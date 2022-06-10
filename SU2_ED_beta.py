@@ -2,7 +2,6 @@ import numpy as np
 import os
 from scipy.sparse import csr_matrix
 import argparse
-
 # ===================================================================================
 from Data_Analysis.Manage_Data import save_dictionary
 from Error_Debugging.Checks import pause
@@ -68,11 +67,11 @@ if args.pure[0] == "y":
     # LOCAL DIMENSION OF THE THEORY
     local_dimension = 9
     # IMPORTING SINGLE SITE OPERATORS
-    from Operators.SU2_Pure_Operators import identity
-    from Operators.SU2_Pure_Operators import gamma_operator
-    from Operators.SU2_Pure_Operators import plaquette
-    from Operators.SU2_Pure_Operators import W_operators
-    from Operators.SU2_Pure_Operators import penalties
+    from Operators.SU2_Free_Operators import identity
+    from Operators.SU2_Free_Operators import gamma_operator
+    from Operators.SU2_Free_Operators import plaquette
+    from Operators.SU2_Free_Operators import W_operators
+    from Operators.SU2_Free_Operators import penalties
 else:
     pure_theory = False
     theory_label = "Full"
@@ -80,20 +79,20 @@ else:
     # LOCAL DIMENSION OF THE THEORY
     local_dimension = 30
     # IMPORTING SINGLE SITE OPERATORS
-    from Operators.SU2_Full_Operators import identity
-    from Operators.SU2_Full_Operators import gamma_operator
-    from Operators.SU2_Full_Operators import plaquette
-    from Operators.SU2_Full_Operators import W_operators
-    from Operators.SU2_Full_Operators import penalties
-    from Operators.SU2_Full_Operators import hopping
-    from Operators.SU2_Full_Operators import matter_operator
-    from Operators.SU2_Full_Operators import number_operators
+    from Operators.SU2_Matter_Operators import identity
+    from Operators.SU2_Matter_Operators import gamma_operator
+    from Operators.SU2_Matter_Operators import plaquette
+    from Operators.SU2_Matter_Operators import W_operators
+    from Operators.SU2_Matter_Operators import penalties
+    from Operators.SU2_Matter_Operators import hopping
+    from Operators.SU2_Matter_Operators import matter_operator
+    from Operators.SU2_Matter_Operators import number_operators
 
     # ACQUIRE FROM INPUT THE MASS VALUE
     mass = float(args.m[0])
 
 # SU(2) Gauge Coupling set
-gauge_coupling_set = np.logspace(start=-1, stop=1, num=1)
+gauge_coupling_set = np.logspace(start=-1, stop=1, num=10)
 params_list = gauge_coupling_set.tolist()
 
 # ===================================================================================

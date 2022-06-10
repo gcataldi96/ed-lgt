@@ -9,7 +9,7 @@ from Hamitonian_Functions.QMB_Operations.Mappings_1D_2D import coords
 # ===================================================================================
 from Hamitonian_Functions.QMB_Operations.Density_Matrix_Tools import get_reduced_density_matrix
 from Hamitonian_Functions.QMB_Operations.Density_Matrix_Tools import truncation,get_projector
-from Hamitonian_Functions.QMB_Operations.Density_Matrix_Tools import Pure_State
+from Hamitonian_Functions.QMB_Operations.Density_Matrix_Tools import Pure_State,get_ground_state_from_Hamiltonian
 # ===================================================================================
 from Hamitonian_Functions.LGT_Objects import Local_Operator,Rishon_Modes
 from Hamitonian_Functions.LGT_Objects import Two_Body_Correlator,Plaquette
@@ -24,7 +24,7 @@ from Hamitonian_Functions.Print_Observables import Print_TWO_BODY_Correlators
 from Hamitonian_Functions.Print_Observables import Print_PLAQUETTE_Correlators
 from Hamitonian_Functions.Print_Observables import Print_BORDER_Penalties
 # ===================================================================================
-#from Hamitonian_Functions import Symmetry_sectors as syms
+from Hamitonian_Functions import Symmetry_sectors as syms
 # ===================================================================================
 # DEFINE THE ARGUMENTS OF THE PARSER FUNCTION
 parser = argparse.ArgumentParser(description='PARAMETERS OF SU2 HAMILTONIAN')
@@ -193,7 +193,7 @@ avg_N_SINGLE_EVEN_site=list()           # AVG Single particle in EVEN SITES
 avg_N_PAIR_ODD_site=list()              # AVG PAIR particle in ODD SITES
 avg_N_PAIR_EVEN_site=list()             # AVG PAIR particle in EVEN SITES
 avg_N_TOT_ODD_site=list()               # AVG TOT particle in ODD SITES
-avg_N_TOT_EVEN_site=list()              # AVG TOT particle in EVEN SITES
+avg_N_TOT_EVEN_site=list()              # AVG TOT particle in EVEN SITE
 
 # ----------------------------------------------------------------------------------
 # Run over different values of the PARAMETER
@@ -229,6 +229,7 @@ for ii in set_parameters_list:
     if not PBC:
         # ADD BORDER PENALTIES DUE TO OBC
         H=H-eta*H_Border
+    H=csr_matrix(H) 
     # ----------------------------------------------------------------------------------
     # DIAGONALIZING THE HAMILTONIAN
     GS=Pure_State()
@@ -315,21 +316,25 @@ for ii in set_parameters_list:
     print('')
     print('')
     # ----------------------------------------------------------------------------------
-    """
-    phrase='SYMMETRY SECTORS OF THE HAMILTONIAN'
-    # GET THE SINGLE SITE SYMMETRY SECTORS WRT THE NUMBER OF FERMIONS
-    single_site_syms=syms.single_site_symmetry_sectors(local_dimension,[0,1,2],[9,12,9])
-    # GET THE NBODY SYMMETRY SECTOR STATE
-    Nbody_syms=syms.many_body_symmetry_sectors(single_site_syms,n)-4
-    print(Nbody_syms)
-    
-    H_subsector={}
-    for ii in range(-4,5,1):
-        # GET THE INDICES ASSOCIATED TO EACH SYMMETRY SECTOR
-        indices=syms.get_indices_from_array(Nbody_syms,ii)
-        indices=indices.tolist()
-        H_subsector[str(ii)]=syms.get_submatrix_from_sparse(H,indices,indices)
-    """
+"""    if not pure_theory:
+        phrase='SYMMETRY SECTORS OF THE HAMILTONIAN'
+        # GET THE SINGLE SITE SYMMETRY SECTORS WRT THE NUMBER OF FERMIONS
+        single_site_syms=syms.single_site_symmetry_sectors(local_dimension,[0,1,2],[9,12,9])
+        # GET THE NBODY SYMMETRY SECTOR STATE
+        Nbody_syms=syms.many_body_symmetry_sectors(single_site_syms,n)-4
+        print(Nbody_syms)
+        
+        H_subsector={}
+        for ii in range(-4,5,2):
+            print(ii)
+            # GET THE INDICES ASSOCIATED TO EACH SYMMETRY SECTOR
+            indices=syms.get_indices_from_array(Nbody_syms,ii)
+            indices=indices.tolist()
+            print('Computing H subsector of ', ii)
+            H_subsector[str(ii)]=syms.get_submatrix_from_sparse(H,indices,indices)
+            sub_energy,sub_psi=get_ground_state_from_Hamiltonian(csr_matrix(H_subsector[str(ii)]),debug=False)
+            sub_energy=(sub_energy+n_penalties*eta)/n
+            print('SUBSECTOR', ii, 'ENERGY',sub_energy)"""
     # ----------------------------------------------------------------------------------
 
 # Truncate the entries of the coupling list
@@ -339,11 +344,11 @@ if pure_theory:
     # Add a label to the simulation
     simulation_label=lattice_size_string
     # Add the label for the values of the Hamiltonian parameter
-    set_parameters_list.insert(0,'g')
+    set_parameters_list.insert(0,'g_{SU(2)}')
 else:
     if mass_fixed:
         # Add the label for the values of the Hamiltonian parameter
-        set_parameters_list.insert(0,'g')
+        set_parameters_list.insert(0,'g_{SU(2)}')
         # Add a label to the simulation
         simulation_label='m_'+format(mass,'.2f')
     else:
@@ -356,7 +361,7 @@ else:
 # Insert a label in each list of observables
 energy_set.insert(0,'Energy')
 avg_gamma.insert(0,Gamma.Op_name)
-avg_plaquette.insert(0,'Plaq')
+avg_plaquette.insert(0,'Plaquette')
 if not pure_theory:
     # N_single
     avg_N_SINGLE_ODD_site.insert(0, f'{N_SINGLE.Op_name}_odd')
@@ -383,3 +388,50 @@ if len(set_parameters_list)>3:
         store_results(f'{RESULTS_directory}Simulation_{simulation_label}.txt',set_parameters_list,avg_N_PAIR_ODD_site)
         store_results(f'{RESULTS_directory}Simulation_{simulation_label}.txt',set_parameters_list,avg_N_TOT_EVEN_site)
         store_results(f'{RESULTS_directory}Simulation_{simulation_label}.txt',set_parameters_list,avg_N_TOT_ODD_site)
+
+
+
+"""
+base_30=np.zeros(30,dtype=float)
+state_1=base_30
+state_1[0]=1.
+state_22=base_30
+state_22[21]=1.
+
+state_7=base_30
+state_7[6]=1.
+state_25=base_30
+state_25[24]=1.
+
+state_28=base_30
+state_28[27]=1.
+state_2=base_30
+state_2[1]=1.
+
+ket_1=np.kron(np.kron(np.kron(state_1,state_22),state_22),state_1)
+bra_1=np.kron(np.kron(np.kron(state_7,state_25),state_28),state_2)
+
+
+state_12=base_30
+state_12[11]=1.
+state_10=base_30
+state_10[9]=1.
+
+state_13=base_30
+state_13[12]=1.
+state_11=base_30
+state_11[10]=1.
+
+ket_2=np.kron(np.kron(np.kron(state_12,state_10),state_12),state_10)
+bra_2=np.kron(np.kron(np.kron(state_13,state_13),state_11),state_11)
+
+
+print('entry_1')
+print(np.real(np.dot(bra_1,H_Plaq.dot(ket_1))))
+print('entry_2')
+print(np.real(np.dot(bra_2,H_Plaq.dot(ket_2)))) 
+print('entry_1')
+print(np.real(np.dot(bra_1,H.dot(ket_1))))
+print('entry_2')
+print(np.real(np.dot(bra_2,H.dot(ket_2))))
+"""
