@@ -1,13 +1,9 @@
 import numpy as np
-from scipy import linalg as la
-from scipy import sparse
 from scipy.sparse import linalg
 from scipy.sparse import kron
 from scipy.sparse import csr_matrix
 import os
-import re
 import sys
-import subprocess as sub
 
 # ========================================================================================
 # ========================================================================================
@@ -80,6 +76,7 @@ def jordan_wigner_operators():
 # ========================================================================================
 # ========================================================================================
 def local_operator(a, ID, pos, dim):
+    print("-------")
     # a    IS THE LOCAL OPERATOR
     # ID   IS THE LOCAL IDENTITY MATRIX
     # pos  IS THE SITE WHERE <a> HAS TO BE APPLIED
@@ -94,6 +91,7 @@ def local_operator(a, ID, pos, dim):
         if dim > 4:
             print("TENSOR PRODUCT")
         c = kron(c, ID)
+
     return c
 
 
@@ -145,6 +143,7 @@ def hopping_terms(x, y, dim):
 # ========================================================================================
 # ========================================================================================
 def two_body_operator(a, b, ID, JW, pos1, pos2, dim):
+    print("-------")
     # IMPLEMENT A 2 BODY FERMION OPERATOR ON A CHAIN
     # OF dim SITES VIA TENSOR PRODUCT OPERATIONS
     # GLOBALLY, THE # OF TENSOR PRODUCT HAS TO BE dim-1
@@ -246,17 +245,12 @@ def sparse_diagonalization(H, x, y, operators):
 
     print("-----------------------------------------------------")
     n_sum = n_up_tot + n_down_tot
-    print("    THE TOTAL UP PARTICLES   IS  " + str(format(n_up_tot, ".3f")) + "    |")
-    print(
-        "    THE TOTAL DOWN PARTICLES IS  " + str(format(n_down_tot, ".3f")) + "    |"
-    )
-    print(
-        "    THE TOTAL COUPLES        IS  " + str(format(n_pair_tot, ".3f")) + "    |"
-    )
-    print("    THE TOTAL PARTICLES      IS  " + str(format(n_sum, ".3f")) + "    |")
+    print("    TOTAL UP PARTICLES   IS  " + str(format(n_up_tot, ".3f")) + "    |")
+    print("    TOTAL DOWN PARTICLES IS  " + str(format(n_down_tot, ".3f")) + "    |")
+    print("    TOTAL PAIRS          IS  " + str(format(n_pair_tot, ".3f")) + "    |")
+    print("    TOTAL PARTICLES      IS  " + str(format(n_sum, ".3f")) + "    |")
     print("=====================================================")
-    rho = n_sum / (x * y)
-    return energy, rho
+    return energy, n_pair_tot / (x * y)
 
 
 # ========================================================================================
