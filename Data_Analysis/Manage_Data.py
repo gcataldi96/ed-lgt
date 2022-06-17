@@ -1,5 +1,5 @@
 import numpy as np
-import pickle
+import json
 import os
 
 
@@ -39,8 +39,8 @@ def store_results(data_file, x_data, new_data):
 
 
 def save_dictionary(dict, filename):
-    with open(f"{filename}.pkl", "wb") as outp:  # Overwrites any existing file.
-        pickle.dump(dict, outp, pickle.HIGHEST_PROTOCOL)
+    with open(f"{filename}.json", "w") as outp:
+        json.dump(dict, outp, indent=4)
     outp.close
 
 
