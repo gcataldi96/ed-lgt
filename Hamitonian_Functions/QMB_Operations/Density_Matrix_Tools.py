@@ -3,8 +3,8 @@ from scipy.linalg import eigh as array_eigh
 from scipy.sparse import csr_matrix
 from scipy.sparse import save_npz
 from scipy.sparse.linalg import eigsh as sparse_eigh
-from scipy.sparse.base import isspmatrix
-from scipy.sparse.csr import isspmatrix_csr
+from scipy.sparse import isspmatrix
+from scipy.sparse import isspmatrix_csr
 
 # ===================================================================
 from .Mappings_1D_2D import zig_zag
@@ -12,10 +12,14 @@ from .Simple_Checks import pause
 
 # ===================================================================
 class Pure_State:
-    def ground_state(self, Hamiltonian, debug_choice):
-        self.energy, self.psi = get_ground_state_from_Hamiltonian(
-            Hamiltonian, debug=debug_choice
+    def ground_state(self, Hamiltonian):
+        self.GSenergy, self.psi = get_eigs_from_sparse_Hamiltonian(Hamiltonian)
+
+    def get_first_n_eigs(self, Hamiltonian, n_eigs=5):
+        self.N_energies, self.psi = get_eigs_from_sparse_Hamiltonian(
+            Hamiltonian, n_eigs=n_eigs
         )
+        self.GSenergy = self.N_energies[0]
 
     def psi_truncate(self, threshold):
         if not np.isscalar(threshold) and not isinstance(threshold, float):
@@ -38,30 +42,17 @@ def truncation(array, threshold):
 
 
 # ===================================================================
-def get_ground_state_from_Hamiltonian(Ham, sparse=True, debug=True):
-    if not isinstance(sparse, bool):
-        raise TypeError(f"sparse should be BOOL, not a {type(sparse)}")
-    if not isinstance(debug, bool):
-        raise TypeError(f"debug should be a BOOL, not a {type(debug)}")
-    # DIAGONALIZE THE HAMILTONIAN AND GET THE GROUND STATE |psi> + ITS ENERGY
-    phrase = "HAMILTONIAN DIAGONALIZATION"
-    pause(phrase, debug)
-    # CHECK ON TYPES
-    if sparse:
-        if not isspmatrix_csr(Ham):
-            raise TypeError(f"Ham should be a csr_matrix, not a {type(Ham)}")
-        # COMPUTE THE LOWEST ENERGY VALUE AND ITS EIGENSTATE
-        eig_vals, eig_vecs = sparse_eigh(Ham, k=1, which="SA")
-    else:
-        if not isinstance(Ham, np.ndarray):
-            raise TypeError(f"Ham should be a np.ndarray, not a {type(Ham)}")
-        eig_vals, eig_vecs = array_eigh(Ham, subset_by_index=[0, 0])
+def get_eigs_from_sparse_Hamiltonian(Ham, n_eigs=1):
+    if not isspmatrix_csr(Ham):
+        raise TypeError(f"Ham should be a csr_matrix, not a {type(Ham)}")
+    # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
+    eig_vals, eig_vecs = sparse_eigh(Ham, k=n_eigs, which="SA")
     # GROUND STATE ENERGY
-    energy = eig_vals[0]
+    energies = eig_vals[:n_eigs]
     # GROUND STATE
-    psi = np.zeros(Ham.shape[0], dtype=complex)
-    psi[:] = eig_vecs[:, 0]
-    return energy, psi
+    GSpsi = np.zeros(Ham.shape[0], dtype=complex)
+    GSpsi[:] = eig_vecs[:, 0]
+    return energies, GSpsi
 
 
 # ===================================================================
