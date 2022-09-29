@@ -1,4 +1,5 @@
 import numpy as np
+from simsio import logger
 from scipy.linalg import eigh as array_eigh
 from scipy.sparse import csr_matrix
 from scipy.sparse import save_npz
@@ -56,7 +57,7 @@ def get_eigs_from_sparse_Hamiltonian(Ham, n_eigs=1):
 
 
 # ===================================================================
-def diagonalize_density_matrix(rho, debug):
+def diagonalize_density_matrix(rho, debug=False):
     # Diagonalize the reduced density matrix which STILL is a HERMITIAN COMPLEX MATRIX
     if isinstance(rho, np.ndarray):
         rho_eigvals, rho_eigvecs = array_eigh(rho)
@@ -64,23 +65,13 @@ def diagonalize_density_matrix(rho, debug):
         rho_eigvals, rho_eigvecs = array_eigh(rho.toarray())
     if not isinstance(debug, bool):
         raise TypeError(f"debug should be a BOOL, not a {type(debug)}")
-
-    print("EIGENVALUES")
-    # Print eigenvalues in descending order
-    print(rho_eigvals[::-1])
-    print("")
-    print("SUM OF EIGENVALUES    " + str(np.sum(rho_eigvals)))
-    print("")
-    # Print eigenvectors
-    # print(csr_matrix(np.real(rho_eigvecs[:,::-1])))
-    # print('')
     return rho_eigvals, rho_eigvecs
 
 
 # ===================================================================
 def get_reduced_density_matrix(psi, loc_dim, nx, ny, site):
     if not isinstance(psi, np.ndarray):
-        raise TypeError(f"density_mat should be an ndarray, not a {type(psi)}")
+        raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
     if not np.isscalar(loc_dim) and not isinstance(loc_dim, int):
         raise TypeError(f"loc_dim must be an SCALAR & INTEGER, not a {type(loc_dim)}")
     if not np.isscalar(nx) and not isinstance(nx, int):
@@ -93,9 +84,9 @@ def get_reduced_density_matrix(psi, loc_dim, nx, ny, site):
     n_sites = nx * ny
     # GET THE COORDINATES OF THE SITE site
     x, y = zig_zag(nx, ny, site)
-    print("----------------------------------------------------")
-    print(f"DENSITY MATRIX OF SITE ({str(x+1)},{str(y+1)})")
-    print("----------------------------------------------------")
+    logger.info("----------------------------------------------------")
+    logger.info(f"DENSITY MATRIX OF SITE ({str(x+1)},{str(y+1)})")
+    logger.info("----------------------------------------------------")
     # RESHAPE psi
     psi_copy = psi.reshape(*[loc_dim for ii in range(n_sites)])
     # DEFINE A LIST OF SITES WE WANT TO TRACE OUT
@@ -157,7 +148,7 @@ def get_projector(rho, loc_dim, threshold, debug, name_save):
     Proj = truncation(Proj, 10 ** (-14))
     # Promote the Projector Proj to a CSR_MATRIX
     Proj = csr_matrix(Proj)
-    print(Proj)
+    logger.info(Proj)
     # Save the Projector on a file
     save_npz(f"{name_save}.npz", Proj)
     return Proj
@@ -177,3 +168,21 @@ def projection(Proj, Operator):
     Operator = Operator * Proj
     Operator = Proj_dagger * Operator
     return Operator
+
+
+def entanglement_entropy(psi, loc_dim, partition_size):
+    if not isinstance(psi, np.ndarray):
+        raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
+    if not np.isscalar(loc_dim) and not isinstance(loc_dim, int):
+        raise TypeError(f"loc_dim must be an SCALAR & INTEGER, not a {type(loc_dim)}")
+    if not np.isscalar(partition_size) and not isinstance(loc_dim, int):
+        raise TypeError(
+            f"partition_size must be an SCALAR & INTEGER, not a {type(partition_size)}"
+        )
+    # COMPUTE THE ENTANGLEMENT ENTROPY OF A SPECIFIC SUBSYSTEM
+    tmp = psi.reshape((loc_dim**partition_size, loc_dim**partition_size))
+    S, V, D = np.linalg.svd(tmp)
+    tmp = np.array(
+        [-np.abs(llambda**2) * np.log(np.abs(llambda**2)) for llambda in V]
+    )
+    return np.sum(tmp)
