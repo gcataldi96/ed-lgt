@@ -1,10 +1,11 @@
+from copy import deepcopy
 import numpy as np
 import os
 from scipy.sparse import csr_matrix
 import argparse
 
 # ===================================================================================
-from Data_Analysis.Manage_Data import store_results, save_dictionary
+from Data_Analysis.Manage_Data import save_dictionary
 from Error_Debugging.Checks import pause
 from Hamitonian_Functions.QMB_Operations.Density_Matrix_Tools import truncation
 from Hamitonian_Functions.QMB_Operations.Density_Matrix_Tools import Pure_State
@@ -19,7 +20,6 @@ parser.add_argument("-x", nargs=1, type=int, help="x_SIZE OF THE LATTICE")
 parser.add_argument("-y", nargs=1, type=int, help="y_SIZE OF THE LATTICE")
 parser.add_argument("-pure", nargs=1, type=str, help="y to exclude MATTER FIELDS")
 parser.add_argument("-pbc", nargs=1, type=str, help="y for PBC")
-parser.add_argument("-m", nargs=1, type=float, help="m MASS of MATTER FIELDS")
 parser.add_argument("-debug", nargs=1, type=int, help="If 0 Activate Debug")
 # ===================================================================================
 # ACQUIRING THE ARGUMENTS VIA PARSER
@@ -51,8 +51,6 @@ if args.pure[0] == "y":
     phrase = "     PURE THEORY: NO MATTER FIELDS"
     # Local dimension of the theory
     local_dimension = 9
-    # Labelling the simulation
-    simulation_label = lattice_size_string
     # IMPORTING SINGLE SITE OPERATORS
     from Operators.SU2_Free_Operators import identity
     from Operators.SU2_Free_Operators import gamma_operator
@@ -65,10 +63,6 @@ else:
     phrase = "     FULL THEORY: MATTER + GAUGE FIELDS"
     # Local dimension of the theory
     local_dimension = 30
-    # Mass of Matter Fields
-    mass = float(args.m[0])
-    # Labelling the simulation
-    simulation_label = "m_" + format(mass, ".5f")
     # IMPORTING SINGLE SITE OPERATORS
     from Operators.SU2_Matter_Operators import identity
     from Operators.SU2_Matter_Operators import gamma_operator
@@ -80,14 +74,24 @@ else:
     from Operators.SU2_Matter_Operators import number_operators
 
 
-# SU(2) Gauge Coupling set
-gauge_coupling_set = np.logspace(start=-1, stop=1, num=30)
-params_list = gauge_coupling_set.tolist()
+params = {
+    "Lx": nx,
+    "Ly": ny,
+    "BC": BC_string,
+    "theory": theory_label,
+    "g_SU2": {"values": [0.1], "label": r"$g_{SU(2)}$"},
+    "mass": {"values": [0.1, 0.2], "label": r"$m$"},
+}
+
+
 # ===================================================================================
 print("####################################################")
 print(phrase)
 print("####################################################")
 print("")
+
+
+# ===================================================================================
 # Define the Printing phrase in debug mode
 phrase = "LOCAL OPERATORS"
 pause(phrase, debug)
@@ -132,6 +136,8 @@ if not PBC:
     Penalty = Rishon_Modes(P_left, P_right, P_bottom, P_top)
     Penalty.add_Op_names("  Left", " Right", "Bottom", "   Top")
     Penalty.get_identity(ID)
+
+
 # ===================================================================================
 # COMPUTE THE GAMMA HAMILTONIAN
 H_Gamma = Local_Hamiltonian(nx, ny, Gamma, debug)
@@ -171,105 +177,75 @@ if not PBC:
     n_penalties += n_border_penalties
 
 
-simulation_label = "m_" + format(mass, ".5f")
+# ===================================================================================
 # RESULT DICTIONARY
-results = {
-    "params": {
-        "Lx": nx,
-        "Ly": ny,
-        "LxL": nx * ny,
-        "g_SU2": {"values": params_list, "label": r"$g_{SU(2)}$"},
-        "simulation_label": simulation_label,
-    },
-    "energy": {
-        "label": r"$E_{GS}$",
-        "values": [],
-    },
-    "gamma": {
-        "label": r"$\avg{\Gamma}$",
-        "values": [],
-    },
-    "plaq": {
-        "label": r"$\avg{C}$",
-        "values": [],
-    },
-    "n_single_EVEN": {
-        "label": r"$\avg{n_{\uparrow}+n_{\downarrow}-2n_{\uparrow}n{\downarrow}}_{+}$",
-        "values": [],
-    },
-    "n_single_ODD": {
-        "label": r"$\avg{n_{\uparrow}+n_{\downarrow}-2n_{\uparrow}n{\downarrow}}_{-}$",
-        "values": [],
-    },
-    "n_pair_EVEN": {
-        "label": r"$\avg{n_{\uparrow}n{\downarrow}}_{+}$",
-        "values": [],
-    },
-    "n_pair_ODD": {
-        "label": r"$\avg{n_{\uparrow}n{\downarrow}}_{-}$",
-        "values": [],
-    },
-    "n_tot_EVEN": {
-        "label": r"$\avg{n_{\uparrow}+n_{\downarrow}}_{+}$",
-        "values": [],
-    },
-    "n_tot_ODD": {
-        "label": r"$\avg{n_{\uparrow}+n_{\downarrow}}_{-}$",
-        "values": [],
-    },
-    "Correlators": {},
+obs_labels = {
+    "energy": r"$E_{GS}$",
+    "gamma": r"$\avg{\Gamma}$",
+    "plaq": r"$\avg{C}$",
+    "n_single_EVEN": r"$\avg{n_{\uparrow}+n_{\downarrow}-2n_{\uparrow}n{\downarrow}}_{+}$",
+    "n_single_ODD": r"$\avg{n_{\uparrow}+n_{\downarrow}-2n_{\uparrow}n{\downarrow}}_{-}$",
+    "n_pair_EVEN": r"$\avg{n_{\uparrow}n{\downarrow}}_{+}$",
+    "n_pair_ODD": r"$\avg{n_{\uparrow}n{\downarrow}}_{-}$",
+    "n_tot_EVEN": r"$\avg{n_{\uparrow}+n_{\downarrow}}_{+}$",
+    "n_tot_ODD": r"$\avg{n_{\uparrow}+n_{\downarrow}}_{-}$",
 }
 
-# ----------------------------------------------------------------------------------
-# Run over different values of the PARAMETER
-for g in params_list:
-    # FIXING THE PARAMETERS FOR A SINGLE SIMULATION
-    if not pure_theory:
-        # CHOICE OF THE PENALTY
-        eta = 10 * max((3 / 16) * (g**2), 4 / (g**2), mass)
-    else:
-        # CHOICE OF THE PENALTY
-        eta = 10 * max((3 / 16) * (g**2), 4 / (g**2))
-    # ----------------------------------------------------------------------------------
-    # COMPUTE THE TOTAL HAMILTONIAN
-    phrase = "TOTAL HAMILTONIAN"
-    pause(phrase, debug)
-    # PURE HAMILTONIAN IN PBC
-    H = ((3 / 16) * (g**2)) * H_Gamma - eta * (H_Link) - (4 / (g**2)) * H_Plaq
-    if not pure_theory:
-        # ADD MATTER FIELDS
-        H = H + mass * H_Matter + 0.5 * H_Hopping
-    if not PBC:
-        # ADD BORDER PENALTIES DUE TO OBC
-        H = H - eta * H_Border
-    # ----------------------------------------------------------------------------------
-    # DIAGONALIZING THE HAMILTONIAN
-    GS = Pure_State()
-    GS.ground_state(H, debug)
-    # RESHIFT THE LOWEST EIGENVALUE OF THE HAMILTONIAN BY THE ENERGY PENALTIES
-    # AND GET THE GROUND STATE ENERGY DENSITY (OF SINGLE SITE)
-    GS.energy = (GS.energy + n_penalties * eta) / n
-    # SAVE THE ENERGY VALUE IN A LIST
-    results["energy"]["values"].append(GS.energy)
-    # TRUNCATE THE ENTRIES OF THE GROUND STATE
-    psi = truncation(GS.psi, 10 ** (-10))
-    # ----------------------------------------------------------------------------------
-    if not pure_theory:
+
+simulation_dict = {}
+simulation_dict["params"] = deepcopy(params)
+
+results = {}
+for mass in params["mass"]["values"]:
+    for g in params["g_SU2"]["values"]:
+        results["mass"] = mass
+        results["g_SU2"] = g
+        # FIXING THE PARAMETERS FOR A SINGLE SIMULATION
+        if not pure_theory:
+            # CHOICE OF THE PENALTY
+            eta = 10 * max((3 / 16) * (g**2), 4 / (g**2), mass)
+        else:
+            # CHOICE OF THE PENALTY
+            eta = 10 * max((3 / 16) * (g**2), 4 / (g**2))
+        # ----------------------------------------------------------------------------------
+        # COMPUTE THE TOTAL HAMILTONIAN
+        phrase = "TOTAL HAMILTONIAN"
+        pause(phrase, debug)
+        # PURE HAMILTONIAN IN PBC
+        H = ((3 / 16) * (g**2)) * H_Gamma - eta * (H_Link) - (4 / (g**2)) * H_Plaq
+        if not pure_theory:
+            # ADD MATTER FIELDS
+            H = H + mass * H_Matter + 0.5 * H_Hopping
+        if not PBC:
+            # ADD BORDER PENALTIES DUE TO OBC
+            H = H - eta * H_Border
+        # ----------------------------------------------------------------------------------
+        # DIAGONALIZING THE HAMILTONIAN
+        GS = Pure_State()
+        GS.ground_state(H, debug)
+        # RESHIFT THE LOWEST EIGENVALUE OF THE HAMILTONIAN BY THE ENERGY PENALTIES
+        # AND GET THE GROUND STATE ENERGY DENSITY (OF SINGLE SITE)
+        GS.energy = (GS.energy + n_penalties * eta) / n
+        # SAVE THE ENERGY VALUE in the dictionary
+        results["energy"] = GS.energy
+        # TRUNCATE THE ENTRIES OF THE GROUND STATE
+        psi = truncation(GS.psi, 10 ** (-10))
+        # ----------------------------------------------------------------------------------
+        if not pure_theory:
+            print("----------------------------------------------------")
+            print("          EFFECTIVE MASS m ", format(mass, ".5f"))
         print("----------------------------------------------------")
-        print("          EFFECTIVE MASS m ", format(mass, ".5f"))
-    print("----------------------------------------------------")
-    print("    SU(2) GAUGE COUPLING g ", format(g, ".3f"))
-    print("----------------------------------------------------")
-    print("    GROUND STATE ENERGY  E ", format(GS.energy, ".5f"))
-    # COMPUTE GAMMA EXPECTATION VALUE
-    results["gamma"]["values"].append(Print_LOCAL_Observable(GS.psi, nx, ny, Gamma))
-    # CHECK PLAQUETTE VALUES
-    print("----------------------------------------------------")
-    print("    PLAQUETTE VALUES")
-    print("----------------------------------------------------")
-    print("")
-    results["plaq"]["values"].append(
-        Print_PLAQUETTE_Correlators(
+        print("    SU(2) GAUGE COUPLING g ", format(g, ".3f"))
+        print("----------------------------------------------------")
+        print("    GROUND STATE ENERGY  E ", format(GS.energy, ".5f"))
+        # COMPUTE GAMMA EXPECTATION VALUE
+        results["gamma"] = Print_LOCAL_Observable(GS.psi, nx, ny, Gamma)
+        # CHECK PLAQUETTE VALUES
+        print("----------------------------------------------------")
+        print("    PLAQUETTE VALUES")
+        print("----------------------------------------------------")
+        print("")
+        results["plaq"] = Print_PLAQUETTE_Correlators(
             GS.psi,
             nx,
             ny,
@@ -279,94 +255,60 @@ for g in params_list:
             get_real=True,
             get_imag=False,
         )
-    )
-    print("")
-    imag_plaquette = Print_PLAQUETTE_Correlators(
-        GS.psi,
-        nx,
-        ny,
-        SU2_Plaq,
-        periodicity=PBC,
-        not_Hermitian=True,
-        get_real=False,
-        get_imag=True,
-    )
-    if not pure_theory:
-        # COMPUTE THE NUMBER DENSITY OPERATORS
-        # N_SINGLE
-        avg_single_odd, avg_single_even = Print_LOCAL_Observable(
-            GS.psi, nx, ny, N_SINGLE, staggered=True
+        print("")
+        imag_plaquette = Print_PLAQUETTE_Correlators(
+            GS.psi,
+            nx,
+            ny,
+            SU2_Plaq,
+            periodicity=PBC,
+            not_Hermitian=True,
+            get_real=False,
+            get_imag=True,
         )
-        results["n_single_ODD"]["values"].append(avg_single_odd)
-        results["n_single_EVEN"]["values"].append(avg_single_even)
-        # N_PAIR
-        avg_pair_odd, avg_pair_even = Print_LOCAL_Observable(
-            GS.psi, nx, ny, N_PAIR, staggered=True
-        )
-        results["n_pair_ODD"]["values"].append(avg_pair_odd)
-        results["n_pair_EVEN"]["values"].append(avg_pair_even)
-        # N_TOT
-        avg_tot_odd, avg_tot_even = Print_LOCAL_Observable(
-            GS.psi, nx, ny, N_TOTAL, staggered=True
-        )
-        results["n_tot_ODD"]["values"].append(avg_tot_odd)
-        results["n_tot_EVEN"]["values"].append(avg_tot_even)
-    # CHECK LINK SYMMETRY PENALTIES
-    # DEFINE A VOCABULARY TO STORE THE EXPECTATION VALUES of 2BODY CORRELATORS
-    correlators = {}
-    print("----------------------------------------------------")
-    print("    CHECK LINK SYMMETRY")
-    print("----------------------------------------------------")
-    correlators = Print_TWO_BODY_Correlators(
-        correlators, GS.psi, nx, ny, SU2_W_Link, periodicity=PBC
-    )
-    if PBC == False:
-        # CHECK PENALTIES ON THE BORDERS
-        print("----------------------------------------------------")
-        print("    CHECK PENALTIES ON THE BORDERS")
-        print("----------------------------------------------------")
-        correlators = Print_BORDER_Penalties(correlators, GS.psi, nx, ny, Penalty)
+        if not pure_theory:
+            # COMPUTE THE NUMBER DENSITY OPERATORS
+            # N_SINGLE
+            results["n_single_ODD"], results["n_single_EVEN"] = Print_LOCAL_Observable(
+                GS.psi, nx, ny, N_SINGLE, staggered=True
+            )
+            # N_PAIR
+            results["n_pair_ODD"], results["n_pair_EVEN"] = Print_LOCAL_Observable(
+                GS.psi, nx, ny, N_PAIR, staggered=True
+            )
+            # N_TOT
+            results["n_tot_ODD"], results["n_tot_EVEN"] = Print_LOCAL_Observable(
+                GS.psi, nx, ny, N_TOTAL, staggered=True
+            )
 
-    print("")
-    print("")
-    print("")
-    print("")
-    print("")
-    print("")
+        # CHECK LINK SYMMETRY PENALTIES
+        print("----------------------------------------------------")
+        print("    CHECK LINK SYMMETRY")
+        print("----------------------------------------------------")
+        Print_TWO_BODY_Correlators(GS.psi, nx, ny, SU2_W_Link, periodicity=PBC)
+        if PBC == False:
+            # CHECK PENALTIES ON THE BORDERS
+            print("----------------------------------------------------")
+            print("    CHECK PENALTIES ON THE BORDERS")
+            print("----------------------------------------------------")
+            Print_BORDER_Penalties(GS.psi, nx, ny, Penalty)
+        # COLLECT ALL THE RESULTS IN A SLOT OF THE DICTIONARY
+        simulation_dict[f"m_{mass}_g_{g}"] = deepcopy(results)
+        results.clear()
+        print("")
+        print("")
+        print("")
+        print("")
+        print("")
+        print("")
 
-# Truncate the entries of the coupling list
-params_list = ["%.3f" % elem for elem in params_list]
-# Add the label for the values of the Hamiltonian parameter
-params_list.insert(0, "g")
-# Insert a label in each list of observables
-results["energy"]["values"].insert(0, "Energy")
-results["gamma"]["values"].insert(0, Gamma.Op_name)
-results["plaq"]["values"].insert(0, "Plaq")
-if not pure_theory:
-    # N_single
-    results["n_single_ODD"]["values"].insert(0, f"{N_SINGLE.Op_name}_odd")
-    results["n_single_EVEN"]["values"].insert(0, f"{N_SINGLE.Op_name}_even")
-    # N_pair
-    results["n_pair_ODD"]["values"].insert(0, f"{N_PAIR.Op_name}_odd")
-    results["n_pair_EVEN"]["values"].insert(0, f"{N_PAIR.Op_name}_even")
-    # N_tot
-    results["n_tot_ODD"]["values"].insert(0, f"{N_TOTAL.Op_name}_odd")
-    results["n_tot_EVEN"]["values"].insert(0, f"{N_TOTAL.Op_name}_even")
 
 # SAVE RESULTS ON TEXT FILES
 RESULTS_dir = f"Results/SU2_{theory_label}_{BC_string}/"
-Simulation_name = f"{RESULTS_dir}Simulation_{simulation_label}.txt"
 if not os.path.exists(RESULTS_dir):
     os.makedirs(RESULTS_dir)
-store_results(Simulation_name, params_list, results["energy"]["values"])
-store_results(Simulation_name, params_list, results["gamma"]["values"])
-store_results(Simulation_name, params_list, results["plaq"]["values"])
-if not pure_theory:
-    store_results(Simulation_name, params_list, results["n_single_EVEN"]["values"])
-    store_results(Simulation_name, params_list, results["n_single_ODD"]["values"])
-    store_results(Simulation_name, params_list, results["n_pair_EVEN"]["values"])
-    store_results(Simulation_name, params_list, results["n_pair_ODD"]["values"])
-    store_results(Simulation_name, params_list, results["n_tot_EVEN"]["values"])
-    store_results(Simulation_name, params_list, results["n_tot_ODD"]["values"])
 
-results.clear()
+simulation_label = "prova"
+simulation_name = f"{RESULTS_dir}Simulation_{simulation_label}"
+
+save_dictionary(simulation_dict, simulation_name)
