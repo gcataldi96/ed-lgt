@@ -1,0 +1,33 @@
+name: ed
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - black
+  - bottleneck
+  - cycler
+  - dictdiffer=0.9
+  - jq=1.6
+  - jupyter
+  - libblas[build=*mkl]
+  - line_profiler
+  - lmfit=1.0
+  - matplotlib=3.5
+  - mkl
+  - mkl-devel
+  - more-itertools
+  - nbconvert
+  - numba
+  - numpy=1.23
+  - pip
+  - pre-commit
+  - prettytable=3.3
+  - pylint=2.11
+  - python=3.10
+  - pyyaml
+  - ruamel.yaml
+  - scipy=1.9
+  - setuptools=63
+  - snakeviz
+  - uncertainties=3.1
+  - yq=2.13
