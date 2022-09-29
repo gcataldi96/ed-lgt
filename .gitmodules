@@ -1,0 +1,3 @@
+[submodule "simsio"]
+	path = simsio
+	url = https://github.com/rgbmrc/simsio.git
