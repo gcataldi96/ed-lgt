@@ -1,11 +1,11 @@
 [IO-handlers]
-dat = data/$uid/$key, w, simsio.serializers.PickleSerializer
-log = Results/SU2/$uid,  , simsio.serializers.LogSerializer
-par = Results/SU2/$uid, w, simsio.serializers.YAMLSerializer
-res = Results/SU2/$uid, w, simsio.serializers.NPZSerializer
+dat = data/$uid/$key, w, simsio.serializers.NPZSerializer
+log = out/$uid,  , simsio.serializers.LogSerializer
+par = out/$uid, w, simsio.serializers.YAMLSerializer
+res = out/$uid, w, simsio.serializers.NPZSerializer
 
 [configs]
-directory = Configs
+directory = configs
 header_tag = ===
 header_ref = <<<
 lock_attempts = 100
