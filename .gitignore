@@ -129,7 +129,8 @@ dmypy.json
 .pyre/
 
 # Config Files
-Configs/
+configs/
 
 # Results
-Results/
+data/
+out/
