@@ -1,4 +1,3 @@
-# %%
 import numpy as np
 from simsio import *
 import pickle
@@ -10,44 +9,65 @@ def save_dictionary(dict, filename):
     outp.close
 
 
-# %%
+def load_dictionary(filename):
+    with open(filename, "rb") as outp:
+        return pickle.load(outp)
+
+
 # ACQUIRE SIMULATION RESULTS
-config_filename = "MG_grid_5eigs"
-
+config_filename = "DeltaN_single_mass"
 match = SimsQuery(group_glob=config_filename)
-ugrid, vals = uids_grid(match.uids, ["mass", "gSU2"])
+ugrid, vals = uids_grid(match.uids, ["N", "g"])
 
-# %%
-def entanglement_entropy(psi, loc_dim, partition):
-    # COMPUTE THE ENTANGLEMENT ENTROPY OF A SPECIFIC SUBSYSTEM
-    tmp = psi.reshape((loc_dim**partition, loc_dim**partition))
-    S, V, D = np.linalg.svd(tmp)
-    tmp = np.array(
-        [-np.abs(llambda**2) * np.log(np.abs(llambda**2)) for llambda in V]
-    )
-    return np.sum(tmp)
+obs_list = [
+    "energy",
+    "entropy",
+    "gamma",
+    "plaq",
+    "n_single_EVEN",
+    "n_single_ODD",
+    "n_single_ODD",
+    "n_pair_EVEN",
+    "n_tot_EVEN",
+    "n_tot_ODD",
+]
 
+res = {}
+res["params"] = vals
+for kk, obs in enumerate(obs_list):
+    res[obs] = np.zeros((vals["N"].shape[0], vals["g"].shape[0]))
 
+for ii, N in enumerate(vals["N"]):
+    for kk, g in enumerate(vals["g"]):
+        res["energy"][ii][kk] = get_sim(ugrid[ii][kk]).res["energy"][0]
+        for kk, obs in enumerate(obs_list[1:]):
+            res[obs][ii][kk] = get_sim(ugrid[ii][kk]).res[obs]
+
+save_dictionary(res, "DeltaN_single_mass.pkl")
+
+"""
 Ent_entropy = np.zeros((vals["mass"].shape[0], vals["gSU2"].shape[0]))
 for ii in range(vals["mass"].shape[0]):
     for jj in range(vals["gSU2"].shape[0]):
         psi = extract_dict(ugrid[ii][jj], key="res", glob="psi")
+
+        # energy = get_sim(ugrid[ii][jj]).res["energy"]
+        # sim= get_sim(ugrid[ii][jj])
+        # sim.link("psi")
+        # psi= sim.load("psi", cache= True tiene in memoria)
+        # sim["psi"]
         Ent_entropy[ii][jj] = entanglement_entropy(psi, loc_dim=30, partition=2)
 
-
-# %%
 with open("Results/Simulation_Dicts/ED_2x2_MG_5eigs.pkl", "rb") as dict:
     ED_data = pickle.load(dict)
 ED_data["entropy"] = Ent_entropy
-# %%
+
 energy = np.zeros((30, 30, 5))
 for ii in range(30):
     for jj in range(30):
         energy[ii][jj] = extract_dict(ugrid[ii][jj], key="res", glob="energy")
 
 ED_data["energy"] = energy
-
-# %%
 fidelity = np.zeros((30, 29))
 for ii in range(vals["mass"].shape[0]):
     for jj in range(vals["gSU2"].shape[0] - 1):
@@ -60,21 +80,4 @@ for ii in range(vals["mass"].shape[0]):
             )
         )
 
-# %%
-res = {}
-res["energy"] = np.vectorize(extract_dict)(ugrid, key="res", glob="energy")
-res["gamma"] = np.vectorize(extract_dict)(ugrid, key="res", glob="gamma")
-res["plaq"] = np.vectorize(extract_dict)(ugrid, key="res", glob="plaq")
-res["n_single_EVEN"] = np.vectorize(extract_dict)(
-    ugrid, key="res", glob="n_single_EVEN"
-)
-res["n_single_ODD"] = np.vectorize(extract_dict)(ugrid, key="res", glob="n_single_ODD")
-res["n_pair_EVEN"] = np.vectorize(extract_dict)(ugrid, key="res", glob="n_pair_EVEN")
-res["n_pair_ODD"] = np.vectorize(extract_dict)(ugrid, key="res", glob="n_pair_ODD")
-
-res["n_tot_EVEN"] = np.vectorize(extract_dict)(ugrid, key="res", glob="n_tot_EVEN")
-res["n_tot_ODD"] = np.vectorize(extract_dict)(ugrid, key="res", glob="n_tot_ODD")
-
-res["params"] = vals
-# %%
-save_dictionary(res, "ED_2x2_MG_5eigs.pkl")
+"""
