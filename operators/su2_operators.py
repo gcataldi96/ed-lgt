@@ -1,43 +1,8 @@
 import numpy as np
 from scipy.sparse import csr_matrix, identity
+from tools import acquire_data
 
-
-def acquire_data(data_file_name, row_for_labels=False):
-    if not isinstance(data_file_name, str):
-        raise TypeError(
-            f"data_file_name should be a STRING, not a {type(data_file_name)}"
-        )
-    if not isinstance(row_for_labels, bool):
-        raise TypeError(f"row_for_labels must be a BOOL, not a {type(row_for_labels)}")
-    # Open the file and acquire all the lines
-    f = open(data_file_name, "r+")
-    line = f.readlines()
-    f.close()
-    # CREATE A DICTIONARY TO HOST THE LISTS OBTAINED FROM EACH COLUMN OF data_file
-    data = {}
-    # Get the first line of the File as a list of entries.
-    n = line[0].strip().split(",")
-    for ii in range(0, len(n)):
-        # Generate a list for each column of data_file
-        data[str(ii)] = list()
-        if row_for_labels:
-            # Generate a label for each list acquiring the ii+1 entry of the first line n
-            data["label_%s" % str(ii)] = str(n[ii])
-
-    if row_for_labels:
-        # IGNORE THE FIRST LINE OF line (ALREAY USED FOR THE LABELS)
-        del line[0]
-
-    # Fill the lists with the entries of Columns
-    for ii in range(len(line)):
-        a = line[ii].strip().split(",")
-
-        for jj in range(len(n)):
-            data[str(jj)].append(float(a[jj]))
-    for ii in range(len(n)):
-        data[str(ii)] = np.asarray(data[str(ii)])
-    return data
-
+__all__=["get_su2_operators"]
 
 def ID(pure_theory):
     ops = {}
@@ -53,10 +18,10 @@ def gamma_operator(pure_theory):
     ops = {}
     if pure_theory:
         hilb_dim = 9
-        path = "operators/su2_operators/pure_operators/"
+        path = "su2_operators/pure_operators/"
     else:
         hilb_dim = 30
-        path = "operators/su2_operators/full_operators/"
+        path = "su2_operators/full_operators/"
     data = acquire_data(path + f"Gamma.txt")
     x = data["0"]
     y = data["1"]
@@ -69,10 +34,10 @@ def plaquette(pure_theory):
     ops = {}
     if pure_theory:
         hilb_dim = 9
-        path = "operators/su2_operators/pure_operators/"
+        path = "su2_operators/pure_operators/"
     else:
         hilb_dim = 30
-        path = "operators/su2_operators/full_operators/"
+        path = "su2_operators/full_operators/"
 
     for corner in ["py_px", "my_px", "py_mx", "my_mx"]:
         data = acquire_data(path + f"Corner_{corner}.txt")
@@ -90,10 +55,10 @@ def W_operators(pure_theory):
     ops = {}
     if pure_theory:
         hilb_dim = 9
-        path = "operators/su2_operators/pure_operators/"
+        path = "su2_operators/pure_operators/"
     else:
         hilb_dim = 30
-        path = "operators/su2_operators/full_operators/"
+        path = "su2_operators/full_operators/"
 
     for s in ["py", "px", "mx", "my"]:
         data = acquire_data(path + f"W_{s}.txt")
@@ -147,7 +112,7 @@ def penalties(pure_theory):
 
 def hopping():
     ops = {}
-    path = "operators/su2_operators/full_operators/"
+    path = "su2_operators/full_operators/"
     for side in ["py", "px", "mx", "my"]:
         data = acquire_data(path + f"Q_{side}_dag.txt")
         x = data["0"]
@@ -160,7 +125,7 @@ def hopping():
 
 def matter_operator():
     ops = {}
-    path = "operators/su2_operators/full_operators/"
+    path = "su2_operators/full_operators/"
     data = acquire_data(path + f"Mass_op.txt")
     x = data["0"]
     y = data["1"]
@@ -199,7 +164,7 @@ def S_Wave_Correlation():
     return pair, Dag_pair
 
 
-def get_operators(pure_theory):
+def get_su2_operators(pure_theory):
     ops = {}
     ops |= ID(pure_theory)
     ops |= gamma_operator(pure_theory)

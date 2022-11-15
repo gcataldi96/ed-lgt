@@ -2,7 +2,9 @@ import numpy as np
 from scipy.sparse import csr_matrix
 from scipy.sparse import identity
 
-def hubbard_operators():
+__all__=["get_fermi_hubbard_operators", "get_bose_hubbard_operators"]
+
+def get_fermi_hubbard_operators():
     data_c_UP=np.array([1.,1.])
     x_c_UP=np.array([3,4])
     y_c_UP=np.array([1,2])
@@ -37,7 +39,7 @@ def hubbard_operators():
     return c_UP, c_DOWN, n_UP, n_DOWN, n_PAIR, JW, ID
 
 
-def bose_operators(n_max):
+def get_bose_hubbard_operators(n_max):
     entries=np.arange(1,n_max+1,1)
     entries=np.sqrt(entries)
     x_coords=np.arange(0,n_max,1)
