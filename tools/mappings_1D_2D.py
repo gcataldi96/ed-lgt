@@ -1,4 +1,4 @@
-__all__ = ["zig_zag", "zig_zag", "snake", "hilbert", "inverse_hilbert", "coords"]
+__all__ = ["zig_zag", "inverse_zig_zag", "snake", "hilbert", "inverse_hilbert", "coords"]
 # =====================================================================================
 #                                    ZIGZAG MAPPING
 # =====================================================================================
@@ -26,7 +26,7 @@ def zig_zag(nx, ny, d):
 
 
 # =====================================================================================
-def zig_zag(nx, ny, x, y):
+def inverse_zig_zag(nx, ny, x, y):
     # INVERSE ZIGZAG CURVE MAPPING (from coords to the 1D points)
     # NOTE: GIVEN THE SIZES (nx,ny) of a LATTICE, THE COORDS x,y HAS TO
     #       START FROM 0 AND ARRIVE TO nx-1 (ny-1). AT THE END, THE POINTS OF THE
