@@ -67,11 +67,11 @@ if args.pure[0] == "y":
     # LOCAL DIMENSION OF THE THEORY
     local_dimension = 9
     # IMPORTING SINGLE SITE OPERATORS
-    from Operators.SU2_Free_Operators import identity
-    from Operators.SU2_Free_Operators import gamma_operator
-    from Operators.SU2_Free_Operators import plaquette
-    from Operators.SU2_Free_Operators import W_operators
-    from Operators.SU2_Free_Operators import penalties
+    from old_operators.SU2_Free_Operators import identity
+    from old_operators.SU2_Free_Operators import gamma_operator
+    from old_operators.SU2_Free_Operators import plaquette
+    from old_operators.SU2_Free_Operators import W_operators
+    from old_operators.SU2_Free_Operators import penalties
 else:
     pure_theory = False
     theory_label = "Full"
@@ -79,14 +79,14 @@ else:
     # LOCAL DIMENSION OF THE THEORY
     local_dimension = 30
     # IMPORTING SINGLE SITE OPERATORS
-    from Operators.SU2_Matter_Operators import identity
-    from Operators.SU2_Matter_Operators import gamma_operator
-    from Operators.SU2_Matter_Operators import plaquette
-    from Operators.SU2_Matter_Operators import W_operators
-    from Operators.SU2_Matter_Operators import penalties
-    from Operators.SU2_Matter_Operators import hopping
-    from Operators.SU2_Matter_Operators import matter_operator
-    from Operators.SU2_Matter_Operators import number_operators
+    from old_operators.SU2_Matter_Operators import identity
+    from old_operators.SU2_Matter_Operators import gamma_operator
+    from old_operators.SU2_Matter_Operators import plaquette
+    from old_operators.SU2_Matter_Operators import W_operators
+    from old_operators.SU2_Matter_Operators import penalties
+    from old_operators.SU2_Matter_Operators import hopping
+    from old_operators.SU2_Matter_Operators import matter_operator
+    from old_operators.SU2_Matter_Operators import number_operators
 
     # ACQUIRE FROM INPUT THE MASS VALUE
     mass = float(args.m[0])
