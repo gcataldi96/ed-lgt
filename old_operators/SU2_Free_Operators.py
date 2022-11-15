@@ -24,7 +24,7 @@ def gamma_operator():
 
 
 def plaquette():
-    path = "Operators/Op_SU2_free/"
+    path = "old_operators/Op_SU2_free/"
     # ===================================================================================================
     Bottom_Left = acquire_data(path + "Corner_Bottom_Left.txt")
     # COORDINATES

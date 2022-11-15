@@ -253,7 +253,7 @@ def W_operators():
 
 
 def plaquette():
-    path = "Operators/Op_SU2_matter/"
+    path = "old_operators/Op_SU2_matter/"
     # ===================================================================================================
     Bottom_Left = acquire_data(path + "Corner_Bottom_Left.txt")
     # COORDINATES
@@ -303,7 +303,7 @@ def plaquette():
 
 
 def hopping():
-    path = "Operators/Op_SU2_matter/"
+    path = "old_operators/Op_SU2_matter/"
     # ===================================================================================================
     Left = acquire_data(path + "Q_Left_dagger.txt")
     # COORDINATES
