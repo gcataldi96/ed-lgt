@@ -5,7 +5,7 @@ from scipy.sparse import isspmatrix_csr
 
 __all__ = ["local_op", "two_body_op", "four_body_op"]
 
-# =====================================================================================
+
 def local_op(Operator, Op_1D_site, n_sites):
     # CHECK ON TYPES
     if not isspmatrix_csr(Operator):
@@ -16,8 +16,7 @@ def local_op(Operator, Op_1D_site, n_sites):
         )
     if not np.isscalar(n_sites) and not isinstance(n_sites, int):
         raise TypeError(f"n_sites must be SCALAR & INTEGER, not a {type(n_sites)}")
-    # ---------------------------------------------------------------------------------
-    # define the IDENTITY MATRIX
+
     ID = identity(n_sites)
     tmp = Operator
     for ii in range(Op_1D_site - 1):
@@ -27,7 +26,6 @@ def local_op(Operator, Op_1D_site, n_sites):
     return tmp
 
 
-# =====================================================================================
 def two_body_op(Op_list, Op_sites_list, n_sites, add_dagger=False):
     # CHECK ON TYPES
     if not isinstance(Op_list, list):
@@ -38,8 +36,7 @@ def two_body_op(Op_list, Op_sites_list, n_sites, add_dagger=False):
         raise TypeError(f"n_sites must be SCALAR & INTEGER, not a {type(n_sites)}")
     if not isinstance(add_dagger, bool):
         raise TypeError(f"add_dagger should be a BOOL, not a {type(add_dagger)}")
-    # ---------------------------------------------------------------------------------
-    # define the IDENTITY MATRIX
+
     ID = identity(n_sites)
     # STORE Op_list according to Op_sites_list in ASCENDING ORDER
     Op_NEW_list = [x for _, x in sorted(zip(Op_sites_list, Op_list))]
@@ -60,7 +57,6 @@ def two_body_op(Op_list, Op_sites_list, n_sites, add_dagger=False):
     return tmp
 
 
-# =====================================================================================
 def four_body_op(Op_list, Op_sites_list, n_sites, get_only_part=None):
     # CHECK ON TYPES
     if not isinstance(Op_list, list):
@@ -74,8 +70,7 @@ def four_body_op(Op_list, Op_sites_list, n_sites, get_only_part=None):
             raise TypeError(
                 f"get_only_part should be a STR, not a {type(get_only_part)}"
             )
-    # ---------------------------------------------------------------------------------
-    # define the IDENTITY MATRIX
+
     ID = identity(n_sites)
     # STORE Op_list according to Op_sites_list in ASCENDING ORDER
     Op_NEW_list = [x for _, x in sorted(zip(Op_sites_list, Op_list))]
