@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.sparse import isspmatrix_csr, isspmatrix, csr_matrix
-from tools import zig_zag, inverse_zig_zag, pause
+from tools import zig_zag, inverse_zig_zag
 from modeling import four_body_op
 
 __all__ = ["PlaquetteTerm2D"]
@@ -49,13 +49,15 @@ class PlaquetteTerm2D:
             raise TypeError(f"has_obc must be a BOOL, not a {type(has_obc)}")
         if not isinstance(add_dagger, bool):
             raise TypeError(f"add_dagger must be a BOOL, not a {type(add_dagger)}")
-        # Compute the total number of particles
-        n = nx * ny
+        # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
+        self.nx = nx
+        self.ny = ny
+        self.n = nx * ny
         # Define a list with the Four Operators involved in the Plaquette:
         op_list = [self.BL, self.BR, self.TL, self.TR]
         # Define the Hamiltonian
-        self.Ham=0
-        for ii in range(n):
+        self.Ham = 0
+        for ii in range(self.n):
             # Compute the corresponding (x,y) coords
             x, y = zig_zag(nx, ny, ii)
             if x < nx - 1 and y < ny - 1:
@@ -80,7 +82,7 @@ class PlaquetteTerm2D:
                 else:
                     continue
             # Add the Plaquette to the Hamiltonian
-            self.Ham = self.Ham + four_body_op(op_list, sites_list, n)
+            self.Ham = self.Ham + four_body_op(op_list, sites_list, self.n)
         if not isspmatrix(self.Ham):
             self.Ham = csr_matrix(self.Ham)
         if add_dagger:

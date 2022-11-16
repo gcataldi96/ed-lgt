@@ -26,16 +26,16 @@ class LocalTerm:
         if not np.isscalar(strength):
             raise TypeError(f"strength must be SCALAR not a {type(strength)}")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
-        n = nx * ny
+        self.nx = nx
+        self.ny = ny
+        self.n = nx * ny
         self.strength = strength
+        if mask is not None:
+            self.mask = mask
         # LOCAL HAMILTONIAN
         H_Local = 0
-        for ii in range(n):
-            if mask is not None:
-                self.mask = mask
-                x, y = zig_zag(nx, ny, ii)
-                if mask[x, y]:
-                    H_Local = H_Local + local_op(self.Op, ii + 1, n)
-            else:
-                H_Local = H_Local + local_op(self.Op, ii + 1, n)
+        for ii in range(self.n):
+            x, y = zig_zag(nx, ny, ii)
+            if mask[x, y]:
+                H_Local = H_Local + local_op(self.Op, ii + 1, self.n)
         self.Ham = self.strength * H_Local
