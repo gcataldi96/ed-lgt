@@ -1,9 +1,11 @@
-import numpy as np
 from functools import partial
-from modeling import PlaquetteTerm, TwoBodyTerm2D, LocalTerm
+
+import numpy as np
+
+from modeling import LocalTerm, TwoBodyTerm2D
 
 
-class SU2_Model:
+class SU2_large_g_Model:
     def __init__(self, params):
         if not isinstance(params, dict):
             raise TypeError(f"params should be a dict, not a {type(params)}")
@@ -18,17 +20,6 @@ class SU2_Model:
         self.input_folder = params["input_folder"]
         self.output_folder = params["output_folder"]
 
-        # Border Penalties
-        if self.has_obc:
-            for d in self.directions:
-                for s in "mp":
-                    mask = partial(self.border_mask, f"{s}{d}")
-                    self += LocalTerm(
-                        f"P_{s}{d}",
-                        strength="eta",
-                        mask=mask,
-                    )
-
         # Link Symmetries
         axes = [[1, 0], [0, 1]]
         for i, d in enumerate(self.directions):
@@ -41,19 +32,6 @@ class SU2_Model:
             )
         # E ELECTRIC ENERGY: gamma operator
         self += LocalTerm("Gamma", strength="g")
-
-        # B MAGNETIC ENERGY: plaquette interaction
-        # NOTE: The order of the operators is BL, TL, BR, TR:
-        self += PlaquetteTerm(
-            ["C_py_px", "C_my_px", "C_py_mx", "C_my_mx"],
-            strength="B",
-            has_obc=self.has_obc,
-        )
-        self += PlaquetteTerm(
-            ["C_py_px_dag", "C_my_px_dag", "C_py_mx_dag", "C_my_mx_dag"],
-            strength="B",
-            has_obc=self.has_obc,
-        )
 
         # HOPPING ACTIVITY along x AXIS
         self += TwoBodyTerm2D(
@@ -172,12 +150,6 @@ class SU2_Model:
         # Number Operators
         for n in ["n_single", "n_pair", "n_tot"]:
             tn_obs += TNObsLocal(n, n)
-        # Density Correlator
-        tn_obs += TNObsCorr("nn_density", ["n_tot", "n_tot"])
-        # S-wave SCOP Correlator
-        # tn_obs += TNObsCorr("S_Wave", ["Delta_Dagger", "Delta"])
+
         return tn_obs
 
-    def get_conv_parameters(self, params):
-        tn_conv = TNConvergenceParameters(**params["conv"])
-        return tn_conv
