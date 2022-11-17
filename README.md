@@ -50,6 +50,7 @@ where N is the number of the Nth simulation with the parameter g (which is not i
 If the *n* is the total number of simulations in the *config_file_name*, to launch just type on the command shell the following command:
 
     nohup bash -c "printf 'n%s\n' {0..n} | shuf | xargs -PA -i python SU2_ED_simsio.py config_file_name {} B" &>/dev/null &
+    nohup bash -c "export OMP_NUM_THREADS=4; printf 'n%s\n' {0..1} | shuf | xargs -P1 -i python SU2_ED_simsio.py prova {} 10" &>/dev/null &
 
 where 
 
