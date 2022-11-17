@@ -1,8 +1,9 @@
 import numpy as np
 from scipy.sparse import csr_matrix, identity
-from tools import acquire_data
+from tools.manage_data import acquire_data
 
-__all__=["get_su2_operators"]
+__all__ = ["get_su2_operators"]
+
 
 def ID(pure_theory):
     ops = {}
@@ -18,10 +19,10 @@ def gamma_operator(pure_theory):
     ops = {}
     if pure_theory:
         hilb_dim = 9
-        path = "su2_operators/pure_operators/"
+        path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/pure_operators/"
     else:
         hilb_dim = 30
-        path = "su2_operators/full_operators/"
+        path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/full_operators/"
     data = acquire_data(path + f"Gamma.txt")
     x = data["0"]
     y = data["1"]
@@ -34,10 +35,10 @@ def plaquette(pure_theory):
     ops = {}
     if pure_theory:
         hilb_dim = 9
-        path = "su2_operators/pure_operators/"
+        path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/pure_operators/"
     else:
         hilb_dim = 30
-        path = "su2_operators/full_operators/"
+        path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/full_operators/"
 
     for corner in ["py_px", "my_px", "py_mx", "my_mx"]:
         data = acquire_data(path + f"Corner_{corner}.txt")
@@ -55,10 +56,10 @@ def W_operators(pure_theory):
     ops = {}
     if pure_theory:
         hilb_dim = 9
-        path = "su2_operators/pure_operators/"
+        path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/pure_operators/"
     else:
         hilb_dim = 30
-        path = "su2_operators/full_operators/"
+        path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/full_operators/"
 
     for s in ["py", "px", "mx", "my"]:
         data = acquire_data(path + f"W_{s}.txt")
@@ -112,7 +113,7 @@ def penalties(pure_theory):
 
 def hopping():
     ops = {}
-    path = "su2_operators/full_operators/"
+    path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/full_operators/"
     for side in ["py", "px", "mx", "my"]:
         data = acquire_data(path + f"Q_{side}_dag.txt")
         x = data["0"]
@@ -125,7 +126,7 @@ def hopping():
 
 def matter_operator():
     ops = {}
-    path = "su2_operators/full_operators/"
+    path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/full_operators/"
     data = acquire_data(path + f"Mass_op.txt")
     x = data["0"]
     y = data["1"]
