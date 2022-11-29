@@ -16,14 +16,15 @@ def local_op(Operator, Op_1D_site, n_sites):
         )
     if not np.isscalar(n_sites) and not isinstance(n_sites, int):
         raise TypeError(f"n_sites must be SCALAR & INTEGER, not a {type(n_sites)}")
-
-    ID = identity(n_sites)
+    # Create a local identity with the same dimensionality of Operator
+    op_dim = Operator.shape[0]
+    ID = identity(op_dim)
     tmp = Operator
     for ii in range(Op_1D_site - 1):
         tmp = kron(ID, tmp)
     for ii in range(n_sites - Op_1D_site):
         tmp = kron(tmp, ID)
-    return tmp
+    return csr_matrix(tmp)
 
 
 def two_body_op(Op_list, Op_sites_list, n_sites, add_dagger=False):
@@ -36,8 +37,9 @@ def two_body_op(Op_list, Op_sites_list, n_sites, add_dagger=False):
         raise TypeError(f"n_sites must be SCALAR & INTEGER, not a {type(n_sites)}")
     if not isinstance(add_dagger, bool):
         raise TypeError(f"add_dagger should be a BOOL, not a {type(add_dagger)}")
-
-    ID = identity(n_sites)
+    # Create a local identity with the same dimensionality of the Operators
+    op_dim = Op_list[0].shape[0]
+    ID = identity(op_dim)
     # STORE Op_list according to Op_sites_list in ASCENDING ORDER
     Op_NEW_list = [x for _, x in sorted(zip(Op_sites_list, Op_list))]
     # STORE Op_sites_list in ASCENDING ORDER
@@ -54,7 +56,7 @@ def two_body_op(Op_list, Op_sites_list, n_sites, add_dagger=False):
     # ADD THE HERMITIAN CONDJUGATE OF THE OPERATOR
     if add_dagger == True:
         tmp = csr_matrix(tmp) + csr_matrix(tmp.conj().transpose())
-    return tmp
+    return csr_matrix(tmp)
 
 
 def four_body_op(Op_list, Op_sites_list, n_sites, get_only_part=None):
@@ -70,8 +72,9 @@ def four_body_op(Op_list, Op_sites_list, n_sites, get_only_part=None):
             raise TypeError(
                 f"get_only_part should be a STR, not a {type(get_only_part)}"
             )
-
-    ID = identity(n_sites)
+    # Create a local identity with the same dimensionality of Operator
+    op_dim = Op_list[0].shape[0]
+    ID = identity(op_dim)
     # STORE Op_list according to Op_sites_list in ASCENDING ORDER
     Op_NEW_list = [x for _, x in sorted(zip(Op_sites_list, Op_list))]
     # STORE Op_sites_list in ASCENDING ORDER
@@ -98,4 +101,4 @@ def four_body_op(Op_list, Op_sites_list, n_sites, get_only_part=None):
         tmp = complex(0.0, -1.0) * (
             csr_matrix(tmp) - csr_matrix(tmp.conj().transpose())
         )
-    return tmp
+    return csr_matrix(tmp)
