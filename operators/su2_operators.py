@@ -27,7 +27,7 @@ def gamma_operator(pure_theory):
     x = data["0"]
     y = data["1"]
     coeff = data["2"]
-    ops[f"Gamma"] = csr_matrix((coeff, (x, y)), shape=(hilb_dim, hilb_dim))
+    ops["gamma"] = csr_matrix((coeff, (x, y)), shape=(hilb_dim, hilb_dim))
     return ops
 
 
