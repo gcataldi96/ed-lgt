@@ -1,20 +1,23 @@
-from simsio import run_sim, logger
 from scipy.sparse import csr_matrix
+from scipy.sparse import identity as IDD
+
 from Error_Debugging.Checks import pause
-from Hamitonian_Functions.QMB_Operations.Density_Matrix_Tools import (
-    truncation,
-    entanglement_entropy,
-)
-from Hamitonian_Functions.QMB_Operations.Density_Matrix_Tools import Pure_State
-from Hamitonian_Functions.LGT_Objects import *
 from Hamitonian_Functions.LGT_Hamiltonians import *
+from Hamitonian_Functions.LGT_Objects import *
 from Hamitonian_Functions.Print_Observables import *
+from Hamitonian_Functions.QMB_Operations.Density_Matrix_Tools import (
+    Pure_State,
+    entanglement_entropy,
+    truncation,
+)
+from Hamitonian_Functions.QMB_Operations.Simple_Checks import check_matrix
 from Hamitonian_Functions.Symmetry_sectors import *
+from simsio import logger, run_sim
 
 # ===================================================================================
 
 with run_sim() as sim:
-    # sim.link("psi")
+    sim.link("psi")
     # X-Lattice dimension
     nx = sim.par["nx"]
     # Y-Lattice dimension
@@ -39,30 +42,34 @@ with run_sim() as sim:
         # Local dimension of the theory
         loc_dim = 9
         # IMPORTING SINGLE SITE OPERATORS
-        from Operators.SU2_Free_Operators import identity
-        from Operators.SU2_Free_Operators import gamma_operator
-        from Operators.SU2_Free_Operators import plaquette
-        from Operators.SU2_Free_Operators import W_operators
-        from Operators.SU2_Free_Operators import penalties
+        from old_operators.SU2_Free_Operators import (
+            W_operators,
+            gamma_operator,
+            identity,
+            penalties,
+            plaquette,
+        )
     else:
         theory_label = "Full"
         phrase = "     FULL THEORY: MATTER + GAUGE FIELDS"
         # Local dimension of the theory
         loc_dim = 30
         # IMPORTING SINGLE SITE OPERATORS
-        from Operators.SU2_Matter_Operators import identity
-        from Operators.SU2_Matter_Operators import gamma_operator
-        from Operators.SU2_Matter_Operators import plaquette
-        from Operators.SU2_Matter_Operators import W_operators
-        from Operators.SU2_Matter_Operators import penalties
-        from Operators.SU2_Matter_Operators import hopping
-        from Operators.SU2_Matter_Operators import matter_operator
-        from Operators.SU2_Matter_Operators import number_operators
+        from old_operators.SU2_Matter_Operators import (
+            W_operators,
+            gamma_operator,
+            hopping,
+            identity,
+            matter_operator,
+            number_operators,
+            penalties,
+            plaquette,
+        )
 
         # GET MASS VALUE
-        mass = sim.par["mass"]
+        mass = sim.par["m"]
     # GET gSU2 VALUE
-    g = sim.par["gSU2"]
+    g = sim.par["g"]
 
     # ===================================================================================
     logger.info("####################################################")
@@ -182,38 +189,42 @@ with run_sim() as sim:
     # PURE HAMILTONIAN IN PBC
     H = ((3 / 16) * (g**2)) * H_Gamma - eta * (H_Link) - (4 / (g**2)) * H_Plaq
     if not pure_theory:
+        # Constraint the number of particles in the model
+        fixN = sim.par["N"]
+        H_fixN = Local_Hamiltonian(nx, ny, N_TOTAL, debug) - fixN * IDD(30 ** (nx * ny))
+        H_fixN = H_fixN * H_fixN
         # ADD MATTER FIELDS
-        H = H + mass * H_Matter + 0.5 * H_Hopping
+        H = H + mass * H_Matter + 0.5 * H_Hopping + 50 * H_fixN
     if not PBC:
         # ADD BORDER PENALTIES DUE TO OBC
         H = H - eta * H_Border
+    """
+    Check Hermitianity
+    H_herm = csr_matrix.getH(H)
+    check_matrix(H, H_herm)
+    """
     # ----------------------------------------------------------------------------------
     # DIAGONALIZING THE HAMILTONIAN
     GS = Pure_State()
-    # GS.ground_state(H)
-    GS.get_first_n_eigs(H)
+    GS.ground_state(H)
+    # GS.get_first_n_eigs(H, n_eigs=2)
+    # RESHIFT THE LOWEST EIGENVALUE OF THE HAMILTONIAN BY THE ENERGY PENALTIES
+    # for ii in range(len(GS.N_energies)):
+    #    GS.N_energies[ii] = (GS.N_energies[ii] + n_penalties * eta) / n
     # RESHIFT THE LOWEST EIGENVALUE OF THE HAMILTONIAN BY THE ENERGY PENALTIES
     # AND GET THE GROUND STATE ENERGY DENSITY (OF SINGLE SITE)
     GS.GSenergy = (GS.GSenergy + n_penalties * eta) / n
     # SAVE THE ENERGY VALUE in the dictionary
-    sim.res["energy"] = GS.N_energies
+    sim.res["energy"] = GS.GSenergy
     # TRUNCATE THE ENTRIES OF THE GROUND STATE
     psi = truncation(GS.psi, 10 ** (-10))
     # MASURE ENTANGLEMENT OF A BIPARTITION
     sim.res["entropy"] = entanglement_entropy(
         psi=psi, loc_dim=loc_dim, partition_size=int(nx * ny / 2)
     )
-    # SAVE STATE
-    sim.res["psi"] = psi
-    # sim["psi"] = psi
     # ----------------------------------------------------------------------------------
-    if not pure_theory:
-        logger.info("----------------------------------------------------")
-        logger.info(f"          EFFECTIVE MASS m {format(mass, '.5f')}")
     logger.info("----------------------------------------------------")
-    logger.info(f"    SU(2) GAUGE COUPLING g {format(g, '.3f')}")
-    logger.info("----------------------------------------------------")
-    logger.info(f"    GROUND STATE ENERGY  E {GS.GSenergy}")
+    logger.info(f"    ENERGY: {GS.GSenergy}")
     logger.info("----------------------------------------------------")
     # COMPUTE GAMMA EXPECTATION VALUE
     sim.res["gamma"], Obs["gamma"] = get_LOCAL_Observable(GS.psi, nx, ny, Gamma)
@@ -302,3 +313,6 @@ for ii in range(-4, 5, 2):
     )
     sub_energy = (sub_energy + n_penalties * eta) / n
     print("SUBSECTOR", ii, "ENERGY", sub_energy)"""
+
+
+# nohup bash -c "printf 'n%s\n' {0..20} | shuf | xargs -P6 -i python scripts/dmrgs.py massless/phases/weak {} 8" &>/dev/null &
