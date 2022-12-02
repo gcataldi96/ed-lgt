@@ -135,3 +135,4 @@ configs/
 data/
 out/
 *.pkl
+results/
