@@ -6,7 +6,13 @@ from scipy.sparse.linalg import eigsh as sparse_eigh
 from simsio import logger
 from tools import pause, zig_zag
 
-__all__ = ["Pure_State"]
+__all__ = [
+    "Pure_State",
+    "entanglement_entropy",
+    "truncation",
+    "normalize",
+    "get_loc_states_from_qmb_state",
+]
 
 
 class Pure_State:
@@ -25,15 +31,21 @@ class Pure_State:
         self.psi = truncation(self.psi, threshold)
 
 
+def normalize(psi):
+    if not isinstance(psi, np.ndarray):
+        raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
+    norm = np.linalg.norm(psi)
+    if np.abs(norm - 1) > 1e-14:
+        psi = psi / norm
+    return psi
+
+
 def truncation(array, threshold):
     if not isinstance(array, np.ndarray):
         raise TypeError(f"array should be an ndarray, not a {type(array)}")
     if not np.isscalar(threshold) and not isinstance(threshold, float):
         raise TypeError(f"threshold should be a SCALAR FLOAT, not a {type(threshold)}")
-    array = np.where(np.abs(array) > threshold, array, 0)
-    if np.all(np.imag(array)) < 10 ** (-15):
-        array = np.real(array)
-    return array
+    return np.where(np.abs(array) > threshold, array, 0)
 
 
 # ===================================================================
@@ -160,3 +172,52 @@ def projection(Proj, Operator):
     Operator = Operator * Proj
     Operator = Proj_dagger * Operator
     return Operator
+
+
+def entanglement_entropy(psi, loc_dim, n_sites, partition_size):
+    if not isinstance(psi, np.ndarray):
+        raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
+    if not np.isscalar(loc_dim) and not isinstance(loc_dim, int):
+        raise TypeError(f"loc_dim must be an SCALAR & INTEGER, not a {type(loc_dim)}")
+    if not np.isscalar(n_sites) and not isinstance(n_sites, int):
+        raise TypeError(f"n_sites must be an SCALAR & INTEGER, not a {type(n_sites)}")
+    if not np.isscalar(partition_size) and not isinstance(partition_size, int):
+        raise TypeError(
+            f"partition_size must be an SCALAR & INTEGER, not a {type(partition_size)}"
+        )
+    # COMPUTE THE ENTANGLEMENT ENTROPY OF A SPECIFIC SUBSYSTEM
+    tmp = psi.reshape(
+        (loc_dim**partition_size, loc_dim ** (n_sites - partition_size))
+    )
+    S, V, D = np.linalg.svd(tmp)
+    tmp = np.array([-(llambda**2) * np.log2(llambda**2) for llambda in V])
+    return np.sum(tmp)
+
+
+def get_loc_states_from_qmb_state(index, loc_dim, n_sites):
+    if not np.isscalar(index) and not isinstance(index, int):
+        raise TypeError(f"index must be an SCALAR & INTEGER, not a {type(index)}")
+    if not np.isscalar(loc_dim) and not isinstance(loc_dim, int):
+        raise TypeError(f"loc_dim must be an SCALAR & INTEGER, not a {type(loc_dim)}")
+    if not np.isscalar(n_sites) and not isinstance(n_sites, int):
+        raise TypeError(f"n_sites must be an SCALAR & INTEGER, not a {type(n_sites)}")
+    """
+    Compute the state of each single lattice site given the index of the qmb state
+    Args:
+        index (int): index of the qmb state associated to a specific configurations of the local sites
+        loc_dim (int): dimension of the local (single site) Hilbert Space
+        n_sites (int): number of sites
+
+    Returns:
+        ndarray(int): list of the states of the local Hilbert space associated to the given QMB state index
+    """
+    if index < 0:
+        raise ValueError(f"index {index} should be positive")
+    if index > (loc_dim**n_sites - 1):
+        raise ValueError(f"index {index} is too high")
+    loc_states = np.zeros(n_sites, dtype=int)
+    for ii in range(n_sites):
+        if ii > 0:
+            index = index - loc_states[ii - 1] * (loc_dim ** (n_sites - ii))
+        loc_states[ii] = index // (loc_dim ** (n_sites - ii - 1))
+    return loc_states
