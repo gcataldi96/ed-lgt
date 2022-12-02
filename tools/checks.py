@@ -3,7 +3,7 @@ import numpy as np
 from simsio import logger
 from scipy.sparse.linalg import norm
 
-__all__ = ["pause", "alert", "check_commutator", "check_matrix"]
+__all__ = ["pause", "alert", "check_commutator", "check_matrix", "check_hermitian"]
 
 
 def pause(phrase, debug):
@@ -13,11 +13,11 @@ def pause(phrase, debug):
         raise TypeError(f"debug should be a BOOL, not a {type(debug)}")
     if debug == True:
         # IT PROVIDES A PAUSE (with a phrase) in a given point of the PYTHON CODE
-        print("----------------------------------------------------")
+        logger.info("----------------------------------------------------")
         # Press the <ENTER> key to continue
         programPause = input(phrase)
-        print("----------------------------------------------------")
-        print("")
+        logger.info("----------------------------------------------------")
+        logger.info("")
 
 
 def alert(phrase, debug):
@@ -27,8 +27,8 @@ def alert(phrase, debug):
         raise TypeError(f"debug should be a BOOL, not a {type(debug)}")
     if debug == True:
         # IT PRINTS A PHRASE IN A GIVEN POINT OF A PYTHON CODE
-        print("")
-        print(phrase)
+        logger.info("")
+        logger.info(phrase)
 
 
 def check_commutator(A, B):
@@ -42,10 +42,10 @@ def check_commutator(A, B):
     ratio = norma / norma_max
     # check=(AB!=BA).nnz
     if ratio > 10 ** (-15):
-        print("    ERROR: A and B do NOT COMMUTE")
-        print("    NORM", norma)
-        print("    RATIO", ratio)
-    print("")
+        logger.info("    ERROR: A and B do NOT COMMUTE")
+        logger.info("    NORM", norma)
+        logger.info("    RATIO", ratio)
+    logger.info("")
 
 
 def check_matrix(A, B):
@@ -63,7 +63,15 @@ def check_matrix(A, B):
     norma_max = max(norm(A + B), norm(A), norm(B))
     ratio = norma / norma_max
     if ratio > 10 ** (-15):
-        print("    ERROR: A and B are DIFFERENT MATRICES")
+        logger.info("    ERROR: A and B are DIFFERENT MATRICES")
         raise ValueError(f"    NORM {norma}, RATIO {ratio}")
-    else:
-        print("The two matrices are equal")
+
+
+def check_hermitian(A):
+    if not isspmatrix(A):
+        raise TypeError(f"A should be a csr_matrix, not a {type(A)}")
+    # Get the Hermitian
+    logger.info(" CHECK HERMITICITY")
+    A_dag = A.getH()
+    check_matrix(A, A_dag)
+    logger.info(" OK")
