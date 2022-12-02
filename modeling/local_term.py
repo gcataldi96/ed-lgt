@@ -36,11 +36,14 @@ class LocalTerm2D:
         for ii in range(n):
             x, y = zig_zag(nx, ny, ii)
             # ADD THE TERM TO THE HAMILTONIAN
-            if mask is None or mask[x, y] is True:
-                H_Local = H_Local + local_op(self.Op, ii + 1, n)
+            if mask is not None:
+                if mask[x, y]:
+                    H_Local += local_op(self.Op, ii + 1, n)
+            else:
+                H_Local += local_op(self.Op, ii + 1, n)
         return strength * H_Local
 
-    def get_loc_expval(self, psi, lvals):
+    def get_loc_expval(self, psi, lvals, staggered=False):
         # CHECK ON TYPES
         if not isinstance(psi, np.ndarray):
             raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
@@ -50,6 +53,10 @@ class LocalTerm2D:
             for ii, ll in enumerate(lvals):
                 if not isinstance(ll, int):
                     raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
+        # PRINT OBSERVABLE NAME
+        logger.info(f"-----------------------")
+        logger.info(f" {self.Op_name}")
+        logger.info(f"----------------------")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]
         ny = lvals[1]
@@ -58,33 +65,25 @@ class LocalTerm2D:
         psi_dag = np.conjugate(psi)
         # Create an array to store the abg local observable
         self.obs = np.zeros((nx, ny))
+        # DEFINE A VECTOR FOR THE STORED VALUES
+        if staggered:
+            avg_odd = 0
+            avg_even = 0
         # RUN OVER THE LATTICE SITES
         for ii in range(n):
             # Given the 1D point on the lattice, get the corresponding (x,y) coords
             x, y = zig_zag(nx, ny, ii)
             # Compute the average value in the site x,y
-            self.obs[x, y] = np.dot(psi_dag, local_op(self.Op, ii + 1, n).dot(psi))
-            if np.imag(self.obs[x, y]) > 1e-10:
-                raise ValueError(f"Local Obs expected to be REAL")
-            self.obs[x, y] = np.real(self.obs[x, y])
-
-    def get_avg_expval(self, staggered=False):
-        # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
-        nx = self.obs.shape[0]
-        ny = self.obs.shape[1]
-        n = nx * ny
-        # DEFINE A VECTOR FOR THE STORED VALUES
-        if staggered:
-            avg_odd = 0
-            avg_even = 0
-            for ii in range(n):
-                # Given the 2D point on the lattice, get the corresponding (x,y) coords
-                x, y = zig_zag(nx, ny, ii)
-                staggered_factor = (-1) ** (x + y)
-                if staggered_factor < 1:
+            self.obs[x, y] = np.real(
+                np.dot(psi_dag, local_op(self.Op, ii + 1, n).dot(psi))
+            )
+            logger.info(f" ({x+1},{y+1}) {format(self.obs[x,y], '.7f')}")
+            if staggered:
+                if (-1) ** (x + y) < 1:
                     avg_odd += 2 * self.obs[x, y] / n
                 else:
                     avg_even += 2 * self.obs[x, y] / n
+        if staggered:
             return avg_even, avg_odd
         else:
             return np.sum(self.obs) / n
@@ -98,7 +97,7 @@ class LocalTerm2D:
             if np.any(np.abs(self.obs[-1, :] - value) > threshold):
                 logger.info(self.obs[-1, :])
                 raise ValueError(f"{border} border penalty not satisfied")
-        if border == "my":
+        elif border == "my":
             if np.any(np.abs(self.obs[:, 0] - value) > threshold):
                 logger.info(self.obs[:, 0])
                 raise ValueError(f"{border} border penalty not satisfied")
@@ -108,3 +107,4 @@ class LocalTerm2D:
                 raise ValueError(f"{border} border penalty not satisfied")
         else:
             raise ValueError(f"border must be in (mx, px, my, py), not {border}")
+        logger.info(f"{border}-border penalties are satisfied")
