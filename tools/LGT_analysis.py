@@ -2,7 +2,9 @@ from simsio import logger
 from itertools import product
 import numpy as np
 import pickle
-from mappings_1D_2D import inverse_zig_zag
+from .mappings_1D_2D import inverse_zig_zag
+
+__all__ = ["save_dictionary", "load_dictionary", "get_energy_density"]
 
 
 def save_dictionary(dict, filename):
