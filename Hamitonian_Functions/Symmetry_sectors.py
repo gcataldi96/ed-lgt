@@ -95,3 +95,26 @@ def get_indices_from_array(array, value):
         (value - 10 ** (-10) < array) & (array < value + 10 ** (-10))
     )[0]
     return index_list
+
+
+# GET THE SINGLE SITE SYMMETRY SECTORS WRT THE NUMBER OF FERMIONS
+N_tot_sectors = [0, 1, 2]
+N_tot_dim_sectors = [9, 12, 9]
+single_site_syms = single_site_symmetry_sectors(
+    loc_dim, sectors_list=N_tot_sectors, dim_sectors_list=N_tot_dim_sectors
+)
+# GET THE NBODY SYMMETRY SECTOR STATE
+Nbody_syms = many_body_symmetry_sectors(single_site_syms, n) - 4
+
+
+H_subsector = {}
+for ii in range(-4, 5, 2):
+    print(ii)
+    # GET THE INDICES ASSOCIATED TO EACH SYMMETRY SECTOR
+    indices = get_indices_from_array(Nbody_syms, ii)
+    indices = indices.tolist()
+    print("Computing H subsector of ", ii)
+    H_subsector[str(ii)] = get_submatrix_from_sparse(H, indices, indices)
+    sub_energy, sub_psi = get_ground_state_from_Hamiltonian(
+        csr_matrix(H_subsector[str(ii)]), debug=False
+    )

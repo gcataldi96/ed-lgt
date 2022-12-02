@@ -2,7 +2,7 @@ import numpy as np
 from scipy.sparse import csr_matrix, identity
 from tools.manage_data import acquire_data
 
-__all__ = ["get_su2_operators"]
+__all__ = ["get_su2_operators", "get_Hamiltonian_couplings"]
 
 
 def ID(pure_theory):
@@ -19,10 +19,10 @@ def gamma_operator(pure_theory):
     ops = {}
     if pure_theory:
         hilb_dim = 9
-        path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/pure_operators/"
+        path = "operators/su2_operators/pure_operators/"
     else:
         hilb_dim = 30
-        path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/full_operators/"
+        path = "operators/su2_operators/full_operators/"
     data = acquire_data(path + f"Gamma.txt")
     x = data["0"]
     y = data["1"]
@@ -35,10 +35,10 @@ def plaquette(pure_theory):
     ops = {}
     if pure_theory:
         hilb_dim = 9
-        path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/pure_operators/"
+        path = "operators/su2_operators/pure_operators/"
     else:
         hilb_dim = 30
-        path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/full_operators/"
+        path = "operators/su2_operators/full_operators/"
 
     for corner in ["py_px", "my_px", "py_mx", "my_mx"]:
         data = acquire_data(path + f"Corner_{corner}.txt")
@@ -56,10 +56,10 @@ def W_operators(pure_theory):
     ops = {}
     if pure_theory:
         hilb_dim = 9
-        path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/pure_operators/"
+        path = "operators/su2_operators/pure_operators/"
     else:
         hilb_dim = 30
-        path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/full_operators/"
+        path = "operators/su2_operators/full_operators/"
 
     for s in ["py", "px", "mx", "my"]:
         data = acquire_data(path + f"W_{s}.txt")
@@ -113,7 +113,7 @@ def penalties(pure_theory):
 
 def hopping():
     ops = {}
-    path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/full_operators/"
+    path = "operators/su2_operators/full_operators/"
     for side in ["py", "px", "mx", "my"]:
         data = acquire_data(path + f"Q_{side}_dag.txt")
         x = data["0"]
@@ -126,7 +126,7 @@ def hopping():
 
 def matter_operator():
     ops = {}
-    path = "/home/opensuse/workspace/ed-su2/operators/su2_operators/full_operators/"
+    path = "operators/su2_operators/full_operators/"
     data = acquire_data(path + f"Mass_op.txt")
     x = data["0"]
     y = data["1"]
@@ -177,3 +177,29 @@ def get_su2_operators(pure_theory):
         ops |= matter_operator()
         ops |= number_operators()
     return ops
+
+
+def get_Hamiltonian_couplings(pure_theory, g, m=None):
+    E = 3 * (g**2) / 16  # ELECTRIC FIELD
+    B = -4 / (g**2)  # MAGNETIC FIELD
+    # DICTIONARY WITH MODEL COEFFICIENTS
+    coeffs = {
+        "g": g,
+        "E": E,  # ELECTRIC FIELD coupling
+        "B": B,  # MAGNETIC FIELD coupling
+    }
+    if pure_theory:
+        coeffs["eta"] = -20 * max(E, np.abs(B))
+    if not pure_theory:
+        coeffs["eta"] = -20 * max(E, np.abs(B), m)
+        coeffs |= {
+            "m": m,
+            "tx": -0.5j,  # HORIZONTAL HOPPING
+            "tx_dag": 0.5j,  # HORIZONTAL HOPPING DAGGER
+            "ty_even": -0.5,  # VERTICAL HOPPING (EVEN SITES)
+            "ty_odd": 0.5,  # VERTICAL HOPPING (ODD SITES)
+            "m_odd": -m,  # EFFECTIVE MASS for ODD SITES
+            "m_even": m,  # EFFECTIVE MASS for EVEN SITES
+        }
+    print(f"PENALTY {coeffs['eta']}")
+    return coeffs
