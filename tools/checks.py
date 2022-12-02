@@ -64,7 +64,6 @@ def check_matrix(A, B):
     ratio = norma / norma_max
     if ratio > 10 ** (-15):
         print("    ERROR: A and B are DIFFERENT MATRICES")
-        print("    NORM", norma)
-        print("    RATIO", ratio)
+        raise ValueError(f"    NORM {norma}, RATIO {ratio}")
     else:
         print("The two matrices are equal")
