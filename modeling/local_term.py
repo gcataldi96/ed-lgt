@@ -89,22 +89,23 @@ class LocalTerm2D:
             return np.sum(self.obs) / n
 
     def check_on_borders(self, border, value=1, threshold=1e-10):
+        logger.info(f" CHECK BORDER PENALTIES")
         if border == "mx":
             if np.any(np.abs(self.obs[0, :] - value) > threshold):
                 logger.info(self.obs[0, :])
-                raise ValueError(f"{border} border penalty not satisfied")
+                raise ValueError(f" {border} border penalty not satisfied")
         elif border == "px":
             if np.any(np.abs(self.obs[-1, :] - value) > threshold):
                 logger.info(self.obs[-1, :])
-                raise ValueError(f"{border} border penalty not satisfied")
+                raise ValueError(f" {border} border penalty not satisfied")
         elif border == "my":
             if np.any(np.abs(self.obs[:, 0] - value) > threshold):
                 logger.info(self.obs[:, 0])
-                raise ValueError(f"{border} border penalty not satisfied")
+                raise ValueError(f" {border} border penalty not satisfied")
         elif border == "py":
             if np.any(np.abs(self.obs[:, -1] - value) > threshold):
                 logger.info(self.obs[:, -1])
-                raise ValueError(f"{border} border penalty not satisfied")
+                raise ValueError(f" {border} border penalty not satisfied")
         else:
-            raise ValueError(f"border must be in (mx, px, my, py), not {border}")
-        logger.info(f"{border}-border penalties are satisfied")
+            raise ValueError(f" border must be in (mx, px, my, py), not {border}")
+        logger.info(f" {border}-border penalties are satisfied")
