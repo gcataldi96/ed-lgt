@@ -90,13 +90,17 @@ class TwoBodyTerm2D:
                         sites_list = [ii + 1, jj + 1]
                     else:
                         continue
-            if mask is None or mask[x, y] is True:
+            if mask is not None:
+                if mask[x, y]:
+                    # Add the term to the Hamiltonian
+                    H_twobody += two_body_op(self.op_list, sites_list, n)
+            else:
                 # Add the term to the Hamiltonian
-                H_twobody = H_twobody + two_body_op(self.op_list, sites_list, n)
+                H_twobody += strength * two_body_op(self.op_list, sites_list, n)
         if not isspmatrix(H_twobody):
             H_twobody = csr_matrix(H_twobody)
         if add_dagger:
-            H_twobody = H_twobody + csr_matrix(H_twobody.conj().transpose())
+            H_twobody += csr_matrix(H_twobody.conj().transpose())
         return H_twobody
 
     def get_expval(self, psi, lvals, has_obc=False):
@@ -124,13 +128,19 @@ class TwoBodyTerm2D:
             x1, y1 = zig_zag(nx, ny, ii)
             for jj in range(n):
                 x2, y2 = zig_zag(nx, ny, jj)
-                self.corr[x1, y1, x2, y2] = np.real(
-                    np.dot(
-                        psi_dag, two_body_op(self.op_list, [ii + 1, jj + 1], n).dot(psi)
+                # AVOID SELF CORRELATIONS
+                if ii != jj:
+                    self.corr[x1, y1, x2, y2] = np.real(
+                        np.dot(
+                            psi_dag,
+                            two_body_op(self.op_list, [ii + 1, jj + 1], n).dot(psi),
+                        )
                     )
-                )
+                else:
+                    self.corr[x1, y1, x2, y2] = 0
 
     def check_link_symm(self, value=1, threshold=1e-10, has_obc=True):
+        logger.info(f" CHECK LINK SYMMETRIES")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = self.corr.shape[0]
         ny = self.corr.shape[1]
@@ -141,15 +151,15 @@ class TwoBodyTerm2D:
                     if x == nx - 1:
                         if not has_obc:
                             if np.abs(self.corr[x, y, 0, y] - value) > threshold:
-                                logger.info(
-                                    f"W{self.axis}_({x},{y})-({0},{y})={self.corr[x,y,0,y]}"
+                                raise ValueError(
+                                    f"W{self.axis}_({x},{y})-({0},{y})={self.corr[x,y,0,y]}: expected {value}"
                                 )
                         else:
                             continue
                     else:
                         if np.abs(self.corr[x, y, x + 1, y] - value) > threshold:
-                            logger.info(
-                                f"W{self.axis}_({x},{y})-({x+1},{y})={self.corr[x,y,x+1,y]}"
+                            raise ValueError(
+                                f"W{self.axis}_({x},{y})-({x+1},{y})={self.corr[x,y,x+1,y]}: expected {value}"
                             )
         if self.axis == "y":
             for x in range(nx):
@@ -157,13 +167,14 @@ class TwoBodyTerm2D:
                     if y == ny - 1:
                         if not has_obc:
                             if np.abs(self.corr[x, y, x, 0] - value) > threshold:
-                                logger.info(
-                                    f"W{self.axis}_({x},{y})-({x},{0})={self.corr[x,y,x,0]}"
+                                raise ValueError(
+                                    f"W{self.axis}_({x},{y})-({x},{0})={self.corr[x,y,x,0]}: expected {value}"
                                 )
                         else:
                             continue
                     else:
                         if np.abs(self.corr[x, y, x, y + 1] - value) > threshold:
-                            logger.info(
-                                f"W{self.axis}_({x},{y})-({x},{y+1})={self.corr[x,y,x,y+1]}"
+                            raise ValueError(
+                                f"W{self.axis}_({x},{y})-({x},{y+1})={self.corr[x,y,x,y+1]}: expected {value}"
                             )
+        logger.info(f" All the {self.axis} Link Symmetries are satisfied")
