@@ -127,7 +127,7 @@ with run_sim() as sim:
         border_penalty=True,
         link_penalty=True,
         plaquette_penalty=False,
-        PBC=not has_obc,
+        has_obc=has_obc,
     )
     # CHECK BORDER PENALTIES
     if has_obc:
