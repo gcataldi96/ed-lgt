@@ -171,12 +171,17 @@ with run_sim() as sim:
             logger.info(f" {obs}_EVEN: {sim.res[f'{obs}_even']}")
             logger.info(f" {obs}_ODD: {sim.res[f'{obs}_odd']}")
     logger.info("----------------------------------------------------")
-    # PERFORM TRUNCATION
-    psi.GSpsi = truncation(psi.GSpsi, 1e-10)
-    logger.info(" STATE CONFIGURATIONS")
-    for ind, alpha in zip(csr_matrix(psi.GSpsi).indices, csr_matrix(psi.GSpsi).data):
-        loc_states = get_loc_states_from_qmb_state(
-            index=ind, loc_dim=loc_dim, n_sites=n_sites
-        )
-        logger.info(f" {loc_states+1}  {alpha}")
-    logger.info("----------------------------------------------------")
+    if pure_theory:
+        if has_obc:
+            # GET STATE CONFIGURATIONS
+            logger.info(" STATE CONFIGURATIONS")
+            # PERFORM TRUNCATION
+            psi.GSpsi = truncation(psi.GSpsi, 1e-10)
+            for ind, alpha in zip(
+                csr_matrix(psi.GSpsi).indices, csr_matrix(psi.GSpsi).data
+            ):
+                loc_states = get_loc_states_from_qmb_state(
+                    index=ind, loc_dim=loc_dim, n_sites=n_sites
+                )
+                logger.info(f" {loc_states+1}  {alpha}")
+            logger.info("----------------------------------------------------")
