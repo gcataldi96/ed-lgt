@@ -1,3 +1,107 @@
+# %%
+import numpy as np
+from simsio import *
+import pickle
+from matplotlib import pyplot as plt
+
+
+def save_dictionary(dict, filename):
+    with open(filename, "wb") as outp:  # Overwrites any existing file.
+        pickle.dump(dict, outp, pickle.HIGHEST_PROTOCOL)
+    outp.close
+
+
+def load_dictionary(filename):
+    with open(filename, "rb") as outp:
+        return pickle.load(outp)
+
+
+# %%
+# Pure_L4_OBC_BD_conv
+config_filename = "pure_3x2_PBC"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+
+obs_list = ["energy", "gamma", "plaq", "entropy"]
+
+res = {}
+res["params"] = vals
+for kk, obs in enumerate(obs_list):
+    res[obs] = []
+    for ii, g in enumerate(vals["g"]):
+        res[obs].append(get_sim(ugrid[ii]).res[obs])
+
+fig1 = plt.figure()
+plt.xscale("log")
+plt.plot(vals["g"], res["gamma"], "-o")
+fig2 = plt.figure()
+plt.xscale("log")
+plt.plot(vals["g"], res["energy"], "-o")
+fig3 = plt.figure()
+plt.xscale("log")
+plt.plot(vals["g"], res["entropy"], "-o")
+
+# %%
+# Full_L4_OBC
+config_filename = "full_prova"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+
+obs_list = [
+    "energy",
+    "entropy",
+    "gamma",
+    "plaq",
+    "n_single_even",
+    "n_single_odd",
+    "n_pair_even",
+    "n_pair_odd",
+    "n_tot_even",
+    "n_tot_odd",
+]
+
+res = {}
+res["params"] = vals
+for kk, obs in enumerate(obs_list):
+    res[obs] = []
+    for ii, g in enumerate(vals["g"]):
+        res[obs].append(get_sim(ugrid[ii]).res[obs])
+
+fig1 = plt.figure()
+plt.plot(vals["g"], res["gamma"], "-o")
+plt.xscale("log")
+fig2 = plt.figure()
+plt.plot(vals["g"], res["energy"], "-o")
+plt.xscale("log")
+fig3 = plt.figure()
+plt.plot(vals["g"], res["n_tot_even"], "-o")
+plt.xscale("log")
+fig4 = plt.figure()
+plt.plot(vals["g"], res["entropy"], "-o")
+plt.xscale("log")
+# %%
+# Full_L4_OBC
+config_filename = "Pure_L4_PBC"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+
+obs_list = ["energy", "gamma", "plaq", "entropy"]
+
+res = {}
+res["params"] = vals
+for kk, obs in enumerate(obs_list):
+    res[obs] = []
+for ii, g in enumerate(vals["g"]):
+    res["gamma"].append(np.sum(get_sim(ugrid[ii]).res["gamma"]) / 16)
+    res["energy"].append(get_sim(ugrid[ii]).res["energy"])
+
+fig1 = plt.figure()
+plt.plot(vals["g"], res["gamma"], "-o")
+plt.xscale("log")
+fig2 = plt.figure()
+plt.plot(vals["g"], res["energy"], "-o")
+plt.xscale("log")
+
 import numpy as np
 from simsio import *
 import pickle
@@ -44,6 +148,7 @@ for ii, N in enumerate(vals["N"]):
             res[obs][ii][kk] = get_sim(ugrid[ii][kk]).res[obs]
 
 save_dictionary(res, "DeltaN_single_mass.pkl")
+
 
 """
 Ent_entropy = np.zeros((vals["mass"].shape[0], vals["gSU2"].shape[0]))
