@@ -77,7 +77,7 @@ class LocalTerm2D:
             self.obs[x, y] = np.real(
                 np.dot(psi_dag, local_op(self.Op, ii + 1, n).dot(psi))
             )
-            logger.info(f" ({x+1},{y+1}) {format(self.obs[x,y], '.7f')}")
+            logger.info(f" ({x+1},{y+1}) {format(self.obs[x,y], '.12f')}")
             if staggered:
                 if (-1) ** (x + y) < 1:
                     avg_odd += 2 * self.obs[x, y] / n
