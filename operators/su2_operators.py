@@ -201,5 +201,4 @@ def get_Hamiltonian_couplings(pure_theory, g, m=None):
             "m_odd": -m,  # EFFECTIVE MASS for ODD SITES
             "m_even": m,  # EFFECTIVE MASS for EVEN SITES
         }
-    print(f"PENALTY {coeffs['eta']}")
     return coeffs
