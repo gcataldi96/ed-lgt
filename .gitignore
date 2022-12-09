@@ -136,3 +136,4 @@ data/
 out/
 *.pkl
 results/
+dict_simulations/
