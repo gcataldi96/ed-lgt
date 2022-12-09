@@ -120,10 +120,7 @@ class PlaquetteTerm2D:
         n = nx * ny
         # Compute the complex_conjugate of the ground state psi
         psi_dag = np.conjugate(psi)
-        if has_obc:
-            plaq_obs = np.zeros((nx - 1, ny - 1))
-        else:
-            plaq_obs = np.zeros((nx, ny))
+        plaq_obs = []
         for ii in range(n):
             # Compute the corresponding (x,y) coords
             x, y = zig_zag(nx, ny, ii)
@@ -183,8 +180,9 @@ class PlaquetteTerm2D:
             )
             # PRINT THE PLAQUETTE
             self.print_Plaquette(plaq_string, plaq)
-            plaq_obs[x, y] = plaq
-        return np.sum(plaq_obs) / (plaq_obs.shape[0] * plaq_obs.shape[0])
+            plaq_obs.append(plaq)
+        plaq_obs = np.array(plaq_obs)
+        return np.sum(plaq_obs) / plaq_obs.shape[0]
 
     def print_Plaquette(self, sites_list, value):
         if not isinstance(sites_list, list):
@@ -198,15 +196,15 @@ class PlaquetteTerm2D:
                 f"sites_list should be a FLOAT REAL NUMBER, not a {type(value)}"
             )
         if value > 0:
-            value = format(value, ".7f")
+            value = format(value, ".10f")
         else:
             if np.abs(value) < 10 ** (-10):
-                value = format(np.abs(value), ".7f")
+                value = format(np.abs(value), ".10f")
             else:
-                value = format(value, ".7f")
-        logger.info(f" ({sites_list[2]})---------({sites_list[3]})")
-        logger.info(f"   |             |")
+                value = format(value, ".10f")
+        logger.info(f" ({sites_list[2]})------------({sites_list[3]})")
+        logger.info(f"   |                |")
         logger.info(f"   |  {value}  |")
-        logger.info(f"   |             |")
-        logger.info(f" ({sites_list[0]})---------({sites_list[1]})")
+        logger.info(f"   |                |")
+        logger.info(f" ({sites_list[0]})------------({sites_list[1]})")
         logger.info("")
