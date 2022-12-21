@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.sparse import identity, csr_matrix
+from scipy.sparse import identity
 from operators import get_su2_operators, get_Hamiltonian_couplings
 from modeling import Pure_State, LocalTerm2D, TwoBodyTerm2D, PlaquetteTerm2D
 from modeling import (
@@ -8,7 +8,7 @@ from modeling import (
     staggered_mask,
     truncation,
     normalize,
-    get_loc_states_from_qmb_state,
+    get_state_configurations,
 )
 from tools import get_energy_density, check_hermitian
 from simsio import logger, run_sim
@@ -18,6 +18,7 @@ from simsio import logger, run_sim
 with run_sim() as sim:
     sim.link("psi")
     # LATTICE DIMENSIONS
+    GS_only = sim.par["GS_only"]
     lvals = sim.par["lvals"]
     dim = len(lvals)
     directions = "xyz"[:dim]
@@ -40,6 +41,7 @@ with run_sim() as sim:
     ops = get_su2_operators(pure_theory)
     # ACQUIRE HAMILTONIAN COEFFICIENTS
     coeffs = get_Hamiltonian_couplings(pure_theory, g, m)
+    logger.info(f"Penalty {coeffs['eta']}")
     # CONSTRUCT THE HAMILTONIAN
     ham_terms = {}
     H = 0
@@ -104,24 +106,24 @@ with run_sim() as sim:
                 -coeffs["eta"]
                 * (
                     ham_terms["fix_N"].get_Hamiltonian(lvals, strength=1)
-                    - DeltaN * identity(tot_hilb_space)
+                    - (DeltaN + n_sites) * identity(tot_hilb_space)
                 )
-                * (
-                    ham_terms["fix_N"].get_Hamiltonian(lvals, strength=1)
-                    - DeltaN * identity(tot_hilb_space)
-                )
+                ** 2
             )
     # CHECK THAT THE HAMILTONIAN IS HERMITIAN
     check_hermitian(H)
     # DIAGONALIZE THE HAMILTONIAN
     psi = Pure_State()
-    psi.ground_state(H)
-    # CHECK THE STATE TO BE NORMALIZED:
-    psi.GSpsi = normalize(psi.GSpsi)
+    if GS_only:
+        psi.ground_state(H)
+        # CHECK THE STATE TO BE NORMALIZED:
+        psi.GSpsi = normalize(psi.GSpsi)
+    else:
+        psi.get_first_n_eigs(H, n_eigs=6)
     # ACQUIRE RESULTS
     # RESCALE ENERGY
     sim.res["energy"] = get_energy_density(
-        psi.GSenergy[0],
+        psi.GSenergy,
         lvals,
         penalty=coeffs["eta"],
         border_penalty=True,
@@ -172,16 +174,23 @@ with run_sim() as sim:
             logger.info(f" {obs}_ODD: {sim.res[f'{obs}_odd']}")
     logger.info("----------------------------------------------------")
     if pure_theory:
-        if has_obc:
-            # GET STATE CONFIGURATIONS
-            logger.info(" STATE CONFIGURATIONS")
-            # PERFORM TRUNCATION
-            psi.GSpsi = truncation(psi.GSpsi, 1e-10)
-            for ind, alpha in zip(
-                csr_matrix(psi.GSpsi).indices, csr_matrix(psi.GSpsi).data
-            ):
-                loc_states = get_loc_states_from_qmb_state(
-                    index=ind, loc_dim=loc_dim, n_sites=n_sites
+        # PERFORM TRUNCATION
+        psi.GSpsi = truncation(psi.GSpsi, 1e-10)
+        # GET STATE CONFIGURATIONS
+        get_state_configurations(psi.GSpsi, loc_dim, n_sites)
+        if not GS_only:
+            for ii in range(1, psi.Npsi.shape[1]):
+                logger.info(f" {ii} EXCITED STATE")
+                exc_energy = get_energy_density(
+                    psi.Nenergies[ii],
+                    lvals,
+                    penalty=coeffs["eta"],
+                    border_penalty=True,
+                    link_penalty=True,
+                    plaquette_penalty=False,
+                    has_obc=has_obc,
                 )
-                logger.info(f" {loc_states+1}  {alpha}")
-            logger.info("----------------------------------------------------")
+                logger.info(f" ENERGY: {exc_energy}")
+                logger.info(" STATE CONFIGURATIONS")
+                phi = truncation(psi.Npsi[:, ii], 1e-10)
+                get_state_configurations(phi, loc_dim, n_sites)
