@@ -10,8 +10,6 @@ from Hamitonian_Functions.QMB_Operations.Density_Matrix_Tools import (
     entanglement_entropy,
     truncation,
 )
-from Hamitonian_Functions.QMB_Operations.Simple_Checks import check_matrix
-from Hamitonian_Functions.Symmetry_sectors import *
 from simsio import logger, run_sim
 
 # ===================================================================================
@@ -27,7 +25,7 @@ with run_sim() as sim:
     # Total Number of lattice sites
     n = nx * ny
     # Debugging mode
-    debug = sim.par["debug"]
+    debug = False
     # Boundary Conditions
     PBC = sim.par["PBC"]
     if PBC:
