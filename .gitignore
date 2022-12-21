@@ -132,8 +132,4 @@ dmypy.json
 configs/
 
 # Results
-data/
-out/
-*.pkl
 results/
-dict_simulations/
