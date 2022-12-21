@@ -11,9 +11,12 @@ for L in [2, 3, 4]:
 
 # %%
 # GENERATE SIMULATION PARAMETERS FOR FULL THEORY
-params = {"g": np.logspace(-1, 1, 20), "m": np.logspace(-2, 0, 10)}
+params = {"g": np.logspace(-1, 1, 20), "m": np.logspace(-1, 0, 10)}
 for N in [0, 2]:
-    for bc in ["OBC", "PBC"]:
+    for bc in ["OBC"]:
         gen_configs("template", params, f"full_Delta{N}_{bc}")
 
 # %%
+# SYMMETRY SECTORS
+params = {"DeltaN": np.array([0, -4, -2, 2, 4]), "g": np.logspace(-1, 1, 20)}
+gen_configs("template", params, f"full_sym_sectors")
