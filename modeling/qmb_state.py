@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.linalg import eigh as array_eigh
-from scipy.sparse import csr_matrix, isspmatrix, isspmatrix_csr, save_npz
+from scipy.sparse import csr_matrix, isspmatrix, isspmatrix_csr, save_npz, lil_matrix
 from scipy.sparse.linalg import eigsh as sparse_eigh
 
 from simsio import logger
@@ -12,6 +12,9 @@ __all__ = [
     "truncation",
     "normalize",
     "get_loc_states_from_qmb_state",
+    "get_qmb_state_from_loc_state",
+    "get_submatrix_from_sparse",
+    "get_state_configurations",
 ]
 
 
@@ -20,10 +23,12 @@ class Pure_State:
         self.GSenergy, self.GSpsi = get_eigs_from_sparse_Hamiltonian(Hamiltonian)
 
     def get_first_n_eigs(self, Hamiltonian, n_eigs=5):
-        self.N_energies, self.psi = get_eigs_from_sparse_Hamiltonian(
+        self.Nenergies, self.Npsi = get_eigs_from_sparse_Hamiltonian(
             Hamiltonian, n_eigs=n_eigs
         )
-        self.GSenergy = self.N_energies[0]
+        # Save GROUND STATE PROPERTIES
+        self.GSenergy = self.Nenergies[0]
+        self.GSpsi = self.Npsi[:, 0]
 
     def psi_truncate(self, threshold):
         if not np.isscalar(threshold) and not isinstance(threshold, float):
@@ -48,21 +53,14 @@ def truncation(array, threshold):
     return np.where(np.abs(array) > threshold, array, 0)
 
 
-# ===================================================================
 def get_eigs_from_sparse_Hamiltonian(Ham, n_eigs=1):
     if not isspmatrix_csr(Ham):
         raise TypeError(f"Ham should be a csr_matrix, not a {type(Ham)}")
     # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
     eig_vals, eig_vecs = sparse_eigh(Ham, k=n_eigs, which="SA")
-    # GROUND STATE ENERGY
-    energies = eig_vals[:n_eigs]
-    # GROUND STATE
-    GSpsi = np.zeros(Ham.shape[0], dtype=complex)
-    GSpsi[:] = eig_vecs[:, 0]
-    return energies, GSpsi
+    return eig_vals, eig_vecs
 
 
-# ===================================================================
 def diagonalize_density_matrix(rho):
     # Diagonalize a density matrix which is HERMITIAN COMPLEX MATRIX
     if isinstance(rho, np.ndarray):
@@ -72,7 +70,6 @@ def diagonalize_density_matrix(rho):
     return rho_eigvals, rho_eigvecs
 
 
-# ===================================================================
 def get_reduced_density_matrix(psi, loc_dim, nx, ny, site):
     if not isinstance(psi, np.ndarray):
         raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
@@ -107,7 +104,6 @@ def get_reduced_density_matrix(psi, loc_dim, nx, ny, site):
     return rho
 
 
-# ===================================================================
 def get_projector(rho, loc_dim, threshold, debug, name_save):
     # THIS FUNCTION CONSTRUCTS THE PROJECTOR OPERATOR TO REDUCE
     # THE SINGLE SITE DIMENSION ACCORDING TO THE EIGENVALUES
@@ -158,7 +154,6 @@ def get_projector(rho, loc_dim, threshold, debug, name_save):
     return Proj
 
 
-# ===================================================================
 def projection(Proj, Operator):
     # THIS FUNCTION PERFORMS THE PROJECTION OF Operator
     # WITH THE PROJECTOR Proj: Op' = Proj^{dagger} Op Proj
@@ -221,3 +216,64 @@ def get_loc_states_from_qmb_state(index, loc_dim, n_sites):
             index = index - loc_states[ii - 1] * (loc_dim ** (n_sites - ii))
         loc_states[ii] = index // (loc_dim ** (n_sites - ii - 1))
     return loc_states
+
+
+# index=22
+# loc_dim=3
+# n_sites=3
+# locs= get_loc_states_from_qmb_state(index,loc_dim,n_sites)
+# print(locs)
+
+
+def get_qmb_state_from_loc_state(loc_states, loc_dim):
+    n_sites = len(loc_states)
+    qmb_index = 0
+    for ii in range(n_sites):
+        qmb_index += loc_states[ii] * (loc_dim ** (n_sites - ii - 1))
+    print(qmb_index)
+    return qmb_index
+
+
+# loc_states=[1,1,2]
+# qmb_state = get_qmb_state_from_loc_state(loc_states, 3)
+
+
+def get_submatrix_from_sparse(matrix, rows_list, cols_list):
+    # CHECK ON TYPES
+    if not isspmatrix(matrix):
+        raise TypeError(f"matrix must be a SPARSE MATRIX, not a {type(matrix)}")
+    if not isinstance(rows_list, list):
+        raise TypeError(f"rows_list must be a LIST, not a {type(rows_list)}")
+    if not isinstance(cols_list, list):
+        raise TypeError(f"cols_list must be a LIST, not a {type(cols_list)}")
+    matrix = lil_matrix(matrix)
+    # Get the Submatrix out of the list of rows and columns
+    sub_matrix = matrix[rows_list, :][:, cols_list]
+    return sub_matrix
+
+
+def get_state_configurations(psi, loc_dim, n_sites):
+    if not isinstance(psi, np.ndarray):
+        raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
+    if not np.isscalar(loc_dim) and not isinstance(loc_dim, int):
+        raise TypeError(f"loc_dim must be an SCALAR & INTEGER, not a {type(loc_dim)}")
+    if not np.isscalar(n_sites) and not isinstance(n_sites, int):
+        raise TypeError(f"n_sites must be an SCALAR & INTEGER, not a {type(n_sites)}")
+    logger.info("----------------------------------------------------")
+    logger.info(" STATE CONFIGURATIONS")
+    psi = truncation(psi, 1e-10)
+    sing_vals = sorted(csr_matrix(psi).data, key=lambda x: (abs(x), -x), reverse=True)
+    indices = [
+        x
+        for _, x in sorted(
+            zip(csr_matrix(psi).data, csr_matrix(psi).indices),
+            key=lambda pair: (abs(pair[0]), -pair[0]),
+            reverse=True,
+        )
+    ]
+    for ind, alpha in zip(indices, sing_vals):
+        loc_states = get_loc_states_from_qmb_state(
+            index=ind, loc_dim=loc_dim, n_sites=n_sites
+        )
+        logger.info(f" {loc_states+1}  {alpha}")
+    logger.info("----------------------------------------------------")
