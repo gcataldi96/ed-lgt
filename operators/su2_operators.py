@@ -2,7 +2,7 @@ import numpy as np
 from scipy.sparse import csr_matrix, identity
 from tools.manage_data import acquire_data
 
-__all__ = ["get_su2_operators", "get_Hamiltonian_couplings"]
+__all__ = ["get_su2_operators", "get_Hamiltonian_couplings", "get_SU2_surface_operator"]
 
 
 def ID(pure_theory):
@@ -41,7 +41,7 @@ def plaquette(pure_theory):
         path = "operators/su2_operators/full_operators/"
 
     for corner in ["py_px", "my_px", "py_mx", "my_mx"]:
-        data = acquire_data(path + f"Corner_{corner}.txt")
+        data = acquire_data(path + f"new_Corner_{corner}.txt")
         x = data["0"]
         y = data["1"]
         coeff = data["2"]
@@ -202,3 +202,63 @@ def get_Hamiltonian_couplings(pure_theory, g, m=None):
             "m_even": m,  # EFFECTIVE MASS for EVEN SITES
         }
     return coeffs
+
+
+def get_SU2_surface_operator(pure_theory, operator, site):
+    """
+    This function computes the operator in the reduced basis that is appropriate
+    for the bordering sites of the lattice
+    Args:
+        pure_theory (bool): if True, operators describe only SU2 pure theory (no matter). If False,
+        operators includes both gauge and dynamical matter d.o.f
+
+        operator (csr_matrix): bulk operator that we want to project in the basis referred to a surface site
+
+        site (str): possible surface site of the lattice.
+        It can be a CORNER ["py_px", "my_px", "py_mx", "my_mx"] or a BORDER ["mx", "px", "my", "py"]
+    """
+    if pure_theory:
+        loc_dim = 9
+        if site == "py_px":
+            coords = np.array([1, 2])
+        elif site == "my_px":
+            coords = np.array([1, 4])
+        elif site == "py_mx":
+            coords = np.array([1, 5])
+        elif site == "my_mx":
+            coords = np.array([1, 6])
+        elif site == "mx":
+            coords = np.array([1, 5, 6, 7])
+        elif site == "px":
+            coords = np.array([1, 2, 4, 6])
+        elif site == "my":
+            coords = np.array([1, 3, 4, 7])
+        elif site == "py":
+            coords = np.array([1, 2, 3, 5])
+    else:
+        loc_dim = 30
+        if site == "py_px":
+            coords = np.array([1, 2, 10, 11, 22, 23])
+        elif site == "my_px":
+            coords = np.array([1, 4, 10, 13, 22, 25])
+        elif site == "py_mx":
+            coords = np.array([1, 5, 11, 12, 22, 26])
+        elif site == "my_mx":
+            coords = np.array([1, 7, 12, 13, 22, 28])
+        elif site == "mx":
+            coords = np.array([1, 5, 6, 7, 11, 12, 13, 20, 21, 22, 26, 27, 28])
+        elif site == "px":
+            coords = np.array([1, 2, 4, 6, 10, 11, 13, 16, 17, 22, 23, 25, 27])
+        elif site == "my":
+            coords = np.array([1, 3, 4, 7, 10, 12, 13, 18, 19, 22, 24, 25, 28])
+        elif site == "py":
+            coords = np.array([1, 2, 3, 5, 10, 11, 12, 14, 15, 22, 23, 24, 26])
+    # CONSTRUCT THE PROJECTOR
+    data = np.ones(coords.shape[0], dtype=float)
+    P = csr_matrix(
+        (data, (coords - 1, np.arange(coords.shape[0]))),
+        shape=(loc_dim, coords.shape[0]),
+    )
+    P_dag = csr_matrix(P.conj().transpose())
+    # return the operator projected on the effective basis
+    return P_dag * operator * P
