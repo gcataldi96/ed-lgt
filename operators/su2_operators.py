@@ -15,6 +15,25 @@ def ID(pure_theory):
     return ops
 
 
+def link_parity(pure_theory):
+    ops = {}
+    if pure_theory:
+        hilb_dim = 9
+        path = "operators/su2_operators/pure_operators/"
+    else:
+        hilb_dim = 30
+        path = "operators/su2_operators/full_operators/"
+    for ii, axis in ["x", "y"]:
+        data = acquire_data(path + f"{axis}_link_parity.txt")
+        x = data["0"]
+        y = data["1"]
+        coeff = data["2"]
+        ops[f"p{axis}_link_P"] = csr_matrix(
+            (coeff, (x - 1, y - 1)), shape=(hilb_dim, hilb_dim)
+        )
+    return ops
+
+
 def gamma_operator(pure_theory):
     ops = {}
     if pure_theory:
@@ -169,6 +188,7 @@ def get_su2_operators(pure_theory):
     ops = {}
     ops |= ID(pure_theory)
     ops |= gamma_operator(pure_theory)
+    ops |= link_parity(pure_theory)
     ops |= plaquette(pure_theory)
     ops |= W_operators(pure_theory)
     ops |= penalties(pure_theory)
