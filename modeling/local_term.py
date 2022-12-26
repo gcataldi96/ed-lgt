@@ -53,6 +53,8 @@ class LocalTerm2D:
             for ii, ll in enumerate(lvals):
                 if not isinstance(ll, int):
                     raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
+        if not isinstance(staggered, bool):
+            raise TypeError(f"staggered should be a BOOL, not a {type(staggered)}")
         # PRINT OBSERVABLE NAME
         logger.info(f"-----------------------")
         logger.info(f" {self.Op_name}")
@@ -87,6 +89,53 @@ class LocalTerm2D:
             return avg_even, avg_odd
         else:
             return np.sum(self.obs) / n
+
+    def get_fluctuations(self, psi, lvals, staggered=False):
+        # CHECK ON TYPES
+        if not isinstance(psi, np.ndarray):
+            raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
+        if not isinstance(lvals, list):
+            raise TypeError(f"lvals should be a list, not a {type(lvals)}")
+        else:
+            for ii, ll in enumerate(lvals):
+                if not isinstance(ll, int):
+                    raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
+        if not isinstance(staggered, bool):
+            raise TypeError(f"staggered should be a BOOL, not a {type(staggered)}")
+        # PRINT OBSERVABLE NAME
+        logger.info(f"-----------------------")
+        logger.info(f" {self.Op_name}")
+        logger.info(f"----------------------")
+        # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
+        nx = lvals[0]
+        ny = lvals[1]
+        n = nx * ny
+        # Compute the complex_conjugate of the ground state psi
+        psi_dag = np.conjugate(psi)
+        # Create array to store fluctuations: (<O^{2}>-<O>^{2})^{1/2}
+        self.var = np.zeros((nx, ny))
+        # DEFINE A VECTOR FOR THE STORED VALUES
+        if staggered:
+            var_odd = 0
+            var_even = 0
+        # RUN OVER THE LATTICE SITES
+        for ii in range(n):
+            # Given the 1D point on the lattice, get the corresponding (x,y) coords
+            x, y = zig_zag(nx, ny, ii)
+            # Compute the standard deviation
+            self.var[x, y] = (
+                np.real(np.dot(psi_dag, (local_op(self.Op, ii + 1, n) ** 2).dot(psi)))
+                - self.obs[x, y] ** 2
+            )
+            if staggered:
+                if (-1) ** (x + y) < 1:
+                    var_odd += 2 * self.var[x, y] / n
+                else:
+                    var_even += 2 * self.var[x, y] / n
+        if staggered:
+            return np.sqrt(var_even), np.sqrt(var_odd)
+        else:
+            return np.sqrt(np.sum(self.var) / n)
 
     def check_on_borders(self, border, value=1, threshold=1e-10):
         logger.info(f" CHECK BORDER PENALTIES")
