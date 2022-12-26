@@ -189,7 +189,7 @@ def get_su2_operators(pure_theory):
     ops = {}
     ops |= ID(pure_theory)
     ops |= gamma_operator(pure_theory)
-    ops |= link_parity(pure_theory)
+    #ops |= link_parity(pure_theory)
     ops |= plaquette(pure_theory)
     ops |= W_operators(pure_theory)
     ops |= penalties(pure_theory)
