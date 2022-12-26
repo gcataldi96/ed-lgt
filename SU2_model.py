@@ -120,7 +120,6 @@ with run_sim() as sim:
         psi.GSpsi = normalize(psi.GSpsi)
     else:
         psi.get_first_n_eigs(H, n_eigs=6)
-    # ACQUIRE RESULTS
     # RESCALE ENERGY
     sim.res["energy"] = get_energy_density(
         psi.GSenergy,
@@ -131,6 +130,11 @@ with run_sim() as sim:
         plaquette_penalty=False,
         has_obc=has_obc,
     )
+    # GET STATE CONFIGURATIONS
+    get_state_configurations(truncation(psi.GSpsi, 1e-10), loc_dim, n_sites)
+    # ===========================================================================
+    # OBSERVABLES
+    # ===========================================================================
     # CHECK BORDER PENALTIES
     if has_obc:
         for d in directions:
@@ -147,7 +151,8 @@ with run_sim() as sim:
 
     # COMPUTE GAUGE OBSERVABLES
     sim.res["gamma"] = ham_terms["gamma"].get_loc_expval(psi.GSpsi, lvals)
-    sim.res["plaq"] = ham_terms["plaq"].get_plaq_expval(
+    sim.res["delta_gamma"] == ham_terms["gamma"].get_fluctuations(psi.GSpsi, lvals)
+    sim.res["plaq"], sim.res["delta_plaq"] = ham_terms["plaq"].get_plaq_expval(
         psi.GSpsi, lvals, has_obc=has_obc, get_imag=False
     )
     if not pure_theory:
@@ -158,6 +163,9 @@ with run_sim() as sim:
             sim.res[f"{obs}_even"], sim.res[f"{obs}_odd"] = ham_terms[
                 obs
             ].get_loc_expval(psi.GSpsi, lvals, staggered=True)
+            sim.res[f"delta_{obs}_even"], sim.res[f"delta_{obs}_odd"] = ham_terms[
+                obs
+            ].get_fluctuations(psi.GSpsi, lvals, staggered=True)
     # COMPUTE ENTROPY of a BIPARTITION
     sim.res["entropy"] = entanglement_entropy(
         psi=psi.GSpsi, loc_dim=loc_dim, n_sites=n_sites, partition_size=int(n_sites / 2)
@@ -166,31 +174,33 @@ with run_sim() as sim:
     logger.info("----------------------------------------------------")
     logger.info(f" ENERGY:   {sim.res['energy']}")
     logger.info(f" ENTROPY:  {sim.res['entropy']}")
-    logger.info(f" ELECTRIC: {sim.res['gamma']}")
+    logger.info(f" ELECTRIC: {sim.res['gamma']} +- {sim.res['gamma']}")
     logger.info(f" MAGNETIC: {sim.res['plaq']}")
     if not pure_theory:
         for obs in local_obs:
-            logger.info(f" {obs}_EVEN: {sim.res[f'{obs}_even']}")
-            logger.info(f" {obs}_ODD: {sim.res[f'{obs}_odd']}")
+            logger.info(
+                f" {obs}_EVEN: {sim.res[f'{obs}_even']} +- {sim.res[f'delta_{obs}_even']}"
+            )
+            logger.info(
+                f" {obs}_ODD: {sim.res[f'{obs}_odd']} +- {sim.res[f'delta_{obs}_odd']}"
+            )
     logger.info("----------------------------------------------------")
-    if pure_theory:
-        # PERFORM TRUNCATION
-        psi.GSpsi = truncation(psi.GSpsi, 1e-10)
-        # GET STATE CONFIGURATIONS
-        get_state_configurations(psi.GSpsi, loc_dim, n_sites)
-        if not GS_only:
-            for ii in range(1, psi.Npsi.shape[1]):
-                logger.info(f" {ii} EXCITED STATE")
-                exc_energy = get_energy_density(
-                    psi.Nenergies[ii],
-                    lvals,
-                    penalty=coeffs["eta"],
-                    border_penalty=True,
-                    link_penalty=True,
-                    plaquette_penalty=False,
-                    has_obc=has_obc,
-                )
-                logger.info(f" ENERGY: {exc_energy}")
-                logger.info(" STATE CONFIGURATIONS")
-                phi = truncation(psi.Npsi[:, ii], 1e-10)
-                get_state_configurations(phi, loc_dim, n_sites)
+    # ===========================================================================
+    # ECXCITED STATES
+    # ===========================================================================
+    if not GS_only:
+        for ii in range(1, psi.Npsi.shape[1]):
+            logger.info(f" {ii} EXCITED STATE")
+            exc_energy = get_energy_density(
+                psi.Nenergies[ii],
+                lvals,
+                penalty=coeffs["eta"],
+                border_penalty=True,
+                link_penalty=True,
+                plaquette_penalty=False,
+                has_obc=has_obc,
+            )
+            logger.info(f" ENERGY: {exc_energy}")
+            logger.info(" STATE CONFIGURATIONS")
+            phi = truncation(psi.Npsi[:, ii], 1e-10)
+            get_state_configurations(phi, loc_dim, n_sites)
