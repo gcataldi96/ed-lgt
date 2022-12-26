@@ -176,13 +176,13 @@ def number_operators():
 
 
 def S_Wave_Correlation():
+    ops = {}
     data = np.ones(9)
     x = np.arange(1, 10)
     y = np.arange(22, 31, 1)
-    pair = csr_matrix((data, (x - 1, y - 1)), shape=(30, 30))
-    Dag_pair = csr_matrix((data, (y - 1, x - 1)), shape=(30, 30))
-    return pair, Dag_pair
-
+    ops["Delta"] = csr_matrix((data, (x - 1, y - 1)), shape=(30, 30))
+    ops["Delta_dag"] = csr_matrix(ops["Delta"].conj().transpose())
+    return ops
 
 def get_su2_operators(pure_theory):
     ops = {}
@@ -196,6 +196,7 @@ def get_su2_operators(pure_theory):
         ops |= hopping()
         ops |= matter_operator()
         ops |= number_operators()
+        ops |= S_Wave_Correlation()
     return ops
 
 
