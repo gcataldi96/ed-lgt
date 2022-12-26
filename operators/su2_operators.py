@@ -23,7 +23,7 @@ def link_parity(pure_theory):
     else:
         hilb_dim = 30
         path = "operators/su2_operators/full_operators/"
-    for ii, axis in ["x", "y"]:
+    for axis in ["x", "y"]:
         data = acquire_data(path + f"{axis}_link_parity.txt")
         x = data["0"]
         y = data["1"]
@@ -183,6 +183,7 @@ def S_Wave_Correlation():
     ops["Delta"] = csr_matrix((data, (x - 1, y - 1)), shape=(30, 30))
     ops["Delta_dag"] = csr_matrix(ops["Delta"].conj().transpose())
     return ops
+
 
 def get_su2_operators(pure_theory):
     ops = {}
