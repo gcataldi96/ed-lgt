@@ -20,7 +20,10 @@ __all__ = [
 
 class Pure_State:
     def ground_state(self, Hamiltonian):
-        self.GSenergy, self.GSpsi = get_eigs_from_sparse_Hamiltonian(Hamiltonian)
+        self.Nenergies, self.Npsi = get_eigs_from_sparse_Hamiltonian(Hamiltonian)
+        # Save GROUND STATE PROPERTIES
+        self.GSenergy = self.Nenergies[0]
+        self.GSpsi = self.Npsi[:, 0]
 
     def get_first_n_eigs(self, Hamiltonian, n_eigs=5):
         self.Nenergies, self.Npsi = get_eigs_from_sparse_Hamiltonian(
@@ -29,11 +32,6 @@ class Pure_State:
         # Save GROUND STATE PROPERTIES
         self.GSenergy = self.Nenergies[0]
         self.GSpsi = self.Npsi[:, 0]
-
-    def psi_truncate(self, threshold):
-        if not np.isscalar(threshold) and not isinstance(threshold, float):
-            raise TypeError(f"threshold must be SCALAR & FLOAT, not {type(threshold)}")
-        self.psi = truncation(self.psi, threshold)
 
 
 def normalize(psi):
