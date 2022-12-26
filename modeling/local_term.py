@@ -102,10 +102,6 @@ class LocalTerm2D:
                     raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
         if not isinstance(staggered, bool):
             raise TypeError(f"staggered should be a BOOL, not a {type(staggered)}")
-        # PRINT OBSERVABLE NAME
-        logger.info(f"-----------------------")
-        logger.info(f" {self.Op_name}")
-        logger.info(f"----------------------")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]
         ny = lvals[1]
