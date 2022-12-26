@@ -121,6 +121,7 @@ class PlaquetteTerm2D:
         # Compute the complex_conjugate of the ground state psi
         psi_dag = np.conjugate(psi)
         plaq_obs = []
+        delta_plaq_obs = []
         for ii in range(n):
             # Compute the corresponding (x,y) coords
             x, y = zig_zag(nx, ny, ii)
@@ -178,11 +179,29 @@ class PlaquetteTerm2D:
                     ).dot(psi),
                 )
             )
+            delta_plaq = (
+                np.real(
+                    np.dot(
+                        psi_dag,
+                        (
+                            four_body_op(
+                                self.op_list, sites_list, n, get_only_part=chosen_part
+                            )
+                            ** 2
+                        ).dot(psi),
+                    )
+                )
+                - plaq**2
+            )
             # PRINT THE PLAQUETTE
             self.print_Plaquette(plaq_string, plaq)
             plaq_obs.append(plaq)
+            delta_plaq_obs.append(delta_plaq)
         plaq_obs = np.array(plaq_obs)
-        return np.sum(plaq_obs) / plaq_obs.shape[0]
+        delta_plaq_obs = np.array(delta_plaq_obs)
+        avg_plaq = np.sum(plaq_obs) / plaq_obs.shape[0]
+        std_plaq = np.sqrt(np.sum(delta_plaq_obs) / plaq_obs.shape[0])
+        return avg_plaq, std_plaq
 
     def print_Plaquette(self, sites_list, value):
         if not isinstance(sites_list, list):
