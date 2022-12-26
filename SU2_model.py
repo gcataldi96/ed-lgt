@@ -151,7 +151,7 @@ with run_sim() as sim:
 
     # COMPUTE GAUGE OBSERVABLES
     sim.res["gamma"] = ham_terms["gamma"].get_loc_expval(psi.GSpsi, lvals)
-    sim.res["delta_gamma"] == ham_terms["gamma"].get_fluctuations(psi.GSpsi, lvals)
+    sim.res["delta_gamma"] = ham_terms["gamma"].get_fluctuations(psi.GSpsi, lvals)
     sim.res["plaq"], sim.res["delta_plaq"] = ham_terms["plaq"].get_plaq_expval(
         psi.GSpsi, lvals, has_obc=has_obc, get_imag=False
     )
@@ -174,8 +174,8 @@ with run_sim() as sim:
     logger.info("----------------------------------------------------")
     logger.info(f" ENERGY:   {sim.res['energy']}")
     logger.info(f" ENTROPY:  {sim.res['entropy']}")
-    logger.info(f" ELECTRIC: {sim.res['gamma']} +- {sim.res['gamma']}")
-    logger.info(f" MAGNETIC: {sim.res['plaq']}")
+    logger.info(f" ELECTRIC: {sim.res['gamma']} +- {sim.res['delta_gamma']}")
+    logger.info(f" MAGNETIC: {sim.res['plaq']} +- {sim.res['delta_plaq']}")
     if not pure_theory:
         for obs in local_obs:
             logger.info(
@@ -184,7 +184,10 @@ with run_sim() as sim:
             logger.info(
                 f" {obs}_ODD: {sim.res[f'{obs}_odd']} +- {sim.res[f'delta_{obs}_odd']}"
             )
-    logger.info("----------------------------------------------------")
+    # ===========================================================================
+    # TOPOLOGICAL SECTOR
+    # ===========================================================================
+
     # ===========================================================================
     # ECXCITED STATES
     # ===========================================================================
@@ -201,6 +204,6 @@ with run_sim() as sim:
                 has_obc=has_obc,
             )
             logger.info(f" ENERGY: {exc_energy}")
-            logger.info(" STATE CONFIGURATIONS")
-            phi = truncation(psi.Npsi[:, ii], 1e-10)
-            get_state_configurations(phi, loc_dim, n_sites)
+            get_state_configurations(
+                truncation(psi.Npsi[:, ii], 1e-10), loc_dim, n_sites
+            )
