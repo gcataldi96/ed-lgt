@@ -9,6 +9,8 @@ from modeling import (
     truncation,
     normalize,
     get_state_configurations,
+    two_body_op,
+    get_SU2_topological_invariant,
 )
 from tools import get_energy_density, check_hermitian
 from simsio import logger, run_sim
@@ -118,22 +120,57 @@ with run_sim() as sim:
         psi.ground_state(H)
         # CHECK THE STATE TO BE NORMALIZED:
         psi.GSpsi = normalize(psi.GSpsi)
+        # RESCALE ENERGY
+        sim.res["energy"] = get_energy_density(
+            psi.GSenergy,
+            lvals,
+            penalty=coeffs["eta"],
+            border_penalty=True,
+            link_penalty=True,
+            plaquette_penalty=False,
+            has_obc=has_obc,
+        )
+        # GET STATE CONFIGURATIONS
+        get_state_configurations(truncation(psi.GSpsi, 1e-10), loc_dim, n_sites)
+        # TOPOLOGICAL SECTOR
+        for ii, ax in enumerate(axes):
+            # select the link parity operator
+            op = ops[f"p{axes[::-1][ii]}_link_P"]
+            # measure the topological sector
+            sim.res[f"p{ax}_sector"] = get_SU2_topological_invariant(
+                op, lvals, psi.GSpsi, ax
+            )
     else:
-        psi.get_first_n_eigs(H, n_eigs=6)
-    # RESCALE ENERGY
-    sim.res["energy"] = get_energy_density(
-        psi.GSenergy,
-        lvals,
-        penalty=coeffs["eta"],
-        border_penalty=True,
-        link_penalty=True,
-        plaquette_penalty=False,
-        has_obc=has_obc,
-    )
-    # GET STATE CONFIGURATIONS
-    get_state_configurations(truncation(psi.GSpsi, 1e-10), loc_dim, n_sites)
+        psi.get_first_n_eigs(H, n_eigs=8)
+        sim.res["px_sector"] = np.zeros(psi.Npsi.shape[1])
+        sim.res["py_sector"] = np.zeros(psi.Npsi.shape[1])
+        sim.res["energies"] = np.zeros(psi.Npsi.shape[1])
+        for ii in range(psi.Npsi.shape[1]):
+            logger.info(f" {ii} ENERGY VALUE")
+            sim.res["energies"][ii] = get_energy_density(
+                psi.Nenergies[ii],
+                lvals,
+                penalty=coeffs["eta"],
+                border_penalty=True,
+                link_penalty=True,
+                plaquette_penalty=False,
+                has_obc=has_obc,
+            )
+            logger.info(f" ENERGY: {sim.res['energies'][ii]}")
+            # GET STATE CONFIGURATIONS
+            get_state_configurations(
+                truncation(psi.Npsi[:, ii], 1e-10), loc_dim, n_sites
+            )
+            # TOPOLOGICAL SECTOR
+            for jj, ax in enumerate(axes):
+                # select the link parity operator
+                op = ops[f"p{axes[::-1][jj]}_link_P"]
+                # measure the topological sector
+                sim.res[f"p{ax}_sector"][ii] = get_SU2_topological_invariant(
+                    op, lvals, psi.Npsi[:, ii], ax
+                )
     # ===========================================================================
-    # OBSERVABLES
+    # OBSERVABLES for the GROUND STATE
     # ===========================================================================
     # CHECK BORDER PENALTIES
     if has_obc:
@@ -172,7 +209,6 @@ with run_sim() as sim:
     )
     # SUMMARIZE OBSERVABLES
     logger.info("----------------------------------------------------")
-    logger.info(f" ENERGY:   {sim.res['energy']}")
     logger.info(f" ENTROPY:  {sim.res['entropy']}")
     logger.info(f" ELECTRIC: {sim.res['gamma']} +- {sim.res['delta_gamma']}")
     logger.info(f" MAGNETIC: {sim.res['plaq']} +- {sim.res['delta_plaq']}")
@@ -183,27 +219,4 @@ with run_sim() as sim:
             )
             logger.info(
                 f" {obs}_ODD: {sim.res[f'{obs}_odd']} +- {sim.res[f'delta_{obs}_odd']}"
-            )
-    # ===========================================================================
-    # TOPOLOGICAL SECTOR
-    # ===========================================================================
-
-    # ===========================================================================
-    # ECXCITED STATES
-    # ===========================================================================
-    if not GS_only:
-        for ii in range(1, psi.Npsi.shape[1]):
-            logger.info(f" {ii} EXCITED STATE")
-            exc_energy = get_energy_density(
-                psi.Nenergies[ii],
-                lvals,
-                penalty=coeffs["eta"],
-                border_penalty=True,
-                link_penalty=True,
-                plaquette_penalty=False,
-                has_obc=has_obc,
-            )
-            logger.info(f" ENERGY: {exc_energy}")
-            get_state_configurations(
-                truncation(psi.Npsi[:, ii], 1e-10), loc_dim, n_sites
             )
