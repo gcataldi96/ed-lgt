@@ -5,6 +5,7 @@ from scipy.sparse.linalg import eigsh as sparse_eigh
 
 from simsio import logger
 from tools import pause, zig_zag
+from .twobody_term import two_body_op
 
 __all__ = [
     "Pure_State",
@@ -15,6 +16,7 @@ __all__ = [
     "get_qmb_state_from_loc_state",
     "get_submatrix_from_sparse",
     "get_state_configurations",
+    "get_SU2_topological_invariant",
 ]
 
 
@@ -197,12 +199,13 @@ def get_loc_states_from_qmb_state(index, loc_dim, n_sites):
     """
     Compute the state of each single lattice site given the index of the qmb state
     Args:
-        index (int): index of the qmb state associated to a specific configurations of the local sites
+        index (int): qmb state index of the a specific local sites configurations 
         loc_dim (int): dimension of the local (single site) Hilbert Space
         n_sites (int): number of sites
 
     Returns:
-        ndarray(int): list of the states of the local Hilbert space associated to the given QMB state index
+        ndarray(int): list of the states of the local Hilbert space 
+        associated to the given QMB state index
     """
     if index < 0:
         raise ValueError(f"index {index} should be positive")
@@ -275,3 +278,20 @@ def get_state_configurations(psi, loc_dim, n_sites):
         )
         logger.info(f" {loc_states+1}  {alpha}")
     logger.info("----------------------------------------------------")
+
+
+def get_SU2_topological_invariant(link_parity_op, lvals, psi, axis):
+    n_sites = lvals[0] * lvals[1]
+    op_list = [link_parity_op, link_parity_op]
+    if axis == "x":
+        op_sites_list = [1, 2]
+    elif axis == "y":
+        op_sites_list = [1, lvals[0] + 1]
+    else:
+        raise ValueError(f"axis can be only x or y not {axis}")
+    sector = np.real(
+        np.dot(np.conjugate(psi), two_body_op(op_list, op_sites_list, n_sites).dot(psi))
+    )
+    logger.info(f" P{axis} TOPOLOGICAL SECTOR: {sector}")
+    logger.info("----------------------------------------------------")
+    return sector
