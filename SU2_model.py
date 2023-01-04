@@ -1,15 +1,13 @@
 import numpy as np
 from scipy.sparse import identity
 from operators import get_su2_operators, get_Hamiltonian_couplings
-from modeling import Pure_State, LocalTerm2D, TwoBodyTerm2D, PlaquetteTerm2D
+from modeling import Ground_State, LocalTerm2D, TwoBodyTerm2D, PlaquetteTerm2D
 from modeling import (
     entanglement_entropy,
     border_mask,
     staggered_mask,
     truncation,
-    normalize,
     get_state_configurations,
-    two_body_op,
     get_SU2_topological_invariant,
 )
 from tools import get_energy_density, check_hermitian
@@ -18,9 +16,7 @@ from simsio import logger, run_sim
 # ===================================================================================
 
 with run_sim() as sim:
-    sim.link("psi")
     # LATTICE DIMENSIONS
-    GS_only = sim.par["GS_only"]
     lvals = sim.par["lvals"]
     dim = len(lvals)
     directions = "xyz"[:dim]
@@ -115,14 +111,19 @@ with run_sim() as sim:
     # CHECK THAT THE HAMILTONIAN IS HERMITIAN
     check_hermitian(H)
     # DIAGONALIZE THE HAMILTONIAN
-    psi = Pure_State()
-    if GS_only:
-        psi.ground_state(H)
-        # CHECK THE STATE TO BE NORMALIZED:
-        psi.GSpsi = normalize(psi.GSpsi)
-        # RESCALE ENERGY
-        sim.res["energy"] = get_energy_density(
-            psi.GSenergy,
+    n_eigs = sim.par["n_eigs"]
+    GS = Ground_State(H, n_eigs)
+    GS.normalize()
+    # ===========================================================================
+    # ENERGIES, STATE CONFIGURATIONS, AND TOPOLOGICAL SECTORS
+    # ===========================================================================
+    sim.res["px_sector"] = np.zeros(n_eigs)
+    sim.res["py_sector"] = np.zeros(n_eigs)
+    sim.res["energy"] = np.zeros(n_eigs)
+    for ii in range(n_eigs):
+        # GET AND RESCALE SINGLE SITE ENERGIES
+        sim.res["energy"][ii] = get_energy_density(
+            GS.Nenergies[ii],
             lvals,
             penalty=coeffs["eta"],
             border_penalty=True,
@@ -130,67 +131,43 @@ with run_sim() as sim:
             plaquette_penalty=False,
             has_obc=has_obc,
         )
+        logger.info(f" {ii} ENERGY VALUE: {sim.res['energy'][ii]}")
         # GET STATE CONFIGURATIONS
-        get_state_configurations(truncation(psi.GSpsi, 1e-10), loc_dim, n_sites)
-        # TOPOLOGICAL SECTOR
-        for ii, ax in enumerate(axes):
+        get_state_configurations(truncation(GS.Npsi[:, ii], 1e-10), loc_dim, n_sites)
+        # MEASURE TOPOLOGICAL SECTORS
+        for jj, ax in enumerate(axes):
             # select the link parity operator
-            op = ops[f"p{axes[::-1][ii]}_link_P"]
+            op = ops[f"p{axes[::-1][jj]}_link_P"]
             # measure the topological sector
-            sim.res[f"p{ax}_sector"] = get_SU2_topological_invariant(
-                op, lvals, psi.GSpsi, ax
+            sim.res[f"p{ax}_sector"][ii] = get_SU2_topological_invariant(
+                op, lvals, GS.Npsi[:, ii], ax
             )
-    else:
-        psi.get_first_n_eigs(H, n_eigs=8)
-        sim.res["px_sector"] = np.zeros(psi.Npsi.shape[1])
-        sim.res["py_sector"] = np.zeros(psi.Npsi.shape[1])
-        sim.res["energies"] = np.zeros(psi.Npsi.shape[1])
-        for ii in range(psi.Npsi.shape[1]):
-            logger.info(f" {ii} ENERGY VALUE")
-            sim.res["energies"][ii] = get_energy_density(
-                psi.Nenergies[ii],
-                lvals,
-                penalty=coeffs["eta"],
-                border_penalty=True,
-                link_penalty=True,
-                plaquette_penalty=False,
-                has_obc=has_obc,
-            )
-            logger.info(f" ENERGY: {sim.res['energies'][ii]}")
-            # GET STATE CONFIGURATIONS
-            get_state_configurations(
-                truncation(psi.Npsi[:, ii], 1e-10), loc_dim, n_sites
-            )
-            # TOPOLOGICAL SECTOR
-            for jj, ax in enumerate(axes):
-                # select the link parity operator
-                op = ops[f"p{axes[::-1][jj]}_link_P"]
-                # measure the topological sector
-                sim.res[f"p{ax}_sector"][ii] = get_SU2_topological_invariant(
-                    op, lvals, psi.Npsi[:, ii], ax
-                )
+    if n_eigs == 1:
+        sim.res["energy"] = sim.res["energy"][0]
+        sim.res["px_sector"] = sim.res["px_sector"][0]
+        sim.res["py_sector"] = sim.res["py_sector"][0]
     # ===========================================================================
-    # OBSERVABLES for the GROUND STATE
+    # GROUND STATE SINGLE SITE OBSERVABLES
     # ===========================================================================
     # CHECK BORDER PENALTIES
     if has_obc:
         for d in directions:
             for s in "mp":
-                ham_terms[f"P_{s}{d}"].get_loc_expval(psi.GSpsi, lvals)
+                ham_terms[f"P_{s}{d}"].get_loc_expval(GS.psi, lvals)
                 ham_terms[f"P_{s}{d}"].check_on_borders(border=f"{s}{d}", value=1)
     # CHECK LINK PENALTIES
     axes = ["x", "y"]
     for i, d in enumerate(directions):
         op_list = [ops[f"W_{s}{d}"] for s in "pm"]
         op_name_list = [f"W_{s}{d}" for s in "pm"]
-        ham_terms[f"W_{axes[i]}_link"].get_expval(psi.GSpsi, lvals, has_obc=has_obc)
+        ham_terms[f"W_{axes[i]}_link"].get_expval(GS.psi, lvals, has_obc=has_obc)
         ham_terms[f"W_{axes[i]}_link"].check_link_symm(value=1, has_obc=has_obc)
 
     # COMPUTE GAUGE OBSERVABLES
-    sim.res["gamma"] = ham_terms["gamma"].get_loc_expval(psi.GSpsi, lvals)
-    sim.res["delta_gamma"] = ham_terms["gamma"].get_fluctuations(psi.GSpsi, lvals)
+    sim.res["gamma"] = ham_terms["gamma"].get_loc_expval(GS.psi, lvals)
+    sim.res["delta_gamma"] = ham_terms["gamma"].get_fluctuations(GS.psi, lvals)
     sim.res["plaq"], sim.res["delta_plaq"] = ham_terms["plaq"].get_plaq_expval(
-        psi.GSpsi, lvals, has_obc=has_obc, get_imag=False
+        GS.psi, lvals, has_obc=has_obc, get_imag=False
     )
     if not pure_theory:
         # COMPUTE MATTER OBSERVABLES
@@ -199,13 +176,13 @@ with run_sim() as sim:
             ham_terms[obs] = LocalTerm2D(ops[obs], obs)
             sim.res[f"{obs}_even"], sim.res[f"{obs}_odd"] = ham_terms[
                 obs
-            ].get_loc_expval(psi.GSpsi, lvals, staggered=True)
+            ].get_loc_expval(GS.psi, lvals, staggered=True)
             sim.res[f"delta_{obs}_even"], sim.res[f"delta_{obs}_odd"] = ham_terms[
                 obs
-            ].get_fluctuations(psi.GSpsi, lvals, staggered=True)
+            ].get_fluctuations(GS.psi, lvals, staggered=True)
     # COMPUTE ENTROPY of a BIPARTITION
     sim.res["entropy"] = entanglement_entropy(
-        psi=psi.GSpsi, loc_dim=loc_dim, n_sites=n_sites, partition_size=int(n_sites / 2)
+        psi=GS.psi, loc_dim=loc_dim, n_sites=n_sites, partition_size=int(n_sites / 2)
     )
     # SUMMARIZE OBSERVABLES
     logger.info("----------------------------------------------------")
