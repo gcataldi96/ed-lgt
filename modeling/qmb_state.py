@@ -8,10 +8,9 @@ from tools import pause, zig_zag
 from .twobody_term import two_body_op
 
 __all__ = [
-    "Pure_State",
+    "Ground_State",
     "entanglement_entropy",
     "truncation",
-    "normalize",
     "get_loc_states_from_qmb_state",
     "get_qmb_state_from_loc_state",
     "get_submatrix_from_sparse",
@@ -20,27 +19,35 @@ __all__ = [
 ]
 
 
-class Pure_State:
-    def ground_state(self, Hamiltonian):
-        self.Nenergies, self.Npsi = get_eigs_from_sparse_Hamiltonian(Hamiltonian)
+class Ground_State:
+    def __init__(self, Ham, n_eigs):
+        if not isspmatrix_csr(Ham):
+            raise TypeError(f"Ham should be a csr_matrix, not a {type(Ham)}")
+        if not np.isscalar(n_eigs) and not isinstance(n_eigs, int):
+            raise TypeError(f"n_eigs should be a SCALAR INT, not a {type(n_eigs)}")
+        # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
+        self.Nenergies, self.Npsi = sparse_eigh(Ham, k=n_eigs, which="SA")
         # Save GROUND STATE PROPERTIES
-        self.GSenergy = self.Nenergies[0]
-        self.GSpsi = self.Npsi[:, 0]
+        self.energy = self.Nenergies[0]
+        self.psi = self.Npsi[:, 0]
 
-    def get_first_n_eigs(self, Hamiltonian, n_eigs=5):
-        self.Nenergies, self.Npsi = get_eigs_from_sparse_Hamiltonian(
-            Hamiltonian, n_eigs=n_eigs
-        )
-        # Save GROUND STATE PROPERTIES
-        self.GSenergy = self.Nenergies[0]
-        self.GSpsi = self.Npsi[:, 0]
+    def normalize(self):
+        norm = np.linalg.norm(self.psi)
+        logger.info(f"NORM {norm}")
+        self.psi /= norm
+
+    def truncate(self, threshold):
+        if not np.isscalar(threshold) and not isinstance(threshold, float):
+            raise TypeError(f"threshold must be a SCALAR FLOAT, not {type(threshold)}")
+        self.psi = np.where(np.abs(self.psi) > threshold, self.psi, 0)
 
 
-def normalize(psi):
+def get_norm(psi):
     if not isinstance(psi, np.ndarray):
         raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
     norm = np.linalg.norm(psi)
     if np.abs(norm - 1) > 1e-14:
+        logger.info(f"NORM {norm}")
         psi = psi / norm
     return psi
 
@@ -51,14 +58,6 @@ def truncation(array, threshold):
     if not np.isscalar(threshold) and not isinstance(threshold, float):
         raise TypeError(f"threshold should be a SCALAR FLOAT, not a {type(threshold)}")
     return np.where(np.abs(array) > threshold, array, 0)
-
-
-def get_eigs_from_sparse_Hamiltonian(Ham, n_eigs=1):
-    if not isspmatrix_csr(Ham):
-        raise TypeError(f"Ham should be a csr_matrix, not a {type(Ham)}")
-    # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
-    eig_vals, eig_vecs = sparse_eigh(Ham, k=n_eigs, which="SA")
-    return eig_vals, eig_vecs
 
 
 def diagonalize_density_matrix(rho):
