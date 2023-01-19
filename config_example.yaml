@@ -1,0 +1,17 @@
+===:
+  template: |
+    n$enum:
+      <<<: common
+      g: $g
+      m: $m
+  common:
+    dim: 2
+    lvals: [2, 2]
+    pure: false
+    has_obc: false
+    n_eigs: 1
+    DeltaN: 0
+n0:
+  <<<: common
+  g: 0.1
+  m: 0.001
