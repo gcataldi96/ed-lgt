@@ -65,6 +65,7 @@ obs_list = get_obs_list(pure=False, has_obc=False)
 
 res = {}
 res["g"] = vals["g"]
+res["m"] = vals["m"]
 for kk, obs in enumerate(obs_list):
     res[obs] = np.zeros((vals["g"].shape[0], vals["m"].shape[0]))
     for ii, g in enumerate(vals["g"]):
