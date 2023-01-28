@@ -57,7 +57,7 @@ def get_obs_list(pure, has_obc):
 
 # %%
 # Full Topology PBC
-config_filename = "full_topology"
+config_filename = "full_topology3"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g", "m"])
 
@@ -73,6 +73,7 @@ for kk, obs in enumerate(obs_list):
             res[obs][ii][jj] = get_sim(ugrid[ii][jj]).res[obs]
 
 save_dictionary(res, "dict_simulations/full_topology2.pkl")
+
 # %%
 for kk, obs in enumerate(obs_list[:10]):
     fig = plt.figure()
@@ -96,3 +97,32 @@ for ii, g in enumerate(vals["g"]):
     plt.xscale("log")
     plt.yscale("log")
     plt.ylabel("py_sector")
+
+# %%
+# Full Topology PBC
+config_filename = "full_low_m_behavior"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g", "m"])
+
+obs_list = get_obs_list(pure=False, has_obc=True)
+
+res = {}
+res["g"] = vals["g"]
+res["m"] = vals["m"]
+for kk, obs in enumerate(obs_list):
+    res[obs] = np.zeros((vals["g"].shape[0], vals["m"].shape[0]))
+    for ii, g in enumerate(vals["g"]):
+        for jj, m in enumerate(vals["m"]):
+            res[obs][ii][jj] = get_sim(ugrid[ii][jj]).res[obs]
+
+save_dictionary(res, "dict_simulations/full_lowmass_behavior.pkl")
+# %%
+for kk, obs in enumerate(obs_list):
+    fig = plt.figure()
+    for jj, m in enumerate(vals["m"]):
+        plt.plot(vals["g"], res[obs][:, jj], "-o", label=fr"$m={m}$")
+        plt.xscale("log")
+        plt.ylabel(obs)
+    plt.legend()
+
+# %%
