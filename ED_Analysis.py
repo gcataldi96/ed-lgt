@@ -56,6 +56,25 @@ def get_obs_list(pure, has_obc):
 
 
 # %%
+# Pure Topology
+config_filename = "pure_topology"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+
+obs_list = get_obs_list(pure=True, has_obc=False)
+
+res = {}
+res["g"] = vals["g"]
+for kk, obs in enumerate(["energy", "py_sector", "px_sector"]):
+    res[obs] = np.zeros((vals["g"].shape[0], 7))
+    for ii, g in enumerate(vals["g"]):
+        for n in range(7):
+            res[obs][ii][n] = get_sim(ugrid[ii]).res[obs][n]
+
+save_dictionary(res, "dict_simulations/pure_topology.pkl")
+
+
+# %%
 # Full Topology PBC
 config_filename = "full_topology3"
 match = SimsQuery(group_glob=config_filename)
@@ -120,7 +139,7 @@ save_dictionary(res, "dict_simulations/full_lowmass_behavior.pkl")
 for kk, obs in enumerate(obs_list):
     fig = plt.figure()
     for jj, m in enumerate(vals["m"]):
-        plt.plot(vals["g"], res[obs][:, jj], "-o", label=fr"$m={m}$")
+        plt.plot(vals["g"], res[obs][:, jj], "-o", label=rf"$m={m}$")
         plt.xscale("log")
         plt.ylabel(obs)
     plt.legend()
