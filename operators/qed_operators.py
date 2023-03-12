@@ -35,8 +35,6 @@ def gauge_invariant_states(rishons_number, lattice_dim=2):
 
 
 from scipy.sparse import csr_matrix
-
-
 def hopping(gauge_states, dim):
     # Spatial directions
     directions = "xyz"[:dim]
@@ -226,3 +224,6 @@ def get_qed_operators(gauge_states):
 # %%
 rishons_number = 2
 gauge_states = gauge_invariant_states(rishons_number)
+# %%
+ops=get_qed_operators(gauge_states)
+# %%
