@@ -38,7 +38,9 @@ class PlaquetteTerm2D:
         # Define a list with the Four Operators involved in the Plaquette:
         self.op_list = [self.BL, self.BR, self.TL, self.TR]
 
-    def get_Hamiltonian(self, lvals, strength, has_obc=True, add_dagger=False):
+    def get_Hamiltonian(
+        self, lvals, strength, has_obc=True, add_dagger=False, mask=None
+    ):
         # CHECK ON TYPES
         if not isinstance(lvals, list):
             raise TypeError(f"lvals should be a list, not a {type(lvals)}")
@@ -83,12 +85,15 @@ class PlaquetteTerm2D:
                 else:
                     continue
             # Add the Plaquette to the Hamiltonian
-            H_plaq += strength * four_body_op(self.op_list, sites_list, n)
+            if mask is not None:
+                if mask[x, y]:
+                    H_plaq += strength * four_body_op(self.op_list, sites_list, n)
+            else:
+                H_plaq += strength * four_body_op(self.op_list, sites_list, n)
         if not isspmatrix(H_plaq):
             H_plaq = csr_matrix(H_plaq)
         if add_dagger:
             H_plaq += csr_matrix(H_plaq.conj().transpose())
-            # H_plaq = H_plaq / 2
         return H_plaq
 
     def get_plaq_expval(self, psi, lvals, has_obc=True, get_imag=False):
