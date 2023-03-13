@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.sparse import identity
-from operators import get_su2_operators, get_Hamiltonian_couplings
+from operators import get_su2_operators, get_SU2_Hamiltonian_couplings
 from modeling import Ground_State, LocalTerm2D, TwoBodyTerm2D, PlaquetteTerm2D
 from modeling import (
     entanglement_entropy,
@@ -38,7 +38,7 @@ with run_sim() as sim:
     # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
     ops = get_su2_operators(pure_theory)
     # ACQUIRE HAMILTONIAN COEFFICIENTS
-    coeffs = get_Hamiltonian_couplings(pure_theory, g, m)
+    coeffs = get_SU2_Hamiltonian_couplings(pure_theory, g, m)
     logger.info(f"Penalty {coeffs['eta']}")
     # CONSTRUCT THE HAMILTONIAN
     ham_terms = {}

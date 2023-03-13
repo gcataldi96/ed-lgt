@@ -2,7 +2,11 @@ import numpy as np
 from scipy.sparse import csr_matrix, identity
 from tools.manage_data import acquire_data
 
-__all__ = ["get_su2_operators", "get_Hamiltonian_couplings", "get_SU2_surface_operator"]
+__all__ = [
+    "get_su2_operators",
+    "get_SU2_Hamiltonian_couplings",
+    "get_SU2_surface_operator",
+]
 
 
 def ID(pure_theory):
@@ -201,7 +205,7 @@ def get_su2_operators(pure_theory):
     return ops
 
 
-def get_Hamiltonian_couplings(pure_theory, g, m=None):
+def get_SU2_Hamiltonian_couplings(pure_theory, g, m=None):
     E = 3 * (g**2) / 16  # ELECTRIC FIELD
     B = -4 / (g**2)  # MAGNETIC FIELD
     # DICTIONARY WITH MODEL COEFFICIENTS
