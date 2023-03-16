@@ -170,16 +170,19 @@ with run_sim() as sim:
         GS.psi, lvals, has_obc=has_obc, get_imag=False
     )
     if not pure_theory:
-        # COMPUTE MATTER OBSERVABLES
+        # COMPUTE MATTER OBSERVABLES STAGGERED
         local_obs = ["n_single", "n_pair", "n_tot"]
         for obs in local_obs:
+            # Generate the Operator
             ham_terms[obs] = LocalTerm2D(ops[obs], obs)
-            sim.res[f"{obs}_even"], sim.res[f"{obs}_odd"] = ham_terms[
-                obs
-            ].get_loc_expval(GS.psi, lvals, staggered=True)
-            sim.res[f"delta_{obs}_even"], sim.res[f"delta_{obs}_odd"] = ham_terms[
-                obs
-            ].get_fluctuations(GS.psi, lvals, staggered=True)
+            # Run over even and odd sites
+            for site in ["odd", "even"]:
+                sim.res[f"{obs}_{site}"] = ham_terms[obs].get_loc_expval(
+                    GS.psi, lvals, site
+                )
+                sim.res[f"delta_{obs}_{site}"] = ham_terms[obs].get_fluctuations(
+                    GS.psi, lvals, site
+                )
     # COMPUTE ENTROPY of a BIPARTITION
     sim.res["entropy"] = entanglement_entropy(
         psi=GS.psi, loc_dim=loc_dim, n_sites=n_sites, partition_size=int(n_sites / 2)
