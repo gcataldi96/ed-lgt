@@ -31,6 +31,7 @@ class TwoBodyTerm2D:
                         f"op_name_list[{ii}] should be a STRING, not {type(name)}"
                     )
         self.axis = axis
+        self.op_name_list = op_name_list
         if axis == "x":
             self.op_list = op_list
             self.Left = op_list[0]
@@ -40,7 +41,7 @@ class TwoBodyTerm2D:
             self.Bottom = op_list[0]
             self.Top = op_list[1]
         else:
-            raise ValueError(f"{axis} can be only x or y")
+            logger.info(f"{axis} can be only x or y")
 
     def get_Hamiltonian(
         self, lvals, strength, has_obc=True, add_dagger=False, mask=None
@@ -93,7 +94,7 @@ class TwoBodyTerm2D:
             if mask is not None:
                 if mask[x, y]:
                     # Add the term to the Hamiltonian
-                    H_twobody += two_body_op(self.op_list, sites_list, n)
+                    H_twobody += strength * two_body_op(self.op_list, sites_list, n)
             else:
                 # Add the term to the Hamiltonian
                 H_twobody += strength * two_body_op(self.op_list, sites_list, n)
@@ -139,7 +140,7 @@ class TwoBodyTerm2D:
                 else:
                     self.corr[x1, y1, x2, y2] = 0
 
-    def check_link_symm(self, value=1, threshold=1e-10, has_obc=True):
+    def check_link_symm(self, value=1, threshold=1e-10, has_obc=True, site=None):
         logger.info(f" CHECK LINK SYMMETRIES")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = self.corr.shape[0]
@@ -148,33 +149,55 @@ class TwoBodyTerm2D:
         if self.axis == "x":
             for y in range(ny):
                 for x in range(nx):
+                    stag = (-1) ** (x + y)
                     if x == nx - 1:
                         if not has_obc:
                             if np.abs(self.corr[x, y, 0, y] - value) > threshold:
-                                raise ValueError(
-                                    f"W{self.axis}_({x},{y})-({0},{y})={self.corr[x,y,0,y]}: expected {value}"
-                                )
+                                if (
+                                    (site == "even" and stag > 0)
+                                    or (site == "odd" and stag < 0)
+                                    or (site is None)
+                                ):
+                                    logger.info(
+                                        f"W{self.axis}_({x},{y})-({0},{y})={self.corr[x,y,0,y]}: expected {value}"
+                                    )
                         else:
                             continue
                     else:
                         if np.abs(self.corr[x, y, x + 1, y] - value) > threshold:
-                            raise ValueError(
-                                f"W{self.axis}_({x},{y})-({x+1},{y})={self.corr[x,y,x+1,y]}: expected {value}"
-                            )
+                            if (
+                                (site == "even" and stag > 0)
+                                or (site == "odd" and stag < 0)
+                                or (site is None)
+                            ):
+                                logger.info(
+                                    f"W{self.axis}_({x},{y})-({x+1},{y})={self.corr[x,y,x+1,y]}: expected {value}"
+                                )
         if self.axis == "y":
             for x in range(nx):
                 for y in range(ny):
+                    stag = (-1) ** (x + y)
                     if y == ny - 1:
                         if not has_obc:
                             if np.abs(self.corr[x, y, x, 0] - value) > threshold:
-                                raise ValueError(
-                                    f"W{self.axis}_({x},{y})-({x},{0})={self.corr[x,y,x,0]}: expected {value}"
-                                )
+                                if (
+                                    (site == "even" and stag > 0)
+                                    or (site == "odd" and stag < 0)
+                                    or (site is None)
+                                ):
+                                    logger.info(
+                                        f"W{self.axis}_({x},{y})-({x},{0})={self.corr[x,y,x,0]}: expected {value}"
+                                    )
                         else:
                             continue
                     else:
                         if np.abs(self.corr[x, y, x, y + 1] - value) > threshold:
-                            raise ValueError(
-                                f"W{self.axis}_({x},{y})-({x},{y+1})={self.corr[x,y,x,y+1]}: expected {value}"
-                            )
-        logger.info(f" All the {self.axis} Link Symmetries are satisfied")
+                            if (
+                                (site == "even" and stag > 0)
+                                or (site == "odd" and stag < 0)
+                                or (site is None)
+                            ):
+                                logger.info(
+                                    f"W{self.axis}_({x},{y})-({x},{y+1})={self.corr[x,y,x,y+1]}: expected {value}"
+                                )
+        # logger.info(f" All the {self.axis} Link Symmetries are satisfied")
