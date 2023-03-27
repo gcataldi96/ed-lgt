@@ -71,7 +71,7 @@ def check_hermitian(A):
     if not isspmatrix(A):
         raise TypeError(f"A should be a csr_matrix, not a {type(A)}")
     # Get the Hermitian
-    logger.info(" CHECK HERMITICITY")
+    logger.info("CHECK HERMITICITY")
     A_dag = A.getH()
     check_matrix(A, A_dag)
-    logger.info(" OK")
+    logger.info("OK")
