@@ -167,8 +167,9 @@ def get_QED_operators(n_rishons):
                 gauge_basis[site].conj().transpose() * ops[op] * gauge_basis[site]
             )
     # CHECK gauge basis
-    check_gauss_law(gauge_basis,eff_ops)
+    check_gauss_law(gauge_basis, eff_ops)
     return eff_ops
+
 
 def check_gauss_law(gauge_basis, ops, threshold=1e-10):
     M = gauge_basis
@@ -191,6 +192,7 @@ def check_gauss_law(gauge_basis, ops, threshold=1e-10):
             )
         if M[site].shape[0] - np.linalg.matrix_rank(ops[f"Gauss_{site}"].todense()) > 0:
             raise ValueError(f"Some gauge basis states of {site} sites are missing")
+
 
 def get_QED_Hamiltonian_couplings(g, m):
     E = (g**2) / 2  # ELECTRIC FIELD
