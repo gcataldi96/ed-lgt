@@ -74,4 +74,3 @@ def check_hermitian(A):
     logger.info("CHECK HERMITICITY")
     A_dag = A.getH()
     check_matrix(A, A_dag)
-    logger.info("OK")

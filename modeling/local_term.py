@@ -54,9 +54,8 @@ class LocalTerm2D:
                 if not isinstance(ll, int):
                     raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
         # PRINT OBSERVABLE NAME
-        logger.info(f"-----------------------")
-        logger.info(f" {self.Op_name}")
         logger.info(f"----------------------")
+        logger.info(f"{self.Op_name}")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]
         ny = lvals[1]
@@ -77,13 +76,13 @@ class LocalTerm2D:
                 np.dot(psi_dag, local_op(self.Op, ii + 1, n).dot(psi))
             )
             if site == "odd" and stag < 0:
-                logger.info(f" ({x+1},{y+1}) {format(self.obs[x,y], '.12f')}")
+                logger.info(f"({x+1},{y+1}) {format(self.obs[x,y], '.12f')}")
                 avg += 2 * self.obs[x, y] / n
             elif site == "even" and stag > 0:
-                logger.info(f" ({x+1},{y+1}) {format(self.obs[x,y], '.12f')}")
+                logger.info(f"({x+1},{y+1}) {format(self.obs[x,y], '.12f')}")
                 avg += 2 * self.obs[x, y] / n
             elif site == None:
-                logger.info(f" ({x+1},{y+1}) {format(self.obs[x,y], '.12f')}")
+                logger.info(f"({x+1},{y+1}) {format(self.obs[x,y], '.12f')}")
                 avg += self.obs[x, y] / n
         return avg
 
@@ -128,23 +127,23 @@ class LocalTerm2D:
             return np.sqrt(var)  # standard deviation
 
     def check_on_borders(self, border, value=1, threshold=1e-10):
-        logger.info(f" CHECK BORDER PENALTIES")
+        logger.info(f"CHECK BORDER PENALTIES")
         if border == "mx":
             if np.any(np.abs(self.obs[0, :] - value) > threshold):
                 logger.info(self.obs[0, :])
-                raise ValueError(f" {border} border penalty not satisfied")
+                raise ValueError(f"{border} border penalty not satisfied")
         elif border == "px":
             if np.any(np.abs(self.obs[-1, :] - value) > threshold):
                 logger.info(self.obs[-1, :])
-                raise ValueError(f" {border} border penalty not satisfied")
+                raise ValueError(f"{border} border penalty not satisfied")
         elif border == "my":
             if np.any(np.abs(self.obs[:, 0] - value) > threshold):
                 logger.info(self.obs[:, 0])
-                raise ValueError(f" {border} border penalty not satisfied")
+                raise ValueError(f"{border} border penalty not satisfied")
         elif border == "py":
             if np.any(np.abs(self.obs[:, -1] - value) > threshold):
                 logger.info(self.obs[:, -1])
-                raise ValueError(f" {border} border penalty not satisfied")
+                raise ValueError(f"{border} border penalty not satisfied")
         else:
-            raise ValueError(f" border must be in (mx, px, my, py), not {border}")
-        logger.info(f" {border}-border penalties are satisfied")
+            raise ValueError(f"border must be in (mx, px, my, py), not {border}")
+        logger.info(f"{border}-border penalties are satisfied")
