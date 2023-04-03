@@ -30,7 +30,6 @@ with run_sim() as sim:
     ops = get_QED_operators(n_rishons)
     # ACQUIRE HAMILTONIAN COEFFICIENTS
     coeffs = get_QED_Hamiltonian_couplings(g, m)
-    logger.info(f"Penalty {coeffs['eta']}")
     # CONSTRUCT THE HAMILTONIAN
     h_terms = {}
     H = 0
@@ -49,7 +48,7 @@ with run_sim() as sim:
                 add_dagger=False,
                 mask=staggered_mask(lvals, site),
             )
-        # SINGLE SITE OPERATORS needed for the LINK SYMMETRY
+        # SINGLE SITE OPERATORS needed for the LINK SYMMETRY/OBC PENALTIES
         for s in "mp":
             for site in ["even", "odd"]:
                 op_name = f"E0_square_{s}{d}_{site}"
@@ -108,6 +107,7 @@ with run_sim() as sim:
             strength=coeffs["B"],
             has_obc=has_obc,
             add_dagger=True,
+            mask=staggered_mask(lvals, site),
         )
     # ===========================================================================
     # CHECK THAT THE HAMILTONIAN IS HERMITIAN
@@ -115,24 +115,26 @@ with run_sim() as sim:
     # DIAGONALIZE THE HAMILTONIAN
     n_eigs = sim.par["n_eigs"]
     GS = Ground_State(H, n_eigs)
-    sim.res["energy"] = GS.Nenergies[0]
-    logger.info(f"ENERGY VALUE: {sim.res['energy']}")
-    # ENTROPY of a BIPARTITION
-    sim.res["entropy"] = entanglement_entropy(
-        GS.psi, loc_dim, n_sites, partition_size=int(n_sites / 2)
-    )
-    # ===========================================================================
-    # OBSERVABLES: RISHON NUMBER OPERATORS
-    for d in directions:
-        for s in "mp":
-            for site in ["even", "odd"]:
-                h_terms[f"n_{s}{d}_{site}"] = LocalTerm2D(
-                    ops[f"n_{s}{d}_{site}"], f"n_{s}{d}_{site}"
-                )
-                h_terms[f"n_{s}{d}_{site}"].get_loc_expval(GS.psi, lvals, site)
-    # OBSERVABLES: ElECTRIC ENERGY E^{2} and DENSITY OPERATOR N
-    for obs in ["E_square", "N"]:
-        for site in ["odd", "even"]:
-            sim.res[f"{obs}_{site}"] = h_terms[f"{obs}_{site}"].get_loc_expval(
-                GS.psi, lvals, site
-            )
+    sim.res["energy"] = GS.Nenergies
+    for ii in range(n_eigs):
+        logger.info("====================================================")
+        logger.info(f"{ii} ENERGY: {format(sim.res['energy'][ii], '.9f')}")
+        # ENTROPY of a BIPARTITION
+        sim.res["entropy"] = entanglement_entropy(
+            GS.Npsi[:, ii], loc_dim, n_sites, partition_size=int(n_sites / 2)
+        )
+        # ===========================================================================
+        # OBSERVABLES: RISHON NUMBER OPERATORS
+        for d in directions:
+            for s in "mp":
+                for site in ["even", "odd"]:
+                    op_name = f"n_{s}{d}_{site}"
+                    h_terms[op_name] = LocalTerm2D(ops[op_name], op_name)
+                    h_terms[op_name].get_loc_expval(GS.Npsi[:, ii], lvals, site)
+        # OBSERVABLES: ElECTRIC ENERGY E^{2} and DENSITY OPERATOR N
+        for obs in ["E_square", "N"]:
+            for site in ["odd", "even"]:
+                obs_name = f"{obs}_{site}"
+                h_terms[obs_name].get_loc_expval(GS.Npsi[:, ii], lvals, site)
+    if n_eigs == 1:
+        sim.res["energy"] = sim.res["energy"][0]
