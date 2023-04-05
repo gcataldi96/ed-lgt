@@ -3,9 +3,9 @@ import numpy as np
 from itertools import product
 from scipy.sparse import csr_matrix, diags, kron, identity
 from scipy.sparse.linalg import norm
+from simsio import logger
 
 __all__ = [
-    "gauge_invariant_states",
     "get_QED_operators",
     "get_QED_Hamiltonian_couplings",
 ]
@@ -60,7 +60,8 @@ def gauge_invariant_states(n_rishons, lattice_dim=2):
 
 
 def inner_site_operators(n_rishons):
-    # Define the Rishon operators according to the chosen spin representation s (to which correspond n_rishons=2s)
+    # Define the Rishon operators according to the chosen spin representation s
+    # (to which correspond n_rishons=2s)
     ops = {}
     shape = (n_rishons + 1, n_rishons + 1)
     if n_rishons == 2:
@@ -96,7 +97,7 @@ def inner_site_operators(n_rishons):
 
 
 def dressed_site_operators(n_rishons, lattice_dim=2):
-    dim = 2 * (n_rishons + 1) ** (2 * lattice_dim)
+    tot_dim = 2 * (n_rishons + 1) ** (2 * lattice_dim)
     # Get inner site operators
     in_ops = inner_site_operators(n_rishons)
     # Dictionary for operators
@@ -132,27 +133,63 @@ def dressed_site_operators(n_rishons, lattice_dim=2):
     ops[f"E_square"] = 0
     for s in ["mx", "my", "px", "py"]:
         ops[f"E_square"] += 0.5 * ops[f"E0_square_{s}"]
-    # Gauss law operators
-    ops["Gauss_even"] = (
-        ops["N"]
-        + ops["n_mx"]
-        + ops["n_my"]
-        + ops["n_px"]
-        + ops["n_py"]
-        - lattice_dim * n_rishons * identity(dim)
-    )
-    ops["Gauss_odd"] = (
-        ops["N"]
-        + ops["n_mx"]
-        + ops["n_my"]
-        + ops["n_px"]
-        + ops["n_py"]
-        - (lattice_dim * n_rishons + 1) * identity(dim)
-    )
+    # GAUSS LAW OPERATORS
+    gauss_law_ops = {
+        "even": (
+            ops["N"]
+            + ops["n_mx"]
+            + ops["n_my"]
+            + ops["n_px"]
+            + ops["n_py"]
+            - lattice_dim * n_rishons * identity(tot_dim)
+        ),
+        "odd": (
+            ops["N"]
+            + ops["n_mx"]
+            + ops["n_my"]
+            + ops["n_px"]
+            + ops["n_py"]
+            - (lattice_dim * n_rishons + 1) * identity(tot_dim)
+        ),
+    }
+    # CHECK GAUSS LAW
+    gauge_basis, _ = gauge_invariant_states(n_rishons)
+    check_gauss_law(gauge_basis, gauss_law_ops)
     return ops
 
 
-def get_QED_operators(n_rishons):
+def check_gauss_law(gauge_basis, gauss_law_ops, threshold=1e-10):
+    logger.info("CHECK GAUSS LAW")
+    M = gauge_basis
+    for site in ["even", "odd"]:
+        # Get the dimension of the gauge invariant dressed site
+        dim_eff_site = M[site].shape[1]
+        # Check that the Matrix Basis behave like an isometry
+        if norm(M[site].transpose() * M[site] - identity(dim_eff_site)) > threshold:
+            raise ValueError(f"The gauge basis M on {site} sites is not an Isometry")
+        # Check that M*M^T is a Projector
+        Proj = M[site] * M[site].transpose()
+        if norm(Proj - Proj**2) > threshold:
+            raise ValueError(
+                f"The gauge basis M on {site} sites does not provide a projector P=M*M^T"
+            )
+        # Check that the basis is the one with ALL the states satisfying Gauss law
+        if norm(gauss_law_ops[site] * M[site]) > threshold:
+            raise ValueError(
+                f"The gauge basis states of {site} sites don't satisfy Gauss Law"
+            )
+        if (
+            M[site].shape[0] - np.linalg.matrix_rank(gauss_law_ops[site].todense())
+            != M[site].shape[1]
+        ):
+            logger.info(site)
+            logger.info(f"Large dimension {M[site].shape[0]}")
+            logger.info(f"Effective dimension {M[site].shape[1]}")
+            logger.info(np.linalg.matrix_rank(gauss_law_ops[site].todense()))
+            logger.info(f"Some gauge basis states of {site} sites are missing")
+
+
+def get_QED_operators(n_rishons, lattice_dim=2):
     eff_ops = {}
     # Build the gauge invariant basis (for even and odd sites)
     # in the chosen spin representation s
@@ -164,34 +201,9 @@ def get_QED_operators(n_rishons):
     for site in ["even", "odd"]:
         for op in ops:
             eff_ops[f"{op}_{site}"] = csr_matrix(
-                gauge_basis[site].conj().transpose() * ops[op] * gauge_basis[site]
+                gauge_basis[site].transpose() * ops[op] * gauge_basis[site]
             )
-    # CHECK gauge basis
-    check_gauss_law(gauge_basis, eff_ops)
     return eff_ops
-
-
-def check_gauss_law(gauge_basis, ops, threshold=1e-10):
-    M = gauge_basis
-    for site in ["even", "odd"]:
-        # Get the dimension of the gauge invariant dressed site
-        dim_eff_site = M[site].shape[0]
-        # Check that the Matrix Basis behave like an isometry
-        if norm(M[site].transpose() * M[site] - identity(dim_eff_site)) > threshold:
-            raise ValueError(f"The gauge basis M on {site} sites is not an Isometry")
-        # Check that M*M^T is a Projector
-        Proj = M[site] * M[site].transpose()
-        if norm(norm(Proj - Proj**2)) > threshold:
-            raise ValueError(
-                f"The gauge basis M on {site} sites does not provide a projector P=M*M^T"
-            )
-        # Check that the basis is the one with ALL the states satisfying Gauss law
-        if norm(ops[f"Gauss_{site}"] * M[site]) > threshold:
-            raise ValueError(
-                f"The gauge basis states of {site} sites don't satisfy Gauss Law"
-            )
-        if M[site].shape[0] - np.linalg.matrix_rank(ops[f"Gauss_{site}"].todense()) > 0:
-            raise ValueError(f"Some gauge basis states of {site} sites are missing")
 
 
 def get_QED_Hamiltonian_couplings(g, m):
@@ -203,7 +215,7 @@ def get_QED_Hamiltonian_couplings(g, m):
         "m": m,
         "E": E,  # ELECTRIC FIELD coupling
         "B": B,  # MAGNETIC FIELD coupling
-        "eta": 5 * max(E, np.abs(B), np.abs(m)),  # PENALTY
+        "eta": 10 * max(E, np.abs(B), np.abs(m)),  # PENALTY
         "tx_even": 0.5,  # HORIZONTAL HOPPING
         "tx_odd": 0.5,
         "ty_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
@@ -211,4 +223,16 @@ def get_QED_Hamiltonian_couplings(g, m):
         "m_even": m,
         "m_odd": -m,
     }
+    logger.info(f"LINK SYMMETRY PENALTY {coeffs['eta']}")
     return coeffs
+
+
+"""
+n_rishons = 2
+in_ops = inner_site_operators(n_rishons)
+ops = dressed_site_operators(n_rishons)
+eff_ops = get_QED_operators(n_rishons)
+M, states = gauge_invariant_states(n_rishons)
+"""
+
+# %%
