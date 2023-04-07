@@ -3,7 +3,8 @@ import numpy as np
 from itertools import product
 from scipy.sparse import csr_matrix, diags, kron, identity
 from scipy.sparse.linalg import norm
-from simsio import logger
+
+# from simsio import logger
 
 __all__ = [
     "get_QED_operators",
@@ -18,44 +19,99 @@ def qmb_op(ops, list_ops):
     return csr_matrix(qmb_op)
 
 
+def border_configs(config, n_rishons):
+    s = int(n_rishons / 2)
+    label = []
+    if config[1] == s:
+        label.append("mx")
+    if config[2] == s:
+        label.append("my")
+    if config[3] == s:
+        label.append("px")
+    if config[4] == s:
+        label.append("py")
+    if (config[1] == s) and (config[2] == s):
+        label.append("mx_my")
+    if (config[1] == s) and (config[4] == s):
+        label.append("mx_py")
+    if (config[2] == s) and (config[3] == s):
+        label.append("my_px")
+    if (config[3] == s) and (config[4] == s):
+        label.append("px_py")
+    return label
+
+
 def gauge_invariant_states(n_rishons, lattice_dim=2):
+    """
+    This function generates the gauge invariant basis of a QED LGT
+    in a 2D rectangular lattice where gauge and matter degrees of
+    freedom are merged in a compact-site notation by exploiting
+    a rishon-based quantum link model.
+    NOTE: the gague invariant basis is different for even
+    and odd sites due to the staggered fermion solution
+    NOTE: the function provides also a restricted basis for sites
+    on the borderd of the lattice where not all the configurations
+    are allowed (the external rishons/gauge fields do not contribute)
+
+    Args:
+        n_rishons (int): it corresponds to the spin representation of U(1) s=n_rishons/2
+
+        lattice_dim (int, optional): number of spatial dimensions. Defaults to 2.
+
+    Returns:
+        _type_: _description_
+    """
     single_rishon_configs = np.arange(n_rishons + 1)
-    gauge_states = {"odd": [], "even": []}
-    gauge_basis = {"odd": [], "even": []}
+    gauge_states = {"even": [], "odd": []}
+    gauge_basis = {}
+    # Set a rows list for the basis
+    row = {"even": [], "odd": []}
+    col_counter = {"even": -1, "odd": -1}
     # Run over even and odd sites
     for ii, site in enumerate(["even", "odd"]):
+        for label in ["mx", "my", "px", "py", "mx_my", "mx_py", "my_px", "px_py"]:
+            gauge_states[f"{site}_{label}"] = []
+            row[f"{site}_{label}"] = []
+            col_counter[f"{site}_{label}"] = -1
         # Define the parity of odd (-1) and even (+1) sites
         parity = -1 if site == "odd" else 1
-        # Set raw and col counters
-        raw_counter = -1
-        col_counter = 0
-        # Set a raw list for the basis
-        raw = []
+        # Set row and col counters
+        row_counter = -1
         # Possible matter occupation number
         for matter in [0, 1]:
             for n_mx, n_my, n_px, n_py in product(single_rishon_configs, repeat=4):
-                # Update raw counter
-                raw_counter += 1
+                # Update row counter
+                row_counter += 1
                 # DEFINE GAUSS LAW
                 left = matter + n_mx + n_px + n_my + n_py
                 right = lattice_dim * n_rishons + 0.5 * (1 - parity)
                 # CHECK GAUSS LAW
                 if left == right:
+                    # FIX row and col of the site basis
+                    row[site].append(row_counter)
+                    col_counter[site] += 1
                     # SAVE THE STATE
-                    gauge_states[site].append([matter, n_mx, n_my, n_px, n_py, parity])
-                    # Update col counter
-                    col_counter += 1
-                    # FIX raw and col of the site basis
-                    raw.append(raw_counter)
+                    config = [matter, n_mx, n_my, n_px, n_py, parity]
+                    gauge_states[site].append(config)
+                    # GET THE CONFIG LABEL
+                    label = border_configs(config, n_rishons)
+                    if label:
+                        # save the config state also in the specific subset for the specif border
+                        for ll in label:
+                            gauge_states[f"{site}_{ll}"].append(config)
+                            row[f"{site}_{ll}"].append(row_counter)
+                            col_counter[f"{site}_{ll}"] += 1
         # Build the basis as a sparse matrix
-        data = np.ones(col_counter, dtype=float)
-        x = np.asarray(raw)
-        y = np.arange(col_counter)
-        gauge_basis[site] = csr_matrix(
-            (data, (x, y)), shape=(raw_counter + 1, col_counter)
-        )
-        # Save the gauge states as a np.array
-        gauge_states[site] = np.asarray(gauge_states[site])
+        for ll in ["mx", "my", "px", "py", "mx_my", "mx_py", "my_px", "px_py"]:
+            name = f"{site}_{ll}"
+            data = np.ones(col_counter[name] + 1, dtype=float)
+            x = np.asarray(row[name])
+            y = np.arange(col_counter[name] + 1)
+            gauge_basis[name] = csr_matrix(
+                (data, (x, y)), shape=(row_counter + 1, col_counter[name] + 1)
+            )
+            # Save the gauge states as a np.array
+            gauge_states[name] = np.asarray(gauge_states[name])
     return gauge_basis, gauge_states
 
 
@@ -159,7 +215,7 @@ def dressed_site_operators(n_rishons, lattice_dim=2):
 
 
 def check_gauss_law(gauge_basis, gauss_law_ops, threshold=1e-10):
-    logger.info("CHECK GAUSS LAW")
+    print("CHECK GAUSS LAW")
     M = gauge_basis
     for site in ["even", "odd"]:
         # Get the dimension of the gauge invariant dressed site
@@ -182,14 +238,14 @@ def check_gauss_law(gauge_basis, gauss_law_ops, threshold=1e-10):
             M[site].shape[0] - np.linalg.matrix_rank(gauss_law_ops[site].todense())
             != M[site].shape[1]
         ):
-            logger.info(site)
-            logger.info(f"Large dimension {M[site].shape[0]}")
-            logger.info(f"Effective dimension {M[site].shape[1]}")
-            logger.info(np.linalg.matrix_rank(gauss_law_ops[site].todense()))
-            logger.info(f"Some gauge basis states of {site} sites are missing")
+            print(site)
+            print(f"Large dimension {M[site].shape[0]}")
+            print(f"Effective dimension {M[site].shape[1]}")
+            print(np.linalg.matrix_rank(gauss_law_ops[site].todense()))
+            print(f"Some gauge basis states of {site} sites are missing")
 
 
-def get_QED_operators(n_rishons, lattice_dim=2):
+def get_QED_operators(n_rishons):
     eff_ops = {}
     # Build the gauge invariant basis (for even and odd sites)
     # in the chosen spin representation s
@@ -219,20 +275,20 @@ def get_QED_Hamiltonian_couplings(g, m):
         "tx_even": 0.5,  # HORIZONTAL HOPPING
         "tx_odd": 0.5,
         "ty_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
-        "ty_odd": -0.5,  # VERTICAL HOPPING (ODD SITES)
+        "ty_odd": 0.5,  # VERTICAL HOPPING (ODD SITES)
         "m_even": m,
         "m_odd": -m,
     }
-    logger.info(f"LINK SYMMETRY PENALTY {coeffs['eta']}")
+    print(f"LINK SYMMETRY PENALTY {coeffs['eta']}")
     return coeffs
 
 
-"""
+# %%
 n_rishons = 2
+M, states = gauge_invariant_states(n_rishons)
+
+
+# %%
 in_ops = inner_site_operators(n_rishons)
 ops = dressed_site_operators(n_rishons)
 eff_ops = get_QED_operators(n_rishons)
-M, states = gauge_invariant_states(n_rishons)
-"""
-
-# %%
