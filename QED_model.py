@@ -1,10 +1,14 @@
 from operators import (
     get_QED_operators,
-    gauge_invariant_states,
     get_QED_Hamiltonian_couplings,
 )
 from modeling import Ground_State, LocalTerm2D, TwoBodyTerm2D, PlaquetteTerm2D
-from modeling import entanglement_entropy, staggered_mask
+from modeling import (
+    entanglement_entropy,
+    staggered_mask,
+    get_state_configurations,
+    truncation,
+)
 from tools import check_hermitian
 from simsio import logger, run_sim
 
@@ -23,11 +27,10 @@ with run_sim() as sim:
     m = sim.par["m"]
     # DEFINE THE GAUGE INVARIANT STATES OF THE BASIS
     n_rishons = sim.par["rishons_number"]
-    gauge_basis, gauge_states = gauge_invariant_states(n_rishons)
-    # GET LOCAL DIMENSION
-    loc_dim = gauge_basis["odd"].shape[1]
     # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
     ops = get_QED_operators(n_rishons)
+    # GET LOCAL DIMENSION
+    loc_dim = ops["E_square_odd"].shape[0]
     # ACQUIRE HAMILTONIAN COEFFICIENTS
     coeffs = get_QED_Hamiltonian_couplings(g, m)
     # CONSTRUCT THE HAMILTONIAN
@@ -104,7 +107,7 @@ with run_sim() as sim:
         h_terms[f"plaq_{site}"] = PlaquetteTerm2D(op_list, op_name_list)
         H += h_terms[f"plaq_{site}"].get_Hamiltonian(
             lvals,
-            strength=coeffs["B"],
+            strength=0.0 * coeffs["B"],
             has_obc=has_obc,
             add_dagger=True,
             mask=staggered_mask(lvals, site),
@@ -119,6 +122,11 @@ with run_sim() as sim:
     for ii in range(n_eigs):
         logger.info("====================================================")
         logger.info(f"{ii} ENERGY: {format(sim.res['energy'][ii], '.9f')}")
+        # GET STATE CONFIGURATIONS
+        if not has_obc:
+            get_state_configurations(
+                truncation(GS.Npsi[:, ii], 1e-10), loc_dim, n_sites
+            )
         # ENTROPY of a BIPARTITION
         sim.res["entropy"] = entanglement_entropy(
             GS.Npsi[:, ii], loc_dim, n_sites, partition_size=int(n_sites / 2)
@@ -136,5 +144,11 @@ with run_sim() as sim:
             for site in ["odd", "even"]:
                 obs_name = f"{obs}_{site}"
                 h_terms[obs_name].get_loc_expval(GS.Npsi[:, ii], lvals, site)
+        # OBSERVABLES: PLAQUETTE ENERGY
+        for site in ["even", "odd"]:
+            if h_terms.get(f"plaq_{site}") is not None:
+                sim.res["plaq"], _ = h_terms[f"plaq_{site}"].get_plaq_expval(
+                    GS.Npsi[:, ii], lvals, has_obc, get_imag=False, site=site
+                )
     if n_eigs == 1:
         sim.res["energy"] = sim.res["energy"][0]
