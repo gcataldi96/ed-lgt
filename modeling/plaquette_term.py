@@ -96,7 +96,7 @@ class PlaquetteTerm2D:
             H_plaq += csr_matrix(H_plaq.conj().transpose())
         return H_plaq
 
-    def get_plaq_expval(self, psi, lvals, has_obc=True, get_imag=False):
+    def get_plaq_expval(self, psi, lvals, has_obc=True, get_imag=False, site=None):
         # CHECK ON TYPES
         if not isinstance(psi, np.ndarray):
             raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
@@ -117,7 +117,7 @@ class PlaquetteTerm2D:
             chosen_part = "IMAG"
         else:
             chosen_part = "REAL"
-        logger.info(f" PLAQUETTE: {chosen_part} PART")
+        logger.info(f"PLAQUETTE: {chosen_part} PART")
         logger.info(f"----------------------")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]
@@ -175,33 +175,38 @@ class PlaquetteTerm2D:
                         ]
                 else:
                     continue
-            # COMPUTE THE PLAQUETTE
-            plaq = np.real(
-                np.dot(
-                    psi_dag,
-                    four_body_op(
-                        self.op_list, sites_list, n, get_only_part=chosen_part
-                    ).dot(psi),
-                )
-            )
-            delta_plaq = (
-                np.real(
+            # COMPUTE THE PLAQUETTE only for the appropriate site
+            stag = (-1) ** (x + y)
+            site_conditions = [
+                site == None,
+                (site == "even" and stag > 0),
+                (site == "odd" and stag < 0),
+            ]
+            if any(site_conditions):
+                plaq = np.real(
                     np.dot(
                         psi_dag,
-                        (
-                            four_body_op(
-                                self.op_list, sites_list, n, get_only_part=chosen_part
-                            )
-                            ** 2
+                        four_body_op(
+                            self.op_list, sites_list, n, get_only_part=chosen_part
                         ).dot(psi),
                     )
                 )
-                - plaq**2
-            )
-            # PRINT THE PLAQUETTE
-            self.print_Plaquette(plaq_string, plaq)
-            plaq_obs.append(plaq)
-            delta_plaq_obs.append(delta_plaq)
+                delta_plaq = (
+                    np.real(
+                        np.dot(
+                            psi_dag,
+                            (
+                                four_body_op(self.op_list, sites_list, n, chosen_part)
+                                ** 2
+                            ).dot(psi),
+                        )
+                    )
+                    - plaq**2
+                )
+                # PRINT THE PLAQUETTE
+                self.print_Plaquette(plaq_string, plaq)
+                plaq_obs.append(plaq)
+                delta_plaq_obs.append(delta_plaq)
         plaq_obs = np.array(plaq_obs)
         delta_plaq_obs = np.array(delta_plaq_obs)
         avg_plaq = np.sum(plaq_obs) / plaq_obs.shape[0]
@@ -225,10 +230,10 @@ class PlaquetteTerm2D:
             if np.abs(value) < 10 ** (-10):
                 value = format(np.abs(value), ".10f")
             else:
-                value = format(value, ".10f")
-        logger.info(f" ({sites_list[2]})------------({sites_list[3]})")
-        logger.info(f"   |                |")
-        logger.info(f"   |  {value}  |")
-        logger.info(f"   |                |")
-        logger.info(f" ({sites_list[0]})------------({sites_list[1]})")
+                value = format(value, ".9f")
+        logger.info(f"({sites_list[2]})------------({sites_list[3]})")
+        logger.info(f"  |                |")
+        logger.info(f"  |  {value}  |")
+        logger.info(f"  |                |")
+        logger.info(f"({sites_list[0]})------------({sites_list[1]})")
         logger.info("")
