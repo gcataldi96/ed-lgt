@@ -26,6 +26,7 @@ class Ground_State:
         if not np.isscalar(n_eigs) and not isinstance(n_eigs, int):
             raise TypeError(f"n_eigs should be a SCALAR INT, not a {type(n_eigs)}")
         # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
+        logger.info("DIAGONALIZE HAMILTONIAN")
         self.Nenergies, self.Npsi = sparse_eigh(Ham, k=n_eigs, which="SA")
         # Save GROUND STATE PROPERTIES
         self.energy = self.Nenergies[0]
@@ -185,6 +186,7 @@ def entanglement_entropy(psi, loc_dim, n_sites, partition_size):
     )
     S, V, D = np.linalg.svd(tmp)
     tmp = np.array([-(llambda**2) * np.log2(llambda**2) for llambda in V])
+    logger.info(f"ENTROPY: {format(np.sum(tmp), '.9f')}")
     return np.sum(tmp)
 
 
@@ -260,7 +262,7 @@ def get_state_configurations(psi, loc_dim, n_sites):
     if not np.isscalar(n_sites) and not isinstance(n_sites, int):
         raise TypeError(f"n_sites must be an SCALAR & INTEGER, not a {type(n_sites)}")
     logger.info("----------------------------------------------------")
-    logger.info(" STATE CONFIGURATIONS")
+    logger.info("STATE CONFIGURATIONS")
     psi = truncation(psi, 1e-10)
     sing_vals = sorted(csr_matrix(psi).data, key=lambda x: (abs(x), -x), reverse=True)
     indices = [
@@ -275,7 +277,7 @@ def get_state_configurations(psi, loc_dim, n_sites):
         loc_states = get_loc_states_from_qmb_state(
             index=ind, loc_dim=loc_dim, n_sites=n_sites
         )
-        logger.info(f" {loc_states+1}  {alpha}")
+        logger.info(f"{loc_states+1}  {alpha}")
     logger.info("----------------------------------------------------")
 
 
@@ -291,6 +293,6 @@ def get_SU2_topological_invariant(link_parity_op, lvals, psi, axis):
     sector = np.real(
         np.dot(np.conjugate(psi), two_body_op(op_list, op_sites_list, n_sites).dot(psi))
     )
-    logger.info(f" P{axis} TOPOLOGICAL SECTOR: {sector}")
+    logger.info(f"P{axis} TOPOLOGICAL SECTOR: {sector}")
     logger.info("----------------------------------------------------")
     return sector
