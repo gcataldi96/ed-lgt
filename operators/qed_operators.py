@@ -3,12 +3,13 @@ import numpy as np
 from itertools import product
 from scipy.sparse import csr_matrix, diags, kron, identity
 from scipy.sparse.linalg import norm
-
-# from simsio import logger
+from simsio import logger
 
 __all__ = [
     "get_QED_operators",
     "get_QED_Hamiltonian_couplings",
+    "dressed_site_operators",
+    "gauge_invariant_states",
 ]
 
 
@@ -102,8 +103,18 @@ def gauge_invariant_states(n_rishons, lattice_dim=2):
                             row[f"{site}_{ll}"].append(row_counter)
                             col_counter[f"{site}_{ll}"] += 1
         # Build the basis as a sparse matrix
-        for ll in ["mx", "my", "px", "py", "mx_my", "mx_py", "my_px", "px_py"]:
-            name = f"{site}_{ll}"
+        for ll in [
+            "",
+            "_mx",
+            "_my",
+            "_px",
+            "_py",
+            "_mx_my",
+            "_mx_py",
+            "_my_px",
+            "_px_py",
+        ]:
+            name = f"{site}{ll}"
             data = np.ones(col_counter[name] + 1, dtype=float)
             x = np.asarray(row[name])
             y = np.arange(col_counter[name] + 1)
@@ -120,15 +131,40 @@ def inner_site_operators(n_rishons):
     # (to which correspond n_rishons=2s)
     ops = {}
     shape = (n_rishons + 1, n_rishons + 1)
-    if n_rishons == 2:
+    if n_rishons == 2:  # s=1
         data_m = np.array([np.sqrt(2), -np.sqrt(2)], dtype=float)
         p_diag = np.array([1, -1, 1], dtype=float)
-    elif n_rishons == 3:
+    elif n_rishons == 3:  # s=3/2
         data_m = np.array([-2 / np.sqrt(3), 4 / 3, -2 / np.sqrt(3)], dtype=float)
         p_diag = np.array([1, -1, 1, -1], dtype=float)
-    elif n_rishons == 4:
+    elif n_rishons == 4:  # s=2
         data_m = np.array([1, -np.sqrt(6) / 2, np.sqrt(6) / 2, -1], dtype=float)
         p_diag = np.array([1, -1, 1, -1, 1], dtype=float)
+    elif n_rishons == 5:  # s=5/2
+        data_m = np.array(
+            [
+                -2 / np.sqrt(5),
+                np.sqrt(32) / 5,
+                -6 / 5,
+                np.sqrt(32) / 5,
+                -2 / np.sqrt(5),
+            ],
+            dtype=float,
+        )
+        p_diag = np.array([1, -1, 1, -1, 1, -1], dtype=float)
+    elif n_rishons == 6:  # s=3
+        data_m = np.array(
+            [
+                np.sqrt(6) / 3,
+                -np.sqrt(10) / 3,
+                np.sqrt(12) / 3,
+                -np.sqrt(12) / 3,
+                np.sqrt(10) / 3,
+                -np.sqrt(6) / 3,
+            ],
+            dtype=float,
+        )
+        p_diag = np.array([1, -1, 1, -1, 1, -1, 1], dtype=float)
     else:
         raise Exception("Not yet implemented")
     data_p = np.ones(n_rishons, dtype=float)
@@ -186,28 +222,18 @@ def dressed_site_operators(n_rishons, lattice_dim=2):
         ops[f"{op}_px"] = qmb_op(in_ops, ["ID_psi", "ID_xi", "ID_xi", op, "ID_xi"])
         ops[f"{op}_py"] = qmb_op(in_ops, ["ID_psi", "ID_xi", "ID_xi", "ID_xi", op])
     # E_square operators
-    ops[f"E_square"] = 0
+    ops["E_square"] = 0
     for s in ["mx", "my", "px", "py"]:
-        ops[f"E_square"] += 0.5 * ops[f"E0_square_{s}"]
+        ops["E_square"] += 0.5 * ops[f"E0_square_{s}"]
     # GAUSS LAW OPERATORS
-    gauss_law_ops = {
-        "even": (
-            ops["N"]
-            + ops["n_mx"]
-            + ops["n_my"]
-            + ops["n_px"]
-            + ops["n_py"]
-            - lattice_dim * n_rishons * identity(tot_dim)
-        ),
-        "odd": (
-            ops["N"]
-            + ops["n_mx"]
-            + ops["n_my"]
-            + ops["n_px"]
-            + ops["n_py"]
-            - (lattice_dim * n_rishons + 1) * identity(tot_dim)
-        ),
-    }
+    gauss_law_ops = {}
+    for site in ["even", "odd"]:
+        parity_coeff = 0 if site == "even" else +1
+        gauss_law_ops[site] = ops["N"] - (
+            lattice_dim * n_rishons + parity_coeff
+        ) * identity(tot_dim)
+        for s in ["mx", "my", "px", "py"]:
+            gauss_law_ops[site] += ops[f"n_{s}"]
     # CHECK GAUSS LAW
     gauge_basis, _ = gauge_invariant_states(n_rishons)
     check_gauss_law(gauge_basis, gauss_law_ops)
@@ -215,7 +241,7 @@ def dressed_site_operators(n_rishons, lattice_dim=2):
 
 
 def check_gauss_law(gauge_basis, gauss_law_ops, threshold=1e-10):
-    print("CHECK GAUSS LAW")
+    logger.info("CHECK GAUSS LAW")
     M = gauge_basis
     for site in ["even", "odd"]:
         # Get the dimension of the gauge invariant dressed site
@@ -238,11 +264,11 @@ def check_gauss_law(gauge_basis, gauss_law_ops, threshold=1e-10):
             M[site].shape[0] - np.linalg.matrix_rank(gauss_law_ops[site].todense())
             != M[site].shape[1]
         ):
-            print(site)
-            print(f"Large dimension {M[site].shape[0]}")
-            print(f"Effective dimension {M[site].shape[1]}")
-            print(np.linalg.matrix_rank(gauss_law_ops[site].todense()))
-            print(f"Some gauge basis states of {site} sites are missing")
+            logger.info(site)
+            logger.info(f"Large dimension {M[site].shape[0]}")
+            logger.info(f"Effective dimension {M[site].shape[1]}")
+            logger.info(np.linalg.matrix_rank(gauss_law_ops[site].todense()))
+            logger.info(f"Some gauge basis states of {site} sites are missing")
 
 
 def get_QED_operators(n_rishons):
@@ -275,20 +301,18 @@ def get_QED_Hamiltonian_couplings(g, m):
         "tx_even": 0.5,  # HORIZONTAL HOPPING
         "tx_odd": 0.5,
         "ty_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
-        "ty_odd": 0.5,  # VERTICAL HOPPING (ODD SITES)
+        "ty_odd": -0.5,  # VERTICAL HOPPING (ODD SITES)
         "m_even": m,
         "m_odd": -m,
     }
-    print(f"LINK SYMMETRY PENALTY {coeffs['eta']}")
+    logger.info(f"LINK SYMMETRY PENALTY {coeffs['eta']}")
     return coeffs
 
 
-# %%
+"""
 n_rishons = 2
 M, states = gauge_invariant_states(n_rishons)
-
-
-# %%
 in_ops = inner_site_operators(n_rishons)
 ops = dressed_site_operators(n_rishons)
 eff_ops = get_QED_operators(n_rishons)
+"""
