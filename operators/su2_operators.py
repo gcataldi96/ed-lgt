@@ -1,12 +1,76 @@
 import numpy as np
-from scipy.sparse import csr_matrix, identity
 from tools.manage_data import acquire_data
+from scipy.sparse import csr_matrix, diags, identity
+from scipy.sparse.linalg import norm
 
 __all__ = [
     "get_su2_operators",
     "get_SU2_Hamiltonian_couplings",
     "get_SU2_surface_operator",
 ]
+
+
+def inner_site_operators(su2_irrep):
+    # Define the Rishon operators according to the chosen su2 spin irrep
+    ops = {}
+    if su2_irrep == "1/2":
+        xi_dim = 3
+        p_diag = np.array([1, -1, -1], dtype=float)
+        xi = {
+            "up": {
+                "data": np.array([1, 1], dtype=float) / np.sqrt(2),
+                "x": np.array([0, 2], dtype=int),
+                "y": np.array([1, 0], dtype=int),
+            },
+            "down": {
+                "data": np.array([1, -1], dtype=float) / np.sqrt(2),
+                "x": np.array([0, 1], dtype=int),
+                "y": np.array([2, 0], dtype=int),
+            },
+        }
+    elif su2_irrep == "1":
+        xi_dim = 6
+        p_diag = np.array([1, -1, -1, 1, 1, 1], dtype=float)
+        xi = {
+            "up": {
+                "data": np.array(
+                    [np.sqrt(3), np.sqrt(2), np.sqrt(3), 1, 1, np.sqrt(2)], dtype=float
+                )
+                / np.sqrt(6),
+                "x": np.array([0, 1, 2, 2, 4, 5], dtype=int),
+                "y": np.array([1, 3, 0, 4, 1, 2], dtype=int),
+            },
+            "down": {
+                "data": np.array(
+                    [np.sqrt(3), -np.sqrt(3), 1, np.sqrt(2), -np.sqrt(2), 1],
+                    dtype=float,
+                )
+                / np.sqrt(6),
+                "x": np.array([0, 1, 1, 2, 3, 4], dtype=int),
+                "y": np.array([2, 0, 4, 5, 1, 2], dtype=int),
+            },
+        }
+    else:
+        raise Exception("irrep not yet implemented")
+    # --------------------------------------------------------------------------
+    # Define the RISHON OPERATORS xi according to the chosen spin irrep
+    for sigma in ["up", "down"]:
+        ops[f"xi_{sigma}"] = csr_matrix(
+            (xi[sigma]["data"], (xi[sigma]["x"], xi[sigma]["y"])),
+            shape=(xi_dim, xi_dim),
+        )
+    ops["P_xi"] = diags(p_diag, offsets=0, shape=(xi_dim, xi_dim))
+    ops["ID_xi"] = identity(xi_dim, dtype=float)
+    # --------------------------------------------------------------------------
+    # Define the generic MATTER FIELD OPERATORS for both the su2 colors
+    # The distinction between the two colors will be specified when considering
+    # the dressed site operators.
+    ops["psi"] = diags(np.array([1], dtype=float), offsets=1, shape=(2, 2))
+    ops["psi_dag"] = ops["psi"].conj().transpose()
+    ops["P_psi"] = diags(np.array([1, -1], dtype=float), offsets=0, shape=(2, 2))
+    ops["N"] = ops["psi_dag"] * ops["psi"]
+    ops["ID_psi"] = identity(2, dtype=float)
+    return ops
 
 
 def ID(pure_theory):
