@@ -21,23 +21,49 @@ def qmb_op(ops, list_ops):
 
 
 def border_configs(config, n_rishons):
-    s = int(n_rishons / 2)
+    """
+    This function fixes the value of the electric field on
+    lattices with open boundary conditions (has_obc=True).
+    -For integer spin representation, the offset of E is naturally
+    the central value assumed by the rishon number.
+
+    -For semi-integer spin representation, there is some freedom
+    in the choice of the offset one possible solution is the one
+    corresponding to the first negative value of the electric field
+
+    Args:
+        config (list of ints): configuration of internal rishons in
+        the single dressed site basis, ordered as follows:
+        [n_matter, n_mx, n_my, n_px, n_py]
+
+        n_rishons (int): chosen spin s=n_rishons/2 representation for U(1)
+
+    Returns:
+        list of strings: list of configs corresponding to a border/corner of the lattice
+        with a fixed value of the electric field
+    """
+    if (n_rishons % 2) == 0:
+        # integer spin representation
+        off_set = {"p": n_rishons // 2, "m": n_rishons // 2}
+    else:
+        # semi-integer representation
+        off_set = {"p": n_rishons // 2, "m": 1 + (n_rishons // 2)}
     label = []
-    if config[1] == s:
+    if config[1] == off_set["m"]:
         label.append("mx")
-    if config[2] == s:
+    if config[2] == off_set["m"]:
         label.append("my")
-    if config[3] == s:
+    if config[3] == off_set["p"]:
         label.append("px")
-    if config[4] == s:
+    if config[4] == off_set["p"]:
         label.append("py")
-    if (config[1] == s) and (config[2] == s):
+    if (config[1] == off_set["m"]) and (config[2] == off_set["m"]):
         label.append("mx_my")
-    if (config[1] == s) and (config[4] == s):
+    if (config[1] == off_set["m"]) and (config[4] == off_set["p"]):
         label.append("mx_py")
-    if (config[2] == s) and (config[3] == s):
+    if (config[2] == off_set["m"]) and (config[3] == off_set["p"]):
         label.append("my_px")
-    if (config[3] == s) and (config[4] == s):
+    if (config[3] == off_set["p"]) and (config[4] == off_set["p"]):
         label.append("px_py")
     return label
 
