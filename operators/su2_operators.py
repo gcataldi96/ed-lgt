@@ -1,7 +1,8 @@
 import numpy as np
 from tools.manage_data import acquire_data
-from scipy.sparse import csr_matrix, diags, identity
+from scipy.sparse import csr_matrix, diags, identity, kron
 from scipy.sparse.linalg import norm
+from ..modeling.qmb_operations_v2 import qmb_operator as qmb_op
 
 __all__ = [
     "get_su2_operators",
@@ -66,10 +67,17 @@ def inner_site_operators(su2_irrep):
     # The distinction between the two colors will be specified when considering
     # the dressed site operators.
     ops["psi"] = diags(np.array([1], dtype=float), offsets=1, shape=(2, 2))
-    ops["psi_dag"] = ops["psi"].conj().transpose()
+    ops["psi_dag"] = ops["psi"]
     ops["P_psi"] = diags(np.array([1, -1], dtype=float), offsets=0, shape=(2, 2))
     ops["N"] = ops["psi_dag"] * ops["psi"]
     ops["ID_psi"] = identity(2, dtype=float)
+    # up & down MATTER OPERATORS
+    ops["psi_up"] = qmb_op(ops, ["psi", "ID_psi"])
+    ops["psi_down"] = qmb_op(ops, ["P_psi", "psi"])
+    ops["N_up"] = qmb_op(ops, ["N", "ID_psi"])
+    ops["N_down"] = qmb_op(ops, ["ID_psi", "N"])
+    for sigma in ["up", "down"]:
+        ops[f"psi_{sigma}_dag"] = ops[f"psi_{sigma}"].conj().transpose()
     return ops
 
 
