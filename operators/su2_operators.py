@@ -1,7 +1,6 @@
 import numpy as np
 from tools.manage_data import acquire_data
-from scipy.sparse import csr_matrix, diags, identity, kron
-from scipy.sparse.linalg import norm
+from scipy.sparse import csr_matrix, diags, identity
 from ..modeling.qmb_operations_v2 import qmb_operator as qmb_op
 
 __all__ = [
@@ -17,6 +16,7 @@ def inner_site_operators(su2_irrep):
     if su2_irrep == "1/2":
         xi_dim = 3
         p_diag = np.array([1, -1, -1], dtype=float)
+        n_diag = np.array([0, 0.5, 0.5], dtype=float)
         xi = {
             "up": {
                 "data": np.array([1, 1], dtype=float) / np.sqrt(2),
@@ -32,6 +32,7 @@ def inner_site_operators(su2_irrep):
     elif su2_irrep == "1":
         xi_dim = 6
         p_diag = np.array([1, -1, -1, 1, 1, 1], dtype=float)
+        n_diag = np.array([0, 0.5, 0.5, 1, 1, 1], dtype=float)
         xi = {
             "up": {
                 "data": np.array(
@@ -61,6 +62,8 @@ def inner_site_operators(su2_irrep):
             shape=(xi_dim, xi_dim),
         )
     ops["P_xi"] = diags(p_diag, offsets=0, shape=(xi_dim, xi_dim))
+    ops["n_xi"] = diags(n_diag, offsets=0, shape=(xi_dim, xi_dim))
+    ops["n_xi_square"] = ops["n_xi"] ** 2
     ops["ID_xi"] = identity(xi_dim, dtype=float)
     # --------------------------------------------------------------------------
     # Define the generic MATTER FIELD OPERATORS for both the su2 colors
@@ -70,14 +73,83 @@ def inner_site_operators(su2_irrep):
     ops["psi_dag"] = ops["psi"]
     ops["P_psi"] = diags(np.array([1, -1], dtype=float), offsets=0, shape=(2, 2))
     ops["N"] = ops["psi_dag"] * ops["psi"]
-    ops["ID_psi"] = identity(2, dtype=float)
     # up & down MATTER OPERATORS
     ops["psi_up"] = qmb_op(ops, ["psi", "ID_psi"])
     ops["psi_down"] = qmb_op(ops, ["P_psi", "psi"])
     ops["N_up"] = qmb_op(ops, ["N", "ID_psi"])
     ops["N_down"] = qmb_op(ops, ["ID_psi", "N"])
+    # other number operators
+    ops["N_pair"] = ops["N_up"] * ops["N_down"]
+    ops["N_tot"] = ops["N_up"] + ops["N_down"]
+    ops["N_single"] = ops["N_tot"] - ops["N_pair"]
+    # identity on the whole matter site
+    ops["ID_psi"] = identity(4, dtype=float)
     for sigma in ["up", "down"]:
         ops[f"psi_{sigma}_dag"] = ops[f"psi_{sigma}"].conj().transpose()
+    return ops
+
+
+def dressed_site_operators(su2_irrep, lattice_dim=2):
+    # Get inner site operators
+    in_ops = inner_site_operators(su2_irrep)
+    # Define the TOTAL DIMENSION of dressed site operators
+    xi_dim = in_ops["xi_up"].shape[0]
+    tot_dim = 4 * (xi_dim) ** (2 * lattice_dim)
+    # Dictionary for dressed site operators
+    ops = {}
+    # HOPPING OPERATORS
+    for sd in ["mx", "my", "px", "py"]:
+        ops[f"Q_{sd}_dag"] = 0
+    for sigma in ["up", "down"]:
+        ops["Q_mx_dag"] += qmb_op(
+            in_ops, [f"psi_{sigma}_dag", f"xi_{sigma}", "ID_xi", "ID_xi", "ID_xi"]
+        )
+        ops["Q_my_dag"] += qmb_op(
+            in_ops, [f"psi_{sigma}_dag", "P_xi", f"xi_{sigma}", "ID_xi", "ID_xi"]
+        )
+        ops["Q_px_dag"] += qmb_op(
+            in_ops, [f"psi_{sigma}_dag", "P_xi", "P_xi", f"xi_{sigma}", "ID_xi"]
+        )
+        ops["Q_py_dag"] += qmb_op(
+            in_ops, [f"psi_{sigma}_dag", "P_xi", "P_xi", "P_xi", f"xi_{sigma}"]
+        )
+    # add DAGGER operators
+    Qs = {}
+    for op in ops:
+        dag_op = op.replace("_dag", "")
+        Qs[dag_op] = csr_matrix(ops[op].conj().transpose())
+    ops |= Qs
+    # Psi NUMBER OPERATORS
+    for sigma in ["up", "down", "tot", "single", "pair"]:
+        ops[f"N_{sigma}"] = qmb_op(
+            in_ops, [f"N_{sigma}", "ID_xi", "ID_xi", "ID_xi", "ID_xi"]
+        )
+    # Rishon NUMBER OPERATORS
+    for op in ["n", "n_square"]:
+        ops[f"{op}_mx"] = qmb_op(in_ops, ["ID_psi", op, "ID_xi", "ID_xi", "ID_xi"])
+        ops[f"{op}_my"] = qmb_op(in_ops, ["ID_psi", "ID_xi", op, "ID_xi", "ID_xi"])
+        ops[f"{op}_px"] = qmb_op(in_ops, ["ID_psi", "ID_xi", "ID_xi", op, "ID_xi"])
+        ops[f"{op}_py"] = qmb_op(in_ops, ["ID_psi", "ID_xi", "ID_xi", "ID_xi", op])
+    # CASIMIR/ELECTRIC OPERATOR
+    ops[f"E_square"] = 0
+    for sd in ["mx", "my", "px", "py"]:
+        ops[f"E_square"] += 0.5 * ops[f"n_square_{sd}"]
+    # CORNER OPERATORS
+    for corner in ["px,py", "py,mx", "mx,my", "my,px"]:
+        ops[f"C_{corner}"] = 0
+    for sigma in ["up", "down"]:
+        ops["C_px,py"] += -qmb_op(
+            in_ops, ["ID_psi", "ID_xi", "ID_xi", f"xi_{sigma}", f"xi_{sigma}_dag"]
+        )
+        ops["C_py,mx"] += qmb_op(
+            in_ops, ["ID_psi", f"xi_{sigma}", "P_xi", "P_xi", f"xi_{sigma}"]
+        )
+        ops["C_mx,my"] += qmb_op(
+            in_ops, ["ID_psi", f"xi_{sigma}", f"xi_{sigma}", "ID_xi", "ID_xi"]
+        )
+        ops["C_my,px"] += qmb_op(
+            in_ops, ["ID_psi", "ID_xi", f"xi_{sigma}", f"xi_{sigma}", "ID_xi"]
+        )
     return ops
 
 
