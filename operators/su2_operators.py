@@ -61,10 +61,15 @@ def inner_site_operators(su2_irrep):
             (xi[sigma]["data"], (xi[sigma]["x"], xi[sigma]["y"])),
             shape=(xi_dim, xi_dim),
         )
+        ops[f"xi_{sigma}_dag"] = ops[f"xi_{sigma}"].conj().transpose()
     ops["P_xi"] = diags(p_diag, offsets=0, shape=(xi_dim, xi_dim))
     ops["n_xi"] = diags(n_diag, offsets=0, shape=(xi_dim, xi_dim))
     ops["n_xi_square"] = ops["n_xi"] ** 2
     ops["ID_xi"] = identity(xi_dim, dtype=float)
+    # Useful operators for corner operators
+    for sigma in ["up", "down"]:
+        ops[f"xi_{sigma}_times_P"] = ops[f"xi_{sigma}"] * ops["P_xi"]
+        ops[f"P_times_xi_{sigma}_dag"] = ops["P_xi"] * ops[f"xi_{sigma}_dag"]
     # --------------------------------------------------------------------------
     # Define the generic MATTER FIELD OPERATORS for both the su2 colors
     # The distinction between the two colors will be specified when considering
@@ -139,16 +144,19 @@ def dressed_site_operators(su2_irrep, lattice_dim=2):
         ops[f"C_{corner}"] = 0
     for sigma in ["up", "down"]:
         ops["C_px,py"] += -qmb_op(
-            in_ops, ["ID_psi", "ID_xi", "ID_xi", f"xi_{sigma}", f"xi_{sigma}_dag"]
+            in_ops,
+            ["ID_psi", "ID_xi", "ID_xi", f"xi_{sigma}_times_P", f"xi_{sigma}_dag"],
         )
         ops["C_py,mx"] += qmb_op(
-            in_ops, ["ID_psi", f"xi_{sigma}", "P_xi", "P_xi", f"xi_{sigma}"]
+            in_ops, ["ID_psi", f"P_times_xi_{sigma}_dag", "P_xi", "P_xi", f"xi_{sigma}"]
         )
         ops["C_mx,my"] += qmb_op(
-            in_ops, ["ID_psi", f"xi_{sigma}", f"xi_{sigma}", "ID_xi", "ID_xi"]
+            in_ops,
+            ["ID_psi", f"xi_{sigma}_times_P", f"xi_{sigma}_dag", "ID_xi", "ID_xi"],
         )
         ops["C_my,px"] += qmb_op(
-            in_ops, ["ID_psi", "ID_xi", f"xi_{sigma}", f"xi_{sigma}", "ID_xi"]
+            in_ops,
+            ["ID_psi", "ID_xi", f"xi_{sigma}_times_P", f"xi_{sigma}_dag", "ID_xi"],
         )
     return ops
 
