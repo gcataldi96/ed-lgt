@@ -37,9 +37,9 @@ class PlaquetteTerm2D:
         self.BR_name = op_name_list[1]
         self.TL_name = op_name_list[2]
         self.TR_name = op_name_list[3]
-        logger.info(
-            f"PLAQUETTE {op_name_list[0]}-{op_name_list[1]}-{op_name_list[2]}-{op_name_list[3]}"
-        )
+        # logger.info(
+        #    f"PLAQUETTE {op_name_list[0]}-{op_name_list[1]}-{op_name_list[2]}-{op_name_list[3]}"
+        # )
         # Define a list with the Four Operators involved in the Plaquette:
         self.op_list = [self.BL, self.BR, self.TL, self.TR]
 
@@ -98,7 +98,7 @@ class PlaquetteTerm2D:
                 else:
                     mask_conditions = False
             if mask_conditions:
-                logger.info(sites_list)
+                # logger.info(sites_list)
                 H_plaq += strength * four_body_op(
                     self.op_list,
                     sites_list,

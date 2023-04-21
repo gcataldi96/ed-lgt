@@ -16,7 +16,7 @@ class LocalTerm2D:
             raise TypeError(f"op_name should be a STRING, not a {type(op_name)}")
         self.op = operator
         self.op_name = op_name
-        logger.info(f"local-term {self.op_name}")
+        #logger.info(f"local-term {self.op_name}")
         self.stag_basis = staggered_basis
         self.site_basis = site_basis
 

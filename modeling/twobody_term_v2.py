@@ -34,7 +34,7 @@ class TwoBodyTerm2D:
                     )
         self.axis = axis
         self.op_name_list = op_name_list
-        logger.info(f"twobody-term {self.op_name_list[0]}-{self.op_name_list[1]}")
+        # logger.info(f"twobody-term {self.op_name_list[0]}-{self.op_name_list[1]}")
         if axis == "x":
             self.op_list = op_list
             self.Left = op_list[0]
