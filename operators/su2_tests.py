@@ -274,3 +274,10 @@ if not pure_theory:
             for penalty_name in Voc_Penalty_names:
                 print(f"{hop_name} , {penalty_name}")
                 check_commutator(Voc_Q_Hop[hop_name], Voc_Penalty[penalty_name])
+
+# CHECK RISHON ALGEBRA
+from scipy.linalg import norm
+
+ops = {}
+for j in ["x", "y", "z"]:
+    norm(ops["zeta_up"], ops[f"zeta_{j}"])
