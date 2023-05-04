@@ -1,4 +1,3 @@
-# %%
 import numpy as np
 from itertools import product
 from scipy.sparse import csr_matrix, diags, kron, identity
@@ -10,14 +9,103 @@ __all__ = [
     "get_QED_Hamiltonian_couplings",
     "dressed_site_operators",
     "gauge_invariant_states",
+    "lattice_base_configs",
 ]
 
 
-def qmb_op(ops, list_ops):
-    qmb_op = ops[list_ops[0]]
-    for op in list_ops[1:]:
-        qmb_op = kron(qmb_op, ops[op])
-    return csr_matrix(qmb_op)
+def lattice_base_configs(lvals, base, staggered=False):
+    """
+    This function associate the basis to each lattice site
+    and the corresponding dim.
+
+    Args:
+        lvals (list of ints): lattice dimensions
+        base (dict of sparse matrices): _description_
+        staggered (bool, optional): _description_. Defaults to False.
+
+    Returns:
+        _type_: _description_
+    """
+    lattice_base = np.zeros(tuple(lvals), dtype=object)
+    loc_dims = np.zeros(tuple(lvals), dtype=int)
+    for x in range(lvals[0]):
+        for y in range(lvals[1]):
+            stag = (-1) ** (x + y)
+            if (staggered == True) and (stag > 0):
+                stag_label = "even"
+            elif (staggered == True) and (stag < 0):
+                stag_label = "odd"
+            else:
+                stag_label = ""
+            if (x == 0) and (y == 0):
+                site_label = "_mx_my"
+            elif (x == 0) and (y == lvals[1] - 1):
+                site_label = "_mx_py"
+            elif (x == lvals[0] - 1) and (y == 0):
+                site_label = "_my_px"
+            elif (x == lvals[0] - 1) and (y == lvals[1] - 1):
+                site_label = "_px_py"
+            elif x == 0:
+                site_label = "_mx"
+            elif x == lvals[0] - 1:
+                site_label = "_px"
+            elif y == 0:
+                site_label = "_my"
+            elif y == lvals[1] - 1:
+                site_label = "_py"
+            else:
+                site_label = ""
+            label = f"{stag_label}{site_label}"
+            lattice_base[x, y] = label
+            loc_dims[x, y] = base[label].shape[1]
+    return lattice_base, loc_dims
+
+
+def qmb_operator(ops, op_list, add_dagger=False, get_real=False, get_imag=False):
+    """
+    This function performs the QMB operation of an arbitrary long list
+    of operators of arbitrary dimensions.
+
+    Args:
+        ops (dict): dictionary storing all the single site operators
+
+        op_list (list): list of the names of the operators involved in the qmb operator
+        the list is assumed to be stored according to the zig-zag order on the lattice
+
+        strength (scalar): real/complex coefficient applied in front of the operator
+
+        add_dagger (bool, optional): if true, yields the hermitian conjugate. Defaults to False.
+
+        get_real (bool, optional):  if true, yields only the real part. Defaults to False.
+
+        get_imag (bool, optional): if true, yields only the imaginary part. Defaults to False.
+    Returns:
+        csr_matrix: QMB sparse operator
+    """
+    # CHECK ON TYPES
+    if not isinstance(ops, dict):
+        raise TypeError(f"ops must be a DICT, not a {type(ops)}")
+    if not isinstance(op_list, list):
+        raise TypeError(f"op_list must be a LIST, not a {type(op_list)}")
+    if not isinstance(add_dagger, bool):
+        raise TypeError(f"add_dagger should be a BOOL, not a {type(add_dagger)}")
+    if not isinstance(get_real, bool):
+        raise TypeError(f"get_real should be a BOOL, not a {type(get_real)}")
+    if not isinstance(get_imag, bool):
+        raise TypeError(f"get_imag should be a BOOL, not a {type(get_imag)}")
+    tmp = ops[op_list[0]]
+    # logger.info("------------------")
+    # logger.info(op_list[0])
+    for op in op_list[1:]:
+        # logger.info(op)
+        tmp = kron(tmp, ops[op])
+    if add_dagger:
+        tmp = csr_matrix(tmp + tmp.conj().transpose())
+    if get_real:
+        tmp = csr_matrix(tmp + tmp.conj().transpose()) / 2
+    elif get_imag:
+        tmp = complex(0.0, -0.5) * (csr_matrix(tmp - tmp.conj().transpose()))
+    return csr_matrix(tmp)
 
 
 def border_configs(config, n_rishons):
@@ -221,10 +309,14 @@ def dressed_site_operators(n_rishons, lattice_dim=2):
     # Dictionary for operators
     ops = {}
     # Hopping operators
-    ops["Q_mx_dag"] = qmb_op(in_ops, ["psi_dag", "xi_m", "ID_xi", "ID_xi", "ID_xi"])
-    ops["Q_my_dag"] = qmb_op(in_ops, ["psi_dag", "P_xi", "xi_m", "ID_xi", "ID_xi"])
-    ops["Q_px_dag"] = qmb_op(in_ops, ["psi_dag", "P_xi", "P_xi", "xi_p", "ID_xi"])
-    ops["Q_py_dag"] = qmb_op(in_ops, ["psi_dag", "P_xi", "P_xi", "P_xi", "xi_p"])
+    ops["Q_mx_dag"] = qmb_operator(
+        in_ops, ["psi_dag", "xi_m", "ID_xi", "ID_xi", "ID_xi"]
+    )
+    ops["Q_my_dag"] = qmb_operator(
+        in_ops, ["psi_dag", "P_xi", "xi_m", "ID_xi", "ID_xi"]
+    )
+    ops["Q_px_dag"] = qmb_operator(in_ops, ["psi_dag", "P_xi", "P_xi", "xi_p", "ID_xi"])
+    ops["Q_py_dag"] = qmb_operator(in_ops, ["psi_dag", "P_xi", "P_xi", "P_xi", "xi_p"])
     # add dagger operators
     Qs = {}
     for op in ops:
@@ -232,21 +324,37 @@ def dressed_site_operators(n_rishons, lattice_dim=2):
         Qs[dag_op] = csr_matrix(ops[op].conj().transpose())
     ops |= Qs
     # Psi Number operators
-    ops["N"] = qmb_op(in_ops, ["N", "ID_xi", "ID_xi", "ID_xi", "ID_xi"])
+    ops["N"] = qmb_operator(in_ops, ["N", "ID_xi", "ID_xi", "ID_xi", "ID_xi"])
     # Corner operators
     in_ops["xi_m_P"] = in_ops["xi_m"] * in_ops["P_xi"]
     in_ops["xi_p_P"] = in_ops["xi_p"] * in_ops["P_xi"]
     in_ops["P_xi_m_dag"] = in_ops["P_xi"] * in_ops["xi_m_dag"]
-    ops["C_px,py"] = -qmb_op(in_ops, ["ID_psi", "ID_xi", "ID_xi", "xi_p_P", "xi_p_dag"])
-    ops["C_py,mx"] = qmb_op(in_ops, ["ID_psi", "P_xi_m_dag", "P_xi", "P_xi", "xi_p"])
-    ops["C_mx,my"] = qmb_op(in_ops, ["ID_psi", "xi_m_P", "xi_m_dag", "ID_xi", "ID_xi"])
-    ops["C_my,px"] = qmb_op(in_ops, ["ID_psi", "ID_xi", "xi_m_P", "xi_p_dag", "ID_xi"])
+    ops["C_px,py"] = -qmb_operator(
+        in_ops, ["ID_psi", "ID_xi", "ID_xi", "xi_p_P", "xi_p_dag"]
+    )
+    ops["C_py,mx"] = qmb_operator(
+        in_ops, ["ID_psi", "P_xi_m_dag", "P_xi", "P_xi", "xi_p"]
+    )
+    ops["C_mx,my"] = qmb_operator(
+        in_ops, ["ID_psi", "xi_m_P", "xi_m_dag", "ID_xi", "ID_xi"]
+    )
+    ops["C_my,px"] = qmb_operator(
+        in_ops, ["ID_psi", "ID_xi", "xi_m_P", "xi_p_dag", "ID_xi"]
+    )
     # Rishon Number operators
     for op in ["E0", "n", "E0_square"]:
-        ops[f"{op}_mx"] = qmb_op(in_ops, ["ID_psi", op, "ID_xi", "ID_xi", "ID_xi"])
-        ops[f"{op}_my"] = qmb_op(in_ops, ["ID_psi", "ID_xi", op, "ID_xi", "ID_xi"])
-        ops[f"{op}_px"] = qmb_op(in_ops, ["ID_psi", "ID_xi", "ID_xi", op, "ID_xi"])
-        ops[f"{op}_py"] = qmb_op(in_ops, ["ID_psi", "ID_xi", "ID_xi", "ID_xi", op])
+        ops[f"{op}_mx"] = qmb_operator(
+            in_ops, ["ID_psi", op, "ID_xi", "ID_xi", "ID_xi"]
+        )
+        ops[f"{op}_my"] = qmb_operator(
+            in_ops, ["ID_psi", "ID_xi", op, "ID_xi", "ID_xi"]
+        )
+        ops[f"{op}_px"] = qmb_operator(
+            in_ops, ["ID_psi", "ID_xi", "ID_xi", op, "ID_xi"]
+        )
+        ops[f"{op}_py"] = qmb_operator(
+            in_ops, ["ID_psi", "ID_xi", "ID_xi", "ID_xi", op]
+        )
     # E_square operators
     ops["E_square"] = 0
     for s in ["mx", "my", "px", "py"]:
@@ -327,7 +435,7 @@ def get_QED_Hamiltonian_couplings(g, m):
         "tx_even": 0.5,  # HORIZONTAL HOPPING
         "tx_odd": 0.5,
         "ty_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
-        "ty_odd": -0.5,  # VERTICAL HOPPING (ODD SITES)
+        "ty_odd": 0.5,  # VERTICAL HOPPING (ODD SITES) -1/2
         "m_even": m,
         "m_odd": -m,
     }
