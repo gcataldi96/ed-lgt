@@ -2,8 +2,8 @@
 
 shopt -s globstar
 
-CFG_PATHS='configs/QED2.yaml'
-OUT_PATHS='qed/'
+CFG_PATHS='configs/**/*.yaml'
+OUT_PATHS='results/'
 UID_REGEX='[a-z0-9]{32}'
 alias uidgrep='grep -oP "${UID_REGEX}"'
 
