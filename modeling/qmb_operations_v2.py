@@ -41,9 +41,9 @@ def qmb_operator(ops, op_list, add_dagger=False, get_real=False, get_imag=False)
     tmp = ops[op_list[0]]
     # logger.info("------------------")
     # logger.info(op_list[0])
-    for ii in range(len(op_list) - 1):
-        # logger.info(op_list[ii + 1])
-        tmp = kron(tmp, ops[op_list[ii + 1]])
+    for op in op_list[1:]:
+        # logger.info(op)
+        tmp = kron(tmp, ops[op])
     if add_dagger:
         tmp = csr_matrix(tmp + tmp.conj().transpose())
     if get_real:
