@@ -169,11 +169,24 @@ def projection(Proj, Operator):
     return Operator
 
 
-def entanglement_entropy(psi, loc_dim, n_sites, partition_size):
+def entanglement_entropy(psi, loc_dims, n_sites, partition_size):
     if not isinstance(psi, np.ndarray):
         raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
-    if not np.isscalar(loc_dim) and not isinstance(loc_dim, int):
-        raise TypeError(f"loc_dim must be an SCALAR & INTEGER, not a {type(loc_dim)}")
+    if isinstance(loc_dims, list):
+        loc_dims = np.asarray(loc_dims)
+        tot_dim = np.prod(loc_dims)
+    elif isinstance(loc_dims, np.ndarray):
+        tot_dim = np.prod(loc_dims)
+    elif np.isscalar(loc_dims):
+        if isinstance(loc_dims, int):
+            loc_dims = np.asarray([loc_dims for ii in range(n_sites)])
+            tot_dim = loc_dims**n_sites
+        else:
+            raise TypeError(f"loc_dims must be INTEGER, not a {type(loc_dims)}")
+    else:
+        raise TypeError(
+            f"loc_dims is neither a SCALAR, a LIST or ARRAY but a {type(loc_dims)}"
+        )
     if not np.isscalar(n_sites) and not isinstance(n_sites, int):
         raise TypeError(f"n_sites must be an SCALAR & INTEGER, not a {type(n_sites)}")
     if not np.isscalar(partition_size) and not isinstance(partition_size, int):
@@ -181,22 +194,35 @@ def entanglement_entropy(psi, loc_dim, n_sites, partition_size):
             f"partition_size must be an SCALAR & INTEGER, not a {type(partition_size)}"
         )
     # COMPUTE THE ENTANGLEMENT ENTROPY OF A SPECIFIC SUBSYSTEM
-    tmp = psi.reshape(
-        (loc_dim**partition_size, loc_dim ** (n_sites - partition_size))
-    )
-    S, V, D = np.linalg.svd(tmp)
+    partition = 1
+    for site in range(partition_size):
+        partition *= loc_dims[site]
+    S, V, D = np.linalg.svd(psi.reshape((partition, int(tot_dim / partition))))
     tmp = np.array([-(llambda**2) * np.log2(llambda**2) for llambda in V])
     logger.info(f"ENTROPY: {format(np.sum(tmp), '.9f')}")
     return np.sum(tmp)
 
 
-def get_loc_states_from_qmb_state(index, loc_dim, n_sites):
+def get_loc_states_from_qmb_state(index, loc_dims, n_sites):
     if not np.isscalar(index) and not isinstance(index, int):
         raise TypeError(f"index must be an SCALAR & INTEGER, not a {type(index)}")
-    if not np.isscalar(loc_dim) and not isinstance(loc_dim, int):
-        raise TypeError(f"loc_dim must be an SCALAR & INTEGER, not a {type(loc_dim)}")
     if not np.isscalar(n_sites) and not isinstance(n_sites, int):
         raise TypeError(f"n_sites must be an SCALAR & INTEGER, not a {type(n_sites)}")
+    if isinstance(loc_dims, list):
+        loc_dims = np.asarray(loc_dims)
+        tot_dim = np.prod(loc_dims)
+    elif isinstance(loc_dims, np.ndarray):
+        tot_dim = np.prod(loc_dims)
+    elif np.isscalar(loc_dims):
+        if isinstance(loc_dims, int):
+            loc_dims = np.asarray([loc_dims for ii in range(n_sites)])
+            tot_dim = loc_dims**n_sites
+        else:
+            raise TypeError(f"loc_dims must be INTEGER, not a {type(loc_dims)}")
+    else:
+        raise TypeError(
+            f"loc_dims is neither a SCALAR, a LIST or ARRAY but a {type(loc_dims)}"
+        )
     """
     Compute the state of each single lattice site given the index of the qmb state
     Args:
@@ -210,13 +236,13 @@ def get_loc_states_from_qmb_state(index, loc_dim, n_sites):
     """
     if index < 0:
         raise ValueError(f"index {index} should be positive")
-    if index > (loc_dim**n_sites - 1):
+    if index > (tot_dim - 1):
         raise ValueError(f"index {index} is too high")
     loc_states = np.zeros(n_sites, dtype=int)
     for ii in range(n_sites):
         if ii > 0:
-            index = index - loc_states[ii - 1] * (loc_dim ** (n_sites - ii))
-        loc_states[ii] = index // (loc_dim ** (n_sites - ii - 1))
+            index = index - loc_states[ii - 1] * (loc_dims[ii] ** (n_sites - ii))
+        loc_states[ii] = index // (loc_dims[ii - 1] ** (n_sites - ii - 1))
     return loc_states
 
 
@@ -254,13 +280,24 @@ def get_submatrix_from_sparse(matrix, rows_list, cols_list):
     return sub_matrix
 
 
-def get_state_configurations(psi, loc_dim, n_sites):
+def get_state_configurations(psi, loc_dims, n_sites):
     if not isinstance(psi, np.ndarray):
         raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
-    if not np.isscalar(loc_dim) and not isinstance(loc_dim, int):
-        raise TypeError(f"loc_dim must be an SCALAR & INTEGER, not a {type(loc_dim)}")
     if not np.isscalar(n_sites) and not isinstance(n_sites, int):
         raise TypeError(f"n_sites must be an SCALAR & INTEGER, not a {type(n_sites)}")
+    if not isinstance(loc_dims, np.ndarray):
+        if isinstance(loc_dims, list):
+            loc_dims = np.asarray(loc_dims)
+        elif np.isscalar(loc_dims):
+            if isinstance(loc_dims, int):
+                loc_dims = np.asarray([loc_dims for ii in range(n_sites)])
+                tot_dim = loc_dims**n_sites
+            else:
+                raise TypeError(f"loc_dims must be INTEGER, not a {type(loc_dims)}")
+        else:
+            raise TypeError(
+                f"loc_dims is neither a SCALAR, a LIST or ARRAY but a {type(loc_dims)}"
+            )
     logger.info("----------------------------------------------------")
     logger.info("STATE CONFIGURATIONS")
     psi = truncation(psi, 1e-10)
@@ -275,7 +312,7 @@ def get_state_configurations(psi, loc_dim, n_sites):
     ]
     for ind, alpha in zip(indices, sing_vals):
         loc_states = get_loc_states_from_qmb_state(
-            index=ind, loc_dim=loc_dim, n_sites=n_sites
+            index=ind, loc_dims=loc_dims, n_sites=n_sites
         )
         logger.info(f"{loc_states+1}  {alpha}")
     logger.info("----------------------------------------------------")
