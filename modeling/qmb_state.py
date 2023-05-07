@@ -179,8 +179,8 @@ def entanglement_entropy(psi, loc_dims, n_sites, partition_size):
         tot_dim = np.prod(loc_dims)
     elif np.isscalar(loc_dims):
         if isinstance(loc_dims, int):
-            loc_dims = np.asarray([loc_dims for ii in range(n_sites)])
             tot_dim = loc_dims**n_sites
+            loc_dims = np.asarray([loc_dims for ii in range(n_sites)])
         else:
             raise TypeError(f"loc_dims must be INTEGER, not a {type(loc_dims)}")
     else:
@@ -291,7 +291,6 @@ def get_state_configurations(psi, loc_dims, n_sites):
         elif np.isscalar(loc_dims):
             if isinstance(loc_dims, int):
                 loc_dims = np.asarray([loc_dims for ii in range(n_sites)])
-                tot_dim = loc_dims**n_sites
             else:
                 raise TypeError(f"loc_dims must be INTEGER, not a {type(loc_dims)}")
         else:
@@ -319,16 +318,18 @@ def get_state_configurations(psi, loc_dims, n_sites):
 
 
 def get_SU2_topological_invariant(link_parity_op, lvals, psi, axis):
-    n_sites = lvals[0] * lvals[1]
     op_list = [link_parity_op, link_parity_op]
     if axis == "x":
-        op_sites_list = [1, 2]
+        op_sites_list = [0, 1]
     elif axis == "y":
-        op_sites_list = [1, lvals[0] + 1]
+        op_sites_list = [0, lvals[0]]
     else:
         raise ValueError(f"axis can be only x or y not {axis}")
     sector = np.real(
-        np.dot(np.conjugate(psi), two_body_op(op_list, op_sites_list, n_sites).dot(psi))
+        np.dot(
+            np.conjugate(psi),
+            two_body_op(op_list, op_sites_list, lvals, has_obc=True).dot(psi),
+        )
     )
     logger.info(f"P{axis} TOPOLOGICAL SECTOR: {sector}")
     logger.info("----------------------------------------------------")
