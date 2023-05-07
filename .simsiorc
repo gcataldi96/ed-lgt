@@ -1,8 +1,8 @@
 [IO-handlers]
-dat = results/qed/$uid/$key, w, simsio.serializers.NPZSerializer
-log = results/qed/$uid/info,  , simsio.serializers.LogSerializer
-par = results/qed/$uid/par, w, simsio.serializers.YAMLSerializer
-res = results/qed/$uid/res, w, simsio.serializers.NPZSerializer
+dat = results/su2/$uid/$key, w, simsio.serializers.NPZSerializer
+log = results/su2/$uid/info,  , simsio.serializers.LogSerializer
+par = results/su2/$uid/par, w, simsio.serializers.YAMLSerializer
+res = results/su2/$uid/res, w, simsio.serializers.NPZSerializer
 
 [configs]
 directory = configs
