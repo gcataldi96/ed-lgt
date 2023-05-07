@@ -16,7 +16,7 @@ class LocalTerm2D:
             raise TypeError(f"op_name should be a STRING, not a {type(op_name)}")
         self.op = operator
         self.op_name = op_name
-        #logger.info(f"local-term {self.op_name}")
+        # logger.info(f"local-term {self.op_name}")
         self.stag_basis = staggered_basis
         self.site_basis = site_basis
 
@@ -57,7 +57,7 @@ class LocalTerm2D:
                 )
         return strength * H_Local
 
-    def get_loc_expval(self, psi, lvals, has_obc, site=None):
+    def get_expval(self, psi, lvals, has_obc, site=None):
         # CHECK ON TYPES
         if not isinstance(psi, np.ndarray):
             raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
@@ -74,6 +74,7 @@ class LocalTerm2D:
         nx = lvals[0]
         ny = lvals[1]
         n = nx * ny
+        self.obs = np.zeros((nx, ny))
         # Compute the complex_conjugate of the ground state psi
         psi_dag = np.conjugate(psi)
         # AVERAGE EXP VAL
@@ -89,27 +90,50 @@ class LocalTerm2D:
                 ((site == "even") and (stag > 0)),
                 ((site == "odd") and (stag < 0)),
             ]
+            # Compute the average value in the site x,y
+            val = np.real(
+                np.dot(
+                    psi_dag,
+                    (
+                        local_op(
+                            self.op,
+                            ii,
+                            lvals,
+                            has_obc,
+                            self.stag_basis,
+                            self.site_basis,
+                        ).dot(psi)
+                    ),
+                )
+            )
+            self.obs[x, y] = val
             if any(mask_conditions):
                 counter += 1
-                # Compute the average value in the site x,y
-                val = np.real(
-                    np.dot(
-                        psi_dag,
-                        (
-                            local_op(
-                                self.op,
-                                ii,
-                                lvals,
-                                has_obc,
-                                self.stag_basis,
-                                self.site_basis,
-                            ).dot(psi)
-                        ),
-                    )
-                )
                 logger.info(f"({x+1},{y+1}) {format(val, '.12f')}")
                 avg += val
         return avg / counter
+
+    def check_on_borders(self, border, value=1, threshold=1e-10):
+        logger.info(f"CHECK BORDER PENALTIES")
+        if border == "mx":
+            if np.any(np.abs(self.obs[0, :] - value) > threshold):
+                logger.info(self.obs[0, :])
+                raise ValueError(f"{border} border penalty not satisfied")
+        elif border == "px":
+            if np.any(np.abs(self.obs[-1, :] - value) > threshold):
+                logger.info(self.obs[-1, :])
+                raise ValueError(f"{border} border penalty not satisfied")
+        elif border == "my":
+            if np.any(np.abs(self.obs[:, 0] - value) > threshold):
+                logger.info(self.obs[:, 0])
+                raise ValueError(f"{border} border penalty not satisfied")
+        elif border == "py":
+            if np.any(np.abs(self.obs[:, -1] - value) > threshold):
+                logger.info(self.obs[:, -1])
+                raise ValueError(f"{border} border penalty not satisfied")
+        else:
+            raise ValueError(f"border must be in (mx, px, my, py), not {border}")
+        logger.info(f"{border}-border penalties are satisfied")
 
     # TODO: adjust according to the new changes
     def get_fluctuations(self, psi, lvals, has_obc, site=None):
