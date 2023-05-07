@@ -8,7 +8,9 @@ __all__ = ["TwoBodyTerm2D"]
 
 
 class TwoBodyTerm2D:
-    def __init__(self, axis, op_list, op_name_list):
+    def __init__(
+        self, axis, op_list, op_name_list, staggered_basis=False, site_basis=None
+    ):
         # CHECK ON TYPES
         if not isinstance(axis, str):
             raise TypeError(f"axis should be a STRING, not a {type(axis)}")
@@ -32,6 +34,7 @@ class TwoBodyTerm2D:
                     )
         self.axis = axis
         self.op_name_list = op_name_list
+        # logger.info(f"twobody-term {self.op_name_list[0]}-{self.op_name_list[1]}")
         if axis == "x":
             self.op_list = op_list
             self.Left = op_list[0]
@@ -42,6 +45,8 @@ class TwoBodyTerm2D:
             self.Top = op_list[1]
         else:
             logger.info(f"{axis} can be only x or y")
+        self.stag_basis = staggered_basis
+        self.site_basis = site_basis
 
     def get_Hamiltonian(
         self, lvals, strength, has_obc=True, add_dagger=False, mask=None
@@ -72,39 +77,50 @@ class TwoBodyTerm2D:
             # HORIZONTAL 2BODY HAMILTONIAN
             if self.axis == "x":
                 if x < nx - 1:
-                    sites_list = [ii + 1, ii + 2]
+                    sites_list = [ii, ii + 1]
                 else:
                     # PERIODIC BOUNDARY CONDITIONS
                     if not has_obc:
                         jj = inverse_zig_zag(nx, ny, 0, y)
-                        sites_list = [ii + 1, jj + 1]
+                        sites_list = [ii, jj]
                     else:
                         continue
             # VERTICAL 2BODY HAMILTONIAN
             elif self.axis == "y":
                 if y < ny - 1:
-                    sites_list = [ii + 1, ii + nx + 1]
+                    sites_list = [ii, ii + nx]
                 else:
                     # PERIODIC BOUNDARY CONDITIONS
                     if not has_obc:
                         jj = inverse_zig_zag(nx, ny, x, 0)
-                        sites_list = [ii + 1, jj + 1]
+                        sites_list = [ii, jj]
                     else:
                         continue
-            if mask is not None:
-                if mask[x, y]:
-                    # Add the term to the Hamiltonian
-                    H_twobody += strength * two_body_op(self.op_list, sites_list, n)
+            # ADD THE TERM TO THE HAMILTONIAN
+            if mask is None:
+                mask_conditions = True
             else:
+                if mask[x, y] == True:
+                    mask_conditions = True
+                else:
+                    mask_conditions = False
+            if mask_conditions:
                 # Add the term to the Hamiltonian
-                H_twobody += strength * two_body_op(self.op_list, sites_list, n)
+                H_twobody += strength * two_body_op(
+                    self.op_list,
+                    sites_list,
+                    lvals,
+                    has_obc,
+                    self.stag_basis,
+                    self.site_basis,
+                )
         if not isspmatrix(H_twobody):
             H_twobody = csr_matrix(H_twobody)
         if add_dagger:
             H_twobody += csr_matrix(H_twobody.conj().transpose())
         return H_twobody
 
-    def get_expval(self, psi, lvals, has_obc=False):
+    def get_expval(self, psi, lvals, has_obc=False, site=None):
         # CHECK ON TYPES
         if not isinstance(psi, np.ndarray):
             raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
@@ -119,85 +135,69 @@ class TwoBodyTerm2D:
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]
         ny = lvals[1]
-        n = nx * ny
+        n_sites = nx * ny
         # Compute the complex_conjugate of the ground state psi
         psi_dag = np.conjugate(psi)
         # Create an array to store the correlator
         self.corr = np.zeros((nx, ny, nx, ny))
         # RUN OVER THE LATTICE SITES
-        for ii in range(n):
+        for ii in range(n_sites):
             x1, y1 = zig_zag(nx, ny, ii)
-            for jj in range(n):
+            for jj in range(n_sites):
                 x2, y2 = zig_zag(nx, ny, jj)
                 # AVOID SELF CORRELATIONS
                 if ii != jj:
                     self.corr[x1, y1, x2, y2] = np.real(
                         np.dot(
                             psi_dag,
-                            two_body_op(self.op_list, [ii + 1, jj + 1], n).dot(psi),
+                            two_body_op(
+                                self.op_list,
+                                [ii, jj],
+                                lvals,
+                                has_obc,
+                                self.stag_basis,
+                                self.site_basis,
+                            ).dot(psi),
                         )
                     )
                 else:
                     self.corr[x1, y1, x2, y2] = 0
 
-    def check_link_symm(self, value=1, threshold=1e-10, has_obc=True, site=None):
-        logger.info(f" CHECK LINK SYMMETRIES")
+    def check_link_symm(self, value=1, threshold=1e-10, has_obc=True):
+        logger.info(f"CHECK LINK SYMMETRIES")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = self.corr.shape[0]
         ny = self.corr.shape[1]
-        n = nx * ny
         if self.axis == "x":
             for y in range(ny):
                 for x in range(nx):
-                    stag = (-1) ** (x + y)
                     if x == nx - 1:
                         if not has_obc:
                             if np.abs(self.corr[x, y, 0, y] - value) > threshold:
-                                if (
-                                    (site == "even" and stag > 0)
-                                    or (site == "odd" and stag < 0)
-                                    or (site is None)
-                                ):
-                                    logger.info(
-                                        f"W{self.axis}_({x},{y})-({0},{y})={self.corr[x,y,0,y]}: expected {value}"
-                                    )
+                                logger.info(
+                                    f"W{self.axis}_({x},{y})-({0},{y})={self.corr[x,y,0,y]}: expected {value}"
+                                )
                         else:
                             continue
                     else:
                         if np.abs(self.corr[x, y, x + 1, y] - value) > threshold:
-                            if (
-                                (site == "even" and stag > 0)
-                                or (site == "odd" and stag < 0)
-                                or (site is None)
-                            ):
-                                logger.info(
-                                    f"W{self.axis}_({x},{y})-({x+1},{y})={self.corr[x,y,x+1,y]}: expected {value}"
-                                )
-        if self.axis == "y":
+                            logger.info(
+                                f"W{self.axis}_({x},{y})-({x+1},{y})={self.corr[x,y,x+1,y]}: expected {value}"
+                            )
+        else:
             for x in range(nx):
                 for y in range(ny):
-                    stag = (-1) ** (x + y)
                     if y == ny - 1:
                         if not has_obc:
                             if np.abs(self.corr[x, y, x, 0] - value) > threshold:
-                                if (
-                                    (site == "even" and stag > 0)
-                                    or (site == "odd" and stag < 0)
-                                    or (site is None)
-                                ):
-                                    logger.info(
-                                        f"W{self.axis}_({x},{y})-({x},{0})={self.corr[x,y,x,0]}: expected {value}"
-                                    )
+                                logger.info(
+                                    f"W{self.axis}_({x},{y})-({x},{0})={self.corr[x,y,x,0]}: expected {value}"
+                                )
                         else:
                             continue
                     else:
                         if np.abs(self.corr[x, y, x, y + 1] - value) > threshold:
-                            if (
-                                (site == "even" and stag > 0)
-                                or (site == "odd" and stag < 0)
-                                or (site is None)
-                            ):
-                                logger.info(
-                                    f"W{self.axis}_({x},{y})-({x},{y+1})={self.corr[x,y,x,y+1]}: expected {value}"
-                                )
-        # logger.info(f" All the {self.axis} Link Symmetries are satisfied")
+                            logger.info(
+                                f"W{self.axis}_({x},{y})-({x},{y+1})={self.corr[x,y,x,y+1]}: expected {value}"
+                            )
+        logger.info(f" All the {self.axis} Link Symmetries are satisfied")

@@ -8,7 +8,7 @@ __all__ = ["PlaquetteTerm2D"]
 
 
 class PlaquetteTerm2D:
-    def __init__(self, op_list, op_name_list):
+    def __init__(self, op_list, op_name_list, staggered_basis=False, site_basis=None):
         if not isinstance(op_list, list):
             raise TypeError(f"op_list should be a list, not a {type(op_list)}")
         else:
@@ -27,6 +27,8 @@ class PlaquetteTerm2D:
                     raise TypeError(
                         f"op_name_list[{ii}] should be a STRING, not {type(name)}"
                     )
+        self.stag_basis = staggered_basis
+        self.site_basis = site_basis
         self.BL = op_list[0]
         self.BR = op_list[1]
         self.TL = op_list[2]
@@ -35,6 +37,9 @@ class PlaquetteTerm2D:
         self.BR_name = op_name_list[1]
         self.TL_name = op_name_list[2]
         self.TR_name = op_name_list[3]
+        # logger.info(
+        #    f"PLAQUETTE {op_name_list[0]}-{op_name_list[1]}-{op_name_list[2]}-{op_name_list[3]}"
+        # )
         # Define a list with the Four Operators involved in the Plaquette:
         self.op_list = [self.BL, self.BR, self.TL, self.TR]
 
@@ -65,7 +70,7 @@ class PlaquetteTerm2D:
             x, y = zig_zag(nx, ny, ii)
             if x < nx - 1 and y < ny - 1:
                 # List of Sites where to apply Operators
-                sites_list = [ii + 1, ii + 2, ii + nx + 1, ii + nx + 2]
+                sites_list = [ii, ii + 1, ii + nx, ii + nx + 1]
             else:
                 if not has_obc:
                     # PERIODIC BOUNDARY CONDITIONS
@@ -73,30 +78,42 @@ class PlaquetteTerm2D:
                         # UPPER BORDER
                         jj = inverse_zig_zag(nx, ny, x, 0)
                         # List of Sites where to apply Operators
-                        sites_list = [ii + 1, ii + 2, jj + 1, jj + 2]
+                        sites_list = [ii, ii + 1, jj, jj + 1]
                     elif x == nx - 1 and y < ny - 1:
                         # RIGHT BORDER
                         # List of Sites where to apply Operators
-                        sites_list = [ii + 1, ii + 2 - nx, ii + nx + 1, ii + 2]
+                        sites_list = [ii, ii + 1 - nx, ii + nx, ii + 1]
                     else:
                         # UPPER RIGHT CORNER
                         # List of Sites where to apply Operators
-                        sites_list = [ii + 1, ii + 2 - nx, nx, 1]
+                        sites_list = [ii, ii + 1 - nx, nx - 1, 0]
                 else:
                     continue
             # Add the Plaquette to the Hamiltonian
-            if mask is not None:
-                if mask[x, y]:
-                    H_plaq += strength * four_body_op(self.op_list, sites_list, n)
+            if mask is None:
+                mask_conditions = True
             else:
-                H_plaq += strength * four_body_op(self.op_list, sites_list, n)
+                if mask[x, y] == True:
+                    mask_conditions = True
+                else:
+                    mask_conditions = False
+            if mask_conditions:
+                # logger.info(sites_list)
+                H_plaq += strength * four_body_op(
+                    self.op_list,
+                    sites_list,
+                    lvals,
+                    has_obc,
+                    self.stag_basis,
+                    self.site_basis,
+                )
         if not isspmatrix(H_plaq):
             H_plaq = csr_matrix(H_plaq)
         if add_dagger:
             H_plaq += csr_matrix(H_plaq.conj().transpose())
         return H_plaq
 
-    def get_plaq_expval(self, psi, lvals, has_obc=True, get_imag=False, site=None):
+    def get_expval(self, psi, lvals, has_obc=True, get_imag=False, site=None):
         # CHECK ON TYPES
         if not isinstance(psi, np.ndarray):
             raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
@@ -110,7 +127,6 @@ class PlaquetteTerm2D:
             raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
         if not isinstance(get_imag, bool):
             raise TypeError(f"get_imag should be a BOOL, not a {type(get_imag)}")
-
         # ADVERTISE OF THE CHOSEN PART OF THE PLAQUETTE YOU WANT TO COMPUTE
         logger.info(f"-----------------------")
         if get_imag:
@@ -132,7 +148,7 @@ class PlaquetteTerm2D:
             x, y = zig_zag(nx, ny, ii)
             if x < nx - 1 and y < ny - 1:
                 # List of Sites where to apply Operators
-                sites_list = [ii + 1, ii + 2, ii + nx + 1, ii + nx + 2]
+                sites_list = [ii, ii + 1, ii + nx, ii + nx + 1]
                 plaq_string = [
                     f"{x+1},{y+1}",
                     f"{x+2},{y+1}",
@@ -146,7 +162,7 @@ class PlaquetteTerm2D:
                         # UPPER BORDER
                         jj = inverse_zig_zag(nx, ny, x, 0)
                         # List of Sites where to apply Operators
-                        sites_list = [ii + 1, ii + 2, jj + 1, jj + 2]
+                        sites_list = [ii, ii + 1, jj, jj + 1]
                         plaq_string = [
                             f"{x+1},{y+1}",
                             f"{x+2},{y+1}",
@@ -156,7 +172,7 @@ class PlaquetteTerm2D:
                     elif x == nx - 1 and y < ny - 1:
                         # RIGHT BORDER
                         # List of Sites where to apply Operators
-                        sites_list = [ii + 1, ii + 2 - nx, ii + nx + 1, ii + 2]
+                        sites_list = [ii, ii + 1 - nx, ii + nx, ii + 1]
                         plaq_string = [
                             f"{x+1},{y+1}",
                             f"{1},{y+1}",
@@ -166,7 +182,7 @@ class PlaquetteTerm2D:
                     else:
                         # UPPER RIGHT CORNER
                         # List of Sites where to apply Operators
-                        sites_list = [ii + 1, ii + 2 - nx, nx, 1]
+                        sites_list = [ii, ii + 1 - nx, nx - 1, 0]
                         plaq_string = [
                             f"{x+1},{y+1}",
                             f"{1},{y+1}",
@@ -178,7 +194,7 @@ class PlaquetteTerm2D:
             # COMPUTE THE PLAQUETTE only for the appropriate site
             stag = (-1) ** (x + y)
             site_conditions = [
-                site == None,
+                site is None,
                 (site == "even" and stag > 0),
                 (site == "odd" and stag < 0),
             ]
@@ -187,7 +203,13 @@ class PlaquetteTerm2D:
                     np.dot(
                         psi_dag,
                         four_body_op(
-                            self.op_list, sites_list, n, get_only_part=chosen_part
+                            self.op_list,
+                            sites_list,
+                            lvals,
+                            has_obc,
+                            self.stag_basis,
+                            self.site_basis,
+                            get_real=True,
                         ).dot(psi),
                     )
                 )
@@ -196,7 +218,15 @@ class PlaquetteTerm2D:
                         np.dot(
                             psi_dag,
                             (
-                                four_body_op(self.op_list, sites_list, n, chosen_part)
+                                four_body_op(
+                                    self.op_list,
+                                    sites_list,
+                                    lvals,
+                                    has_obc,
+                                    self.stag_basis,
+                                    self.site_basis,
+                                    get_real=True,
+                                )
                                 ** 2
                             ).dot(psi),
                         )
@@ -205,13 +235,14 @@ class PlaquetteTerm2D:
                 )
                 # PRINT THE PLAQUETTE
                 self.print_Plaquette(plaq_string, plaq)
+                # self.print_Plaquette(plaq_string, delta_plaq)
                 plaq_obs.append(plaq)
                 delta_plaq_obs.append(delta_plaq)
         plaq_obs = np.array(plaq_obs)
         delta_plaq_obs = np.array(delta_plaq_obs)
         avg_plaq = np.sum(plaq_obs) / plaq_obs.shape[0]
-        std_plaq = np.sqrt(np.sum(delta_plaq_obs) / plaq_obs.shape[0])
-        return avg_plaq, std_plaq
+        # std_plaq = np.sqrt(np.sum(delta_plaq_obs) / plaq_obs.shape[0])
+        return avg_plaq
 
     def print_Plaquette(self, sites_list, value):
         if not isinstance(sites_list, list):
