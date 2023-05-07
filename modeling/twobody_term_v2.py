@@ -135,15 +135,15 @@ class TwoBodyTerm2D:
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]
         ny = lvals[1]
-        n = nx * ny
+        n_sites = nx * ny
         # Compute the complex_conjugate of the ground state psi
         psi_dag = np.conjugate(psi)
         # Create an array to store the correlator
         self.corr = np.zeros((nx, ny, nx, ny))
         # RUN OVER THE LATTICE SITES
-        for ii in range(n):
+        for ii in range(n_sites):
             x1, y1 = zig_zag(nx, ny, ii)
-            for jj in range(n):
+            for jj in range(n_sites):
                 x2, y2 = zig_zag(nx, ny, jj)
                 # AVOID SELF CORRELATIONS
                 if ii != jj:
@@ -152,7 +152,7 @@ class TwoBodyTerm2D:
                             psi_dag,
                             two_body_op(
                                 self.op_list,
-                                [ii + 1, jj + 1],
+                                [ii, jj],
                                 lvals,
                                 has_obc,
                                 self.stag_basis,
@@ -162,3 +162,42 @@ class TwoBodyTerm2D:
                     )
                 else:
                     self.corr[x1, y1, x2, y2] = 0
+
+    def check_link_symm(self, value=1, threshold=1e-10, has_obc=True):
+        logger.info(f"CHECK LINK SYMMETRIES")
+        # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
+        nx = self.corr.shape[0]
+        ny = self.corr.shape[1]
+        if self.axis == "x":
+            for y in range(ny):
+                for x in range(nx):
+                    if x == nx - 1:
+                        if not has_obc:
+                            if np.abs(self.corr[x, y, 0, y] - value) > threshold:
+                                logger.info(
+                                    f"W{self.axis}_({x},{y})-({0},{y})={self.corr[x,y,0,y]}: expected {value}"
+                                )
+                        else:
+                            continue
+                    else:
+                        if np.abs(self.corr[x, y, x + 1, y] - value) > threshold:
+                            logger.info(
+                                f"W{self.axis}_({x},{y})-({x+1},{y})={self.corr[x,y,x+1,y]}: expected {value}"
+                            )
+        else:
+            for x in range(nx):
+                for y in range(ny):
+                    if y == ny - 1:
+                        if not has_obc:
+                            if np.abs(self.corr[x, y, x, 0] - value) > threshold:
+                                logger.info(
+                                    f"W{self.axis}_({x},{y})-({x},{0})={self.corr[x,y,x,0]}: expected {value}"
+                                )
+                        else:
+                            continue
+                    else:
+                        if np.abs(self.corr[x, y, x, y + 1] - value) > threshold:
+                            logger.info(
+                                f"W{self.axis}_({x},{y})-({x},{y+1})={self.corr[x,y,x,y+1]}: expected {value}"
+                            )
+        logger.info(f" All the {self.axis} Link Symmetries are satisfied")
