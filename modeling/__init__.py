@@ -1,6 +1,12 @@
-from . import local_term, plaquette_term, twobody_term, qmb_operations, qmb_state, masks
+from . import (
+    local_term,
+    plaquette_term,
+    qmb_operations,
+    twobody_term,
+    qmb_state,
+    masks,
+)
 from .local_term import *
-from .qmb_operations import *
 from .plaquette_term import *
 from .twobody_term import *
 from .qmb_operations import *
@@ -12,6 +18,5 @@ __all__ = local_term.__all__.copy()
 __all__ += qmb_operations.__all__.copy()
 __all__ += twobody_term.__all__.copy()
 __all__ += plaquette_term.__all__.copy()
-__all__ += qmb_operations.__all__.copy()
 __all__ += qmb_state.__all__.copy()
 __all__ += masks.__all__.copy()
