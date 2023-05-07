@@ -113,7 +113,7 @@ class PlaquetteTerm2D:
             H_plaq += csr_matrix(H_plaq.conj().transpose())
         return H_plaq
 
-    def get_plaq_expval(self, psi, lvals, has_obc=True, get_imag=False, site=None):
+    def get_expval(self, psi, lvals, has_obc=True, get_imag=False, site=None):
         # CHECK ON TYPES
         if not isinstance(psi, np.ndarray):
             raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
