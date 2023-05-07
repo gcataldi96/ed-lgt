@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.sparse import isspmatrix_csr, isspmatrix, csr_matrix
 from tools import zig_zag, inverse_zig_zag
-from .qmb_operations import two_body_op
+from .qmb_operations_old import two_body_op
 from simsio import logger
 
 __all__ = ["TwoBodyTerm2D"]

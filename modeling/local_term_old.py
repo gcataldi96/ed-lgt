@@ -2,7 +2,7 @@ import numpy as np
 from scipy.sparse import isspmatrix_csr
 from simsio import logger
 from tools import zig_zag
-from .qmb_operations import local_op
+from .qmb_operations_old import local_op
 
 __all__ = ["LocalTerm2D"]
 
