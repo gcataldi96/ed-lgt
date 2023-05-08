@@ -74,11 +74,11 @@ class LocalTerm2D:
         nx = lvals[0]
         ny = lvals[1]
         n = nx * ny
-        self.obs = np.zeros((nx, ny))
         # Compute the complex_conjugate of the ground state psi
         psi_dag = np.conjugate(psi)
-        # AVERAGE EXP VAL
-        avg = 0.0
+        # AVERAGE EXP VAL <O> & STD DEVIATION (<O^{2}>-<O>^{2})^{1/2}
+        self.avg = 0.0
+        self.std = 0.0
         counter = 0
         # RUN OVER THE LATTICE SITES
         for ii in range(n):
@@ -91,7 +91,7 @@ class LocalTerm2D:
                 ((site == "odd") and (stag < 0)),
             ]
             # Compute the average value in the site x,y
-            val = np.real(
+            exp_obs = np.real(
                 np.dot(
                     psi_dag,
                     (
@@ -106,12 +106,32 @@ class LocalTerm2D:
                     ),
                 )
             )
-            self.obs[x, y] = val
+            # Compute the corresponding fluctuation
+            exp_var = (
+                np.real(
+                    np.dot(
+                        psi_dag,
+                        (
+                            local_op(
+                                self.op**2,
+                                ii,
+                                lvals,
+                                has_obc,
+                                self.stag_basis,
+                                self.site_basis,
+                            )
+                        ).dot(psi),
+                    )
+                )
+                - exp_obs**2
+            )
             if any(mask_conditions):
+                logger.info(f"({x+1},{y+1}) {format(exp_obs, '.12f')}")
                 counter += 1
-                logger.info(f"({x+1},{y+1}) {format(val, '.12f')}")
-                avg += val
-        return avg / counter
+                self.avg += exp_obs
+                self.std += exp_var
+        self.avg = self.avg / counter
+        self.std = np.sqrt(self.std / counter)
 
     def check_on_borders(self, border, value=1, threshold=1e-10):
         logger.info(f"CHECK BORDER PENALTIES")
@@ -134,60 +154,3 @@ class LocalTerm2D:
         else:
             raise ValueError(f"border must be in (mx, px, my, py), not {border}")
         logger.info(f"{border}-border penalties are satisfied")
-
-    def get_fluctuations(self, psi, lvals, has_obc, site=None):
-        # CHECK ON TYPES
-        if not isinstance(psi, np.ndarray):
-            raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
-        if not isinstance(lvals, list):
-            raise TypeError(f"lvals should be a list, not a {type(lvals)}")
-        else:
-            for ii, ll in enumerate(lvals):
-                if not isinstance(ll, int):
-                    raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
-        # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
-        nx = lvals[0]
-        ny = lvals[1]
-        n = nx * ny
-        # Compute the complex_conjugate of the ground state psi
-        psi_dag = np.conjugate(psi)
-        # Create array to store fluctuations: (<O^{2}>-<O>^{2})^{1/2}
-        self.var = np.zeros((nx, ny))
-        # AVERAGE EXP VAL
-        var = 0.0
-        counter = 0
-        # RUN OVER THE LATTICE SITES
-        for ii in range(n):
-            # Given the 1D point on the lattice, get the corresponding (x,y) coords
-            x, y = zig_zag(nx, ny, ii)
-            # Compute the staggered factor
-            stag = (-1) ** (x + y)
-            mask_conditions = [
-                site is None,
-                ((site == "even") and (stag > 0)),
-                ((site == "odd") and (stag < 0)),
-            ]
-            # Compute the variance
-            op_square = np.real(
-                np.dot(
-                    psi_dag,
-                    (
-                        (
-                            local_op(
-                                self.op,
-                                ii,
-                                lvals,
-                                has_obc,
-                                self.stag_basis,
-                                self.site_basis,
-                            )
-                            ** 2
-                        ).dot(psi)
-                    ),
-                )
-            )
-            self.var[x, y] = op_square - self.obs[x, y] ** 2
-            if any(mask_conditions):
-                counter += 1
-                var += self.var[x, y]
-        return np.sqrt(var / counter)  # standard deviation
