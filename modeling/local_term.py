@@ -135,7 +135,6 @@ class LocalTerm2D:
             raise ValueError(f"border must be in (mx, px, my, py), not {border}")
         logger.info(f"{border}-border penalties are satisfied")
 
-    # TODO: adjust according to the new changes
     def get_fluctuations(self, psi, lvals, has_obc, site=None):
         # CHECK ON TYPES
         if not isinstance(psi, np.ndarray):
@@ -154,24 +153,41 @@ class LocalTerm2D:
         psi_dag = np.conjugate(psi)
         # Create array to store fluctuations: (<O^{2}>-<O>^{2})^{1/2}
         self.var = np.zeros((nx, ny))
-        # Define a variable for the average fluctuation
-        var = 0
+        # AVERAGE EXP VAL
+        var = 0.0
+        counter = 0
         # RUN OVER THE LATTICE SITES
         for ii in range(n):
             # Given the 1D point on the lattice, get the corresponding (x,y) coords
             x, y = zig_zag(nx, ny, ii)
             # Compute the staggered factor
             stag = (-1) ** (x + y)
+            mask_conditions = [
+                site is None,
+                ((site == "even") and (stag > 0)),
+                ((site == "odd") and (stag < 0)),
+            ]
             # Compute the variance
-            self.var[x, y] = (
-                np.real(np.dot(psi_dag, (local_op(self.op, ii + 1, n) ** 2).dot(psi)))
-                - self.obs[x, y] ** 2
+            op_square = np.real(
+                np.dot(
+                    psi_dag,
+                    (
+                        (
+                            local_op(
+                                self.op,
+                                ii,
+                                lvals,
+                                has_obc,
+                                self.stag_basis,
+                                self.site_basis,
+                            )
+                            ** 2
+                        ).dot(psi)
+                    ),
+                )
             )
-            if site == "odd" and stag < 0:
-                var += 2 * self.var[x, y] / n
-            elif site == "even" and stag > 0:
-                var += 2 * self.var[x, y] / n
-            elif site == None:
-                var += self.var[x, y] / n
-        else:
-            return np.sqrt(var)  # standard deviation
+            self.var[x, y] = op_square - self.obs[x, y] ** 2
+            if any(mask_conditions):
+                counter += 1
+                var += self.var[x, y]
+        return np.sqrt(var / counter)  # standard deviation
