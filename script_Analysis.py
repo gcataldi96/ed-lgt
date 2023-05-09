@@ -26,32 +26,34 @@ def load_dictionary(filename):
         return pickle.load(outp)
 
 
-def get_obs_list(pure, has_obc):
+def get_obs_list(model, pure=None, has_obc=True):
     obs_list = [
         "energy",
         "entropy",
-        "gamma",
+        "E_square",
         "plaq",
-        "delta_gamma",
-        "delta_plaq",
     ]
-    if not pure:
-        obs_list += [
-            "n_single_even",
-            "n_single_odd",
-            "n_pair_even",
-            "n_pair_odd",
-            "n_tot_even",
-            "n_tot_odd",
-            "delta_n_single_even",
-            "delta_n_single_odd",
-            "delta_n_pair_even",
-            "delta_n_pair_odd",
-            "delta_n_tot_even",
-            "delta_n_tot_odd",
-        ]
-    if not has_obc:
-        obs_list += ["py_sector", "px_sector"]
+    if model == "SU2":
+        obs_list += ["delta_E_square", "delta_plaq"]
+        if not pure:
+            obs_list += [
+                "n_single_even",
+                "n_single_odd",
+                "n_pair_even",
+                "n_pair_odd",
+                "n_tot_even",
+                "n_tot_odd",
+                "delta_n_single_even",
+                "delta_n_single_odd",
+                "delta_n_pair_even",
+                "delta_n_pair_odd",
+                "delta_n_tot_even",
+                "delta_n_tot_odd",
+            ]
+        if not has_obc:
+            obs_list += ["py_sector", "px_sector"]
+    else:
+        obs_list += ["N"]
     return obs_list
 
 
