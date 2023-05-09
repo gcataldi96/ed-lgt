@@ -70,18 +70,35 @@ def diagonalize_density_matrix(rho):
     return rho_eigvals, rho_eigvecs
 
 
-def get_reduced_density_matrix(psi, loc_dim, nx, ny, site):
+def get_reduced_density_matrix(psi, loc_dims, lvals, site):
     if not isinstance(psi, np.ndarray):
         raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
-    if not np.isscalar(loc_dim) and not isinstance(loc_dim, int):
-        raise TypeError(f"loc_dim must be an SCALAR & INTEGER, not a {type(loc_dim)}")
-    if not np.isscalar(nx) and not isinstance(nx, int):
-        raise TypeError(f"nx must be an SCALAR & INTEGER, not a {type(nx)}")
-    if not np.isscalar(ny) and not isinstance(ny, int):
-        raise TypeError(f"ny must be an SCALAR & INTEGER, not a {type(ny)}")
+    if isinstance(loc_dims, list):
+        loc_dims = np.asarray(loc_dims)
+        tot_dim = np.prod(loc_dims)
+    elif isinstance(loc_dims, np.ndarray):
+        tot_dim = np.prod(loc_dims)
+    elif np.isscalar(loc_dims):
+        if isinstance(loc_dims, int):
+            tot_dim = loc_dims**n_sites
+            loc_dims = np.asarray([loc_dims for ii in range(n_sites)])
+        else:
+            raise TypeError(f"loc_dims must be INTEGER, not a {type(loc_dims)}")
+    else:
+        raise TypeError(
+            f"loc_dims is neither a SCALAR, a LIST or ARRAY but a {type(loc_dims)}"
+        )
+    if not isinstance(lvals, list):
+        raise TypeError(f"lvals should be a list, not a {type(lvals)}")
+    else:
+        for ii, ll in enumerate(lvals):
+            if not isinstance(ll, int):
+                raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
     if not np.isscalar(site) and not isinstance(site, int):
         raise TypeError(f"site must be an SCALAR & INTEGER, not a {type(site)}")
-    # GET THE TOTAL NUMBER OF SITES
+    # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
+    nx = lvals[0]
+    ny = lvals[1]
     n_sites = nx * ny
     # GET THE COORDINATES OF THE SITE site
     x, y = zig_zag(nx, ny, site)
@@ -89,7 +106,7 @@ def get_reduced_density_matrix(psi, loc_dim, nx, ny, site):
     logger.info(f"DENSITY MATRIX OF SITE ({str(x+1)},{str(y+1)})")
     logger.info("----------------------------------------------------")
     # RESHAPE psi
-    psi_copy = psi.reshape(*[loc_dim for ii in range(n_sites)])
+    psi_copy = psi.reshape(*[loc_dim for loc_dim in loc_dims.tolist()])
     # DEFINE A LIST OF SITES WE WANT TO TRACE OUT
     indices = np.arange(0, n_sites)
     indices = indices.tolist()
