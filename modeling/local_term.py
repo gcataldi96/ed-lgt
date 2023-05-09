@@ -68,7 +68,7 @@ class LocalTerm2D:
                 if not isinstance(ll, int):
                     raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
         # PRINT OBSERVABLE NAME
-        logger.info(f"----------------------")
+        logger.info(f"----------------------------------------------------")
         logger.info(f"{self.op_name}")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]
@@ -77,6 +77,7 @@ class LocalTerm2D:
         # Compute the complex_conjugate of the ground state psi
         psi_dag = np.conjugate(psi)
         # AVERAGE EXP VAL <O> & STD DEVIATION (<O^{2}>-<O>^{2})^{1/2}
+        self.obs = np.zeros((nx, ny))
         self.avg = 0.0
         self.std = 0.0
         counter = 0
@@ -128,13 +129,14 @@ class LocalTerm2D:
             if any(mask_conditions):
                 logger.info(f"({x+1},{y+1}) {format(exp_obs, '.12f')}")
                 counter += 1
+                self.obs[x, y] = exp_obs
                 self.avg += exp_obs
                 self.std += exp_var
         self.avg = self.avg / counter
         self.std = np.sqrt(self.std / counter)
+        logger.info(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 
     def check_on_borders(self, border, value=1, threshold=1e-10):
-        logger.info(f"CHECK BORDER PENALTIES")
         if border == "mx":
             if np.any(np.abs(self.obs[0, :] - value) > threshold):
                 logger.info(self.obs[0, :])
@@ -153,4 +155,4 @@ class LocalTerm2D:
                 raise ValueError(f"{border} border penalty not satisfied")
         else:
             raise ValueError(f"border must be in (mx, px, my, py), not {border}")
-        logger.info(f"{border}-border penalties are satisfied")
+        logger.info(f"{border}-BORDER PENALTIES SATISFIED")

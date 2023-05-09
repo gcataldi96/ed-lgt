@@ -128,21 +128,22 @@ class PlaquetteTerm2D:
         if not isinstance(get_imag, bool):
             raise TypeError(f"get_imag should be a BOOL, not a {type(get_imag)}")
         # ADVERTISE OF THE CHOSEN PART OF THE PLAQUETTE YOU WANT TO COMPUTE
-        logger.info(f"-----------------------")
+        logger.info(f"----------------------------------------------------")
         if get_imag:
             chosen_part = "IMAG"
         else:
             chosen_part = "REAL"
         logger.info(f"PLAQUETTE: {chosen_part} PART")
-        logger.info(f"----------------------")
+        logger.info(f"----------------------------------------------------")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]
         ny = lvals[1]
         n = nx * ny
         # Compute the complex_conjugate of the ground state psi
         psi_dag = np.conjugate(psi)
-        plaq_obs = []
-        delta_plaq_obs = []
+        self.avg = 0.0
+        self.std = 0.0
+        counter = 0
         for ii in range(n):
             # Compute the corresponding (x,y) coords
             x, y = zig_zag(nx, ny, ii)
@@ -235,13 +236,12 @@ class PlaquetteTerm2D:
                 )
                 # PRINT THE PLAQUETTE
                 self.print_Plaquette(plaq_string, plaq)
-                # self.print_Plaquette(plaq_string, delta_plaq)
-                plaq_obs.append(plaq)
-                delta_plaq_obs.append(delta_plaq)
-        plaq_obs = np.array(plaq_obs)
-        delta_plaq_obs = np.array(delta_plaq_obs)
-        self.avg = np.sum(plaq_obs) / plaq_obs.shape[0]
-        self.std = np.sqrt(np.sum(delta_plaq_obs) / plaq_obs.shape[0])
+                counter += 1
+                self.avg += plaq
+                self.std += np.abs(delta_plaq)
+        self.avg = self.avg / counter
+        self.std = np.sqrt(self.std / counter)
+        logger.info(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 
     def print_Plaquette(self, sites_list, value):
         if not isinstance(sites_list, list):
