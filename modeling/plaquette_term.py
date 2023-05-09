@@ -240,8 +240,8 @@ class PlaquetteTerm2D:
                 delta_plaq_obs.append(delta_plaq)
         plaq_obs = np.array(plaq_obs)
         delta_plaq_obs = np.array(delta_plaq_obs)
-        self.avg_plaq = np.sum(plaq_obs) / plaq_obs.shape[0]
-        self.std_plaq = np.sqrt(np.sum(delta_plaq_obs) / plaq_obs.shape[0])
+        self.avg = np.sum(plaq_obs) / plaq_obs.shape[0]
+        self.std = np.sqrt(np.sum(delta_plaq_obs) / plaq_obs.shape[0])
 
     def print_Plaquette(self, sites_list, value):
         if not isinstance(sites_list, list):
