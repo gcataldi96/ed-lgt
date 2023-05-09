@@ -164,7 +164,6 @@ class TwoBodyTerm2D:
                     self.corr[x1, y1, x2, y2] = 0
 
     def check_link_symm(self, value=1, threshold=1e-10, has_obc=True):
-        logger.info(f"CHECK {self.axis} LINK SYMMETRIES")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = self.corr.shape[0]
         ny = self.corr.shape[1]
@@ -200,3 +199,4 @@ class TwoBodyTerm2D:
                             logger.info(
                                 f"W{self.axis}_({x},{y})-({x},{y+1})={self.corr[x,y,x,y+1]}: expected {value}"
                             )
+        logger.info(f"{self.axis} LINK SYMMETRIES SATISFIED")
