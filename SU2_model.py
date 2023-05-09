@@ -71,8 +71,10 @@ with run_sim() as sim:
                     mask=border_mask(lvals, f"{s}{d}"),
                 )
     # ELECTRIC ENERGY
-    h_terms["gamma"] = LocalTerm2D(ops["gamma"], "gamma")
-    H += h_terms["gamma"].get_Hamiltonian(lvals, has_obc=has_obc, strength=coeffs["E"])
+    h_terms["E_square"] = LocalTerm2D(ops["gamma"], "E_square")
+    H += h_terms["E_square"].get_Hamiltonian(
+        lvals, has_obc=has_obc, strength=coeffs["E"]
+    )
     # MAGNETIC ENERGY
     op_name_list = ["C_py_px", "C_py_mx", "C_my_px", "C_my_mx"]
     op_list = [ops[op] for op in op_name_list]
@@ -124,11 +126,15 @@ with run_sim() as sim:
     # ===========================================================================
     # ENERGIES, STATE CONFIGURATIONS, AND TOPOLOGICAL SECTORS
     # ===========================================================================
-    list_obs = ["energy", "entropy", "px_sector", "py_sector", "gamma", "plaq"]
+    list_obs = ["energy", "entropy", "E_square", "plaq", "delta_E_square", "delta_plaq"]
+    if not has_obc:
+        for obs in ["px_sector", "py_sector"]:
+            list_obs.append(obs)
     if not pure_theory:
         for obs in ["n_single", "n_pair", "n_tot"]:
             for site in ["even", "odd"]:
                 list_obs.append(f"{obs}_{site}")
+                list_obs.append(f"delta_{obs}_{site}")
     for obs in list_obs:
         sim.res[obs] = []
     for ii in range(n_eigs):
@@ -146,58 +152,67 @@ with run_sim() as sim:
         )
         logger.info("====================================================")
         logger.info(f"{ii} ENERGY: {format(sim.res['energy'][ii], '.9f')}")
-        # GET STATE CONFIGURATIONS
-        get_state_configurations(truncation(GS.Npsi[:, ii], 1e-10), loc_dim, n_sites)
         # ENTROPY of a BIPARTITION
         sim.res["entropy"].append(
             entanglement_entropy(
                 GS.Npsi[:, ii], loc_dim, n_sites, partition_size=int(n_sites / 2)
             )
         )
+        if pure_theory or ((not pure_theory) and has_obc):
+            # GET STATE CONFIGURATIONS
+            get_state_configurations(
+                truncation(GS.Npsi[:, ii], 1e-10), loc_dim, n_sites
+            )
+        logger.info("====================================================")
         # ===========================================================================
-        # GROUND STATE SINGLE SITE OBSERVABLES
+        # CHECK PENALTIES
         # ===========================================================================
-        # CHECK LINK PENALTIES
+        # LINK PENALTIES
         for d in directions:
             h_terms[f"W_{d}"].get_expval(GS.Npsi[:, ii], lvals, has_obc)
             h_terms[f"W_{d}"].check_link_symm(value=1, has_obc=has_obc)
-        # CHECK BORDER PENALTIES
+        # BORDER PENALTIES
         if has_obc:
             for d in directions:
                 for s in "mp":
                     op_name = f"P_{s}{d}"
                     h_terms[op_name].get_expval(GS.Npsi[:, ii], lvals, has_obc)
                     h_terms[op_name].check_on_borders(border=f"{s}{d}", value=1)
-        # COMPUTE GAUGE OBSERVABLES
-        sim.res["gamma"].append(
-            h_terms["gamma"].get_expval(GS.Npsi[:, ii], lvals, has_obc)
-        )
-        # sim.res["delta_gamma"] = h_terms["gamma"].get_fluctuations(GS.psi, lvals)
-        sim.res["plaq"].append(
-            h_terms["plaq"].get_expval(GS.Npsi[:, ii], lvals, has_obc)
-        )
+        # ===========================================================================
+        # GAUGE OBSERVABLES
+        # ===========================================================================
+        for obs in ["E_square", "plaq"]:
+            h_terms[obs].get_expval(GS.Npsi[:, ii], lvals, has_obc)
+            sim.res[obs].append(h_terms[obs].avg)
+            sim.res[f"delta_{obs}"].append(h_terms[obs].std)
+        # ===========================================================================
+        # COMPUTE MATTER OBSERVABLES (STAGGERED)
+        # ===========================================================================
         if not pure_theory:
-            # COMPUTE MATTER OBSERVABLES STAGGERED
             local_obs = ["n_single", "n_pair", "n_tot"]
             for obs in local_obs:
-                # Generate the Operator
                 h_terms[obs] = LocalTerm2D(ops[obs], obs)
-                # Run over even and odd sites
                 for site in ["odd", "even"]:
-                    sim.res[f"{obs}_{site}"].append(
-                        h_terms[obs].get_expval(GS.Npsi[:, ii], lvals, has_obc, site)
-                    )
-                    """                    
-                    sim.res[f"delta_{obs}_{site}"] = h_terms[obs].get_fluctuations(
-                        GS.psi, lvals, site
-                    )
-                    """
-        # MEASURE TOPOLOGICAL SECTORS
+                    h_terms[obs].get_expval(GS.Npsi[:, ii], lvals, has_obc, site)
+                    sim.res[f"{obs}_{site}"].append(h_terms[obs].avg)
+                    sim.res[f"delta_{obs}_{site}"].append(h_terms[obs].std)
+            if has_obc:
+                # SCOP CORRELATOR
+                h_terms["SCOP"] = TwoBodyTerm2D("x", op_list, op_name_list)
+                h_terms["SCOP"].get_expval(GS.Npsi[:, ii], lvals, has_obc)
+                sim.res["SCOP"] = h_terms["SCOP"].corr
+        # ===========================================================================
+        # TOPOLOGICAL SECTORS
+        # ===========================================================================
         if not has_obc:
+            logger.info("====================================================")
             for d1, d2 in [("y", "x"), ("x", "y")]:
-                # select the link parity operator
+                # Select the link parity operator
                 op = ops[f"p{d1}_link_P"]
-                # measure the topological sector
+                # Measure the topological sector
                 sim.res[f"p{d2}_sector"].append(
                     get_SU2_topological_invariant(op, lvals, GS.Npsi[:, ii], d2)
                 )
+    if n_eigs == 1:
+        for obs in list(sim.res.keys()):
+            sim.res[obs] = sim.res[obs][0]

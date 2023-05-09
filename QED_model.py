@@ -124,32 +124,32 @@ with run_sim() as sim:
     n_eigs = sim.par["n_eigs"]
     GS = Ground_State(H, n_eigs)
     sim.res["energy"] = GS.Nenergies
+    # ===========================================================================
     # DEFINE THE OBSERVABLE LIST
-    loc_obs = [f"n_{s}{d}" for s in "mp" for d in directions] + ["E_square", "N"]
-    for obs in loc_obs:
-        sim.res[obs] = []
-    sim.res["plaq"] = []
     sim.res["entropy"] = []
+    obs_list = [f"n_{s}{d}" for s in "mp" for d in directions] + ["E_square", "N"]
+    for obs in obs_list:
+        h_terms[obs] = LocalTerm2D(ops[obs], obs, staggered_basis=True, site_basis=M)
+        sim.res[obs] = []
+    obs_list.append("plaq")
+    sim.res["plaq"] = []
+    # ===========================================================================
     for ii in range(n_eigs):
         logger.info("====================================================")
         logger.info(f"{ii} ENERGY: {format(sim.res['energy'][ii], '.9f')}")
-        # GET STATE CONFIGURATIONS
-        get_state_configurations(truncation(GS.Npsi[:, ii], 1e-10), loc_dims, n_sites)
         # ENTROPY of a BIPARTITION
         sim.res["entropy"].append(
             entanglement_entropy(
                 GS.Npsi[:, ii], loc_dims, n_sites, partition_size=int(n_sites / 2)
             )
         )
+        # GET STATE CONFIGURATIONS
+        get_state_configurations(truncation(GS.Npsi[:, ii], 1e-10), loc_dims, n_sites)
         # ===========================================================================
-        # OBSERVABLES: RISHON NUMBER OPERATORS, ElECTRIC ENERGY E^{2} and DENSITY OPERATOR N
-        for obs in loc_obs:
-            h_terms[obs] = LocalTerm2D(
-                ops[obs], obs, staggered_basis=True, site_basis=M
-            )
-            sim.res[obs].append(h_terms[obs].get_expval(GS.Npsi[:, ii], lvals, has_obc))
-        # OBSERVABLES: PLAQUETTE ENERGY
-        sim.res["plaq"].append(
-            h_terms["plaq"].get_expval(GS.Npsi[:, ii], lvals, has_obc)
-        )
+        # MEASURE OBSERVABLES:
+        # RISHON NUMBER OPERATORS, ELECTRIC ENERGY E^{2}, DENSITY OPERATOR N, B^{2}
+        # ===========================================================================
+        for obs in obs_list:
+            h_terms[obs].get_expval(GS.Npsi[:, ii], lvals, has_obc)
+            sim.res[obs].append(h_terms[obs].avg)
     logger.info(f"Energies {sim.res['energy']}")
