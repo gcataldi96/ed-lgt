@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.sparse import isspmatrix_csr, isspmatrix, csr_matrix
+from scipy.sparse import isspmatrix, csr_matrix
 from tools import zig_zag, inverse_zig_zag
 from .qmb_operations import four_body_op
 from simsio import logger
@@ -13,10 +13,8 @@ class PlaquetteTerm2D:
             raise TypeError(f"op_list should be a list, not a {type(op_list)}")
         else:
             for ii, op in enumerate(op_list):
-                if not isspmatrix_csr(op):
-                    raise TypeError(
-                        f"op_list[{ii}] should be a CSR_MATRIX, not {type(op)}"
-                    )
+                if not isspmatrix(op):
+                    raise TypeError(f"op_list[{ii}] should be SPARSE, not {type(op)}")
         if not isinstance(op_name_list, list):
             raise TypeError(
                 f"op_name_list should be a list, not a {type(op_name_list)}"

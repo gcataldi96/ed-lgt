@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.sparse import isspmatrix_csr
+from scipy.sparse import isspmatrix, csr_matrix
 from simsio import logger
 from tools import zig_zag
 from .qmb_operations import local_op
@@ -10,8 +10,8 @@ __all__ = ["LocalTerm2D"]
 class LocalTerm2D:
     def __init__(self, operator, op_name, staggered_basis=False, site_basis=None):
         # CHECK ON TYPES
-        if not isspmatrix_csr(operator):
-            raise TypeError(f"operator should be CSR_MATRIX, not {type(operator)}")
+        if not isspmatrix(operator):
+            raise TypeError(f"operator should be SPARSE, not {type(operator)}")
         if not isinstance(op_name, str):
             raise TypeError(f"op_name should be a STRING, not a {type(op_name)}")
         self.op = operator
