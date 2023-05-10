@@ -1,59 +1,13 @@
 import numpy as np
 from tools.manage_data import acquire_data
-from scipy.sparse import csr_matrix, diags, kron, identity
+from scipy.sparse import csr_matrix, diags, identity
+from modeling import qmb_operator as qmb_op
 
 __all__ = [
     "get_su2_operators",
     "get_SU2_Hamiltonian_couplings",
     "get_SU2_surface_operator",
 ]
-
-
-def qmb_operator(ops, op_list, add_dagger=False, get_real=False, get_imag=False):
-    """
-    This function performs the QMB operation of an arbitrary long list
-    of operators of arbitrary dimensions.
-
-    Args:
-        ops (dict): dictionary storing all the single site operators
-
-        op_list (list): list of the names of the operators involved in the qmb operator
-        the list is assumed to be stored according to the zig-zag order on the lattice
-
-        strength (scalar): real/complex coefficient applied in front of the operator
-
-        add_dagger (bool, optional): if true, yields the hermitian conjugate. Defaults to False.
-
-        get_real (bool, optional):  if true, yields only the real part. Defaults to False.
-
-        get_imag (bool, optional): if true, yields only the imaginary part. Defaults to False.
-    Returns:
-        csr_matrix: QMB sparse operator
-    """
-    # CHECK ON TYPES
-    if not isinstance(ops, dict):
-        raise TypeError(f"ops must be a DICT, not a {type(ops)}")
-    if not isinstance(op_list, list):
-        raise TypeError(f"op_list must be a LIST, not a {type(op_list)}")
-    if not isinstance(add_dagger, bool):
-        raise TypeError(f"add_dagger should be a BOOL, not a {type(add_dagger)}")
-    if not isinstance(get_real, bool):
-        raise TypeError(f"get_real should be a BOOL, not a {type(get_real)}")
-    if not isinstance(get_imag, bool):
-        raise TypeError(f"get_imag should be a BOOL, not a {type(get_imag)}")
-    tmp = ops[op_list[0]]
-    # logger.info("------------------")
-    # logger.info(op_list[0])
-    for op in op_list[1:]:
-        # logger.info(op)
-        tmp = kron(tmp, ops[op])
-    if add_dagger:
-        tmp = csr_matrix(tmp + tmp.conj().transpose())
-    if get_real:
-        tmp = csr_matrix(tmp + tmp.conj().transpose()) / 2
-    elif get_imag:
-        tmp = complex(0.0, -0.5) * (csr_matrix(tmp - tmp.conj().transpose()))
-    return tmp
 
 
 def inner_site_operators(su2_irrep):
@@ -125,10 +79,10 @@ def inner_site_operators(su2_irrep):
     ops["P_psi"] = diags(np.array([1, -1], dtype=float), offsets=0, shape=(2, 2))
     ops["N"] = ops["psi_dag"] * ops["psi"]
     # up & down MATTER OPERATORS
-    ops["psi_up"] = qmb_operator(ops, ["psi", "ID_psi"])
-    ops["psi_down"] = qmb_operator(ops, ["P_psi", "psi"])
-    ops["N_up"] = qmb_operator(ops, ["N", "ID_psi"])
-    ops["N_down"] = qmb_operator(ops, ["ID_psi", "N"])
+    ops["psi_up"] = qmb_op(ops, ["psi", "ID_psi"])
+    ops["psi_down"] = qmb_op(ops, ["P_psi", "psi"])
+    ops["N_up"] = qmb_op(ops, ["N", "ID_psi"])
+    ops["N_down"] = qmb_op(ops, ["ID_psi", "N"])
     # other number operators
     ops["N_pair"] = ops["N_up"] * ops["N_down"]
     ops["N_tot"] = ops["N_up"] + ops["N_down"]
@@ -153,16 +107,16 @@ def dressed_site_operators(su2_irrep, lattice_dim=2, pure=False):
         for sd in ["mx", "my", "px", "py"]:
             ops[f"Q_{sd}_dag"] = 0
         for sigma in ["up", "down"]:
-            ops["Q_mx_dag"] += qmb_operator(
+            ops["Q_mx_dag"] += qmb_op(
                 in_ops, [f"psi_{sigma}_dag", f"xi_{sigma}", "ID_xi", "ID_xi", "ID_xi"]
             )
-            ops["Q_my_dag"] += qmb_operator(
+            ops["Q_my_dag"] += qmb_op(
                 in_ops, [f"psi_{sigma}_dag", "P_xi", f"xi_{sigma}", "ID_xi", "ID_xi"]
             )
-            ops["Q_px_dag"] += qmb_operator(
+            ops["Q_px_dag"] += qmb_op(
                 in_ops, [f"psi_{sigma}_dag", "P_xi", "P_xi", f"xi_{sigma}", "ID_xi"]
             )
-            ops["Q_py_dag"] += qmb_operator(
+            ops["Q_py_dag"] += qmb_op(
                 in_ops, [f"psi_{sigma}_dag", "P_xi", "P_xi", "P_xi", f"xi_{sigma}"]
             )
         # add DAGGER operators
@@ -173,23 +127,15 @@ def dressed_site_operators(su2_irrep, lattice_dim=2, pure=False):
         ops |= Qs
         # Psi NUMBER OPERATORS
         for sigma in ["up", "down", "tot", "single", "pair"]:
-            ops[f"N_{sigma}"] = qmb_operator(
+            ops[f"N_{sigma}"] = qmb_op(
                 in_ops, [f"N_{sigma}", "ID_xi", "ID_xi", "ID_xi", "ID_xi"]
             )
     # Rishon NUMBER OPERATORS
     for op in ["n", "n_square"]:
-        ops[f"{op}_mx"] = qmb_operator(
-            in_ops, ["ID_psi", op, "ID_xi", "ID_xi", "ID_xi"]
-        )
-        ops[f"{op}_my"] = qmb_operator(
-            in_ops, ["ID_psi", "ID_xi", op, "ID_xi", "ID_xi"]
-        )
-        ops[f"{op}_px"] = qmb_operator(
-            in_ops, ["ID_psi", "ID_xi", "ID_xi", op, "ID_xi"]
-        )
-        ops[f"{op}_py"] = qmb_operator(
-            in_ops, ["ID_psi", "ID_xi", "ID_xi", "ID_xi", op]
-        )
+        ops[f"{op}_mx"] = qmb_op(in_ops, ["ID_psi", op, "ID_xi", "ID_xi", "ID_xi"])
+        ops[f"{op}_my"] = qmb_op(in_ops, ["ID_psi", "ID_xi", op, "ID_xi", "ID_xi"])
+        ops[f"{op}_px"] = qmb_op(in_ops, ["ID_psi", "ID_xi", "ID_xi", op, "ID_xi"])
+        ops[f"{op}_py"] = qmb_op(in_ops, ["ID_psi", "ID_xi", "ID_xi", "ID_xi", op])
     # CASIMIR/ELECTRIC OPERATOR
     ops[f"E_square"] = 0
     for sd in ["mx", "my", "px", "py"]:
@@ -198,18 +144,18 @@ def dressed_site_operators(su2_irrep, lattice_dim=2, pure=False):
     for corner in ["px,py", "py,mx", "mx,my", "my,px"]:
         ops[f"C_{corner}"] = 0
     for sigma in ["up", "down"]:
-        ops["C_px,py"] += -qmb_operator(
+        ops["C_px,py"] += -qmb_op(
             in_ops,
             ["ID_psi", "ID_xi", "ID_xi", f"xi_{sigma}_times_P", f"xi_{sigma}_dag"],
         )
-        ops["C_py,mx"] += qmb_operator(
+        ops["C_py,mx"] += qmb_op(
             in_ops, ["ID_psi", f"P_times_xi_{sigma}_dag", "P_xi", "P_xi", f"xi_{sigma}"]
         )
-        ops["C_mx,my"] += qmb_operator(
+        ops["C_mx,my"] += qmb_op(
             in_ops,
             ["ID_psi", f"xi_{sigma}_times_P", f"xi_{sigma}_dag", "ID_xi", "ID_xi"],
         )
-        ops["C_my,px"] += qmb_operator(
+        ops["C_my,px"] += qmb_op(
             in_ops,
             ["ID_psi", "ID_xi", f"xi_{sigma}_times_P", f"xi_{sigma}_dag", "ID_xi"],
         )
