@@ -133,4 +133,5 @@ configs/
 
 # Results
 results/
-qed/
+saved_dicts/
+nohup.out
