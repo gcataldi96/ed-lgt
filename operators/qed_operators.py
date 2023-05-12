@@ -3,109 +3,14 @@ from itertools import product
 from scipy.sparse import csr_matrix, diags, kron, identity
 from scipy.sparse.linalg import norm
 from simsio import logger
+from modeling import qmb_operator
 
 __all__ = [
     "get_QED_operators",
     "get_QED_Hamiltonian_couplings",
     "dressed_site_operators",
     "gauge_invariant_states",
-    "lattice_base_configs",
 ]
-
-
-def lattice_base_configs(lvals, base, staggered=False):
-    """
-    This function associate the basis to each lattice site
-    and the corresponding dim.
-
-    Args:
-        lvals (list of ints): lattice dimensions
-        base (dict of sparse matrices): _description_
-        staggered (bool, optional): _description_. Defaults to False.
-
-    Returns:
-        _type_: _description_
-    """
-    lattice_base = np.zeros(tuple(lvals), dtype=object)
-    loc_dims = np.zeros(tuple(lvals), dtype=int)
-    for x in range(lvals[0]):
-        for y in range(lvals[1]):
-            stag = (-1) ** (x + y)
-            if (staggered == True) and (stag > 0):
-                stag_label = "even"
-            elif (staggered == True) and (stag < 0):
-                stag_label = "odd"
-            else:
-                stag_label = ""
-            if (x == 0) and (y == 0):
-                site_label = "_mx_my"
-            elif (x == 0) and (y == lvals[1] - 1):
-                site_label = "_mx_py"
-            elif (x == lvals[0] - 1) and (y == 0):
-                site_label = "_my_px"
-            elif (x == lvals[0] - 1) and (y == lvals[1] - 1):
-                site_label = "_px_py"
-            elif x == 0:
-                site_label = "_mx"
-            elif x == lvals[0] - 1:
-                site_label = "_px"
-            elif y == 0:
-                site_label = "_my"
-            elif y == lvals[1] - 1:
-                site_label = "_py"
-            else:
-                site_label = ""
-            label = f"{stag_label}{site_label}"
-            lattice_base[x, y] = label
-            loc_dims[x, y] = base[label].shape[1]
-    return lattice_base, loc_dims
-
-
-def qmb_operator(ops, op_list, add_dagger=False, get_real=False, get_imag=False):
-    """
-    This function performs the QMB operation of an arbitrary long list
-    of operators of arbitrary dimensions.
-
-    Args:
-        ops (dict): dictionary storing all the single site operators
-
-        op_list (list): list of the names of the operators involved in the qmb operator
-        the list is assumed to be stored according to the zig-zag order on the lattice
-
-        strength (scalar): real/complex coefficient applied in front of the operator
-
-        add_dagger (bool, optional): if true, yields the hermitian conjugate. Defaults to False.
-
-        get_real (bool, optional):  if true, yields only the real part. Defaults to False.
-
-        get_imag (bool, optional): if true, yields only the imaginary part. Defaults to False.
-    Returns:
-        csr_matrix: QMB sparse operator
-    """
-    # CHECK ON TYPES
-    if not isinstance(ops, dict):
-        raise TypeError(f"ops must be a DICT, not a {type(ops)}")
-    if not isinstance(op_list, list):
-        raise TypeError(f"op_list must be a LIST, not a {type(op_list)}")
-    if not isinstance(add_dagger, bool):
-        raise TypeError(f"add_dagger should be a BOOL, not a {type(add_dagger)}")
-    if not isinstance(get_real, bool):
-        raise TypeError(f"get_real should be a BOOL, not a {type(get_real)}")
-    if not isinstance(get_imag, bool):
-        raise TypeError(f"get_imag should be a BOOL, not a {type(get_imag)}")
-    tmp = ops[op_list[0]]
-    # logger.info("------------------")
-    # logger.info(op_list[0])
-    for op in op_list[1:]:
-        # logger.info(op)
-        tmp = kron(tmp, ops[op])
-    if add_dagger:
-        tmp = csr_matrix(tmp + tmp.conj().transpose())
-    if get_real:
-        tmp = csr_matrix(tmp + tmp.conj().transpose()) / 2
-    elif get_imag:
-        tmp = complex(0.0, -0.5) * (csr_matrix(tmp - tmp.conj().transpose()))
-    return csr_matrix(tmp)
 
 
 def border_configs(config, n_rishons):
@@ -240,45 +145,61 @@ def gauge_invariant_states(n_rishons, lattice_dim=2):
     return gauge_basis, gauge_states
 
 
-def inner_site_operators(n_rishons):
+def inner_site_operators(n_rishons, U="spin"):
     # Define the Rishon operators according to the chosen spin representation s
     # (to which correspond n_rishons=2s)
     ops = {}
     shape = (n_rishons + 1, n_rishons + 1)
     if n_rishons == 2:  # s=1
-        data_m = np.array([np.sqrt(2), -np.sqrt(2)], dtype=float)
         p_diag = np.array([1, -1, 1], dtype=float)
+        if U == "spin":
+            data_m = np.array([np.sqrt(2), -np.sqrt(2)], dtype=float)
+        else:
+            data_m = np.array([1, -1], dtype=float)
+
     elif n_rishons == 3:  # s=3/2
-        data_m = np.array([-2 / np.sqrt(3), 4 / 3, -2 / np.sqrt(3)], dtype=float)
         p_diag = np.array([1, -1, 1, -1], dtype=float)
+        if U == "spin":
+            data_m = np.array([-2 / np.sqrt(3), 4 / 3, -2 / np.sqrt(3)], dtype=float)
+        else:
+            data_m = np.array([-1, 1, -1], dtype=float)
     elif n_rishons == 4:  # s=2
-        data_m = np.array([1, -np.sqrt(6) / 2, np.sqrt(6) / 2, -1], dtype=float)
         p_diag = np.array([1, -1, 1, -1, 1], dtype=float)
+        if U == "spin":
+            data_m = np.array([1, -np.sqrt(6) / 2, np.sqrt(6) / 2, -1], dtype=float)
+        else:
+            data_m = np.array([1, -1, 1, -1], dtype=float)
     elif n_rishons == 5:  # s=5/2
-        data_m = np.array(
-            [
-                -2 / np.sqrt(5),
-                np.sqrt(32) / 5,
-                -6 / 5,
-                np.sqrt(32) / 5,
-                -2 / np.sqrt(5),
-            ],
-            dtype=float,
-        )
         p_diag = np.array([1, -1, 1, -1, 1, -1], dtype=float)
+        if U == "spin":
+            data_m = np.array(
+                [
+                    -2 / np.sqrt(5),
+                    np.sqrt(32) / 5,
+                    -6 / 5,
+                    np.sqrt(32) / 5,
+                    -2 / np.sqrt(5),
+                ],
+                dtype=float,
+            )
+        else:
+            data_m = np.array([-1, 1, -1, 1, -1], dtype=float)
     elif n_rishons == 6:  # s=3
-        data_m = np.array(
-            [
-                np.sqrt(6) / 3,
-                -np.sqrt(10) / 3,
-                np.sqrt(12) / 3,
-                -np.sqrt(12) / 3,
-                np.sqrt(10) / 3,
-                -np.sqrt(6) / 3,
-            ],
-            dtype=float,
-        )
         p_diag = np.array([1, -1, 1, -1, 1, -1, 1], dtype=float)
+        if U == "spin":
+            data_m = np.array(
+                [
+                    np.sqrt(6) / 3,
+                    -np.sqrt(10) / 3,
+                    np.sqrt(12) / 3,
+                    -np.sqrt(12) / 3,
+                    np.sqrt(10) / 3,
+                    -np.sqrt(6) / 3,
+                ],
+                dtype=float,
+            )
+        else:
+            data_m = np.array([1, -1, 1, -1, 1, -1], dtype=float)
     else:
         raise Exception("Not yet implemented")
     data_p = np.ones(n_rishons, dtype=float)
