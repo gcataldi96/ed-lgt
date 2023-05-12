@@ -1,8 +1,8 @@
 # %%
 import numpy as np
 from simsio import *
-import pickle
 from matplotlib import pyplot as plt
+from tools import save_dictionary
 
 """
 To extract simulations use
@@ -13,17 +13,6 @@ To acquire the psi file
     sim.link("psi")
     psi= sim.load("psi", cache=True)
 """
-
-
-def save_dictionary(dict, filename):
-    with open(filename, "wb") as outp:  # Overwrites any existing file.
-        pickle.dump(dict, outp, pickle.HIGHEST_PROTOCOL)
-    outp.close
-
-
-def load_dictionary(filename):
-    with open(filename, "rb") as outp:
-        return pickle.load(outp)
 
 
 def get_obs_list(model, pure=None, has_obc=True):
@@ -58,92 +47,72 @@ def get_obs_list(model, pure=None, has_obc=True):
 
 
 # %%
+# ========================================================================
+# SU(2) SIMULATIONS
+# ========================================================================
 # Pure Topology
-config_filename = "pure_topology"
+config_filename = "SU2/pure/topology"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = get_obs_list(model="SU2", pure=True, has_obc=True)
+res = {"g": vals["g"]}
 
-obs_list = get_obs_list(pure=True, has_obc=False)
-
-res = {}
-res["g"] = vals["g"]
-for kk, obs in enumerate(["energy", "py_sector", "px_sector"]):
-    res[obs] = np.zeros((vals["g"].shape[0], 7))
-    for ii, g in enumerate(vals["g"]):
-        for n in range(7):
+for obs in ["energy", "py_sector", "px_sector"]:
+    res[obs] = np.zeros((vals["g"].shape[0], 5))
+    for ii in range(len(res["g"])):
+        for n in range(5):
             res[obs][ii][n] = get_sim(ugrid[ii]).res[obs][n]
-
-save_dictionary(res, "dict_simulations/pure_topology.pkl")
-
-
+fig = plt.figure()
+for n in range(1, 5):
+    plt.plot(
+        vals["g"],
+        res["energy"][:, n] - res["energy"][:, 0],
+        "-o",
+        label=f"{format(res['px_sector'][0, n],'.5f')}",
+    )
+plt.xscale("log")
+plt.yscale("log")
+plt.legend()
+plt.ylabel("energy")
+save_dictionary(res, "saved_dicts/SU2_pure_topology.pkl")
 # %%
-# Full Topology PBC
-config_filename = "full_topology3"
+# Full Topology 1
+config_filename = "SU2/full/topology1"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g", "m"])
-
-obs_list = get_obs_list(pure=False, has_obc=False)
-
-res = {}
-res["g"] = vals["g"]
-res["m"] = vals["m"]
-for kk, obs in enumerate(obs_list):
-    res[obs] = np.zeros((vals["g"].shape[0], vals["m"].shape[0]))
-    for ii, g in enumerate(vals["g"]):
-        for jj, m in enumerate(vals["m"]):
+obs_list = get_obs_list(model="SU2", pure=False, has_obc=True)
+res = {"g": vals["g"], "m": vals["m"]}
+for obs in ["energy", "py_sector", "px_sector"]:
+    res[obs] = np.zeros((res["g"].shape[0], res["m"].shape[0]))
+    for ii, g in enumerate(res["g"]):
+        for jj, m in enumerate(res["m"]):
             res[obs][ii][jj] = get_sim(ugrid[ii][jj]).res[obs]
-
-save_dictionary(res, "dict_simulations/full_topology2.pkl")
-
-# %%
-for kk, obs in enumerate(obs_list[:10]):
-    fig = plt.figure()
-    for jj, m in enumerate(vals["m"]):
-        plt.plot(vals["g"], res[obs][:, jj], "-o")
-        plt.xscale("log")
-        if kk > 3:
-            plt.yscale("log")
-        plt.ylabel(obs)
-
 fig = plt.figure()
-for jj, m in enumerate(vals["m"]):
-    plt.plot(vals["m"], res["energy"][:, jj], "-o")
+for jj, m in enumerate(res["m"]):
+    plt.plot(vals["g"], 1 - res["py_sector"][:, jj], "-o", label=f"m={format(m,'.3f')}")
     plt.xscale("log")
     plt.yscale("log")
-    plt.ylabel("py_sector")
-
-fig = plt.figure()
-for ii, g in enumerate(vals["g"]):
-    plt.plot(vals["m"], 1 - res["py_sector"][ii, :], "-o")
-    plt.xscale("log")
-    plt.yscale("log")
-    plt.ylabel("py_sector")
-
-# %%
-# Full Topology PBC
-config_filename = "full_low_m_behavior"
-match = SimsQuery(group_glob=config_filename)
-ugrid, vals = uids_grid(match.uids, ["g", "m"])
-
-obs_list = get_obs_list(pure=False, has_obc=True)
-
-res = {}
-res["g"] = vals["g"]
-res["m"] = vals["m"]
-for kk, obs in enumerate(obs_list):
-    res[obs] = np.zeros((vals["g"].shape[0], vals["m"].shape[0]))
-    for ii, g in enumerate(vals["g"]):
-        for jj, m in enumerate(vals["m"]):
-            res[obs][ii][jj] = get_sim(ugrid[ii][jj]).res[obs]
-
-save_dictionary(res, "dict_simulations/full_lowmass_behavior.pkl")
-# %%
-for kk, obs in enumerate(obs_list):
-    fig = plt.figure()
-    for jj, m in enumerate(vals["m"]):
-        plt.plot(vals["g"], res[obs][:, jj], "-o", label=rf"$m={m}$")
-        plt.xscale("log")
-        plt.ylabel(obs)
     plt.legend()
-
+    plt.ylabel("1-py_sector")
+save_dictionary(res, "saved_dicts/SU2_full_topology1.pkl")
+# %%
+# Full Topology 2
+config_filename = "SU2/full/topology2"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g", "m"])
+obs_list = get_obs_list(model="SU2", pure=False, has_obc=True)
+res = {"g": vals["g"], "m": vals["m"]}
+for obs in ["energy", "py_sector", "px_sector"]:
+    res[obs] = np.zeros((res["g"].shape[0], res["m"].shape[0]))
+    for ii, g in enumerate(res["g"]):
+        for jj, m in enumerate(res["m"]):
+            res[obs][ii][jj] = get_sim(ugrid[ii][jj]).res[obs]
+fig = plt.figure()
+for ii, g in enumerate(res["g"]):
+    plt.plot(vals["m"], 1 - res["py_sector"][ii, :], "-o", label=f"g={format(g,'.3f')}")
+    plt.xscale("log")
+    plt.yscale("log")
+    plt.legend()
+    plt.ylabel("1-py_sector")
+save_dictionary(res, "saved_dicts/SU2_full_topology2.pkl")
 # %%
