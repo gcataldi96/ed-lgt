@@ -145,7 +145,7 @@ def gauge_invariant_states(n_rishons, lattice_dim=2):
     return gauge_basis, gauge_states
 
 
-def inner_site_operators(n_rishons, U="spin"):
+def inner_site_operators(n_rishons, U="ladder"):
     # Define the Rishon operators according to the chosen spin representation s
     # (to which correspond n_rishons=2s)
     ops = {}
