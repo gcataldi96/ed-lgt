@@ -1,5 +1,5 @@
 import numpy as np
-from tools import zig_zag
+from .mappings_1D_2D import zig_zag
 from simsio import logger
 
 __all__ = [
