@@ -3,7 +3,6 @@ from operators import (
     dressed_site_operators,
     gauge_invariant_states,
     get_QED_Hamiltonian_couplings,
-    lattice_base_configs,
 )
 from modeling import Ground_State, LocalTerm2D, TwoBodyTerm2D, PlaquetteTerm2D
 from modeling import (
@@ -11,6 +10,7 @@ from modeling import (
     staggered_mask,
     get_state_configurations,
     truncation,
+    lattice_base_configs,
 )
 from tools import check_hermitian
 from simsio import logger, run_sim
@@ -34,8 +34,11 @@ with run_sim() as sim:
     ops = dressed_site_operators(n_rishons)
     M, _ = gauge_invariant_states(n_rishons)
     # ACQUIRE LOCAL DIMENSION OF EVERY SINGLE SITE
-    _, loc_dims = lattice_base_configs(lvals, M, staggered=True)
+    lattice_base, loc_dims = lattice_base_configs(M, lvals, has_obc, staggered=True)
     loc_dims = loc_dims.transpose().reshape(n_sites)
+    lattice_base = lattice_base.transpose().reshape(n_sites)
+    logger.info(lattice_base)
+    logger.info(loc_dims)
     # ACQUIRE HAMILTONIAN COEFFICIENTS
     coeffs = get_QED_Hamiltonian_couplings(g, m)
     # CONSTRUCT THE HAMILTONIAN
@@ -72,7 +75,7 @@ with run_sim() as sim:
     h_terms["E_square"] = LocalTerm2D(
         ops["E_square"], "E_square", staggered_basis=True, site_basis=M
     )
-    H += h_terms["E_square"].get_Hamiltonian(lvals, has_obc, 0 * coeffs["E"])
+    H += h_terms["E_square"].get_Hamiltonian(lvals, has_obc, coeffs["E"])
     for site in ["even", "odd"]:
         # STAGGERED MASS TERM
         h_terms[f"N_{site}"] = LocalTerm2D(
@@ -113,7 +116,7 @@ with run_sim() as sim:
     )
     H += h_terms["plaq"].get_Hamiltonian(
         lvals,
-        strength=0 * coeffs["B"],
+        strength=coeffs["B"],
         has_obc=has_obc,
         add_dagger=True,
     )
@@ -143,8 +146,11 @@ with run_sim() as sim:
                 GS.Npsi[:, ii], loc_dims, n_sites, partition_size=int(n_sites / 2)
             )
         )
-        # GET STATE CONFIGURATIONS
-        get_state_configurations(truncation(GS.Npsi[:, ii], 1e-10), loc_dims, n_sites)
+        if has_obc:
+            # GET STATE CONFIGURATIONS
+            get_state_configurations(
+                truncation(GS.Npsi[:, ii], 1e-10), loc_dims, n_sites
+            )
         # ===========================================================================
         # MEASURE OBSERVABLES:
         # RISHON NUMBER OPERATORS, ELECTRIC ENERGY E^{2}, DENSITY OPERATOR N, B^{2}
