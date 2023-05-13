@@ -18,3 +18,9 @@ gen_configs("template", params, f"SU2/full/topology2")
 # FULL THEORY PHASE DIAGRAM
 params = {"g": np.logspace(-1, 1, 30), "m": np.logspace(-3, 1, 30)}
 gen_configs("template", params, f"SU2/full/phase_diagram")
+# %%
+# FULL THEORY SUPERCONDUCTING ORDER PARAMETER
+params = {"g": np.logspace(-1, 1, 10)}
+gen_configs("template", params, f"SU2/full/SCOP")
+
+# %%
