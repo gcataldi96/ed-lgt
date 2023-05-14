@@ -3,7 +3,15 @@ import numpy as np
 from simsio import logger
 from scipy.sparse.linalg import norm
 
-__all__ = ["pause", "alert", "check_commutator", "check_matrix", "check_hermitian"]
+__all__ = [
+    "pause",
+    "alert",
+    "commutator",
+    "anti_commutator",
+    "check_commutator",
+    "check_matrix",
+    "check_hermitian",
+]
 
 
 def pause(phrase, debug):
@@ -29,6 +37,24 @@ def alert(phrase, debug):
         # IT PRINTS A PHRASE IN A GIVEN POINT OF A PYTHON CODE
         logger.info("")
         logger.info(phrase)
+
+
+def commutator(A, B):
+    # THIS FUNCTION COMPUTES THE COMMUTATOR of TWO SPARSE MATRICES
+    if not isspmatrix(A):
+        raise TypeError(f"A should be a csr_matrix, not a {type(A)}")
+    if not isspmatrix(B):
+        raise TypeError(f"B should be a csr_matrix, not a {type(B)}")
+    return A * B - B * A
+
+
+def anti_commutator(A, B):
+    # THIS FUNCTION COMPUTES THE ANTI_COMMUTATOR of TWO SPARSE MATRICES
+    if not isspmatrix(A):
+        raise TypeError(f"A should be a csr_matrix, not a {type(A)}")
+    if not isspmatrix(B):
+        raise TypeError(f"B should be a csr_matrix, not a {type(B)}")
+    return A * B + B * A
 
 
 def check_commutator(A, B):
