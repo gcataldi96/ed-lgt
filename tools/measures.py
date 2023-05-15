@@ -2,9 +2,7 @@ import numpy as np
 from .mappings_1D_2D import zig_zag
 from simsio import logger
 
-__all__ = [
-    "structure_factor",
-]
+__all__ = ["structure_factor", "get_charge", "get_density"]
 
 
 def structure_factor(corr, lvals):
@@ -37,3 +35,11 @@ def single_structure_factor(lvals, kx, ky, corr):
                 exp_factor = kx * (ix - jx) + ky * (iy - jy)
                 sum += np.exp(complex(0.0, 1.0) * exp_factor) * corr[ix, iy, jx, jy]
     return sum / counter
+
+
+def get_density(N_plus, N_minus):
+    return N_plus - N_minus + 2
+
+
+def get_charge(N_plus, N_minus):
+    return N_plus + N_minus - 2
