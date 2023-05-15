@@ -20,7 +20,7 @@ def pause(phrase, debug):
     if not isinstance(debug, bool):
         raise TypeError(f"debug should be a BOOL, not a {type(debug)}")
     if debug == True:
-        # IT PROVIDES A PAUSE (with a phrase) in a given point of the PYTHON CODE
+        # IT PROVIDES A PAUSE in a given point of the PYTHON CODE
         logger.info("----------------------------------------------------")
         # Press the <ENTER> key to continue
         programPause = input(phrase)
@@ -58,7 +58,7 @@ def anti_commutator(A, B):
 
 
 def check_commutator(A, B):
-    # THIS FUNCTION CHECK THE COMMUTATION RELATIONS BETWEEN THE OPERATORS A AND B
+    # CHECKS THE COMMUTATION RELATIONS BETWEEN THE OPERATORS A AND B
     if not isspmatrix(A):
         raise TypeError(f"A should be a csr_matrix, not a {type(A)}")
     if not isspmatrix(B):
@@ -75,8 +75,7 @@ def check_commutator(A, B):
 
 
 def check_matrix(A, B):
-    # THIS FUNCTION CHECK THE DIFFERENCE BETWEEN TWO SPARSE MATRICES
-    # CHECK TYPE
+    # CHEKS THE DIFFERENCE BETWEEN TWO SPARSE MATRICES
     if not isspmatrix(A):
         raise TypeError(f"A should be a csr_matrix, not a {type(A)}")
     if not isspmatrix(B):
@@ -88,7 +87,7 @@ def check_matrix(A, B):
     norma = norm(A - B)
     norma_max = max(norm(A + B), norm(A), norm(B))
     ratio = norma / norma_max
-    if ratio > 10 ** (-15):
+    if ratio > 1e-15:
         logger.info("    ERROR: A and B are DIFFERENT MATRICES")
         raise ValueError(f"    NORM {norma}, RATIO {ratio}")
 
