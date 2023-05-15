@@ -1,75 +1,160 @@
 import numpy as np
-from tools.manage_data import acquire_data
-from scipy.sparse import csr_matrix, diags, identity
+from tools import (
+    acquire_data,
+    check_matrix,
+    anti_commutator as anti_comm,
+    commutator as comm,
+)
+from scipy.sparse import csr_matrix, diags, identity, block_diag
+from scipy.sparse.linalg import norm
 from modeling import qmb_operator as qmb_op
+from .spin_operators import get_spin_operators
 
 __all__ = [
-    "get_su2_operators",
+    "get_SU2_operators",
     "get_SU2_Hamiltonian_couplings",
     "get_SU2_surface_operator",
 ]
 
 
-def inner_site_operators(su2_irrep):
-    # Define the Rishon operators according to the chosen su2 spin irrep
+def SU2_generators(s):
+    if not np.isscalar(s):
+        raise TypeError(f"s must be SCALAR & (semi)INTEGER, not {type(s)}")
+    """
+    This function computes the SU(2) generators of the Rishon modes adopted
+    for the SU2 Lattice Gauge Theory: [Tz, Tp=T+, Tm=T-, Tx, Ty, T2=Casimir]
+    in any arbitrary spin-s representation
+
+    Args:
+        s (scalar, real): spin value, assumed to be integer or semi-integer
+
+    Returns:
+        dict: dictionary with the spin matrices
+    """
+    matrices = {"Tz": [0], "Tp": [0], "T2": [0]}
+    largest_s_size = int(2 * s + 1)
+    for s_size in range(1, largest_s_size):
+        spin = s_size / 2
+        spin_ops = get_spin_operators(spin)
+        for op in ["z", "p", "2"]:
+            matrices[f"T{op}"] += [spin_ops[f"S{op}"]]
+    SU2_gen = {}
+    for op in ["Tz", "Tp", "T2"]:
+        SU2_gen[op] = block_diag(tuple(matrices[op]), format="csr")
+    SU2_gen["Tm"] = SU2_gen["Tp"].transpose()
+    SU2_gen["Tx"] = 0.5 * (SU2_gen["Tp"] + SU2_gen["Tm"])
+    SU2_gen["Ty"] = complex(0, -0.5) * (SU2_gen["Tp"] - SU2_gen["Tm"])
+    return SU2_gen
+
+
+def chi_function(s, m):
+    if not np.isscalar(s):
+        raise TypeError(f"s must be SCALAR & (semi)INTEGER, not {type(s)}")
+    "This function computes the factor for SU2 rishon entries"
+    return np.sqrt((s - m + 1) / (4 * np.ceil(s) + 2))
+
+
+def SU2_rishon_operators(s):
+    if not np.isscalar(s):
+        raise TypeError(f"s must be SCALAR & (semi)INTEGER, not {type(s)}")
+    """
+    This function computes the SU2 the Rishon modes adopted
+    for the SU2 Lattice Gauge Theory for the chosen spin-s irrepresentation
+
+    Args:
+        s (scalar, real): spin value, assumed to be integer or semi-integer
+
+    Returns:
+        dict: dictionary with the rishon operators and the parity
+    """
+    # Compute the dimension of the rishon modes
+    largest_s_size = int(2 * s + 1)
+    zeta_size = np.sum([s_size for s_size in range(1, largest_s_size + 1)])
+    zeta_shape = (zeta_size, zeta_size)
+    # List of diagonal entries
+    zeta_entries = []
+    # List of diagonals
+    zeta_diags = []
+    # Starting diagonals of the s=0 case
+    diag_p = 2
+    diag_m = -1
+    # Number of zeros at the beginning of the diagonals.
+    # It increases with the spin representation
+    in_zeros = 0
+    for s_size in range(largest_s_size - 1):
+        # Obtain spin
+        spin = s_size / 2
+        # Compute chi & P coefficientes
+        sz_diag = np.arange(-spin, spin + 1)[::-1]
+        chi_diag_p = (np.vectorize(chi_function)(spin, sz_diag)).tolist()
+        chi_diag_m = (-np.vectorize(chi_function)(spin, -sz_diag)).tolist()
+        # Fill the diags with zeros according to the lenght of the diag
+        out_zeros_p = zeta_size - len(chi_diag_p) - diag_p - in_zeros
+        out_zeros_m = zeta_size - len(chi_diag_p) + diag_m - in_zeros
+        chi_diag_p = [0] * in_zeros + chi_diag_p + [0] * out_zeros_p
+        chi_diag_m = [0] * in_zeros + chi_diag_m + [0] * out_zeros_m
+        # Append the diags
+        zeta_entries.append(chi_diag_p)
+        zeta_diags.append(diag_p)
+        zeta_entries.append(chi_diag_m)
+        zeta_diags.append(diag_m)
+        # Update the diagonals and the number of initial zeros
+        diag_p += 1
+        diag_m -= 1
+        in_zeros += s_size + 1
+    # Compose the Rishon operators
     ops = {}
-    if su2_irrep == "1/2":
-        xi_dim = 3
-        p_diag = np.array([1, -1, -1], dtype=float)
-        n_diag = np.array([0, 0.5, 0.5], dtype=float)
-        xi = {
-            "up": {
-                "data": np.array([1, 1], dtype=float) / np.sqrt(2),
-                "x": np.array([0, 2], dtype=int),
-                "y": np.array([1, 0], dtype=int),
-            },
-            "down": {
-                "data": np.array([1, -1], dtype=float) / np.sqrt(2),
-                "x": np.array([0, 1], dtype=int),
-                "y": np.array([2, 0], dtype=int),
-            },
-        }
-    elif su2_irrep == "1":
-        xi_dim = 6
-        p_diag = np.array([1, -1, -1, 1, 1, 1], dtype=float)
-        n_diag = np.array([0, 0.5, 0.5, 1, 1, 1], dtype=float)
-        xi = {
-            "up": {
-                "data": np.array(
-                    [np.sqrt(3), np.sqrt(2), np.sqrt(3), 1, 1, np.sqrt(2)], dtype=float
-                )
-                / np.sqrt(6),
-                "x": np.array([0, 1, 2, 2, 4, 5], dtype=int),
-                "y": np.array([1, 3, 0, 4, 1, 2], dtype=int),
-            },
-            "down": {
-                "data": np.array(
-                    [np.sqrt(3), -np.sqrt(3), 1, np.sqrt(2), -np.sqrt(2), 1],
-                    dtype=float,
-                )
-                / np.sqrt(6),
-                "x": np.array([0, 1, 1, 2, 3, 4], dtype=int),
-                "y": np.array([2, 0, 4, 5, 1, 2], dtype=int),
-            },
-        }
-    else:
-        raise Exception("irrep not yet implemented")
-    # --------------------------------------------------------------------------
-    # Define the RISHON OPERATORS xi according to the chosen spin irrep
-    for sigma in ["up", "down"]:
-        ops[f"xi_{sigma}"] = csr_matrix(
-            (xi[sigma]["data"], (xi[sigma]["x"], xi[sigma]["y"])),
-            shape=(xi_dim, xi_dim),
-        )
-        ops[f"xi_{sigma}_dag"] = ops[f"xi_{sigma}"].conj().transpose()
-    ops["P_xi"] = diags(p_diag, offsets=0, shape=(xi_dim, xi_dim))
-    ops["n_xi"] = diags(n_diag, offsets=0, shape=(xi_dim, xi_dim))
-    ops["n_xi_square"] = ops["n_xi"] ** 2
-    ops["ID_xi"] = identity(xi_dim, dtype=float)
+    ops["z_down"] = diags(zeta_entries, zeta_diags, zeta_shape)
+    ops["z_up"] = abs(ops["z_down"].transpose())
+    # Define the Parity operator
+    P_diag = []
+    for s_size in range(largest_s_size):
+        spin = s_size / 2
+        P_diag += [((-1) ** s_size)] * (s_size + 1)
+        n_diag += [spin * (spin + 1)] * (s_size + 1)
+    ops["P_z"] = diags(P_diag, 0, zeta_shape)
+    ops["n"] = diags(n_diag, 0, zeta_shape)
+    ops["n_square"] = ops["n"] ** 2
+    ops["ID_z"] = identity(zeta_size, dtype=float)
     # Useful operators for corner operators
     for sigma in ["up", "down"]:
-        ops[f"xi_{sigma}_times_P"] = ops[f"xi_{sigma}"] * ops["P_xi"]
-        ops[f"P_times_xi_{sigma}_dag"] = ops["P_xi"] * ops[f"xi_{sigma}_dag"]
+        ops[f"z_{sigma}_dag"] = ops[f"z_{sigma}"].transpose()
+        ops[f"z_{sigma}_times_P"] = ops[f"z_{sigma}"] * ops["P_z"]
+        ops[f"P_times_z_{sigma}_dag"] = ops["P_z"] * ops[f"z_{sigma}_dag"]
+    return ops
+
+
+def check_SU2_rishon_algebra(s):
+    # Checks that the SU(2) rishon modes satisfies the SU2 algebra
+    if not np.isscalar(s):
+        raise TypeError(f"s must be SCALAR & (semi)INTEGER, not {type(s)}")
+    # Define the SU2 generators
+    T = SU2_generators(s)
+    # Define the rishon operators
+    z = SU2_rishon_operators(s)
+    if check_matrix(2 * comm(z["z_up"], T["Tx"]), z["z_down"]):
+        raise ValueError("ERROR")
+    if check_matrix(2 * comm(z["z_down"], T["Tx"]), z["z_up"]):
+        raise ValueError("ERROR")
+    if check_matrix(2 * comm(z["z_up"], T["Ty"]), -complex(0, 1) * z["z_down"]):
+        raise ValueError("ERROR")
+    if check_matrix(2 * comm(z["z_down"], T["Ty"]), complex(0, 1) * z["z_up"]):
+        raise ValueError("ERROR")
+    if check_matrix(2 * comm(z["z_up"], T["Tz"]), z["z_up"]):
+        raise ValueError("ERROR")
+    if check_matrix(2 * comm(z["z_down"], T["Tz"]), -z["z_down"]):
+        raise ValueError("ERROR")
+    # CHECK RISHON MODES TO BEHAVE LIKE FERMIONS (anticommute with parity)
+    for alpha in ["up", "down"]:
+        if norm(anti_comm(z[f"z_{alpha}"], z["P_z"])) > 1e-15:
+            raise ValueError(f"z_{alpha} is a Fermion and must anticommute with P")
+
+
+def inner_site_operators(s):
+    if not np.isscalar(s):
+        raise TypeError(f"s must be SCALAR & (semi)INTEGER, not {type(s)}")
+    # Define the SU2 Rishon operators
+    ops = SU2_rishon_operators(s)
     # --------------------------------------------------------------------------
     # Define the generic MATTER FIELD OPERATORS for both the su2 colors
     # The distinction between the two colors will be specified when considering
@@ -94,12 +179,14 @@ def inner_site_operators(su2_irrep):
     return ops
 
 
-def dressed_site_operators(su2_irrep, lattice_dim=2, pure=False):
+def dressed_site_operators(s, lattice_dim=2, pure=False):
+    if not np.isscalar(s):
+        raise TypeError(f"s must be SCALAR & (semi)INTEGER, not {type(s)}")
     # Get inner site operators
-    in_ops = inner_site_operators(su2_irrep)
+    in_ops = inner_site_operators(s)
     # Define the TOTAL DIMENSION of dressed site operators
-    xi_dim = in_ops["xi_up"].shape[0]
-    tot_dim = 4 * (xi_dim) ** (2 * lattice_dim)
+    z_size = np.sum([s_size for s_size in range(1, 2 * s + 2)])
+    tot_dim = 4 * (z_size) ** (2 * lattice_dim)
     # Dictionary for dressed site operators
     ops = {}
     if not pure:
@@ -108,16 +195,16 @@ def dressed_site_operators(su2_irrep, lattice_dim=2, pure=False):
             ops[f"Q_{sd}_dag"] = 0
         for sigma in ["up", "down"]:
             ops["Q_mx_dag"] += qmb_op(
-                in_ops, [f"psi_{sigma}_dag", f"xi_{sigma}", "ID_xi", "ID_xi", "ID_xi"]
+                in_ops, [f"psi_{sigma}_dag", f"z_{sigma}", "ID_z", "ID_z", "ID_z"]
             )
             ops["Q_my_dag"] += qmb_op(
-                in_ops, [f"psi_{sigma}_dag", "P_xi", f"xi_{sigma}", "ID_xi", "ID_xi"]
+                in_ops, [f"psi_{sigma}_dag", "P_z", f"z_{sigma}", "ID_z", "ID_z"]
             )
             ops["Q_px_dag"] += qmb_op(
-                in_ops, [f"psi_{sigma}_dag", "P_xi", "P_xi", f"xi_{sigma}", "ID_xi"]
+                in_ops, [f"psi_{sigma}_dag", "P_z", "P_z", f"z_{sigma}", "ID_z"]
             )
             ops["Q_py_dag"] += qmb_op(
-                in_ops, [f"psi_{sigma}_dag", "P_xi", "P_xi", "P_xi", f"xi_{sigma}"]
+                in_ops, [f"psi_{sigma}_dag", "P_z", "P_z", "P_z", f"z_{sigma}"]
             )
         # add DAGGER operators
         Qs = {}
@@ -126,16 +213,16 @@ def dressed_site_operators(su2_irrep, lattice_dim=2, pure=False):
             Qs[dag_op] = csr_matrix(ops[op].conj().transpose())
         ops |= Qs
         # Psi NUMBER OPERATORS
-        for sigma in ["up", "down", "tot", "single", "pair"]:
-            ops[f"N_{sigma}"] = qmb_op(
-                in_ops, [f"N_{sigma}", "ID_xi", "ID_xi", "ID_xi", "ID_xi"]
+        for label in ["up", "down", "tot", "single", "pair"]:
+            ops[f"N_{label}"] = qmb_op(
+                in_ops, [f"N_{label}", "ID_z", "ID_z", "ID_z", "ID_z"]
             )
     # Rishon NUMBER OPERATORS
     for op in ["n", "n_square"]:
-        ops[f"{op}_mx"] = qmb_op(in_ops, ["ID_psi", op, "ID_xi", "ID_xi", "ID_xi"])
-        ops[f"{op}_my"] = qmb_op(in_ops, ["ID_psi", "ID_xi", op, "ID_xi", "ID_xi"])
-        ops[f"{op}_px"] = qmb_op(in_ops, ["ID_psi", "ID_xi", "ID_xi", op, "ID_xi"])
-        ops[f"{op}_py"] = qmb_op(in_ops, ["ID_psi", "ID_xi", "ID_xi", "ID_xi", op])
+        ops[f"{op}_mx"] = qmb_op(in_ops, ["ID_psi", op, "ID_z", "ID_z", "ID_z"])
+        ops[f"{op}_my"] = qmb_op(in_ops, ["ID_psi", "ID_z", op, "ID_z", "ID_z"])
+        ops[f"{op}_px"] = qmb_op(in_ops, ["ID_psi", "ID_z", "ID_z", op, "ID_z"])
+        ops[f"{op}_py"] = qmb_op(in_ops, ["ID_psi", "ID_z", "ID_z", "ID_z", op])
     # CASIMIR/ELECTRIC OPERATOR
     ops[f"E_square"] = 0
     for sd in ["mx", "my", "px", "py"]:
@@ -146,20 +233,24 @@ def dressed_site_operators(su2_irrep, lattice_dim=2, pure=False):
     for sigma in ["up", "down"]:
         ops["C_px,py"] += -qmb_op(
             in_ops,
-            ["ID_psi", "ID_xi", "ID_xi", f"xi_{sigma}_times_P", f"xi_{sigma}_dag"],
+            ["ID_psi", "ID_z", "ID_z", f"z_{sigma}_times_P", f"z_{sigma}_dag"],
         )
         ops["C_py,mx"] += qmb_op(
-            in_ops, ["ID_psi", f"P_times_xi_{sigma}_dag", "P_xi", "P_xi", f"xi_{sigma}"]
+            in_ops, ["ID_psi", f"P_times_z_{sigma}_dag", "P_z", "P_z", f"z_{sigma}"]
         )
         ops["C_mx,my"] += qmb_op(
             in_ops,
-            ["ID_psi", f"xi_{sigma}_times_P", f"xi_{sigma}_dag", "ID_xi", "ID_xi"],
+            ["ID_psi", f"z_{sigma}_times_P", f"z_{sigma}_dag", "ID_z", "ID_z"],
         )
         ops["C_my,px"] += qmb_op(
             in_ops,
-            ["ID_psi", "ID_xi", f"xi_{sigma}_times_P", f"xi_{sigma}_dag", "ID_xi"],
+            ["ID_psi", "ID_z", f"z_{sigma}_times_P", f"z_{sigma}_dag", "ID_z"],
         )
     return ops
+
+
+# =====================================================================================
+# =====================================================================================
 
 
 def ID(pure_theory):
@@ -281,12 +372,6 @@ def penalties(pure_theory):
     return ops
 
 
-# ==========================================================================================
-# ==========================================================================================
-# ==========================================================================================
-# ==========================================================================================
-
-
 def hopping():
     ops = {}
     path = "operators/su2_operators/full_operators/"
@@ -342,7 +427,7 @@ def S_Wave_Correlation():
     return ops
 
 
-def get_su2_operators(pure_theory):
+def get_SU2_operators(pure_theory):
     ops = {}
     ops |= ID(pure_theory)
     ops |= gamma_operator(pure_theory)
