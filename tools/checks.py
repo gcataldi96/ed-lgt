@@ -81,9 +81,7 @@ def check_matrix(A, B):
     if not isspmatrix(B):
         raise TypeError(f"B should be a csr_matrix, not a {type(B)}")
     if A.shape != B.shape:
-        raise ValueError(
-            f"A and B should have the same shape but A is {A.shape}, B is {B.shape}"
-        )
+        raise ValueError(f"Shape mismatch between : A {A.shape} & B: {B.shape}")
     norma = norm(A - B)
     norma_max = max(norm(A + B), norm(A), norm(B))
     ratio = norma / norma_max
