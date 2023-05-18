@@ -167,3 +167,41 @@ for ii, ax in enumerate(axs.flat):
     )
 save_dictionary(res, "saved_dicts/SU2_full_phase_diagram.pkl")
 # %%
+# SU(2) SuperConductingOrderParameter
+config_filename = "SU2/full/SCOP"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = get_obs_list(model="SU2", pure=False, has_obc=True)
+res = {"g": vals["g"]}
+for obs in obs_list:
+    res[obs] = np.zeros(res["g"].shape[0])
+    for ii, g in enumerate(res["g"]):
+        res[obs][ii] = get_sim(ugrid[ii]).res[obs]
+# SCOP MEASURES
+res["SCOP"] = np.zeros(res["g"].shape[0], dtype=object)
+for ii, g in enumerate(res["g"]):
+    res["SCOP"][ii] = get_sim(ugrid[ii]).res["SCOP"]
+
+SCOP = structure_factor(res["SCOP"][0], [2, 2])
+
+# %%
+# QED U COMPARISON
+config_filename = "QED/U_comparison"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["U", "spin"])
+obs_list = get_obs_list(model="SU2", pure=False, has_obc=False)
+res = {"U": vals["U"], "spin": vals["spin"]}
+res["DeltaE"] = np.zeros((res["U"].shape[0], res["spin"].shape[0]))
+for ii, g in enumerate(res["U"]):
+    for jj, m in enumerate(res["spin"]):
+        res["DeltaE"][ii][jj] = get_sim(ugrid[ii][jj]).res["DeltaE"]
+        res["DeltaE"][ii][jj] /= np.abs(get_sim(ugrid[ii][jj]).res["energy"][0])
+fig = plt.figure()
+plt.ylabel(r"|Delta E|/|E0|")
+plt.xlabel(r"s")
+plt.yscale("log")
+plt.grid()
+for ii, U in enumerate(res["U"]):
+    plt.plot(res["spin"], res["DeltaE"][ii][:], "-o", label=f"U={U}")
+plt.legend()
+# %%
