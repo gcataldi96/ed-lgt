@@ -29,10 +29,10 @@ with run_sim() as sim:
     g = sim.par["g"]
     m = sim.par["m"]
     # DEFINE THE GAUGE INVARIANT STATES OF THE BASIS
-    n_rishons = sim.par["rishons_number"]
+    spin = sim.par["spin"]
     # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
-    ops = dressed_site_operators(n_rishons)
-    M, _ = gauge_invariant_states(n_rishons)
+    ops = dressed_site_operators(spin, U="ladder")
+    M, _ = gauge_invariant_states(spin)
     # ACQUIRE LOCAL DIMENSION OF EVERY SINGLE SITE
     lattice_base, loc_dims = lattice_base_configs(M, lvals, has_obc, staggered=True)
     loc_dims = loc_dims.transpose().reshape(n_sites)
