@@ -24,3 +24,8 @@ params = {"g": np.logspace(-1, 1, 10)}
 gen_configs("template", params, f"SU2/full/SCOP")
 
 # %%
+# QED U COMPARISON
+params = {"spin": np.arange(1, 5, 1), "U": ["ladder", "spin"]}
+gen_configs("template", params, f"QED/U_comparison")
+
+# %%
