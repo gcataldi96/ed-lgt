@@ -1,6 +1,6 @@
 import numpy as np
 from operators import (
-    dressed_site_operators,
+    QED_dressed_site_operators,
     gauge_invariant_states,
     get_QED_Hamiltonian_couplings,
 )
@@ -31,13 +31,12 @@ with run_sim() as sim:
     # DEFINE THE GAUGE INVARIANT STATES OF THE BASIS
     spin = sim.par["spin"]
     # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
-    ops = dressed_site_operators(spin, U=sim.par["U"])
+    ops = QED_dressed_site_operators(spin, U=sim.par["U"])
     M, _ = gauge_invariant_states(spin)
     # ACQUIRE LOCAL DIMENSION OF EVERY SINGLE SITE
     lattice_base, loc_dims = lattice_base_configs(M, lvals, has_obc, staggered=True)
     loc_dims = loc_dims.transpose().reshape(n_sites)
     lattice_base = lattice_base.transpose().reshape(n_sites)
-    logger.info(lattice_base)
     logger.info(loc_dims)
     # ACQUIRE HAMILTONIAN COEFFICIENTS
     coeffs = get_QED_Hamiltonian_couplings(g, m)
@@ -143,7 +142,7 @@ with run_sim() as sim:
         # ENTROPY of a BIPARTITION
         sim.res["entropy"].append(
             entanglement_entropy(
-                GS.Npsi[:, ii], loc_dims, n_sites, partition_size=int(n_sites / 2)
+                GS.Npsi[:, ii], loc_dims, n_sites, partition_size=lvals[0]
             )
         )
         if has_obc:
@@ -159,4 +158,5 @@ with run_sim() as sim:
             h_terms[obs].get_expval(GS.Npsi[:, ii], lvals, has_obc)
             sim.res[obs].append(h_terms[obs].avg)
     logger.info(f"Energies {sim.res['energy']}")
-    sim.res["DeltaE"] = np.abs(sim.res["energy"][0] - sim.res["energy"][1])
+    if n_eigs > 1:
+        sim.res["DeltaE"] = np.abs(sim.res["energy"][0] - sim.res["energy"][1])
