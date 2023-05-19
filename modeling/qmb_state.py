@@ -1,8 +1,8 @@
+# %%
 import numpy as np
 from scipy.linalg import eigh as array_eigh
 from scipy.sparse import csr_matrix, isspmatrix, isspmatrix_csr, save_npz, lil_matrix
 from scipy.sparse.linalg import eigsh as sparse_eigh
-
 from simsio import logger
 from tools import pause, zig_zag
 from .twobody_term import two_body_op
@@ -220,9 +220,11 @@ def entanglement_entropy(psi, loc_dims, n_sites, partition_size):
     return np.sum(tmp)
 
 
-def get_loc_states_from_qmb_state(index, loc_dims, n_sites):
-    if not np.isscalar(index) and not isinstance(index, int):
-        raise TypeError(f"index must be an SCALAR & INTEGER, not a {type(index)}")
+def get_loc_states_from_qmb_state(qmb_index, loc_dims, n_sites):
+    if not np.isscalar(qmb_index) and not isinstance(qmb_index, int):
+        raise TypeError(
+            f"qmb_index must be an SCALAR & INTEGER, not a {type(qmb_index)}"
+        )
     if not np.isscalar(n_sites) and not isinstance(n_sites, int):
         raise TypeError(f"n_sites must be an SCALAR & INTEGER, not a {type(n_sites)}")
     if isinstance(loc_dims, list):
@@ -243,44 +245,81 @@ def get_loc_states_from_qmb_state(index, loc_dims, n_sites):
     """
     Compute the state of each single lattice site given the index of the qmb state
     Args:
-        index (int): qmb state index of the a specific local sites configurations 
-        loc_dim (int): dimension of the local (single site) Hilbert Space
+        index (int): qmb state index corresponding to a specific list 
+        of local sites configurations
+        loc_dim (int, list, np.array): dimensions of the local (single site) Hilbert Spaces
         n_sites (int): number of sites
 
     Returns:
         ndarray(int): list of the states of the local Hilbert space 
         associated to the given QMB state index
     """
-    if index < 0:
-        raise ValueError(f"index {index} should be positive")
-    if index > (tot_dim - 1):
-        raise ValueError(f"index {index} is too high")
+    if qmb_index < 0:
+        raise ValueError(f"index {qmb_index} should be positive")
+    if qmb_index > (tot_dim - 1):
+        raise ValueError(f"index {qmb_index} is too high")
     loc_states = np.zeros(n_sites, dtype=int)
+    # logger.info(f"TOT_DIM {tot_dim}")
     for ii in range(n_sites):
-        if ii > 0:
-            index = index - loc_states[ii - 1] * (loc_dims[ii] ** (n_sites - ii))
-        loc_states[ii] = index // (loc_dims[ii - 1] ** (n_sites - ii - 1))
+        # logger.info(f"QMB index {qmb_index}")
+        tot_dim /= loc_dims[ii]
+        # logger.info(f"TOT_DIM {tot_dim}")
+        loc_states[ii] = qmb_index // tot_dim
+        # logger.info(f"loc_state {loc_states[ii]}")
+        qmb_index -= loc_states[ii] * tot_dim
+    # logger.info(loc_states)
     return loc_states
 
 
-# index=22
-# loc_dim=3
-# n_sites=3
-# locs= get_loc_states_from_qmb_state(index,loc_dim,n_sites)
-# print(locs)
+"""
+qmb_index = 5
+loc_dim = [3, 4, 2]
+n_sites = 3
+locs = get_loc_states_from_qmb_state(qmb_index, loc_dim, n_sites)
+"""
 
 
-def get_qmb_state_from_loc_state(loc_states, loc_dim):
+def get_qmb_state_from_loc_state(loc_states, loc_dims):
+    """
+    This function generate the QMB index out the the indices of the
+    single lattices sites. The latter ones can display local Hilbert
+    space with different dimension.
+    The order of the sites must match the order of the dimensionality
+    of the local basis
+    Args:
+        loc_states (list of ints): list of numbered state of the lattice sites
+        loc_dims (list of ints): list of lattice site dimensions (in the same order as they are stored in the loc_states!)
+
+    Returns:
+        int: QMB index
+    """
+    if np.isscalar(loc_dims):
+        if isinstance(loc_dims, int):
+            loc_dims = [loc_dims for ii in range(len(loc_states))]
+        else:
+            raise TypeError(f"loc_dims must be INTEGER, not a {type(loc_dims)}")
+    elif isinstance(loc_dims, list):
+        if len(loc_dims) != len(loc_states):
+            raise ValueError(
+                f"DIMENSION MISMATCH: dim loc_states = {len(loc_states)} != dim loc_basis = {len(loc_basis)}"
+            )
+    else:
+        raise TypeError(
+            f"loc_dims is neither a SCALAR, a LIST or ARRAY but a {type(loc_dims)}"
+        )
     n_sites = len(loc_states)
     qmb_index = 0
-    for ii in range(n_sites):
-        qmb_index += loc_states[ii] * (loc_dim ** (n_sites - ii - 1))
-    print(qmb_index)
+    dim_factor = 1
+    for ii in reversed(range(n_sites)):
+        qmb_index += loc_states[ii] * dim_factor
+        dim_factor *= loc_dims[ii]
     return qmb_index
 
 
-# loc_states=[1,1,2]
-# qmb_state = get_qmb_state_from_loc_state(loc_states, 3)
+"""
+loc_states = [0, 1, 1]
+qmb_state = get_qmb_state_from_loc_state(loc_states, [3, 4, 2])
+"""
 
 
 def get_submatrix_from_sparse(matrix, rows_list, cols_list):
@@ -328,9 +367,9 @@ def get_state_configurations(psi, loc_dims, n_sites):
     ]
     for ind, alpha in zip(indices, sing_vals):
         loc_states = get_loc_states_from_qmb_state(
-            index=ind, loc_dims=loc_dims, n_sites=n_sites
+            qmb_index=ind, loc_dims=loc_dims, n_sites=n_sites
         )
-        logger.info(f"{loc_states+1}  {alpha}")
+        logger.info(f"{loc_states}  {alpha}")
     logger.info("----------------------------------------------------")
 
 
@@ -351,3 +390,6 @@ def get_SU2_topological_invariant(link_parity_op, lvals, psi, axis):
     logger.info(f"P{axis} TOPOLOGICAL SECTOR: {sector}")
     logger.info("----------------------------------------------------")
     return sector
+
+
+# %%
