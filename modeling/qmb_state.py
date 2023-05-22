@@ -14,6 +14,8 @@ __all__ = [
     "get_loc_states_from_qmb_state",
     "get_qmb_state_from_loc_state",
     "get_submatrix_from_sparse",
+    "get_reduced_density_matrix",
+    "diagonalize_density_matrix",
     "get_state_configurations",
     "get_SU2_topological_invariant",
 ]
@@ -71,6 +73,17 @@ def diagonalize_density_matrix(rho):
 
 
 def get_reduced_density_matrix(psi, loc_dims, lvals, site):
+    """
+    This function computes the reduced density matrix (in sparse format)
+    of a state psi with respect to sigle site in position "site".
+    Args:
+        psi (np.ndarray): QMB states
+        loc_dims (list, np.ndarray, or int): dimensions of the single site Hilbert space
+        lvals (list): list of the lattice spatial dimensions
+        site (int): position of the lattice site we want to look at
+    Returns:
+        sparse: reduced density matrix of the single site
+    """
     if not isinstance(psi, np.ndarray):
         raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
     if isinstance(loc_dims, list):
@@ -85,9 +98,7 @@ def get_reduced_density_matrix(psi, loc_dims, lvals, site):
         else:
             raise TypeError(f"loc_dims must be INTEGER, not a {type(loc_dims)}")
     else:
-        raise TypeError(
-            f"loc_dims is neither a SCALAR, a LIST or ARRAY but a {type(loc_dims)}"
-        )
+        raise TypeError(f"loc_dims isn't SCALAR/LIST/ARRAY but {type(loc_dims)}")
     if not isinstance(lvals, list):
         raise TypeError(f"lvals should be a list, not a {type(lvals)}")
     else:
@@ -103,13 +114,11 @@ def get_reduced_density_matrix(psi, loc_dims, lvals, site):
     # GET THE COORDINATES OF THE SITE site
     x, y = zig_zag(nx, ny, site)
     logger.info("----------------------------------------------------")
-    logger.info(f"DENSITY MATRIX OF SITE ({str(x+1)},{str(y+1)})")
-    logger.info("----------------------------------------------------")
+    logger.info(f"DENSITY MATRIX OF SITE ({x},{y})")
     # RESHAPE psi
     psi_copy = psi.reshape(*[loc_dim for loc_dim in loc_dims.tolist()])
     # DEFINE A LIST OF SITES WE WANT TO TRACE OUT
-    indices = np.arange(0, n_sites)
-    indices = indices.tolist()
+    indices = list(np.arange(0, n_sites))
     # The index we remove is the one wrt which we get the reduced DM
     indices.remove(site)
     # COMPUTE THE REDUCED DENSITY MATRIX
@@ -117,73 +126,7 @@ def get_reduced_density_matrix(psi, loc_dims, lvals, site):
     # TRUNCATE RHO
     rho = truncation(rho, 10 ** (-10))
     # PROMOTE RHO TO A SPARSE MATRIX
-    rho = csr_matrix(rho)
-    return rho
-
-
-def get_projector(rho, loc_dim, threshold, debug, name_save):
-    # THIS FUNCTION CONSTRUCTS THE PROJECTOR OPERATOR TO REDUCE
-    # THE SINGLE SITE DIMENSION ACCORDING TO THE EIGENVALUES
-    # THAT MOSTLY CONTRIBUTES TO THE REDUCED DENSITY MATRIX OF THE SINGLE SITE
-    if not isinstance(loc_dim, int) and not np.isscalar(loc_dim):
-        raise TypeError(f"loc_dim should be INT & SCALAR, not a {type(loc_dim)}")
-    if not isinstance(threshold, float) and not np.isscalar(threshold):
-        raise TypeError(f"threshold should be FLOAT & SCALAR, not a {type(threshold)}")
-    if not isinstance(debug, bool):
-        raise TypeError(f"debug should be a BOOL, not a {type(debug)}")
-    if not isinstance(name_save, str):
-        raise TypeError(f"name_save should be a STR, not a {type(name_save)}")
-    # ------------------------------------------------------------------
-    # 1) DIAGONALIZE THE SINGLE SITE DENSITY MATRIX rho
-    phrase = "DIAGONALIZE THE SINGLE SITE DENSITY MATRIX"
-    pause(phrase, debug)
-    rho_eigvals, rho_eigvecs = diagonalize_density_matrix(rho, debug)
-    # ------------------------------------------------------------------
-    # 2) COMPUTE THE PROJECTOR STARTING FROM THE DIAGONALIZATION of rho
-    phrase = "COMPUTING THE PROJECTOR"
-    pause(phrase, debug)
-    # Counts the number of eigenvalues larger than <threshold>
-    P_columns = (rho_eigvals > threshold).sum()
-    # PREVENT THE CASE OF A SINGLE RELEVANT EIGENVALUE:
-    while P_columns < 2:
-        threshold = threshold / 10
-        # Counts the number of eigenvalues larger than <threshold>
-        P_columns = (rho_eigvals > threshold).sum()
-    phrase = "TOTAL NUMBER OF SIGNIFICANT EIGENVALUES " + str(P_columns)
-    pause(phrase, debug)
-
-    column_indx = -1
-    # Define the projector operator Proj: it has dimension (loc_dim,P_columns)
-    Proj = np.zeros((loc_dim, P_columns), dtype=complex)
-    # Now, recalling that eigenvalues in <reduced_dm> are stored in increasing order,
-    # in order to compute the columns of P_proj we proceed as follows
-    for ii in range(loc_dim):
-        if rho_eigvals[ii] > threshold:
-            column_indx += 1
-            Proj[:, column_indx] = rho_eigvecs[:, ii]
-    # Truncate to 0 all the entries of Proj that are below a certain threshold
-    Proj = truncation(Proj, 10 ** (-14))
-    # Promote the Projector Proj to a CSR_MATRIX
-    Proj = csr_matrix(Proj)
-    logger.info(Proj)
-    # Save the Projector on a file
-    save_npz(f"{name_save}.npz", Proj)
-    return Proj
-
-
-def projection(Proj, Operator):
-    # THIS FUNCTION PERFORMS THE PROJECTION OF Operator
-    # WITH THE PROJECTOR Proj: Op' = Proj^{dagger} Op Proj
-    # NOTE: both Proj and Operator have to be CSR_MATRIX type!
-    if not isspmatrix_csr(Proj):
-        raise TypeError(f"Proj should be an CSR_MATRIX, not a {type(Proj)}")
-    if not isspmatrix_csr(Operator):
-        raise TypeError(f"Operator should be an CSR_MATRIX, not a {type(Operator)}")
-    # -----------------------------------------------------------------------
-    Proj_dagger = csr_matrix(csr_matrix(Proj).conj().transpose())
-    Operator = Operator * Proj
-    Operator = Proj_dagger * Operator
-    return Operator
+    return csr_matrix(rho)
 
 
 def entanglement_entropy(psi, loc_dims, n_sites, partition_size):
@@ -288,7 +231,8 @@ def get_qmb_state_from_loc_state(loc_states, loc_dims):
     of the local basis
     Args:
         loc_states (list of ints): list of numbered state of the lattice sites
-        loc_dims (list of ints): list of lattice site dimensions (in the same order as they are stored in the loc_states!)
+        loc_dims (list of ints): list of lattice site dimensions
+        (in the same order as they are stored in the loc_states!)
 
     Returns:
         int: QMB index
@@ -301,7 +245,7 @@ def get_qmb_state_from_loc_state(loc_states, loc_dims):
     elif isinstance(loc_dims, list):
         if len(loc_dims) != len(loc_states):
             raise ValueError(
-                f"DIMENSION MISMATCH: dim loc_states = {len(loc_states)} != dim loc_basis = {len(loc_basis)}"
+                f"DIMENSION MISMATCH: dim loc_states = {len(loc_states)} != dim loc_dims = {len(loc_dims)}"
             )
     else:
         raise TypeError(
@@ -322,21 +266,16 @@ qmb_state = get_qmb_state_from_loc_state(loc_states, [3, 4, 2])
 """
 
 
-def get_submatrix_from_sparse(matrix, rows_list, cols_list):
-    # CHECK ON TYPES
-    if not isspmatrix(matrix):
-        raise TypeError(f"matrix must be a SPARSE MATRIX, not a {type(matrix)}")
-    if not isinstance(rows_list, list):
-        raise TypeError(f"rows_list must be a LIST, not a {type(rows_list)}")
-    if not isinstance(cols_list, list):
-        raise TypeError(f"cols_list must be a LIST, not a {type(cols_list)}")
-    matrix = lil_matrix(matrix)
-    # Get the Submatrix out of the list of rows and columns
-    sub_matrix = matrix[rows_list, :][:, cols_list]
-    return sub_matrix
-
-
 def get_state_configurations(psi, loc_dims, n_sites):
+    """
+    This function express the main QMB state configurations associated to the
+    most relevant coefficients of the QMB state psi. Every state configuration
+    is expressed in terms of the single site local Hilber basis
+    Args:
+        psi (np.ndarray): QMB state
+        loc_dims (list/np.ndarray/int: dimension of every lattice site Hilbert space
+        n_sites (int): number of sites in the lattice
+    """
     if not isinstance(psi, np.ndarray):
         raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
     if not np.isscalar(n_sites) and not isinstance(n_sites, int):
@@ -373,7 +312,14 @@ def get_state_configurations(psi, loc_dims, n_sites):
     logger.info("----------------------------------------------------")
 
 
+# ================================================================================================
+# ================================================================================================
+# ================================================================================================
+# ================================================================================================
+
+
 def get_SU2_topological_invariant(link_parity_op, lvals, psi, axis):
+    # NOTE: it works only on a 2x2 system
     op_list = [link_parity_op, link_parity_op]
     if axis == "x":
         op_sites_list = [0, 1]
@@ -392,4 +338,80 @@ def get_SU2_topological_invariant(link_parity_op, lvals, psi, axis):
     return sector
 
 
-# %%
+def get_submatrix_from_sparse(matrix, rows_list, cols_list):
+    # CHECK ON TYPES
+    if not isspmatrix(matrix):
+        raise TypeError(f"matrix must be a SPARSE MATRIX, not a {type(matrix)}")
+    if not isinstance(rows_list, list):
+        raise TypeError(f"rows_list must be a LIST, not a {type(rows_list)}")
+    if not isinstance(cols_list, list):
+        raise TypeError(f"cols_list must be a LIST, not a {type(cols_list)}")
+    matrix = lil_matrix(matrix)
+    # Get the Submatrix out of the list of rows and columns
+    sub_matrix = matrix[rows_list, :][:, cols_list]
+    return sub_matrix
+
+
+def get_projector(rho, loc_dim, threshold, debug, name_save):
+    # THIS FUNCTION CONSTRUCTS THE PROJECTOR OPERATOR TO REDUCE
+    # THE SINGLE SITE DIMENSION ACCORDING TO THE EIGENVALUES
+    # THAT MOSTLY CONTRIBUTES TO THE REDUCED DENSITY MATRIX OF THE SINGLE SITE
+    if not isinstance(loc_dim, int) and not np.isscalar(loc_dim):
+        raise TypeError(f"loc_dim should be INT & SCALAR, not a {type(loc_dim)}")
+    if not isinstance(threshold, float) and not np.isscalar(threshold):
+        raise TypeError(f"threshold should be FLOAT & SCALAR, not a {type(threshold)}")
+    if not isinstance(debug, bool):
+        raise TypeError(f"debug should be a BOOL, not a {type(debug)}")
+    if not isinstance(name_save, str):
+        raise TypeError(f"name_save should be a STR, not a {type(name_save)}")
+    # ------------------------------------------------------------------
+    # 1) DIAGONALIZE THE SINGLE SITE DENSITY MATRIX rho
+    phrase = "DIAGONALIZE THE SINGLE SITE DENSITY MATRIX"
+    pause(phrase, debug)
+    rho_eigvals, rho_eigvecs = diagonalize_density_matrix(rho, debug)
+    # ------------------------------------------------------------------
+    # 2) COMPUTE THE PROJECTOR STARTING FROM THE DIAGONALIZATION of rho
+    phrase = "COMPUTING THE PROJECTOR"
+    pause(phrase, debug)
+    # Counts the number of eigenvalues larger than <threshold>
+    P_columns = (rho_eigvals > threshold).sum()
+    # PREVENT THE CASE OF A SINGLE RELEVANT EIGENVALUE:
+    while P_columns < 2:
+        threshold = threshold / 10
+        # Counts the number of eigenvalues larger than <threshold>
+        P_columns = (rho_eigvals > threshold).sum()
+    phrase = "TOTAL NUMBER OF SIGNIFICANT EIGENVALUES " + str(P_columns)
+    pause(phrase, debug)
+
+    column_indx = -1
+    # Define the projector operator Proj: it has dimension (loc_dim,P_columns)
+    Proj = np.zeros((loc_dim, P_columns), dtype=complex)
+    # Now, recalling that eigenvalues in <reduced_dm> are stored in increasing order,
+    # in order to compute the columns of P_proj we proceed as follows
+    for ii in range(loc_dim):
+        if rho_eigvals[ii] > threshold:
+            column_indx += 1
+            Proj[:, column_indx] = rho_eigvecs[:, ii]
+    # Truncate to 0 all the entries of Proj that are below a certain threshold
+    Proj = truncation(Proj, 10 ** (-14))
+    # Promote the Projector Proj to a CSR_MATRIX
+    Proj = csr_matrix(Proj)
+    logger.info(Proj)
+    # Save the Projector on a file
+    save_npz(f"{name_save}.npz", Proj)
+    return Proj
+
+
+def projection(Proj, Operator):
+    # THIS FUNCTION PERFORMS THE PROJECTION OF Operator
+    # WITH THE PROJECTOR Proj: Op' = Proj^{dagger} Op Proj
+    # NOTE: both Proj and Operator have to be CSR_MATRIX type!
+    if not isspmatrix_csr(Proj):
+        raise TypeError(f"Proj should be an CSR_MATRIX, not a {type(Proj)}")
+    if not isspmatrix_csr(Operator):
+        raise TypeError(f"Operator should be an CSR_MATRIX, not a {type(Operator)}")
+    # -----------------------------------------------------------------------
+    Proj_dagger = csr_matrix(csr_matrix(Proj).conj().transpose())
+    Operator = Operator * Proj
+    Operator = Proj_dagger * Operator
+    return Operator
