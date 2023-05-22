@@ -29,3 +29,13 @@ params = {"spin": np.arange(1, 5, 1), "U": ["ladder", "spin"]}
 gen_configs("template", params, f"QED/U_comparison")
 
 # %%
+# QED DM MATRIX eigenvalue scaling
+params = {"g": np.logspace(-2, -1, 10)}
+gen_configs("template", params, f"QED/DM_scaling_PBC")
+
+# %%
+# QED ENTANGLEMENT vs spin REP
+params = {"spin": np.arange(1, 6, 1), "g": np.logspace(-2, 0, 15)}
+gen_configs("template", params, f"QED/entanglement")
+
+# %%
