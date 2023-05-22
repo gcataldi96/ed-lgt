@@ -178,11 +178,11 @@ for obs in obs_list:
     for ii, g in enumerate(res["g"]):
         res[obs][ii] = get_sim(ugrid[ii]).res[obs]
 # SCOP MEASURES
-res["SCOP"] = np.zeros(res["g"].shape[0], dtype=object)
+res["SCOP"] = []
 for ii, g in enumerate(res["g"]):
-    res["SCOP"][ii] = get_sim(ugrid[ii]).res["SCOP"]
+    res["SCOP"].append(get_sim(ugrid[ii]).res["SCOP"])
 
-SCOP = structure_factor(res["SCOP"][0], [2, 2])
+# SCOP = structure_factor(res["SCOP"][0], [2, 2])
 
 # %%
 # QED U COMPARISON
@@ -204,4 +204,55 @@ plt.grid()
 for ii, U in enumerate(res["U"]):
     plt.plot(res["spin"], res["DeltaE"][ii][:], "-o", label=f"U={U}")
 plt.legend()
+save_dictionary(res, "saved_dicts/QED_U_comparison.pkl")
+# %%
+# QED ENTANGLEMENT
+config_filename = "QED/entanglement"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["spin", "g"])
+obs_list = get_obs_list(model="SU2", pure=False, has_obc=False)
+res = {"g": vals["g"], "spin": vals["spin"]}
+res["entropy"] = np.zeros((res["spin"].shape[0], res["g"].shape[0]))
+for ii, s in enumerate(res["spin"]):
+    for jj, g in enumerate(res["g"]):
+        res["entropy"][ii][jj] = get_sim(ugrid[ii][jj]).res["entropy"]
+fig = plt.figure()
+plt.ylabel(r"Entanglement entropy")
+plt.xlabel(r"g")
+plt.xscale("log")
+plt.grid()
+for ii, s in enumerate(res["spin"]):
+    plt.plot(res["g"], res["entropy"][ii, :], "-o", label=f"s={s}")
+plt.legend()
+save_dictionary(res, "saved_dicts/QED_entanglement.pkl")
+# %%
+# QED singular values
+config_filename = "QED/DM_scaling_PBC"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = get_obs_list(model="SU2", pure=False, has_obc=False)
+res = {"g": vals["g"]}
+res["rho0"] = []
+res["rho1"] = []
+for ii, g in enumerate(res["g"]):
+    res["rho0"].append(get_sim(ugrid[ii]).res["rho_eigvals"][0][::-1])
+    res["rho1"].append(get_sim(ugrid[ii]).res["rho_eigvals"][1][::-1])
+fig = plt.figure()
+plt.ylabel(r"Value")
+plt.yscale("log")
+plt.xlabel(r"Singular Values")
+plt.grid()
+for ii, g in enumerate(res["g"]):
+    plt.plot(np.arange(35), res["rho0"][ii], "-", label=f"g={format(g,'.3f')}")
+plt.legend()
+fig = plt.figure()
+plt.ylabel(r"Value")
+plt.yscale("log")
+plt.xlabel(r"Singular Values")
+plt.grid()
+for ii, g in enumerate(res["g"]):
+    plt.plot(np.arange(35), res["rho1"][ii], "-", label=f"g={format(g,'.3f')}")
+plt.legend()
+save_dictionary(res, "saved_dicts/QED_singular_values.pkl")
+
 # %%
