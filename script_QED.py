@@ -7,6 +7,8 @@ from operators import (
 from modeling import Ground_State, LocalTerm2D, TwoBodyTerm2D, PlaquetteTerm2D
 from modeling import (
     entanglement_entropy,
+    get_reduced_density_matrix,
+    diagonalize_density_matrix,
     staggered_mask,
     get_state_configurations,
     truncation,
@@ -129,6 +131,8 @@ with run_sim() as sim:
     # ===========================================================================
     # DEFINE THE OBSERVABLE LIST
     sim.res["entropy"] = []
+    if not has_obc:
+        sim.res["rho_eigvals"] = []
     obs_list = [f"n_{s}{d}" for s in "mp" for d in directions] + ["E_square", "N"]
     for obs in obs_list:
         h_terms[obs] = LocalTerm2D(ops[obs], obs, staggered_basis=True, site_basis=M)
@@ -150,6 +154,11 @@ with run_sim() as sim:
             get_state_configurations(
                 truncation(GS.Npsi[:, ii], 1e-10), loc_dims, n_sites
             )
+        else:
+            # COMPUTE THE REDUCED DENSITY MATRIX
+            rho = get_reduced_density_matrix(GS.Npsi[:, ii], loc_dims, lvals, 0)
+            eigvals, _ = diagonalize_density_matrix(rho)
+            sim.res["rho_eigvals"].append(eigvals)
         # ===========================================================================
         # MEASURE OBSERVABLES:
         # RISHON NUMBER OPERATORS, ELECTRIC ENERGY E^{2}, DENSITY OPERATOR N, B^{2}
@@ -158,5 +167,7 @@ with run_sim() as sim:
             h_terms[obs].get_expval(GS.Npsi[:, ii], lvals, has_obc)
             sim.res[obs].append(h_terms[obs].avg)
     logger.info(f"Energies {sim.res['energy']}")
+    if not has_obc:
+        logger.info(f"DM eigvals {sim.res['rho_eigvals']}")
     if n_eigs > 1:
         sim.res["DeltaE"] = np.abs(sim.res["energy"][0] - sim.res["energy"][1])
