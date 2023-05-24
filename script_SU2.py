@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.sparse import identity
-from operators import get_su2_operators, get_SU2_Hamiltonian_couplings
+from operators import get_SU2_operators, get_SU2_Hamiltonian_couplings
 from modeling import Ground_State, LocalTerm2D, TwoBodyTerm2D, PlaquetteTerm2D
 from modeling import (
     entanglement_entropy,
@@ -35,7 +35,7 @@ with run_sim() as sim:
         DeltaN = sim.par["DeltaN"]
         m = sim.par["m"]
     # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
-    ops = get_su2_operators(pure_theory)
+    ops = get_SU2_operators(pure_theory)
     # ACQUIRE HAMILTONIAN COEFFICIENTS
     coeffs = get_SU2_Hamiltonian_couplings(pure_theory, g, m)
     logger.info(f"PENALTY {coeffs['eta']}")
@@ -135,6 +135,7 @@ with run_sim() as sim:
             for site in ["even", "odd"]:
                 list_obs.append(f"{obs}_{site}")
                 list_obs.append(f"delta_{obs}_{site}")
+        list_obs.append("SCOP")
     for obs in list_obs:
         sim.res[obs] = []
     for ii in range(n_eigs):
@@ -200,7 +201,7 @@ with run_sim() as sim:
                 # SCOP CORRELATOR
                 h_terms["SCOP"] = TwoBodyTerm2D("x", op_list, op_name_list)
                 h_terms["SCOP"].get_expval(GS.Npsi[:, ii], lvals, has_obc)
-                sim.res["SCOP"] = h_terms["SCOP"].corr
+                sim.res["SCOP"].append(h_terms["SCOP"].corr)
         # ===========================================================================
         # TOPOLOGICAL SECTORS
         # ===========================================================================
