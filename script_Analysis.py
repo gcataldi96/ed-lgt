@@ -54,9 +54,8 @@ def get_obs_list(model, pure=None, has_obc=True):
 
 # %%
 # ========================================================================
-# SU(2) SIMULATIONS
+# SU(2) SIMULATIONS PURE TOPOLOGY
 # ========================================================================
-# Pure Topology
 config_filename = "SU2/pure/topology"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
@@ -82,7 +81,9 @@ plt.legend()
 plt.ylabel("energy")
 save_dictionary(res, "saved_dicts/SU2_pure_topology.pkl")
 # %%
-# Full Topology 1
+# ========================================================================
+# SU(2) FULL TOPOLOGY 1
+# ========================================================================
 config_filename = "SU2/full/topology1"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g", "m"])
@@ -102,7 +103,9 @@ for jj, m in enumerate(res["m"]):
     plt.ylabel("1-py_sector")
 save_dictionary(res, "saved_dicts/SU2_full_topology1.pkl")
 # %%
-# Full Topology 2
+# ========================================================================
+# SU(2) FULL TOPOLOGY 2
+# ========================================================================
 config_filename = "SU2/full/topology2"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g", "m"])
@@ -122,7 +125,9 @@ for ii, g in enumerate(res["g"]):
     plt.ylabel("1-py_sector")
 save_dictionary(res, "saved_dicts/SU2_full_topology2.pkl")
 # %%
-# SU2 PHASE DIAGRAM
+# ========================================================================
+# SU(2) PHASE DIAGRAM
+# ========================================================================
 config_filename = "SU2/full/phase_diagram"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g", "m"])
@@ -167,7 +172,9 @@ for ii, ax in enumerate(axs.flat):
     )
 save_dictionary(res, "saved_dicts/SU2_full_phase_diagram.pkl")
 # %%
-# SU(2) SuperConductingOrderParameter
+# ========================================================================
+# SU(2) SUPERCONDUCTING ORDER PARAMETER
+# ========================================================================
 config_filename = "SU2/full/SCOP"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
@@ -185,7 +192,9 @@ for ii, g in enumerate(res["g"]):
 # SCOP = structure_factor(res["SCOP"][0], [2, 2])
 
 # %%
+# ========================================================================
 # QED U COMPARISON
+# ========================================================================
 config_filename = "QED/U_comparison"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["U", "spin"])
@@ -206,7 +215,9 @@ for ii, U in enumerate(res["U"]):
 plt.legend()
 save_dictionary(res, "saved_dicts/QED_U_comparison.pkl")
 # %%
-# QED ENTANGLEMENT
+# ========================================================================
+# QED ENTANGLEMENT SCALING
+# ========================================================================
 config_filename = "QED/entanglement"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["spin", "g"])
@@ -226,7 +237,9 @@ for ii, s in enumerate(res["spin"]):
 plt.legend()
 save_dictionary(res, "saved_dicts/QED_entanglement.pkl")
 # %%
-# QED singular values
+# ========================================================================
+# QED SINGULAR VALUES
+# ========================================================================
 config_filename = "QED/DM_scaling_PBC"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
@@ -256,3 +269,6 @@ plt.legend()
 save_dictionary(res, "saved_dicts/QED_singular_values.pkl")
 
 # %%
+# ========================================================================
+# SU2 DENSITY OPERATOR
+# ========================================================================

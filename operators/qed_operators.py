@@ -127,8 +127,9 @@ def QED_dressed_site_operators(spin, U="ladder", lattice_dim=2):
         for s in ["mx", "my", "px", "py"]:
             gauss_law_ops[site] += ops[f"n_{s}"]
     # CHECK GAUSS LAW
-    # gauge_basis, _ = gauge_invariant_states(spin)
-    # check_QED_gauss_law(gauge_basis, gauss_law_ops)
+    if spin < 4:
+        gauge_basis, _ = gauge_invariant_states(spin)
+        check_QED_gauss_law(gauge_basis, gauss_law_ops)
     return ops
 
 
