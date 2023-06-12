@@ -22,11 +22,33 @@ gen_configs("template", params, f"SU2/full/phase_diagram")
 # SU2 FULL THEORY SUPERCONDUCTING ORDER PARAMETER
 params = {"g": np.logspace(-1, 1, 10)}
 gen_configs("template", params, f"SU2/full/SCOP")
+# %%
+# SU2 FULL THEORY CHARGE vs DENSITY
+params = {"g": np.logspace(-1, 1, 15), "m": np.logspace(-1, 0, 10)}
+gen_configs("template", params, f"SU2/full/charge_vs_density")
 
 # %%
 # QED U COMPARISON
 params = {"spin": np.arange(1, 5, 1), "U": ["ladder", "spin"]}
 gen_configs("template", params, f"QED/U_comparison")
+# %%
+# QED U CONVERGENCE
+params = {
+    "g": np.logspace(-2, -1, 4),
+    "U": ["ladder", "spin"],
+    "spin": np.arange(1, 11, 1),
+}
+gen_configs("template", params, f"QED/U_convergence")
+
+# %%
+# QED true convergence
+beta = np.logspace(0, 1, 5)
+params = {
+    "g": 1 / beta,
+    "U": ["ladder", "spin"],
+    "spin": np.arange(1, 11, 1),
+}
+gen_configs("template", params, f"QED/convergence")
 
 # %%
 # QED DM MATRIX eigenvalue scaling
