@@ -9,7 +9,7 @@ def structure_factor(corr, lvals):
     # DEFINE THE BRILLUOIN ZONE
     Lx = lvals[0]
     Ly = lvals[1]
-    str_factor = np.zeros((Lx, Ly))
+    str_factor = np.zeros((Lx, Ly), dtype=complex)
     for nx in range(Lx):
         for ny in range(Ly):
             kx = 2 * np.pi * nx / Lx
