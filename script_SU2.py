@@ -136,6 +136,8 @@ with run_sim() as sim:
                 list_obs.append(f"{obs}_{site}")
                 list_obs.append(f"delta_{obs}_{site}")
         list_obs.append("SCOP")
+        list_obs.append("rho")
+        list_obs.append("spin")
     for obs in list_obs:
         sim.res[obs] = []
     for ii in range(n_eigs):
@@ -197,11 +199,17 @@ with run_sim() as sim:
                     h_terms[obs].get_expval(GS.Npsi[:, ii], lvals, has_obc, site)
                     sim.res[f"{obs}_{site}"].append(h_terms[obs].avg)
                     sim.res[f"delta_{obs}_{site}"].append(h_terms[obs].std)
-            if has_obc:
-                # SCOP CORRELATOR
-                h_terms["SCOP"] = TwoBodyTerm2D("x", op_list, op_name_list)
-                h_terms["SCOP"].get_expval(GS.Npsi[:, ii], lvals, has_obc)
-                sim.res["SCOP"].append(h_terms["SCOP"].corr)
+            # ADD SPIN and PARTICLE DENSITY
+            sim.res["rho"].append(
+                2 + h_terms["n_tot_even"].avg - h_terms["n_tot_odd"].avg
+            )
+            sim.res["spin"] = 0.5 * (
+                h_terms["n_single_even"].avg + h_terms["n_single_odd"].avg
+            )
+            # SCOP CORRELATOR
+            h_terms["SCOP"] = TwoBodyTerm2D("x", op_list, op_name_list)
+            h_terms["SCOP"].get_expval(GS.Npsi[:, ii], lvals, has_obc)
+            sim.res["SCOP"].append(h_terms["SCOP"].corr)
         # ===========================================================================
         # TOPOLOGICAL SECTORS
         # ===========================================================================
