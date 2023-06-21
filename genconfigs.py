@@ -5,7 +5,11 @@ import numpy as np
 # %%
 # SU2 PURE THEORY TOPOLOGY
 params = {"g": np.logspace(-1, 1, 15)}
-gen_configs("template", params, f"pure_topology")
+gen_configs("template", params, f"SU2/pure/topology")
+# %%
+# SU2 PURE THEORY FLUCTUATIONS
+params = {"g": np.logspace(-1, 1, 15)}
+gen_configs("template", params, f"SU2/pure/fluctuations")
 # %%
 # SU2 FULL THEORY TOPOLOGY pt1
 params = {"g": np.logspace(-1, 1, 10), "m": np.array([1e-2, 1e-1, 1, 1e1, 1e2])}
@@ -22,6 +26,14 @@ gen_configs("template", params, f"SU2/full/phase_diagram")
 # SU2 FULL THEORY SUPERCONDUCTING ORDER PARAMETER
 params = {"g": np.logspace(-1, 1, 10)}
 gen_configs("template", params, f"SU2/full/SCOP")
+# %%
+# SU2 FULL THEORY ENERGY GAP
+params = {
+    "DeltaN": [0, 2],
+    "g": np.logspace(-1, 0, 15),
+    "k": np.logspace(-2, 1, 5),
+}
+gen_configs("template", params, f"SU2/full/energy_gaps")
 # %%
 # SU2 FULL THEORY CHARGE vs DENSITY
 params = {"g": np.logspace(-1, 1, 15), "m": np.logspace(-1, 0, 10)}

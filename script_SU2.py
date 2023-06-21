@@ -33,7 +33,8 @@ with run_sim() as sim:
     else:
         loc_dim = 30
         DeltaN = sim.par["DeltaN"]
-        m = sim.par["m"]
+        m = sim.par["k"] * (sim.par["g"]) ** 2
+        sim.res["m"] = m
     # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
     ops = get_SU2_operators(pure_theory)
     # ACQUIRE HAMILTONIAN COEFFICIENTS
@@ -200,12 +201,12 @@ with run_sim() as sim:
                     sim.res[f"{obs}_{site}"].append(h_terms[obs].avg)
                     sim.res[f"delta_{obs}_{site}"].append(h_terms[obs].std)
             # ADD SPIN and PARTICLE DENSITY
-            sim.res["rho"].append(
-                2 + h_terms["n_tot_even"].avg - h_terms["n_tot_odd"].avg
-            )
-            sim.res["spin"] = 0.5 * (
-                h_terms["n_single_even"].avg + h_terms["n_single_odd"].avg
-            )
+            # sim.res["rho"].append(
+            #    2 + h_terms["n_tot_even"].avg - h_terms["n_tot_odd"].avg
+            # )
+            # sim.res["spin"] = 0.5 * (
+            #    h_terms["n_single_even"].avg + h_terms["n_single_odd"].avg
+            # )
             # SCOP CORRELATOR
             h_terms["SCOP"] = TwoBodyTerm2D("x", op_list, op_name_list)
             h_terms["SCOP"].get_expval(GS.Npsi[:, ii], lvals, has_obc)
@@ -222,6 +223,3 @@ with run_sim() as sim:
                 sim.res[f"p{d2}_sector"].append(
                     get_SU2_topological_invariant(op, lvals, GS.Npsi[:, ii], d2)
                 )
-    if n_eigs == 1:
-        for obs in list(sim.res.keys()):
-            sim.res[obs] = sim.res[obs][0]
