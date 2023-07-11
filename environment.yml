@@ -4,6 +4,7 @@ channels:
   - defaults
 dependencies:
   - black
+  - sympy
   - bottleneck
   - cycler
   - dictdiffer=0.9
