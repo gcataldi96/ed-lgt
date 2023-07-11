@@ -303,17 +303,8 @@ def gauge_invariant_states(spin, lattice_dim=2):
                             row[f"{site}_{ll}"].append(row_counter)
                             col_counter[f"{site}_{ll}"] += 1
         # Build the basis as a sparse matrix
-        for ll in [
-            "",
-            "_mx",
-            "_my",
-            "_px",
-            "_py",
-            "_mx_my",
-            "_mx_py",
-            "_my_px",
-            "_px_py",
-        ]:
+        bord = ["", "_mx", "_my", "_px", "_py", "_mx_my", "_mx_py", "_my_px", "_px_py"]
+        for ll in bord:
             name = f"{site}{ll}"
             data = np.ones(col_counter[name] + 1, dtype=float)
             x = np.asarray(row[name])
