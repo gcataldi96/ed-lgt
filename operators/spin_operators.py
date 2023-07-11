@@ -415,3 +415,240 @@ def dressed_site_operators(s, pure=False):
     for sd in ["mx", "my", "px", "py"]:
         ops[f"E_square"] += 0.5 * ops[f"n_square_{sd}"]
     return ops
+
+
+def spin_space(s):
+    # Given the spin value s, it returns the size of its Hilber space
+    return int(2 * s + 1)
+
+
+def m_values(j):
+    # Given the spin value j, it returns an array with the possible spin-z components
+    return np.arange(-j, j + 1)[::-1]
+
+
+def spin_couple(j1, j2, singlet=False, M=None):
+    """
+    This function computes states obtained by combining two spins j1, j2
+    by computing Clebsh-Gordan coefficients CG (and the Wigner 3j symbols).
+    Args:
+        j1 (real & scalar): spin of the 1st particle
+
+        j2 (real & scalar): spin of the 2nd particle
+
+        singlet (bool, optional): if true, look only at the combinations
+        if j1 and j2 that provides an SU(2) single. Defaults to False.
+
+        M (real & scalar, optional): spin-z component of the 1st particle.
+        Defaults to None.
+
+    Returns:
+        list: [(j1, m1,) j2, m2, CG, j3, m3]
+    """
+    set = []
+    if singlet:
+        # if we expect a singlet, the only resulting j can only be 0
+        j3_values = np.array([0])
+    else:
+        # otherwise, it is bounded between |j1 - j2| and j1 + j2
+        j3_values = np.arange(np.abs(j1 - j2), j1 + j2 + 1, 1)
+    if M is not None:
+        m1values = [M]
+    else:
+        m1values = m_values(j1)
+    for m1, m2, j3 in product(m1values, m_values(j2), j3_values):
+        for m3 in m_values(j3):
+            # Compute the CG coefficient
+            CG = CG_coeff(S(j1), S(j2), S(j3), S(m1), S(m2), S(m3))
+            # Save the configuration if it exists
+            if CG != 0:
+                if M is not None:
+                    set.append([S(j2), S(m2), CG, S(j3), S(m3)])
+                else:
+                    set.append([S(j1), S(m1), S(j2), S(m2), CG, S(j3), S(m3)])
+    return set
+
+
+class SU2_singlet:
+    def __init__(self, J_config, M_configs, CG_values):
+        self.n_spins = len(J_config)
+        # CHECK ON TYPES
+        if len(M_configs) != len(CG_values):
+            raise ValueError(f"M_configs and CG_values must have the same # of entries")
+        for ii, conf in enumerate(M_configs):
+            if len(conf) != self.n_spins:
+                raise ValueError(
+                    f"Every M config should be made of {self.n_spins} not {len(conf)}"
+                )
+            if len(CG_values[ii]) != (self.n_spins - 1):
+                raise ValueError(
+                    f"The {ii} M config should have {self.n_spins-1} CGs, not {len(CG_values[ii])}"
+                )
+        self.J_config = J_config
+        self.M_configs = M_configs
+        self.CG_values = CG_values
+
+    def show(self):
+        print("=============================================")
+        print(f"J: {self.J_config}")
+        for m, CG in zip(self.M_configs, self.CG_values):
+            print(f"M:{m} CG:{CG}")
+
+
+def get_SU2_singlets(spin_list):
+    """
+    This function computes the form of an SU(2) singlet out of a list of
+    spin representations
+    Args:
+        spin_list (list): list of spins to be coupled in order to get a singlet
+    Returns:
+        list: list of instances of class:SU2_singlet; if there is no singlet, just None
+    """
+    n_spins = len(spin_list)
+    if n_spins < 2:
+        raise ValueError("2 is the minimum number of spins to be coupled")
+    # Perform the first coupling
+    if len(spin_list) == 2:
+        spin_config = spin_couple(spin_list[0], spin_list[1], singlet=True)
+    else:
+        spin_config = spin_couple(spin_list[0], spin_list[1])
+    # Couple the resulting spin with the next ones
+    for ii in np.arange(2, n_spins, 1):
+        if ii == n_spins - 1:
+            singlet = True
+        else:
+            singlet = False
+        # Make a copy of the spin configurations
+        tmp1 = spin_config.copy()
+        spin_config = []
+        for j in tmp1:
+            # Couple the resulting spin of the previous combination with the next spin
+            tmp2 = spin_couple(j1=j[-2], j2=spin_list[ii], singlet=singlet, M=j[-1])
+            for J in tmp2:
+                spin_config.append(j + J)
+    if spin_config:
+        M_sites = [1] + list(np.arange(3, len(spin_config[0]), 5))
+        CG_sites = list(np.arange(4, len(spin_config[0]), 5))
+        K_sites = list(np.arange(5, len(spin_config[0]), 5))
+        # Sort the the spin_config in terms of different SINGLETS
+        spin_config = sorted(spin_config, key=lambda x: tuple(x[k] for k in K_sites))
+        SU2_singlets = []
+        M_configs = []
+        CG_configs = []
+        for ii, conf in enumerate(spin_config):
+            if ii == 0:
+                M_configs.append([conf[M] for M in M_sites])
+                CG_configs.append([conf[CG] for CG in CG_sites])
+                K_values = [conf[k] for k in K_sites]
+            else:
+                K_values_new = [conf[k] for k in K_sites]
+                if K_values_new == K_values:
+                    M_configs.append([conf[M] for M in M_sites])
+                    CG_configs.append([conf[CG] for CG in CG_sites])
+                else:
+                    SU2_singlets.append(SU2_singlet(spin_list, M_configs, CG_configs))
+                    K_values = K_values_new.copy()
+                    M_configs = [[conf[M] for M in M_sites]]
+                    CG_configs = [[conf[CG] for CG in CG_sites]]
+        SU2_singlets.append(SU2_singlet(spin_list, M_configs, CG_configs))
+    else:
+        SU2_singlets = None
+    return SU2_singlets
+
+
+def SU2_gauge_invariant_basis(s_max, pure_theory=False, dim=2):
+    spin_list = [S(s_max) for i in range(2 * dim)]
+    spins = []
+    # For each single spin particle in the list,
+    # consider all the spin irrep up to the max one
+    for s in spin_list:
+        tmp = np.arange(S(0), spin_space(s), 1)
+        spins.append(tmp / 2)
+    if not pure_theory:
+        spins.insert(0, np.asarray([S(0), S(1) / 2, S(0)]))
+    # Set rows and col counters list for the basis
+    gauge_states = {"site": []}
+    gauge_basis = {}
+    row = {"site": []}
+    col_counter = {"site": -1}
+    # Run over lattice borders:
+    borders = ["mx", "my", "px", "py", "mx_my", "mx_py", "my_px", "px_py"]
+    for label in borders:
+        gauge_states[f"site_{label}"] = []
+        row[f"site_{label}"] = []
+        col_counter[f"site_{label}"] = -1
+    # Set col counter
+    row_counter = -1
+    for spins_config in product(*spins):
+        spins_config = list(spins_config)
+        # Update row counter
+        row_counter += 1
+        # Check the existence of a SU2 singlet state
+        singlets = get_SU2_singlets(spins_config)
+        if singlets is not None:
+            for s in singlets:
+                # FIX row and col of the core site basis
+                row["site"].append(row_counter)
+                col_counter["site"] += 1
+                # Save the singlet state
+                gauge_states["site"].append(s)
+                # GET THE CONFIG LABEL
+                label = SU2_border_configs(spins_config)
+                if label:
+                    # save the config state also in the specific subset of borders
+                    for ll in label:
+                        gauge_states[f"site_{ll}"].append(spins_config)
+                        row[f"site_{ll}"].append(row_counter)
+                        col_counter[f"site_{ll}"] += 1
+    # Build the basis as a sparse matrix
+    site_label = [""] + [f"_{label}" for label in borders]
+    for ll in site_label:
+        name = f"site{ll}"
+        data = np.ones(col_counter[name] + 1, dtype=float)
+        x = np.asarray(row[name])
+        y = np.arange(col_counter[name] + 1)
+        gauge_basis[name] = csr_matrix(
+            (data, (x, y)), shape=(row_counter + 1, col_counter[name] + 1)
+        )
+    return gauge_basis, gauge_states
+
+
+def SU2_border_configs(config, pure_theory=False):
+    """
+    This function fixes the value of the SU2 irrep = 0 on the borders
+    of 2D lattices with open boundary conditions (has_obc=True).
+
+    Args:
+        config (list of spins): spin configuration of internal rishons
+        in the single dressed site basis, ordered as follows:
+
+        pure_theory (bool):
+        if True, then config=[j_mx, j_my, j_px, j_py]
+        if False, then config=[j_matter, j_mx, j_my, j_px, j_py]
+
+    Returns:
+        list of strings: list of configs corresponding to a border/corner
+        of the 2D lattice with 0 SU(2)-irrep
+    """
+    if pure_theory:
+        config = config[2:]
+    # List of the size of the Hilbert spaces
+    tmp = [spin_space(s) for s in config]
+    label = []
+    if tmp[0] == 1:
+        label.append("mx")
+    if tmp[1] == 1:
+        label.append("my")
+    if tmp[2] == 1:
+        label.append("px")
+    if tmp[3] == 1:
+        label.append("py")
+    if (tmp[0] == 1) and (tmp[1] == 1):
+        label.append("mx_my")
+    if (tmp[0] == 1) and (tmp[3] == 1):
+        label.append("mx_py")
+    if (tmp[1] == 1) and (tmp[2] == 1):
+        label.append("my_px")
+    if (tmp[2] == 1) and (tmp[3] == 1):
+        label.append("px_py")
+    return label
