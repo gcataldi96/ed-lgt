@@ -133,7 +133,7 @@ class LocalTerm2D:
                 self.avg += exp_obs
                 self.std += exp_var
         self.avg = self.avg / counter
-        self.std = np.sqrt(self.std / counter)
+        self.std = np.sqrt(np.abs(self.std) / counter)
         logger.info(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 
     def check_on_borders(self, border, value=1, threshold=1e-10):

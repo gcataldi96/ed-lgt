@@ -236,9 +236,9 @@ class PlaquetteTerm2D:
                 self.print_Plaquette(plaq_string, plaq)
                 counter += 1
                 self.avg += plaq
-                self.std += np.abs(delta_plaq)
+                self.std += delta_plaq
         self.avg = self.avg / counter
-        self.std = np.sqrt(self.std / counter)
+        self.std = np.sqrt(np.abs(self.std) / counter)
         logger.info(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 
     def print_Plaquette(self, sites_list, value):
