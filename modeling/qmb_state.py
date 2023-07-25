@@ -23,8 +23,8 @@ __all__ = [
 
 class Ground_State:
     def __init__(self, Ham, n_eigs):
-        if not isspmatrix_csr(Ham):
-            raise TypeError(f"Ham should be a csr_matrix, not a {type(Ham)}")
+        if not isspmatrix(Ham):
+            raise TypeError(f"Ham should be a sparse_matrix, not a {type(Ham)}")
         if not np.isscalar(n_eigs) and not isinstance(n_eigs, int):
             raise TypeError(f"n_eigs should be a SCALAR INT, not a {type(n_eigs)}")
         # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
