@@ -145,12 +145,13 @@ def get_site_label(x, y, lvals, has_obc, staggered=False, all_sites_equal=True):
     ny = lvals[1]
     # STAGGERED LABEL
     stag = (-1) ** (x + y)
-    if (staggered == True) and (stag > 0):
-        stag_label = "even"
-    elif (staggered == True) and (stag < 0):
-        stag_label = "odd"
+    if staggered:
+        if stag > 0:
+            stag_label = "even"
+        else:
+            stag_label = "odd"
     else:
-        stag_label = ""
+        stag_label = "site"
     # SITE LABEL
     if not all_sites_equal:
         if has_obc:
