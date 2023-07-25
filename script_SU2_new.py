@@ -57,8 +57,8 @@ with run_sim() as sim:
     H = 0
     h_terms = {}
     # ELECTRIC ENERGY
-    # h_terms["E_square"] = LocalTerm2D(ops["E_square"], "E_square", site_basis=M)
-    # H += h_terms["E_square"].get_Hamiltonian(lvals, has_obc, coeffs["E"])
+    h_terms["E_square"] = LocalTerm2D(ops["E_square"], "E_square", site_basis=M)
+    H += h_terms["E_square"].get_Hamiltonian(lvals, has_obc, coeffs["E"])
     # -------------------------------------------------------------------------------
     # LINK PENALTIES & Border penalties
     for d in directions:
@@ -78,7 +78,7 @@ with run_sim() as sim:
             )
     if not pure_theory:
         # STAGGERED MASS TERM
-        h_terms["mass"] = LocalTerm2D(ops["N_tot"], "N_tot")
+        h_terms["mass"] = LocalTerm2D(ops["N_tot"], "N_tot", site_basis=M)
         for site in ["even", "odd"]:
             H += h_terms["mass"].get_Hamiltonian(
                 lvals,
@@ -89,7 +89,7 @@ with run_sim() as sim:
         if DeltaN != 0:
             # SELECT THE SYMMETRY SECTOR with N PARTICLES
             tot_hilb_space = H.shape[0]
-            h_terms["fix_N"] = LocalTerm2D(ops["N_tot"], "N_tot")
+            h_terms["fix_N"] = LocalTerm2D(ops["N_tot"], "N_tot", site_basis=M)
             H += (
                 -coeffs["eta"]
                 * (
@@ -136,7 +136,7 @@ with run_sim() as sim:
         sim.res["rho_eigvals"] = []
     # ===========================================================================
     # LIST OF OBSERVABLES
-    obs_list = [f"T2_{s}{d}" for s in "mp" for d in directions]  # + ["E_square"]
+    obs_list = [f"T2_{s}{d}" for s in "mp" for d in directions] + ["E_square"]
     for obs in obs_list:
         h_terms[obs] = LocalTerm2D(ops[obs], obs, site_basis=M)
         sim.res[obs] = []
@@ -181,6 +181,7 @@ with run_sim() as sim:
             rho = get_reduced_density_matrix(GS.Npsi[:, ii], loc_dims, lvals, 0)
             eigvals, _ = diagonalize_density_matrix(rho)
             sim.res["rho_eigvals"].append(eigvals)
+            # PRINT THE EIGENVALUES
             for eig in eigvals[::-1]:
                 logger.info(eig)
         # ===========================================================================
