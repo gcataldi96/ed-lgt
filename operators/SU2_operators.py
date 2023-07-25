@@ -276,7 +276,7 @@ def inner_site_operators(s, pure_theory=False):
         # other number operators
         ops["N_pair"] = ops["N_up"] * ops["N_down"]
         ops["N_tot"] = ops["N_up"] + ops["N_down"]
-        ops["N_single"] = ops["N_tot"] - ops["N_pair"]
+        ops["N_single"] = ops["N_tot"] - 2 * ops["N_pair"]
         # identity on the whole matter site
         ops["ID_psi"] = identity(4, dtype=float)
         for s in ["up", "down"]:
