@@ -143,11 +143,9 @@ with run_sim() as sim:
     if not pure_theory:
         matter_obs = ["N_up", "N_down", "N_tot", "N_single", "N_pair"]
         for obs in matter_obs:
-            for site in ["even", "odd"]:
-                h_terms[obs] = LocalTerm2D(ops[obs], obs, site_basis=M)
-                sim.res[obs] = []
-                obs_list.append(f"{obs}_{site}")
-                obs_list.append(f"delta_{obs}_{site}")
+            h_terms[obs] = LocalTerm2D(ops[obs], obs, site_basis=M)
+            sim.res[obs] = []
+            obs_list.append(obs)
     # ===========================================================================
     # COMPUTE THE OBSERVABLES FOR EACH EIGENSTATES
     for ii in range(n_eigs):
@@ -185,23 +183,17 @@ with run_sim() as sim:
             for eig in eigvals[::-1]:
                 logger.info(eig)
         # ===========================================================================
-        # MEASURE GAUGE OBSERVABLES:
-        # RISHON CASIMIR OPERATORS, ELECTRIC ENERGY E^{2}
+        # MEASURE GAUGE OBSERVABLES: RISHON CASIMIR OPERATORS, ELECTRIC ENERGY E^{2}
         # ===========================================================================
         for obs in obs_list:
             h_terms[obs].get_expval(GS.Npsi[:, ii], lvals, has_obc)
             sim.res[obs].append(h_terms[obs].avg)
-            # sim.res[f"delta_{obs}"].append(h_terms[obs].std)
         # ===========================================================================
         # COMPUTE MATTER OBSERVABLES (STAGGERED)
         # ===========================================================================
         if not pure_theory:
             for obs in matter_obs:
-                h_terms[obs] = LocalTerm2D(ops[obs], obs, site_basis=M)
-                for site in ["even", "odd"]:
-                    h_terms[obs].get_expval(GS.Npsi[:, ii], lvals, has_obc, site)
-                    sim.res[f"{obs}_{site}"].append(h_terms[obs].avg)
-                    # sim.res[f"delta_{obs}_{site}"].append(h_terms[obs].std)
+                h_terms[obs].get_expval(GS.Npsi[:, ii], lvals, has_obc)
         logger.info("====================================================")
 
     if n_eigs > 1:
