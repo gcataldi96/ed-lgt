@@ -777,9 +777,9 @@ def SU2_Hamiltonian_couplings(pure_theory, g, m=None):
         "B": B,  # MAGNETIC FIELD coupling
     }
     if pure_theory:
-        coeffs["eta"] = -10 * max(E, np.abs(B))
+        coeffs["eta"] = 10 * max(E, np.abs(B))
     if not pure_theory:
-        coeffs["eta"] = -10 * max(E, np.abs(B), m)
+        coeffs["eta"] = 10 * max(E, np.abs(B), m)
         coeffs |= {
             "m": m,
             "tx_even": -0.5j,  # HORIZONTAL HOPPING (EVEN SITES)
