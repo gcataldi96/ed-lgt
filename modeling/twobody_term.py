@@ -130,6 +130,9 @@ class TwoBodyTerm2D:
                     raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
         if not isinstance(has_obc, bool):
             raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
+        if site is not None:
+            if not isinstance(site, bool):
+                raise TypeError(f"site should be BOOL, not {type(site)}")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]
         ny = lvals[1]
