@@ -539,11 +539,11 @@ class SU2_singlet:
             self.JM_configs.append(self.J_config + m)
 
     def show(self):
-        logger.info("=============================================")
+        logger.info("====================================================")
         logger.info(f"J: {self.J_config}")
         for m, CG in zip(self.M_configs, self.CG_values):
             logger.info(f"M:{m} CG:{CG}")
-        logger.info("---------------------------------------------")
+        logger.info("----------------------------------------------------")
 
 
 def get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None):
