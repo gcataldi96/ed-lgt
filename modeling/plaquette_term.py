@@ -134,7 +134,10 @@ class PlaquetteTerm2D:
             chosen_part = "IMAG"
         else:
             chosen_part = "REAL"
-        logger.info(f"PLAQUETTE: {chosen_part} PART")
+        if site is None:
+            logger.info(f"PLAQUETTE: {chosen_part}")
+        else:
+            logger.info(f"PLAQUETTE: {chosen_part} PART {site}")
         logger.info(f"----------------------------------------------------")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]

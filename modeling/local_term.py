@@ -72,7 +72,10 @@ class LocalTerm2D:
                 raise TypeError(f"site should be STR ('even' / 'odd'), not {type(str)}")
         # PRINT OBSERVABLE NAME
         logger.info(f"----------------------------------------------------")
-        logger.info(f"{self.op_name}")
+        if site is None:
+            logger.info(f"{self.op_name}")
+        else:
+            logger.info(f"{self.op_name} {site}")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]
         ny = lvals[1]
