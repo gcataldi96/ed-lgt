@@ -410,8 +410,8 @@ def SU2_border_configs(config, pure_theory=False):
         list of strings: list of configs corresponding to a border/corner
         of the 2D lattice with 0 SU(2)-irrep
     """
-    if pure_theory:
-        config = config[2:]
+    if not pure_theory:
+        config = config[1:]
     # List of the size of the Hilbert spaces
     tmp = [spin_space(s) for s in config]
     label = []
