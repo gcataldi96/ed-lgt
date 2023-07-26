@@ -68,8 +68,8 @@ class LocalTerm2D:
                 if not isinstance(ll, int):
                     raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
         if site is not None:
-            if not isinstance(site, bool):
-                raise TypeError(f"site should be BOOL, not {type(site)}")
+            if not isinstance(site, str):
+                raise TypeError(f"site should be STR ('even' / 'odd'), not {type(str)}")
         # PRINT OBSERVABLE NAME
         logger.info(f"----------------------------------------------------")
         logger.info(f"{self.op_name}")

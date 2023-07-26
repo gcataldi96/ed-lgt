@@ -126,8 +126,8 @@ class PlaquetteTerm2D:
         if not isinstance(get_imag, bool):
             raise TypeError(f"get_imag should be a BOOL, not a {type(get_imag)}")
         if site is not None:
-            if not isinstance(site, bool):
-                raise TypeError(f"site should be BOOL, not {type(site)}")
+            if not isinstance(site, str):
+                raise TypeError(f"site should be STR ('even' / 'odd'), not {type(str)}")
         # ADVERTISE OF THE CHOSEN PART OF THE PLAQUETTE YOU WANT TO COMPUTE
         logger.info(f"----------------------------------------------------")
         if get_imag:
