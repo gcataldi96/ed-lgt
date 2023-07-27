@@ -304,12 +304,16 @@ def get_state_configurations(psi, loc_dims, n_sites):
             reverse=True,
         )
     ]
+    state_configurations = {"state_config": [], "coeff": []}
     for ind, alpha in zip(indices, sing_vals):
         loc_states = get_loc_states_from_qmb_state(
             qmb_index=ind, loc_dims=loc_dims, n_sites=n_sites
         )
         logger.info(f"{loc_states}  {alpha}")
+        state_configurations["state_config"].append(loc_states)
+        state_configurations["coeff"].append(alpha)
     logger.info("----------------------------------------------------")
+    return state_configurations
 
 
 # ================================================================================================
