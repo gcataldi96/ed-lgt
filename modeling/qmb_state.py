@@ -18,6 +18,7 @@ __all__ = [
     "diagonalize_density_matrix",
     "get_state_configurations",
     "get_SU2_topological_invariant",
+    "define_measurements",
 ]
 
 
@@ -317,10 +318,14 @@ def get_state_configurations(psi, loc_dims, n_sites):
 
 
 def define_measurements(obs_list, stag_obs_list=None, has_obc=False):
+    if not isinstance(obs_list, list):
+        raise TypeError(f"obs_list must be a LIST, not a {type(obs_list)}")
+    else:
+        for obs in obs_list:
+            if not isinstance(obs, str):
+                raise TypeError(f"obs_list elements are STR, not a {type(obs)}")
     if not isinstance(has_obc, bool):
         raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
-    if not isinstance(staggered, bool):
-        raise TypeError(f"staggered should be a BOOL, not a {type(staggered)}")
     # ===========================================================================
     # Default observables
     measures = {}
