@@ -151,7 +151,7 @@ def get_site_label(x, y, lvals, has_obc, staggered=False, all_sites_equal=True):
         else:
             stag_label = "odd"
     else:
-        stag_label = "site"
+        stag_label = ""
     # SITE LABEL
     if not all_sites_equal:
         if has_obc:
@@ -174,7 +174,7 @@ def get_site_label(x, y, lvals, has_obc, staggered=False, all_sites_equal=True):
             else:
                 site_label = ""
         else:
-            site_label = ""
+            site_label = "site"
     else:
         site_label = ""
     return f"{stag_label}{site_label}"
