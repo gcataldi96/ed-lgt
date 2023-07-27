@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.sparse import isspmatrix, isspmatrix_csr, csr_matrix
+from scipy.sparse import isspmatrix, csr_matrix
 from tools import zig_zag, inverse_zig_zag
 from .qmb_operations import two_body_op
 from simsio import logger
