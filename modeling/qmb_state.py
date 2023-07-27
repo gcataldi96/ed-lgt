@@ -316,6 +316,45 @@ def get_state_configurations(psi, loc_dims, n_sites):
     return state_configurations
 
 
+def define_measurements(obs_list, stag_obs_list=None, has_obc=False):
+    if not isinstance(has_obc, bool):
+        raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
+    if not isinstance(staggered, bool):
+        raise TypeError(f"staggered should be a BOOL, not a {type(staggered)}")
+    # ===========================================================================
+    # Default observables
+    measures = {}
+    measures["energy"] = []
+    measures["energy_density"] = []
+    measures["entropy"] = []
+    if not has_obc:
+        measures["rho_eigvals"] = []
+    else:
+        measures["state_configurations"] = []
+    # ===========================================================================
+    # Observables resulting from Operators
+    for obs in obs_list:
+        measures[obs] = []
+        measures[f"delta_{obs}"] = []
+    # Observables resulting from STAGGERED Operators
+    if stag_obs_list is not None:
+        if not isinstance(stag_obs_list, list):
+            raise TypeError(
+                f"stag_obs_list must be a LIST, not a {type(stag_obs_list)}"
+            )
+        else:
+            for obs in stag_obs_list:
+                if not isinstance(obs, str):
+                    raise TypeError(
+                        f"stag_obs_list elements are STR, not a {type(obs)}"
+                    )
+        for site in ["even", "odd"]:
+            for obs in stag_obs_list:
+                measures[f"{obs}_{site}"] = []
+                measures[f"delta_{obs}_{site}"] = []
+    return measures
+
+
 # ================================================================================================
 # ================================================================================================
 # ================================================================================================
