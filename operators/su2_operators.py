@@ -3,12 +3,9 @@ import numpy as np
 from tools.manage_data import acquire_data
 from scipy.sparse import csr_matrix, identity
 
-__all__ = [
-    "get_SU2_operators",
-]
+__all__ = ["get_SU2_operators", "get_SU2_Hamiltonian_couplings"]
 
 
-# "get_SU2_Hamiltonian_couplings",
 def ID(pure_theory):
     ops = {}
     if pure_theory:
@@ -64,7 +61,7 @@ def plaquette(pure_theory):
         path = "operators/su2_operators/full_operators/"
 
     for corner in ["py_px", "my_px", "py_mx", "my_mx"]:
-        data = acquire_data(path + f"new_Corner_{corner}.txt")
+        data = acquire_data(path + f"Corner_{corner}.txt")
         x = data["0"]
         y = data["1"]
         coeff = data["2"]
