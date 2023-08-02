@@ -125,13 +125,19 @@ class PlaquetteTerm2D:
             raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
         if not isinstance(get_imag, bool):
             raise TypeError(f"get_imag should be a BOOL, not a {type(get_imag)}")
+        if site is not None:
+            if not isinstance(site, str):
+                raise TypeError(f"site should be STR ('even' / 'odd'), not {type(str)}")
         # ADVERTISE OF THE CHOSEN PART OF THE PLAQUETTE YOU WANT TO COMPUTE
         logger.info(f"----------------------------------------------------")
         if get_imag:
             chosen_part = "IMAG"
         else:
             chosen_part = "REAL"
-        logger.info(f"PLAQUETTE: {chosen_part} PART")
+        if site is None:
+            logger.info(f"PLAQUETTE: {chosen_part}")
+        else:
+            logger.info(f"PLAQUETTE: {chosen_part} PART {site}")
         logger.info(f"----------------------------------------------------")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]
@@ -236,9 +242,9 @@ class PlaquetteTerm2D:
                 self.print_Plaquette(plaq_string, plaq)
                 counter += 1
                 self.avg += plaq
-                self.std += np.abs(delta_plaq)
+                self.std += delta_plaq
         self.avg = self.avg / counter
-        self.std = np.sqrt(self.std / counter)
+        self.std = np.sqrt(np.abs(self.std) / counter)
         logger.info(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 
     def print_Plaquette(self, sites_list, value):

@@ -134,4 +134,4 @@ configs/
 # Results
 results/
 saved_dicts/
-nohup.out
+*.out

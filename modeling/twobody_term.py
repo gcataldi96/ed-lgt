@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.sparse import isspmatrix, isspmatrix_csr, csr_matrix
+from scipy.sparse import isspmatrix, csr_matrix
 from tools import zig_zag, inverse_zig_zag
 from .qmb_operations import two_body_op
 from simsio import logger
@@ -130,6 +130,9 @@ class TwoBodyTerm2D:
                     raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
         if not isinstance(has_obc, bool):
             raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
+        if site is not None:
+            if not isinstance(site, str):
+                raise TypeError(f"site should be STR ('even' / 'odd'), not {type(str)}")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]
         ny = lvals[1]

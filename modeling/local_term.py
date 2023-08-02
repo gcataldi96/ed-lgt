@@ -67,9 +67,15 @@ class LocalTerm2D:
             for ii, ll in enumerate(lvals):
                 if not isinstance(ll, int):
                     raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
+        if site is not None:
+            if not isinstance(site, str):
+                raise TypeError(f"site should be STR ('even' / 'odd'), not {type(str)}")
         # PRINT OBSERVABLE NAME
         logger.info(f"----------------------------------------------------")
-        logger.info(f"{self.op_name}")
+        if site is None:
+            logger.info(f"{self.op_name}")
+        else:
+            logger.info(f"{self.op_name} {site}")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]
         ny = lvals[1]
@@ -133,7 +139,7 @@ class LocalTerm2D:
                 self.avg += exp_obs
                 self.std += exp_var
         self.avg = self.avg / counter
-        self.std = np.sqrt(self.std / counter)
+        self.std = np.sqrt(np.abs(self.std) / counter)
         logger.info(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 
     def check_on_borders(self, border, value=1, threshold=1e-10):

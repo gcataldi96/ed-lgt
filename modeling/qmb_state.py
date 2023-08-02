@@ -18,13 +18,14 @@ __all__ = [
     "diagonalize_density_matrix",
     "get_state_configurations",
     "get_SU2_topological_invariant",
+    "define_measurements",
 ]
 
 
 class Ground_State:
     def __init__(self, Ham, n_eigs):
-        if not isspmatrix_csr(Ham):
-            raise TypeError(f"Ham should be a csr_matrix, not a {type(Ham)}")
+        if not isspmatrix(Ham):
+            raise TypeError(f"Ham should be a sparse_matrix, not a {type(Ham)}")
         if not np.isscalar(n_eigs) and not isinstance(n_eigs, int):
             raise TypeError(f"n_eigs should be a SCALAR INT, not a {type(n_eigs)}")
         # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
@@ -304,12 +305,59 @@ def get_state_configurations(psi, loc_dims, n_sites):
             reverse=True,
         )
     ]
+    state_configurations = {"state_config": [], "coeff": []}
     for ind, alpha in zip(indices, sing_vals):
         loc_states = get_loc_states_from_qmb_state(
             qmb_index=ind, loc_dims=loc_dims, n_sites=n_sites
         )
         logger.info(f"{loc_states}  {alpha}")
+        state_configurations["state_config"].append(loc_states)
+        state_configurations["coeff"].append(alpha)
     logger.info("----------------------------------------------------")
+    return state_configurations
+
+
+def define_measurements(obs_list, stag_obs_list=None, has_obc=False):
+    if not isinstance(obs_list, list):
+        raise TypeError(f"obs_list must be a LIST, not a {type(obs_list)}")
+    else:
+        for obs in obs_list:
+            if not isinstance(obs, str):
+                raise TypeError(f"obs_list elements are STR, not a {type(obs)}")
+    if not isinstance(has_obc, bool):
+        raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
+    # ===========================================================================
+    # Default observables
+    measures = {}
+    measures["energy"] = []
+    measures["energy_density"] = []
+    measures["entropy"] = []
+    if not has_obc:
+        measures["rho_eigvals"] = []
+    else:
+        measures["state_configurations"] = []
+    # ===========================================================================
+    # Observables resulting from Operators
+    for obs in obs_list:
+        measures[obs] = []
+        measures[f"delta_{obs}"] = []
+    # Observables resulting from STAGGERED Operators
+    if stag_obs_list is not None:
+        if not isinstance(stag_obs_list, list):
+            raise TypeError(
+                f"stag_obs_list must be a LIST, not a {type(stag_obs_list)}"
+            )
+        else:
+            for obs in stag_obs_list:
+                if not isinstance(obs, str):
+                    raise TypeError(
+                        f"stag_obs_list elements are STR, not a {type(obs)}"
+                    )
+        for site in ["even", "odd"]:
+            for obs in stag_obs_list:
+                measures[f"{obs}_{site}"] = []
+                measures[f"delta_{obs}_{site}"] = []
+    return measures
 
 
 # ================================================================================================
