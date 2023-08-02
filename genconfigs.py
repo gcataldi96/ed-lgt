@@ -30,8 +30,8 @@ gen_configs("template", params, f"SU2/full/SCOP")
 # SU2 FULL THEORY ENERGY GAP
 params = {
     "DeltaN": [0, 2],
-    "g": np.logspace(-1, 0, 15),
-    "k": np.logspace(-2, 1, 5),
+    "m": np.logspace(-3, -1, 15),
+    "k": np.logspace(-1, 1, 5),
 }
 gen_configs("template", params, f"SU2/full/energy_gaps")
 # %%
