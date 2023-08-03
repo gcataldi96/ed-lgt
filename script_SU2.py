@@ -33,8 +33,8 @@ with run_sim() as sim:
     else:
         loc_dim = 30
         DeltaN = sim.par["DeltaN"]
-        m = sim.par["k"] * (sim.par["g"]) ** 2
-        sim.res["m"] = m
+        # m = sim.par["k"] * (sim.par["g"]) ** 2
+        m = sim.par["m"]
     # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
     ops = get_SU2_operators(pure_theory)
     # ACQUIRE HAMILTONIAN COEFFICIENTS
@@ -48,29 +48,29 @@ with run_sim() as sim:
         op_name_list = [f"W_{s}{d}" for s in "pm"]
         op_list = [ops[op] for op in op_name_list]
         # Define the Hamiltonian term
-        h_terms[f"W_{d}"] = TwoBodyTerm2D(
-            d, op_list, op_name_list, staggered_basis=False, site_basis=None
-        )
+        h_terms[f"W_{d}"] = TwoBodyTerm2D(d, op_list, op_name_list)
+        """
         H += h_terms[f"W_{d}"].get_Hamiltonian(
             lvals,
             has_obc=has_obc,
             strength=coeffs["eta"],
             add_dagger=False,
         )
+        """
     # BORDER PENALTIES
     if has_obc:
         for d in directions:
             for s in "mp":
                 op_name = f"P_{s}{d}"
-                h_terms[op_name] = LocalTerm2D(
-                    ops[op_name], op_name, staggered_basis=False, site_basis=None
-                )
+                h_terms[op_name] = LocalTerm2D(ops[op_name], op_name)
+                """
                 H += h_terms[op_name].get_Hamiltonian(
                     lvals,
                     has_obc=has_obc,
                     strength=coeffs["eta"],
                     mask=border_mask(lvals, f"{s}{d}"),
                 )
+                """
     # ELECTRIC ENERGY
     h_terms["E_square"] = LocalTerm2D(ops["gamma"], "E_square")
     H += h_terms["E_square"].get_Hamiltonian(
@@ -80,9 +80,11 @@ with run_sim() as sim:
     op_name_list = ["C_py_px", "C_py_mx", "C_my_px", "C_my_mx"]
     op_list = [ops[op] for op in op_name_list]
     h_terms["plaq"] = PlaquetteTerm2D(op_list, op_name_list)
+    """
     H += h_terms["plaq"].get_Hamiltonian(
         lvals, strength=coeffs["B"], has_obc=has_obc, add_dagger=True
     )
+    """
     # -----------------------------------------------------------------------------
     if not pure_theory:
         # STAGGERED MASS TERM
@@ -119,6 +121,7 @@ with run_sim() as sim:
                 )
                 ** 2
             )
+    print(H)
     # CHECK THAT THE HAMILTONIAN IS HERMITIAN
     check_hermitian(H)
     # DIAGONALIZE THE HAMILTONIAN
