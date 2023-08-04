@@ -4,6 +4,7 @@ channels:
   - defaults
 dependencies:
   - sphinx
+  - sphinx_rtd_theme
   - black
   - sympy
   - bottleneck
