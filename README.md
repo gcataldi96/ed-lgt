@@ -5,16 +5,21 @@ Code for Exact Diagonalization of Quantum Many-Body Hamiltonians
 
         git clone --recursive git@github.com:gcataldi96/ed-su2.git
 
-2) Add the simsio library as a submodule (it should be already there)
+2a) (ignore it unless you create the repo for the first time) Add the simsio library as a submodule (it should be already there)
 
         git submodule add https://github.com/rgbmrc/simsio.git
         git add .
         git commit -m "Add simsio submodule to the TTN code"
 
+2b) Update and get all the submodules
+        
+        git submodule update
+        git submodule recursive
+
 3) Create the Environment with all the needed python packages
 
         conda env create -f ed-su2/environment.yml
-        conda activate su2
+        conda activate ed
 
 Enjoy 👏
 
