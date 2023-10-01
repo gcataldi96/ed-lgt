@@ -14,15 +14,15 @@ __all__ = [
 def zig_zag(nx, ny, d):
     """
     Given the 1d point at position d of the zigzag curve in a (nx,ny) discrete lattice,
-    it provides the corresponding 2d coordinates (x,y) of the point
-    NOTE: the zigzag curve is built by always counting from 0 (not 1),
-        hence the points of the 1d curve start from 0 to (nx * ny)-1
-        and the coordinates (x,y) are supposed to go from (0,0) to (nx-1,ny-1.
+    it provides the corresponding 2d coordinates (x,y) of the point.
+
+    NOTE: The zigzag curve is built by always counting from 0 (not 1), hence the points
+    of the 1d curve start from 0 to (nx * ny)-1 and the coordinates (x,y) are supposed to go from (0,0) to (nx-1,ny-1).
 
     Args:
         nx (int): x number of lattice sites
         ny (int): y number of lattice sites
-        d (int): point of a 1D curve covering the 2D lattice.
+        d (int): point of a 1D curve covering the 2D lattice
 
     Returns:
         (int, int): 2D coordinates of the 1D point of the ZigZag curve in the lattice
@@ -49,10 +49,11 @@ def zig_zag(nx, ny, d):
 
 def inverse_zig_zag(nx, ny, x, y):
     """
-    Inverse zigzag curve mapping (from 2D coords to the 1D points)
-    NOTE: given the sizes (nx,ny) of a lattice, the coords (x,y)
-        has to start from (0,0) and arrive to (nx-1,ny-1).
-        Correspondingly, the points of the zigzag curve range from 0 to (nx * ny -1).
+    Inverse zigzag curve mapping (from 2D coords to the 1D points).
+
+    NOTE: Given the sizes (nx,ny) of a lattice, the coords (x,y)
+    has to start from (0,0) and arrive to (nx-1,ny-1).
+    Correspondingly, the points of the zigzag curve range from 0 to (nx * ny -1).
 
     Args:
         nx (int): x number of lattice sites
@@ -78,10 +79,11 @@ def inverse_zig_zag(nx, ny, x, y):
 def snake(nx, ny, d):
     """
     Given the 1d point of the snake curve in a (nx,ny) discrete lattice,
-    it provides the corresponding 2d coordinates (x,y) of the point
-    NOTE: the snake curve is built by always counting from 0 (not 1)
-        hence the points of the 1d curve start from 0 to (nx*ny)-1
-        and the coord.s x and y are supposed to go from 0 to n-1
+    it provides the corresponding 2d coordinates (x,y) of the point.
+
+    NOTE: The snake curve is built by always counting from 0 (not 1)
+    hence the points of the 1d curve start from 0 to (nx*ny)-1
+    and the coords x and y are supposed to go from 0 to n-1.
 
     Args:
         nx (int): x number of lattice sites
@@ -116,9 +118,10 @@ def snake(nx, ny, d):
 def inverse_snake(nx, ny, x, y):
     """
     Inverse snake curve mapping (from coords to the 1d points)
-    NOTE: given the size l of a square lattice, the coords x,y has to
-        start from 0 and arrive to l-1. at the end, the points of the
-        snake curve start from 0. add 1 if you want to start from 1
+
+    NOTE: Given the sizes (nx,ny) of a lattice, the coords (x,y)
+    has to start from (0,0) and arrive to (nx-1,ny-1).
+    Correspondingly, the points of the zigzag curve range from 0 to (nx * ny -1).
 
     Args:
         nx (int): x number of lattice sites

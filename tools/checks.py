@@ -1,6 +1,4 @@
 from scipy.sparse import isspmatrix
-import numpy as np
-from simsio import logger
 from scipy.sparse.linalg import norm
 
 __all__ = [
@@ -31,11 +29,11 @@ def pause(phrase, debug):
         raise TypeError(f"debug should be a BOOL, not a {type(debug)}")
     if debug == True:
         # IT PROVIDES A PAUSE in a given point of the PYTHON CODE
-        logger.info("----------------------------------------------------")
+        print("----------------------------------------------------")
         # Press the <ENTER> key to continue
         programPause = input(phrase)
-        logger.info("----------------------------------------------------")
-        logger.info("")
+        print("----------------------------------------------------")
+        print("")
 
 
 def alert(phrase, debug):
@@ -55,8 +53,8 @@ def alert(phrase, debug):
         raise TypeError(f"debug should be a BOOL, not a {type(debug)}")
     if debug == True:
         # IT PRINTS A PHRASE IN A GIVEN POINT OF A PYTHON CODE
-        logger.info("")
-        logger.info(phrase)
+        print("")
+        print(phrase)
 
 
 def commutator(A, B):
@@ -125,10 +123,10 @@ def check_commutator(A, B):
     ratio = norma / norma_max
     # check=(AB!=BA).nnz
     if ratio > 10 ** (-15):
-        logger.info("    ERROR: A and B do NOT COMMUTE")
-        logger.info("    NORM", norma)
-        logger.info("    RATIO", ratio)
-    logger.info("")
+        print("    ERROR: A and B do NOT COMMUTE")
+        print("    NORM", norma)
+        print("    RATIO", ratio)
+    print("")
 
 
 def check_matrix(A, B):
@@ -154,7 +152,7 @@ def check_matrix(A, B):
     norma_max = max(norm(A + B), norm(A), norm(B))
     ratio = norma / norma_max
     if ratio > 1e-15:
-        logger.info("    ERROR: A and B are DIFFERENT MATRICES")
+        print("    ERROR: A and B are DIFFERENT MATRICES")
         raise ValueError(f"    NORM {norma}, RATIO {ratio}")
 
 
@@ -171,6 +169,6 @@ def check_hermitian(A):
     if not isspmatrix(A):
         raise TypeError(f"A should be a csr_matrix, not a {type(A)}")
     # Get the Hermitian
-    logger.info("CHECK HERMITICITY")
+    print("CHECK HERMITICITY")
     A_dag = A.getH()
     check_matrix(A, A_dag)

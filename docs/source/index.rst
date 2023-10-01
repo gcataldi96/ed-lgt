@@ -3,21 +3,30 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to Exact Diagonalization for Lattice Gauge Theories's documentation!
+Exact Diagonalization for Lattice Gauge Theories!
 ============================================================================
 
-Contents
-^^^^^^^^
+The Exact Diagonalization Library for Lattice Gauge Theories provides a powerful set of tools for performing exact diagonalization calculations on 2-dimensional lattices, specifically targeting both Abelian and non-Abelian Lattice Gauge Theories. 
+This library empowers researchers and practitioners in the field of quantum many-body systems to analyze and explore the behavior of complex lattice gauge theories through the precise computation of Hamiltonian eigenvalues and eigenvectors.
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
+   installation
+   tools/index
+   license
+
+.. raw :: latex
+
+   \appendix
 
 
-Indices and tables
-==================
+.. only :: html
 
-* :ref:`genindex`
-* :ref:`modindex`
-* :ref:`search`
+   Indices and Tables
+   ==================
+
+   * :ref:`genindex`
+   * :ref:`modindex`
+   * :ref:`search`
