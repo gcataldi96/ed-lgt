@@ -1,6 +1,5 @@
 import numpy as np
 from .mappings_1D_2D import zig_zag
-from simsio import logger
 
 __all__ = ["structure_factor", "get_charge", "get_density"]
 
