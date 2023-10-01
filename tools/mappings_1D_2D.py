@@ -1,16 +1,38 @@
-__all__ = ["zig_zag", "inverse_zig_zag", "snake", "hilbert", "inverse_hilbert", "coords"]
-# =====================================================================================
-#                                    ZIGZAG MAPPING
-# =====================================================================================
+import numpy as np
+
+__all__ = [
+    "zig_zag",
+    "inverse_zig_zag",
+    "snake",
+    "inverse_snake",
+    "hilbert",
+    "inverse_hilbert",
+    "coords",
+]
+
+
 def zig_zag(nx, ny, d):
-    # GIVEN THE 1D POINT AT POSITION d OF THE ZIGZAG CURVE IN A nx x ny DISCRETE LATTICE
-    # IT PROVIDES THE CORRESPONDING 2D COORDINATES (x,y) OF THE POINT
-    # NOTE: THE ZIGZAG CURVE IS BUILT BY ALWAYS COUNTING FROM 0 (NOT 1)
-    #       HENCE THE POINTS OF THE 1D CURVE START FROM 0 TO (nx * ny)-1
-    #       AND THE COORDINATES (x,y) ARE SUPPOSED TO GO FROM 0 TO nx-1 (ny-1)
-    #       FOR MATTER OF CODE AT THE END OF THE PROCEEDING BOTH
-    #       THE COORDS (x,y) AND THE POINTS OF THE CURVE HAVE TO
-    #       BE SHIFTED BY ADDING 1
+    """
+    Given the 1d point at position d of the zigzag curve in a (nx,ny) discrete lattice,
+    it provides the corresponding 2d coordinates (x,y) of the point
+    NOTE: the zigzag curve is built by always counting from 0 (not 1),
+        hence the points of the 1d curve start from 0 to (nx * ny)-1
+        and the coordinates (x,y) are supposed to go from (0,0) to (nx-1,ny-1.
+
+    Args:
+        nx (int): x number of lattice sites
+        ny (int): y number of lattice sites
+        d (int): point of a 1D curve covering the 2D lattice.
+
+    Returns:
+        (int, int): 2D coordinates of the 1D point of the ZigZag curve in the lattice
+    """
+    if not np.isscalar(nx) and not isinstance(nx, int):
+        raise TypeError(f"nx must be SCALAR & INTEGER, not {type(nx)}")
+    if not np.isscalar(ny) and not isinstance(ny, int):
+        raise TypeError(f"ny must be SCALAR & INTEGER, not {type(ny)}")
+    if not np.isscalar(d) and not isinstance(d, int):
+        raise TypeError(f"d must be SCALAR & INTEGER, not {type(d)}")
     if d == 0:
         x = 0
         y = 0
@@ -21,78 +43,115 @@ def zig_zag(nx, ny, d):
         # COMPUTE THE REST OF THE DIVISION
         x = d % nx
         # COMPUTE THE INTEGER PART OF THE DIVISION
-        y = int(d / nx)
+        y = d // nx
     return x, y
 
 
-# =====================================================================================
 def inverse_zig_zag(nx, ny, x, y):
-    # INVERSE ZIGZAG CURVE MAPPING (from coords to the 1D points)
-    # NOTE: GIVEN THE SIZES (nx,ny) of a LATTICE, THE COORDS x,y HAS TO
-    #       START FROM 0 AND ARRIVE TO nx-1 (ny-1). AT THE END, THE POINTS OF THE
-    #       ZIGZAG CURVE START FROM 0. ADD 1 IF YOU WANT TO START FROM 1
+    """
+    Inverse zigzag curve mapping (from 2D coords to the 1D points)
+    NOTE: given the sizes (nx,ny) of a lattice, the coords (x,y)
+        has to start from (0,0) and arrive to (nx-1,ny-1).
+        Correspondingly, the points of the zigzag curve range from 0 to (nx * ny -1).
+
+    Args:
+        nx (int): x number of lattice sites
+        ny (int): y number of lattice sites
+        x (int): x coordinate of the lattice
+        y (int): y coordinate of the lattice
+
+    Returns:
+        int: 1D point of the zigzag curve
+    """
+    if not np.isscalar(nx) and not isinstance(nx, int):
+        raise TypeError(f"nx must be SCALAR & INTEGER, not {type(nx)}")
+    if not np.isscalar(ny) and not isinstance(ny, int):
+        raise TypeError(f"ny must be SCALAR & INTEGER, not {type(ny)}")
+    if not np.isscalar(x) and not isinstance(x, int):
+        raise TypeError(f"x must be SCALAR & INTEGER, not {type(x)}")
+    if not np.isscalar(y) and not isinstance(y, int):
+        raise TypeError(f"y must be SCALAR & INTEGER, not {type(y)}")
     d = (y * nx) + x
     return d
 
 
-# ========================================================================================
-#                                    SNAKE MAPPING
-# ========================================================================================
-def snake(n, d):
-    # GIVEN THE 1D POINT OF THE SNAKE CURVE IN A nxn DISCRETE LATTICE
-    # IT PROVIDES THE CORRESPONDING 2D COORDINATES (x,y) OF THE POINT
-    # NOTE: THE SNAKE CURVE IS BUILT BY ALWAYS COUNTING FROM 0 (NOT 1)
-    #       HENCE THE POINTS OF THE 1D CURVE START FROM 0 TO (n**2)-1
-    #       AND THE COORD.S x AND y ARE SUPPOSED TO GO FROM 0 TO n-1
-    #       FOR MATTER OF CODE AT THE END OF THE PROCEEDING EITHER
-    #       THE COORDS (x,y) EITHER THE POINTS OF THE CURVE HAVE TO
-    #       BE SHIFTED BY ADDING 1
+def snake(nx, ny, d):
+    """
+    Given the 1d point of the snake curve in a (nx,ny) discrete lattice,
+    it provides the corresponding 2d coordinates (x,y) of the point
+    NOTE: the snake curve is built by always counting from 0 (not 1)
+        hence the points of the 1d curve start from 0 to (nx*ny)-1
+        and the coord.s x and y are supposed to go from 0 to n-1
+
+    Args:
+        nx (int): x number of lattice sites
+        ny (int): y number of lattice sites
+        d (int): point of a 1D curve covering the 2D lattice.
+
+    Returns:
+        (int, int): 2D coordinates of the 1D point of the ZigZag curve in the lattice
+    """
+    if not np.isscalar(nx) and not isinstance(nx, int):
+        raise TypeError(f"nx must be SCALAR & INTEGER, not {type(nx)}")
+    if not np.isscalar(ny) and not isinstance(ny, int):
+        raise TypeError(f"ny must be SCALAR & INTEGER, not {type(ny)}")
+    if not np.isscalar(d) and not isinstance(d, int):
+        raise TypeError(f"d must be SCALAR & INTEGER, not {type(d)}")
     if d == 0:
         x = 0
         y = 0
-    elif d < n:
+    elif d < nx:
         y = 0
         x = d
     else:
-        # COMPUTE THE REST OF THE DIVISION
-        tmp1 = d % n
         # COMPUTE THE INTEGER PART OF THE DIVISION
-        tmp2 = int(d / n)
-        tmp3 = (tmp2 + 1) % 2
-        y = tmp2
-        if tmp3 == 0:
-            x = n - 1 - tmp1
+        y = d // nx
+        if (y % 2) == 0:
+            x = d % nx
         else:
-            x = tmp1
+            x = nx - 1 - d % nx
     return x, y
 
 
-# ========================================================================================
-# ========================================================================================
-def inverse_snake(n, x, y):
-    # INVERSE SNAKE CURVE MAPPING (from coords to the 1D points)
-    # NOTE: GIVEN THE SIZE L of A SQUARE LATTICE, THE COORDS X,Y HAS TO
-    #       START FROM 0 AND ARRIVE TO L-1. AT THE END, THE POINTS OF THE
-    #       SNAKE CURVE START FROM 0. ADD 1 IF YOU WANT TO START FROM 1
+def inverse_snake(nx, ny, x, y):
+    """
+    Inverse snake curve mapping (from coords to the 1d points)
+    NOTE: given the size l of a square lattice, the coords x,y has to
+        start from 0 and arrive to l-1. at the end, the points of the
+        snake curve start from 0. add 1 if you want to start from 1
+
+    Args:
+        nx (int): x number of lattice sites
+        ny (int): y number of lattice sites
+        x (int): x coordinate of the lattice
+        y (int): y coordinate of the lattice
+
+    Returns:
+        int: 1D point of the zigzag curve
+    """
+    if not np.isscalar(nx) and not isinstance(nx, int):
+        raise TypeError(f"nx must be SCALAR & INTEGER, not {type(nx)}")
+    if not np.isscalar(ny) and not isinstance(ny, int):
+        raise TypeError(f"ny must be SCALAR & INTEGER, not {type(ny)}")
+    if not np.isscalar(x) and not isinstance(x, int):
+        raise TypeError(f"x must be SCALAR & INTEGER, not {type(x)}")
+    if not np.isscalar(y) and not isinstance(y, int):
+        raise TypeError(f"y must be SCALAR & INTEGER, not {type(y)}")
     d = 0
-    tmp1 = (y + 1) % 2
-    # notice that the first (and hence odd) column is the 0^th column
-    if tmp1 == 0:
-        # EVEN COLUMNS (1,3,5...n-1)
-        d = (y * n) + n - 1 - x
+    # Notice that the first (and hence odd) column is the 0^th column
+    if (y % 2) == 0:
+        # EVEN COLUMNS (0,2,4,...n-2)
+        d = (y * nx) + x
     else:
-        # ODD COLUMNS (0,2,4,...n-2)
-        d = (y * n) + x
+        # ODD COLUMNS (1,3,5...n-1)
+        d = (y * nx) + nx - 1 - x
     return d
 
 
-# ========================================================================================
-#                                   HILBERT MAPPING
-# ========================================================================================
 def regions(num, x, y, s):
     if num == 0:
         # BOTTOM LEFT: CLOCKWISE ROTATE THE COORDS (x,y) OF 90 DEG
-        #              THE ROTATION MAKES (x,y) INVERT (y,x)
+        # THE ROTATION MAKES (x,y) INVERT (y,x)
         t = x
         x = y
         y = t
@@ -112,8 +171,6 @@ def regions(num, x, y, s):
     return x, y
 
 
-# ========================================================================================
-# ========================================================================================
 def bitconv(num):
     # GIVEN THE POSITION OF THE HILBERT CURVE IN A 2x2 SQUARE,
     # IT RETURNS THE CORRESPONDING PAIR OF COORDINATES (rx,ry)
@@ -136,13 +193,10 @@ def bitconv(num):
     return rx, ry
 
 
-# ========================================================================================
-# ========================================================================================
 def hilbert(n, d):
     # MAPPING THE POSITION d OF THE HILBERT CURVE
     # LIVING IN A nxn SQUARE LATTIVE INTO THE
-    # CORRESPONDING 2D (x,y) COORDINATES
-    # OF A S
+    # CORRESPONDING 2D (x,y) COORDINATES OF A S
     s = 1  # FIX THE INITIAL LEVEL OF DESCRIPTION
     n1 = d & 3  # FIX THE 2 BITS CORRESPONDING TO THE LEVEL
     x = 0
@@ -161,8 +215,6 @@ def hilbert(n, d):
     return x, y
 
 
-# ========================================================================================
-# ========================================================================================
 def inverse_regions(num, x, y, s):
     if num == 0:
         # BOTTOM LEFT
@@ -185,8 +237,6 @@ def inverse_regions(num, x, y, s):
     return x, y
 
 
-# ========================================================================================
-# ========================================================================================
 def inverse_bitconv(rx, ry):
     # GIVEN A PAIR OF COORDINATES (x,y) IN A 2x2 LATTICE, IT
     # RETURNS THE POINT num OF THE CORRESPONDING HILBERT CURVE
@@ -207,8 +257,6 @@ def inverse_bitconv(rx, ry):
     return num
 
 
-# ========================================================================================
-# ========================================================================================
 def inverse_hilbert(n, x, y):
     # MAPPING THE 2D (x,y) OF A nxn SQUARE INTO THE POSITION d
     # OF THE HILBERT CURVE. REMEMBER THAT THE FINAL POINT
@@ -230,7 +278,5 @@ def inverse_hilbert(n, x, y):
     return d
 
 
-# ========================================================================================
-# ========================================================================================
 def coords(x, y):
     return "(" + str(x + 1) + "," + str(y + 1) + ")"
