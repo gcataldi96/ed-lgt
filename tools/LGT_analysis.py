@@ -1,21 +1,4 @@
-from simsio import logger
-from itertools import product
-import numpy as np
-import pickle
-from .mappings_1D_2D import inverse_zig_zag
-
-__all__ = ["save_dictionary", "load_dictionary", "get_energy_density"]
-
-
-def save_dictionary(dict, filename):
-    with open(filename, "wb") as outp:  # Overwrites any existing file.
-        pickle.dump(dict, outp, pickle.HIGHEST_PROTOCOL)
-    outp.close
-
-
-def load_dictionary(filename):
-    with open(filename, "rb") as outp:
-        return pickle.load(outp)
+__all__ = ["get_energy_density"]
 
 
 def get_energy_density(
