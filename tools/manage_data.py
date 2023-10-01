@@ -1,28 +1,64 @@
-import json
 import os
-
+import pickle
 import numpy as np
 
-__all__ = ["store_results", "acquire_data"]
+__all__ = [
+    "save_dictionary",
+    "load_dictionary",
+    "save_data_in_textfile",
+    "load_data_from_textfile",
+]
 
-def store_results(data_file, x_data, new_data):
+
+def save_dictionary(dictionary, filename):
+    """
+    This function save the information of a Python dictionary into a .pkl file
+
+    Args:
+        dictionary (dict): dictionary to be saved
+        filename (str): name of the file where to save the dictionary
+    """
+    if not isinstance(dictionary, dict):
+        raise TypeError(f"dictionary should be a DICT, not a {type(dictionary)}")
+    if not isinstance(filename, str):
+        raise TypeError(f"filename should be a STRING, not a {type(filename)}")
+    with open(filename, "wb") as outp:  # Overwrites any existing file.
+        pickle.dump(dict, outp, pickle.HIGHEST_PROTOCOL)
+    outp.close
+
+
+def load_dictionary(filename):
+    """
+    This function loads the information of a Python dictionary from a .pkl file
+
+    Args:
+        filename (str): name of the file where the dictionary is saved
+    """
+    if not isinstance(filename, str):
+        raise TypeError(f"filename should be a STRING, not a {type(filename)}")
+    with open(filename, "rb") as outp:
+        return pickle.load(outp)
+
+
+def save_data_in_textfile(data_file, x_data, new_data):
+    """
+    This function stores a set of values as a new column of a text file with already existing columns of values.
+    Each column will be then easily used for comparison in plots.
+
+    Args:
+        data_file (str): Name of the file where to save the set of values
+        x_data (list): It contains the x values corresponding to the new set of values. The first entry is a string label
+        new_data (list): It contains the new set of y values corresponding to the x_data. The first entry is a string label (typicalliy referred to the simulation)
+
+    Raises:
+        TypeError: If the input arguments are of incorrect types or formats.
+    """
     if not isinstance(data_file, str):
         raise TypeError(f"data_file should be a STRING, not a {type(data_file)}")
     if not isinstance(x_data, list):
         raise TypeError(f"x_data must be a LIST, not a {type(x_data)}")
     if not isinstance(new_data, list):
         raise TypeError(f"new_data must be a LIST, not a {type(new_data)}")
-    """
-    THIS FUNCTION STORES SOME VALUES IN NEW COLUMN OF A FILE
-    WITH ALREADY EXISTING COLUMNS OF vocabulary. THESE WOULD
-    BE THEN EASILY COMPARED IN A PLOT, ALL TOGETHER.
-    *    data_file   IS THE NAME OF THE FILE WHERE ALL THE
-    *                ALREADY EXISTING SIMULATIONS LIE
-    *    x_data      LIST CONTAINING X VALUES (FIRST ENTRY = LABEL OF x AXIS)
-    *    new data    IS A LIST CONTAINING ALL THE NEW DATA (y VALUES).
-    *                THE FIRST ELEMENT OF THE LIST IS A STRING
-    *                LABELING THE NAME OF THE SIMULATION
-    """
     # STORE X VALUES
     if not os.path.exists(data_file):
         g = open(data_file, "w+")
@@ -39,7 +75,21 @@ def store_results(data_file, x_data, new_data):
         h.write(line[ii] + "," + str(new_data[ii]) + "\n")
     h.close()
 
-def acquire_data(data_file_name, row_for_labels=False):
+
+def load_data_from_textfile(data_file_name, row_for_labels=False):
+    """
+    This function acquires data from a text file made out of different columns and yields it as a dictonary
+
+    Args:
+        data_file_name (str): name of the file
+        row_for_labels (bool, optional): If True, the firs line contains the labels. Default to False.
+
+    Raises:
+        TypeError: If the input arguments are of incorrect types or formats.
+
+    Returns:
+        dict: Dictonary where all the informations are stored
+    """
     if not isinstance(data_file_name, str):
         raise TypeError(
             f"data_file_name should be a STRING, not a {type(data_file_name)}"
