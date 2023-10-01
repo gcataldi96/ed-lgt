@@ -27,21 +27,30 @@ with run_sim() as sim:
     n_sites = lvals[0] * lvals[1]
     # BOUNDARY CONDITIONS
     has_obc = sim.par["has_obc"]
-    # GET g & m COUPLING
-    g = sim.par["g"]
-    m = sim.par["m"]
     # DEFINE THE GAUGE INVARIANT STATES OF THE BASIS
     spin = sim.par["spin"]
+    # PURE or FULL THEORY
+    pure_theory = sim.par["pure"]
+    # GET g COUPLING
+    g = sim.par["g"]
+    if pure_theory:
+        m = None
+        staggered_basis = False
+    else:
+        m = sim.par["m"]
+        staggered_basis = True
     # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
-    ops = QED_dressed_site_operators(spin, U=sim.par["U"])
-    M, _ = gauge_invariant_states(spin)
+    ops = QED_dressed_site_operators(spin, U=sim.par["U"], pure_theory=pure_theory)
+    M, states = gauge_invariant_states(spin, pure_theory)
     # ACQUIRE LOCAL DIMENSION OF EVERY SINGLE SITE
-    lattice_base, loc_dims = lattice_base_configs(M, lvals, has_obc, staggered=True)
+    lattice_base, loc_dims = lattice_base_configs(
+        M, lvals, has_obc, staggered=staggered_basis
+    )
     loc_dims = loc_dims.transpose().reshape(n_sites)
     lattice_base = lattice_base.transpose().reshape(n_sites)
     logger.info(loc_dims)
     # ACQUIRE HAMILTONIAN COEFFICIENTS
-    coeffs = get_QED_Hamiltonian_couplings(g, m)
+    coeffs = get_QED_Hamiltonian_couplings(pure_theory, g, m)
     # CONSTRUCT THE HAMILTONIAN
     H = 0
     h_terms = {}
@@ -52,7 +61,7 @@ with run_sim() as sim:
         op_list = [ops[op] for op in op_name_list]
         # Define the Hamiltonian term
         h_terms[f"W_{d}"] = TwoBodyTerm2D(
-            d, op_list, op_name_list, staggered_basis=True, site_basis=M
+            d, op_list, op_name_list, staggered_basis=staggered_basis, site_basis=M
         )
         H += h_terms[f"W_{d}"].get_Hamiltonian(
             lvals,
@@ -64,7 +73,7 @@ with run_sim() as sim:
         for s in "mp":
             op_name = f"E0_square_{s}{d}"
             h_terms[op_name] = LocalTerm2D(
-                ops[op_name], op_name, staggered_basis=True, site_basis=M
+                ops[op_name], op_name, staggered_basis=staggered_basis, site_basis=M
             )
             H += h_terms[op_name].get_Hamiltonian(
                 lvals=lvals,
@@ -74,35 +83,9 @@ with run_sim() as sim:
     # -------------------------------------------------------------------------------
     # ELECTRIC ENERGY
     h_terms["E_square"] = LocalTerm2D(
-        ops["E_square"], "E_square", staggered_basis=True, site_basis=M
+        ops["E_square"], "E_square", staggered_basis=staggered_basis, site_basis=M
     )
     H += h_terms["E_square"].get_Hamiltonian(lvals, has_obc, coeffs["E"])
-    for site in ["even", "odd"]:
-        # STAGGERED MASS TERM
-        h_terms[f"N_{site}"] = LocalTerm2D(
-            ops["N"], "N", staggered_basis=True, site_basis=M
-        )
-        H += h_terms[f"N_{site}"].get_Hamiltonian(
-            lvals, has_obc, coeffs[f"m_{site}"], staggered_mask(lvals, site)
-        )
-    # -------------------------------------------------------------------------------
-    # HOPPING
-    for d in directions:
-        for site in ["even", "odd"]:
-            # Define the list of the 2 non trivial operators
-            op_name_list = [f"Q_p{d}_dag", f"Q_m{d}"]
-            op_list = [ops[op] for op in op_name_list]
-            # Define the Hamiltonian term
-            h_terms[f"{d}_hop_{site}"] = TwoBodyTerm2D(
-                d, op_list, op_name_list, staggered_basis=True, site_basis=M
-            )
-            H += h_terms[f"{d}_hop_{site}"].get_Hamiltonian(
-                lvals,
-                strength=coeffs[f"t{d}_{site}"],
-                has_obc=has_obc,
-                add_dagger=True,
-                mask=staggered_mask(lvals, site),
-            )
     # -------------------------------------------------------------------------------
     # PLAQUETTE TERM: MAGNETIC INTERACTION
     op_name_list = [
@@ -113,7 +96,7 @@ with run_sim() as sim:
     ]
     op_list = [ops[op] for op in op_name_list]
     h_terms["plaq"] = PlaquetteTerm2D(
-        op_list, op_name_list, staggered_basis=True, site_basis=M
+        op_list, op_name_list, staggered_basis=staggered_basis, site_basis=M
     )
     H += h_terms["plaq"].get_Hamiltonian(
         lvals,
@@ -121,6 +104,39 @@ with run_sim() as sim:
         has_obc=has_obc,
         add_dagger=True,
     )
+    # -------------------------------------------------------------------------------
+    if not pure_theory:
+        # ---------------------------------------------------------------------------
+        # STAGGERED MASS TERM
+        for site in ["even", "odd"]:
+            h_terms[f"N_{site}"] = LocalTerm2D(
+                ops["N"], "N", staggered_basis=staggered_basis, site_basis=M
+            )
+            H += h_terms[f"N_{site}"].get_Hamiltonian(
+                lvals, has_obc, coeffs[f"m_{site}"], staggered_mask(lvals, site)
+            )
+        # ---------------------------------------------------------------------------
+        # HOPPING
+        for d in directions:
+            for site in ["even", "odd"]:
+                # Define the list of the 2 non trivial operators
+                op_name_list = [f"Q_p{d}_dag", f"Q_m{d}"]
+                op_list = [ops[op] for op in op_name_list]
+                # Define the Hamiltonian term
+                h_terms[f"{d}_hop_{site}"] = TwoBodyTerm2D(
+                    d,
+                    op_list,
+                    op_name_list,
+                    staggered_basis=staggered_basis,
+                    site_basis=M,
+                )
+                H += h_terms[f"{d}_hop_{site}"].get_Hamiltonian(
+                    lvals,
+                    strength=coeffs[f"t{d}_{site}"],
+                    has_obc=has_obc,
+                    add_dagger=True,
+                    mask=staggered_mask(lvals, site),
+                )
     # ===========================================================================
     # CHECK THAT THE HAMILTONIAN IS HERMITIAN
     check_hermitian(H)
@@ -133,9 +149,13 @@ with run_sim() as sim:
     sim.res["entropy"] = []
     if not has_obc:
         sim.res["rho_eigvals"] = []
-    obs_list = [f"n_{s}{d}" for s in "mp" for d in directions] + ["E_square", "N"]
+    obs_list = [f"n_{s}{d}" for s in "mp" for d in directions] + ["E_square"]
+    if not pure_theory:
+        obs_list.append("N")
     for obs in obs_list:
-        h_terms[obs] = LocalTerm2D(ops[obs], obs, staggered_basis=True, site_basis=M)
+        h_terms[obs] = LocalTerm2D(
+            ops[obs], obs, staggered_basis=staggered_basis, site_basis=M
+        )
         sim.res[obs] = []
     obs_list.append("plaq")
     sim.res["plaq"] = []
