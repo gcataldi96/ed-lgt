@@ -116,6 +116,7 @@ def truncation(array, threshold):
     return np.where(np.abs(array) > threshold, array, 0)
 
 
+# prova
 # %%
 L = 1
 alpha = 10
