@@ -2,7 +2,6 @@ import numpy as np
 from scipy.sparse import isspmatrix, csr_matrix
 from tools import zig_zag, inverse_zig_zag
 from .qmb_operations import four_body_op
-from simsio import logger
 
 __all__ = ["PlaquetteTerm2D"]
 
@@ -35,7 +34,7 @@ class PlaquetteTerm2D:
         self.BR_name = op_name_list[1]
         self.TL_name = op_name_list[2]
         self.TR_name = op_name_list[3]
-        # logger.info(
+        # print(
         #    f"PLAQUETTE {op_name_list[0]}-{op_name_list[1]}-{op_name_list[2]}-{op_name_list[3]}"
         # )
         # Define a list with the Four Operators involved in the Plaquette:
@@ -96,7 +95,7 @@ class PlaquetteTerm2D:
                 else:
                     mask_conditions = False
             if mask_conditions:
-                # logger.info(sites_list)
+                # print(sites_list)
                 H_plaq += strength * four_body_op(
                     self.op_list,
                     sites_list,
@@ -129,16 +128,16 @@ class PlaquetteTerm2D:
             if not isinstance(site, str):
                 raise TypeError(f"site should be STR ('even' / 'odd'), not {type(str)}")
         # ADVERTISE OF THE CHOSEN PART OF THE PLAQUETTE YOU WANT TO COMPUTE
-        logger.info(f"----------------------------------------------------")
+        print(f"----------------------------------------------------")
         if get_imag:
             chosen_part = "IMAG"
         else:
             chosen_part = "REAL"
         if site is None:
-            logger.info(f"PLAQUETTE: {chosen_part}")
+            print(f"PLAQUETTE: {chosen_part}")
         else:
-            logger.info(f"PLAQUETTE: {chosen_part} PART {site}")
-        logger.info(f"----------------------------------------------------")
+            print(f"PLAQUETTE: {chosen_part} PART {site}")
+        print(f"----------------------------------------------------")
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = lvals[0]
         ny = lvals[1]
@@ -245,7 +244,7 @@ class PlaquetteTerm2D:
                 self.std += delta_plaq
         self.avg = self.avg / counter
         self.std = np.sqrt(np.abs(self.std) / counter)
-        logger.info(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
+        print(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 
     def print_Plaquette(self, sites_list, value):
         if not isinstance(sites_list, list):
@@ -265,9 +264,9 @@ class PlaquetteTerm2D:
                 value = format(np.abs(value), ".10f")
             else:
                 value = format(value, ".9f")
-        logger.info(f"({sites_list[2]})------------({sites_list[3]})")
-        logger.info(f"  |                |")
-        logger.info(f"  |  {value}  |")
-        logger.info(f"  |                |")
-        logger.info(f"({sites_list[0]})------------({sites_list[1]})")
-        logger.info("")
+        print(f"({sites_list[2]})------------({sites_list[3]})")
+        print(f"  |                |")
+        print(f"  |  {value}  |")
+        print(f"  |                |")
+        print(f"({sites_list[0]})------------({sites_list[1]})")
+        print("")

@@ -2,7 +2,6 @@ import numpy as np
 from scipy.sparse import isspmatrix, csr_matrix
 from tools import zig_zag, inverse_zig_zag
 from .qmb_operations import two_body_op
-from simsio import logger
 
 __all__ = ["TwoBodyTerm2D"]
 
@@ -32,7 +31,7 @@ class TwoBodyTerm2D:
                     )
         self.axis = axis
         self.op_name_list = op_name_list
-        # logger.info(f"twobody-term {self.op_name_list[0]}-{self.op_name_list[1]}")
+        # print(f"twobody-term {self.op_name_list[0]}-{self.op_name_list[1]}")
         if axis == "x":
             self.op_list = op_list
             self.Left = op_list[0]
@@ -42,7 +41,7 @@ class TwoBodyTerm2D:
             self.Bottom = op_list[0]
             self.Top = op_list[1]
         else:
-            logger.info(f"{axis} can be only x or y")
+            print(f"{axis} can be only x or y")
         self.stag_basis = staggered_basis
         self.site_basis = site_basis
 
@@ -174,14 +173,14 @@ class TwoBodyTerm2D:
                     if x == nx - 1:
                         if not has_obc:
                             if np.abs(self.corr[x, y, 0, y] - value) > threshold:
-                                logger.info(
+                                print(
                                     f"W{self.axis}_({x},{y})-({0},{y})={self.corr[x,y,0,y]}: expected {value}"
                                 )
                         else:
                             continue
                     else:
                         if np.abs(self.corr[x, y, x + 1, y] - value) > threshold:
-                            logger.info(
+                            print(
                                 f"W{self.axis}_({x},{y})-({x+1},{y})={self.corr[x,y,x+1,y]}: expected {value}"
                             )
         else:
@@ -190,14 +189,14 @@ class TwoBodyTerm2D:
                     if y == ny - 1:
                         if not has_obc:
                             if np.abs(self.corr[x, y, x, 0] - value) > threshold:
-                                logger.info(
+                                print(
                                     f"W{self.axis}_({x},{y})-({x},{0})={self.corr[x,y,x,0]}: expected {value}"
                                 )
                         else:
                             continue
                     else:
                         if np.abs(self.corr[x, y, x, y + 1] - value) > threshold:
-                            logger.info(
+                            print(
                                 f"W{self.axis}_({x},{y})-({x},{y+1})={self.corr[x,y,x,y+1]}: expected {value}"
                             )
-        logger.info(f"{self.axis} LINK SYMMETRIES SATISFIED")
+        print(f"{self.axis} LINK SYMMETRIES SATISFIED")
