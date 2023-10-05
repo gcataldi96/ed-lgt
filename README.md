@@ -1,5 +1,6 @@
 # Exact_Diagonalization
-Code for Exact Diagonalization of Quantum Many-Body Hamiltonians
+Code for Exact Diagonalization of Quantum Many-Body Hamiltonians:
+Read the Documentation on https://ed-su2.readthedocs.io/en/latest/
 # Setup
 1) Download from git the repository
 
