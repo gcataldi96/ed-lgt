@@ -14,6 +14,7 @@ This library empowers researchers and practitioners in the field of quantum many
    :caption: Contents:
 
    installation
+   modeling/index
    tools/index
    license
 
