@@ -1,8 +1,8 @@
 .. _plaquette_term:
 
-=================
-LocalTerm2D Class
-=================
+=====================
+PlaquetteTerm2D Class
+=====================
 
 .. automodule:: modeling.plaquette_term
    :synopsis: Functions to construct Plaquette term Hamiltonian
