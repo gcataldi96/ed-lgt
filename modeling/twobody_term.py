@@ -1,3 +1,9 @@
+"""
+:class:`TwoBodyTerm2D` provides methods for computing two-body terms along a specified axis in a 2D lattice model.
+Two-body terms are used to calculate properties related to lattice models and quantum systems. 
+It takes a list of operator matrices and names, along with an axis (x or y), and provides methods
+to calculate the Hamiltonian, expectation values, and check link symmetry.
+"""
 import numpy as np
 from scipy.sparse import isspmatrix, csr_matrix
 from tools import zig_zag, inverse_zig_zag

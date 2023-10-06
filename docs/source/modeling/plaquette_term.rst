@@ -4,10 +4,11 @@
 PlaquetteTerm2D Class
 =====================
 
-.. automodule:: modeling.plaquette_term
-   :synopsis: Functions to construct Plaquette term Hamiltonian
+.. autoclass:: modeling.plaquette_term.PlaquetteTerm2D
    :noindex:
    :members:
+   :undoc-members:
+   :show-inheritance:
 
 .. seealso::
     :ref:`plaquette_term Module <plaquette_term>`

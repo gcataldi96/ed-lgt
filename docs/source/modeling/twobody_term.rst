@@ -4,10 +4,11 @@
 TwoBodyTerm2D Class
 =====================
 
-.. automodule:: modeling.twobody_term
-   :synopsis: Functions to construct 2Body term Hamiltonian
+.. autoclass:: modeling.twobody_term.TwoBodyTerm2D
    :noindex:
    :members:
+   :undoc-members:
+   :show-inheritance:
 
 .. seealso::
     :ref:`twobody_term Module <twobody_term>`

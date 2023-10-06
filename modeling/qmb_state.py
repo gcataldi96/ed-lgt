@@ -3,7 +3,6 @@ import numpy as np
 from scipy.linalg import eigh as array_eigh
 from scipy.sparse import csr_matrix, isspmatrix, isspmatrix_csr, save_npz, lil_matrix
 from scipy.sparse.linalg import eigsh as sparse_eigh
-from simsio import logger
 from tools import pause, zig_zag
 from .twobody_term import two_body_op
 
@@ -19,7 +18,16 @@ __all__ = [
     "get_state_configurations",
     "get_SU2_topological_invariant",
     "define_measurements",
+    "expectation_value",
 ]
+
+
+def expectation_value(psi, operator):
+    if not isspmatrix(operator):
+        raise TypeError(f"operator should be a sparse_matrix, not a {type(operator)}")
+    if not isinstance(psi, np.ndarray):
+        raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
+    return np.real(np.dot(np.conjugate(psi), (operator.dot(psi))))
 
 
 class Ground_State:
@@ -29,7 +37,7 @@ class Ground_State:
         if not np.isscalar(n_eigs) and not isinstance(n_eigs, int):
             raise TypeError(f"n_eigs should be a SCALAR INT, not a {type(n_eigs)}")
         # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
-        logger.info("DIAGONALIZE HAMILTONIAN")
+        print("DIAGONALIZE HAMILTONIAN")
         self.Nenergies, self.Npsi = sparse_eigh(Ham, k=n_eigs, which="SA")
         # Save GROUND STATE PROPERTIES
         self.energy = self.Nenergies[0]
@@ -37,7 +45,7 @@ class Ground_State:
 
     def normalize(self):
         norm = np.linalg.norm(self.psi)
-        logger.info(f"NORM {norm}")
+        print(f"NORM {norm}")
         self.psi /= norm
 
     def truncate(self, threshold):
@@ -51,7 +59,7 @@ def get_norm(psi):
         raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
     norm = np.linalg.norm(psi)
     if np.abs(norm - 1) > 1e-14:
-        logger.info(f"NORM {norm}")
+        print(f"NORM {norm}")
         psi = psi / norm
     return psi
 
@@ -114,8 +122,8 @@ def get_reduced_density_matrix(psi, loc_dims, lvals, site):
     n_sites = nx * ny
     # GET THE COORDINATES OF THE SITE site
     x, y = zig_zag(nx, ny, site)
-    logger.info("----------------------------------------------------")
-    logger.info(f"DENSITY MATRIX OF SITE ({x},{y})")
+    print("----------------------------------------------------")
+    print(f"DENSITY MATRIX OF SITE ({x},{y})")
     # RESHAPE psi
     psi_copy = psi.reshape(*[loc_dim for loc_dim in loc_dims.tolist()])
     # DEFINE A LIST OF SITES WE WANT TO TRACE OUT
@@ -160,7 +168,7 @@ def entanglement_entropy(psi, loc_dims, n_sites, partition_size):
         partition *= loc_dims[site]
     S, V, D = np.linalg.svd(psi.reshape((partition, int(tot_dim / partition))))
     tmp = np.array([-(llambda**2) * np.log2(llambda**2) for llambda in V])
-    logger.info(f"ENTROPY: {format(np.sum(tmp), '.9f')}")
+    print(f"ENTROPY: {format(np.sum(tmp), '.9f')}")
     return np.sum(tmp)
 
 
@@ -203,15 +211,15 @@ def get_loc_states_from_qmb_state(qmb_index, loc_dims, n_sites):
     if qmb_index > (tot_dim - 1):
         raise ValueError(f"index {qmb_index} is too high")
     loc_states = np.zeros(n_sites, dtype=int)
-    # logger.info(f"TOT_DIM {tot_dim}")
+    # print(f"TOT_DIM {tot_dim}")
     for ii in range(n_sites):
-        # logger.info(f"QMB index {qmb_index}")
+        # print(f"QMB index {qmb_index}")
         tot_dim /= loc_dims[ii]
-        # logger.info(f"TOT_DIM {tot_dim}")
+        # print(f"TOT_DIM {tot_dim}")
         loc_states[ii] = qmb_index // tot_dim
-        # logger.info(f"loc_state {loc_states[ii]}")
+        # print(f"loc_state {loc_states[ii]}")
         qmb_index -= loc_states[ii] * tot_dim
-    # logger.info(loc_states)
+    # print(loc_states)
     return loc_states
 
 
@@ -293,8 +301,8 @@ def get_state_configurations(psi, loc_dims, n_sites):
             raise TypeError(
                 f"loc_dims is neither a SCALAR, a LIST or ARRAY but a {type(loc_dims)}"
             )
-    logger.info("----------------------------------------------------")
-    logger.info("STATE CONFIGURATIONS")
+    print("----------------------------------------------------")
+    print("STATE CONFIGURATIONS")
     psi = truncation(psi, 1e-10)
     sing_vals = sorted(csr_matrix(psi).data, key=lambda x: (abs(x), -x), reverse=True)
     indices = [
@@ -310,10 +318,10 @@ def get_state_configurations(psi, loc_dims, n_sites):
         loc_states = get_loc_states_from_qmb_state(
             qmb_index=ind, loc_dims=loc_dims, n_sites=n_sites
         )
-        logger.info(f"{loc_states}  {alpha}")
+        print(f"{loc_states}  {alpha}")
         state_configurations["state_config"].append(loc_states)
         state_configurations["coeff"].append(alpha)
-    logger.info("----------------------------------------------------")
+    print("----------------------------------------------------")
     return state_configurations
 
 
@@ -381,8 +389,8 @@ def get_SU2_topological_invariant(link_parity_op, lvals, psi, axis):
             two_body_op(op_list, op_sites_list, lvals, has_obc=True).dot(psi),
         )
     )
-    logger.info(f"P{axis} TOPOLOGICAL SECTOR: {sector}")
-    logger.info("----------------------------------------------------")
+    print(f"P{axis} TOPOLOGICAL SECTOR: {sector}")
+    print("----------------------------------------------------")
     return sector
 
 
@@ -444,7 +452,7 @@ def get_projector(rho, loc_dim, threshold, debug, name_save):
     Proj = truncation(Proj, 10 ** (-14))
     # Promote the Projector Proj to a CSR_MATRIX
     Proj = csr_matrix(Proj)
-    logger.info(Proj)
+    print(Proj)
     # Save the Projector on a file
     save_npz(f"{name_save}.npz", Proj)
     return Proj

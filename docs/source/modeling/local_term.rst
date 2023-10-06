@@ -4,10 +4,11 @@
 LocalTerm2D Class
 =================
 
-.. automodule:: modeling.local_term
-   :synopsis: Functions to construct local term Hamiltonian
+.. autoclass:: modeling.local_term.LocalTerm2D
    :noindex:
    :members:
+   :undoc-members:
+   :show-inheritance:
 
 .. seealso::
     :ref:`local_term Module <local_term>`

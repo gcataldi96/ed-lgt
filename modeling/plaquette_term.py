@@ -1,3 +1,9 @@
+"""
+:class:`PlaquetteTerm2D` computes plaquette terms on a 2D lattice model, 
+providing methods for their calculation and visualization. 
+Plaquette terms are used to compute properties relevant to lattice gauge theories.
+"""
+
 import numpy as np
 from scipy.sparse import isspmatrix, csr_matrix
 from tools import zig_zag, inverse_zig_zag
