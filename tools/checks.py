@@ -1,3 +1,6 @@
+"""
+This module provides utility functions for manipulating quantum many-body operators and matrices.
+"""
 from scipy.sparse import isspmatrix
 from scipy.sparse.linalg import norm
 
