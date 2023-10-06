@@ -11,6 +11,7 @@ Modeling
     :maxdepth: 2
     :caption: Contents:
 
+    qmb_operations
     local_term
     twobody_term
     plaquette_term
