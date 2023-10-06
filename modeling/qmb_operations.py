@@ -1,7 +1,6 @@
 import numpy as np
 from scipy.sparse import csr_matrix, identity, isspmatrix, kron
 from tools import zig_zag
-from simsio import logger
 
 __all__ = [
     "local_op",
@@ -57,6 +56,24 @@ def qmb_operator(ops, op_list, add_dagger=False, get_real=False, get_imag=False)
 
 
 def lattice_base_configs(base, lvals, has_obc=True, staggered=False):
+    """
+    This function associate the basis to each lattice site
+    and the corresponding dimension.
+
+    Args:
+        base (dict of sparse matrices): dict with the proper hilbert basis
+        of a given LGT for each lattice site
+
+        lvals (list of ints): lattice dimensions
+
+        has_obc (bool, optional): true for OBC, false for PBC
+
+        staggered (bool, optional): if True, a staggered basis is required. Default to False.
+
+    Returns:
+        (np.array((lvals)),np.array((lvals))): the 2D array with the labels of the site
+        and the 2D with the corresponding site-basis dimensions
+    """
     if not isinstance(lvals, list):
         raise TypeError(f"lvals should be a list, not a {type(lvals)}")
     else:
@@ -67,24 +84,6 @@ def lattice_base_configs(base, lvals, has_obc=True, staggered=False):
         raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
     if not isinstance(staggered, bool):
         raise TypeError(f"staggered should be a BOOL, not a {type(staggered)}")
-    """
-    This function associate the basis to each lattice site
-    and the corresponding dimension.
-
-    Args:
-        base (dict of sparse matrices): dict with the proper hilbert basis 
-        of a given LGT for each lattice site
-
-        lvals (list of ints): lattice dimensions
-
-        has_obc (bool, optional): true for OBC, false for PBC
-
-        staggered (bool, optional): if True, a staggered basis is required. Defaults to False.
-
-    Returns:
-        (np.array((lvals)),np.array((lvals))): the 2D array with the labels of the site
-        and the 2D with the corresponding site-basis dimensions
-    """
     lattice_base = np.zeros(tuple(lvals), dtype=object)
     loc_dims = np.zeros(tuple(lvals), dtype=int)
     for x in range(lvals[0]):
@@ -183,6 +182,29 @@ def get_site_label(x, y, lvals, has_obc, staggered=False, all_sites_equal=True):
 def local_op(
     operator, op_1D_site, lvals, has_obc, staggered_basis=False, site_basis=None
 ):
+    """
+    This function compute the single local operator term on the lattice where the operator
+    acts on a specific site (the rest is occupied by identities).
+
+    Args:
+        operator (scipy.sparse): A single site sparse operator matrix.
+
+        op_1D_site (scalar int): position of the site along a certain 1D ordering in the 2D lattice
+
+        lvals (list): Dimensions (# of sites) of a 2D rectangular lattice ([nx,ny])
+
+        has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+
+        staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
+
+        site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites (corners, borders, lattice core, even/odd sites). Defaults to None.
+
+    Raises:
+        TypeError: If the input arguments are of incorrect types or formats.
+
+    Returns:
+        scipy.sparse.matrix: QMB Hamiltonian in sparse form
+    """
     # CHECK ON TYPES
     if not isspmatrix(operator):
         raise TypeError(f"operator should be SPARSE, not a {type(operator)}")
@@ -237,6 +259,29 @@ def local_op(
 def two_body_op(
     op_list, op_sites_list, lvals, has_obc, staggered_basis=False, site_basis=None
 ):
+    """
+    This function compute the single twobody operator term on the lattice with 2 operators
+    acting on two specific lattice sites (the rest is occupied by identities).
+
+    Args:
+        op_list (list of 2 scipy.sparse.matrices): list of the 4 operators involved in the Plaquette Term
+
+        op_sites_list (list of 2 int): list of the positions of two operators in the 1D chain ordering 2d lattice sites
+
+        lvals (list): Dimensions (# of sites) of a 2D rectangular lattice ([nx,ny])
+
+        has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+
+        staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
+
+        site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites (corners, borders, lattice core, even/odd sites). Defaults to None.
+
+    Raises:
+        TypeError: If the input arguments are of incorrect types or formats.
+
+    Returns:
+        scipy.sparse.matrix: QMB Hamiltonian in sparse form
+    """
     # CHECK ON TYPES
     if not isinstance(op_list, list):
         raise TypeError(f"op_list must be a LIST, not a {type(op_list)}")
@@ -299,6 +344,31 @@ def four_body_op(
     site_basis=None,
     get_real=False,
 ):
+    """
+    This function compute the single plaquette operator term on the lattice with 4 operators
+    acting on 4 specific lattice sites (the rest is occupied by identities).
+
+    Args:
+        op_list (list of 4 scipy.sparse.matrices): list of the 4 operators involved in the Plaquette Term
+
+        op_sites_list (list of 4 int): list of the positions of two operators in the 1D chain ordering 2d lattice sites
+
+        lvals (list): Dimensions (# of sites) of a 2D rectangular lattice ([nx,ny])
+
+        has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+
+        staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
+
+        site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites (corners, borders, lattice core, even/odd sites). Defaults to None.
+
+        get_real (bool, optional): If true, it yields the real part of the operator. Defaults to False.
+
+    Raises:
+        TypeError: If the input arguments are of incorrect types or formats.
+
+    Returns:
+        scipy.sparse.matrix: QMB Hamiltonian in sparse form
+    """
     # CHECK ON TYPES
     if not isinstance(op_list, list):
         raise TypeError(f"op_list must be a LIST, not a {type(op_list)}")
