@@ -10,6 +10,20 @@ class TwoBodyTerm2D:
     def __init__(
         self, axis, op_list, op_name_list, staggered_basis=False, site_basis=None
     ):
+        """
+        This function introduce alla the fundamental information to define a TwoBody Hamiltonian Term and
+        possible eventual measures of it.
+
+        Args:
+            axis (str): axis along which the 2Body Term is performed
+            op_list (list of 2 scipy.sparse.matrices): list of the two operators involved in the 2Body Term
+            op_name_list (list of 2 str): list of the names of the two operators
+            staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
+            site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites (corners, borders, lattice core, even/odd sites). Defaults to None.
+
+        Raises:
+            TypeError: If the input arguments are of incorrect types or formats.
+        """
         # CHECK ON TYPES
         if not isinstance(axis, str):
             raise TypeError(f"axis should be a STRING, not a {type(axis)}")
@@ -48,6 +62,25 @@ class TwoBodyTerm2D:
     def get_Hamiltonian(
         self, lvals, strength, has_obc=True, add_dagger=False, mask=None
     ):
+        """
+        The function calculates the TwoBody Hamiltonian by summing up 2body terms for each lattice site,
+        potentially with some sites excluded based on the mask.
+        The result is scaled by the strength parameter before being returned.
+        Eventually, it is possible to sum also the dagger part of the Hamiltonian.
+
+        Args:
+            lvals (list): Dimensions (# of sites) of a 2D rectangular lattice ([nx,ny])
+            strength (scalar): Coupling of the Hamiltonian term.
+            has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+            add_dagger (bool, optional): If true, it add the hermitian conjugate of the resulting Hamiltonian. Defaults to False.
+            mask (np.ndarray, optional): 2D array with bool variables specifying (if True) where to apply the local term. Defaults to None.
+
+        Raises:
+            TypeError: If the input arguments are of incorrect types or formats.
+
+        Returns:
+            scipy.sparse: TwoBody Hamiltonian term ready to be used for exact diagonalization/expectation values.
+        """
         # CHECK ON TYPES
         if not isinstance(lvals, list):
             raise TypeError(f"lvals should be a list, not a {type(lvals)}")
@@ -118,6 +151,19 @@ class TwoBodyTerm2D:
         return H_twobody
 
     def get_expval(self, psi, lvals, has_obc=False, site=None):
+        """
+        The function calculates the expectation value (and it variance) of the TwoBody Hamiltonian
+        and its average over all the lattice sites.
+
+        Args:
+            psi (numpy.ndarray): QMB state where the expectation value has to be computed
+            lvals (list): Dimensions (# of sites) of a 2D rectangular lattice ([nx,ny])
+            has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+            site (str, optional): if odd/even, then the expectation value is performed only on that kind of sites. Defaults to None.
+
+        Raises:
+            TypeError: If the input arguments are of incorrect types or formats.
+        """
         # CHECK ON TYPES
         if not isinstance(psi, np.ndarray):
             raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
@@ -164,6 +210,17 @@ class TwoBodyTerm2D:
                     self.corr[x1, y1, x2, y2] = 0
 
     def check_link_symm(self, value=1, threshold=1e-10, has_obc=True):
+        """
+        This function checks the value of a 2body operator along the self.axis and compare it with an expected value.
+
+        Args:
+            value (int, optional): Default value which is expected for the observable. Defaults to 1.
+            threshold (scalar, real, optional): Tolerance for the checks. Defaults to 1e-10.
+            has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus and there are more links to be checked
+
+        Raises:
+            ValueError: If any site of the chosen border has not the expected value of the observable
+        """
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = self.corr.shape[0]
         ny = self.corr.shape[1]
@@ -173,14 +230,14 @@ class TwoBodyTerm2D:
                     if x == nx - 1:
                         if not has_obc:
                             if np.abs(self.corr[x, y, 0, y] - value) > threshold:
-                                print(
+                                raise ValueError(
                                     f"W{self.axis}_({x},{y})-({0},{y})={self.corr[x,y,0,y]}: expected {value}"
                                 )
                         else:
                             continue
                     else:
                         if np.abs(self.corr[x, y, x + 1, y] - value) > threshold:
-                            print(
+                            raise ValueError(
                                 f"W{self.axis}_({x},{y})-({x+1},{y})={self.corr[x,y,x+1,y]}: expected {value}"
                             )
         else:
@@ -189,14 +246,14 @@ class TwoBodyTerm2D:
                     if y == ny - 1:
                         if not has_obc:
                             if np.abs(self.corr[x, y, x, 0] - value) > threshold:
-                                print(
+                                raise ValueError(
                                     f"W{self.axis}_({x},{y})-({x},{0})={self.corr[x,y,x,0]}: expected {value}"
                                 )
                         else:
                             continue
                     else:
                         if np.abs(self.corr[x, y, x, y + 1] - value) > threshold:
-                            print(
+                            raise ValueError(
                                 f"W{self.axis}_({x},{y})-({x},{y+1})={self.corr[x,y,x,y+1]}: expected {value}"
                             )
         print(f"{self.axis} LINK SYMMETRIES SATISFIED")
