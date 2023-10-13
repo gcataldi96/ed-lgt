@@ -15,6 +15,7 @@ This library empowers researchers and practitioners in the field of quantum many
 
    installation
    modeling/index
+   operators/index
    tools/index
    license
 

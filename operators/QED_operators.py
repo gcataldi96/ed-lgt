@@ -89,8 +89,11 @@ def QED_dressed_site_operators(spin, U="ladder", pure_theory=False, lattice_dim=
 
     Args:
         spin (scalar, real): spin value, assumed to be integer or semi-integer
+
         U (str, optional): which version of U you want to use to obtain rishons. Default to "ladder".
+
         pure_theory (bool, optional): If true, the dressed site includes matter fields. Defaults to False.
+
         lattice_dim (int, optional): number of lattice spatial dimensions. Defaults to 2.
 
     Returns:
@@ -190,14 +193,20 @@ def check_QED_gauss_law(gauge_basis, gauss_law_ops, pure_theory=False, threshold
 
     Args:
         gauge_basis (dict): It contains the Gauge invarian basis (for each type of lattice site)
+
         gauss_law_ops (dict): It contains the Gauss Law operators (for each type of lattice site)
+
         pure_theory (bool, optional): If True the local basis describes gauge invariant states in absence of matter. Defaults to False.
+
         threshold (scalar & real, optional): numerical threshold for checks. Defaults to 1e-15.
 
     Raises:
         TypeError: If the input arguments are of incorrect types or formats.
+
         ValueError: if the gauge basis M does not behave as an Isometry: M^T*M=1
+
         ValueError: if the gauge basis does not generate a Projector P=M*M^T
+
         ValueError: if the QED gauss law is not satisfied
     """
 
@@ -244,9 +253,12 @@ def get_QED_Hamiltonian_couplings(pure_theory, g, m=None):
     """
     This function provides the QED Hamiltonian coefficients
     starting from the gauge coupling g and the bare mass parameter m
+
     Args:
         pure_theory (bool): True if the theory does not include matter
+
         g (scalar): gauge coupling
+
         m (scalar, optional): bare mass parameter
 
     Returns:
@@ -365,7 +377,7 @@ def gauge_invariant_states(spin, pure_theory=False, lattice_dim=2):
         lattice_dim (int, optional): number of spatial dimensions. Defaults to 2.
 
     Returns:
-        dict, dict: dictionaries with the basis and the states
+        (dict, dict): dictionaries with the basis and the states
     """
     if not np.isscalar(spin):
         raise TypeError(f"spin must be SCALAR & (semi)INTEGER, not {type(spin)}")

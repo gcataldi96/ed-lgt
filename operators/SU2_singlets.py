@@ -3,18 +3,21 @@ from itertools import product
 from sympy import S
 from sympy.physics.wigner import clebsch_gordan as CG_coeff
 from scipy.sparse import diags
-from simsio import logger
 
-__all__ = ["get_spin_operators", "spin_space", "m_values"]
+__all__ = [
+    "get_spin_operators",
+    "spin_space",
+    "m_values",
+    "spin_couple",
+    "SU2_singlet",
+    "get_SU2_singlets",
+]
 
 
 def get_spin_operators(s):
-    if not np.isscalar(s):
-        raise TypeError(f"s must be SCALAR & (semi)INTEGER, not {type(s)}")
     """
-    This function computes the spin (sparse) matrices: 
-    [Sz, Sp=S+, Sm=S-, Sx, Sy, S2=Casimir]
-    in any arbitrary spin-s representation
+    This function computes the spin (sparse) matrices:
+    [Sz, Sp=S+, Sm=S-, Sx, Sy, S2=Casimir] in any arbitrary spin-s representation
 
     Args:
         s (scalar, real): spin value, assumed to be integer or semi-integer
@@ -22,6 +25,8 @@ def get_spin_operators(s):
     Returns:
         dict: dictionary with the spin matrices
     """
+    if not np.isscalar(s):
+        raise TypeError(f"s must be SCALAR & (semi)INTEGER, not {type(s)}")
     # Size of the spin matrix
     size = spin_space(s)
     shape = (size, size)
@@ -54,29 +59,28 @@ def m_values(s):
 
 
 def spin_couple(j1, j2, singlet=False, M=None):
+    """
+    This function computes SU(2) states obtained by combining two spins j1, j2
+    by computing Clebsh-Gordan coefficients CG.
+
+    Args:
+        j1 (real & scalar): spin of the 1st particle
+
+        j2 (real & scalar): spin of the 2nd particle
+
+        singlet (bool, optional): if true, look only at the combinations of j1 and j2 that provides an SU(2) single. Defaults to False.
+
+        M (real & scalar, optional): spin-z component of the 1st particle. Defaults to None.
+
+    Returns:
+        list: [(j1, m1,) j2, m2, CG, j3, m3]
+    """
     if not np.isscalar(j1):
         raise TypeError(f"j1 must be scalar (int or real), not {type(j1)}")
     if not np.isscalar(j2):
         raise TypeError(f"j2 must be scalar (int or real), not {type(j2)}")
     if not isinstance(singlet, bool):
         raise TypeError(f"singlet must be bool, not {type(singlet)}")
-    """
-    This function computes states obtained by combining two spins j1, j2
-    by computing Clebsh-Gordan coefficients CG. 
-    Args:
-        j1 (real & scalar): spin of the 1st particle
-
-        j2 (real & scalar): spin of the 2nd particle
-
-        singlet (bool, optional): if true, look only at the combinations
-        if j1 and j2 that provides an SU(2) single. Defaults to False.
-
-        M (real & scalar, optional): spin-z component of the 1st particle.
-        Defaults to None.
-
-    Returns:
-        list: [(j1, m1,) j2, m2, CG, j3, m3]
-    """
     set = []
     if singlet:
         # if we expect a singlet, the only resulting j can only be 0
@@ -110,6 +114,23 @@ class SU2_singlet:
     def __init__(
         self, J_config, M_configs, CG_values, pure_theory=True, psi_vacuum=None
     ):
+        """
+        This class collects a configuration fo a set of angular momenta Js (and their corresponding momentum Z) that form an SU(2) singlet state with a certain Clebsh-Gordon coeffiicient.
+        The set of momenta is typically referred to SU(2) gauge fields, but it can eventually include also a matter state (in first position) describing Flavorless Color 1/2 Dirac fermions with 4 possible states: (J,M)=(0,0), (J,M)=(1/2,1/2), (J,M)=(1/2,-1/2), and (J,M)=(1/2,0)
+
+        Args:
+            J_config (list): list of Total angular momentum J of a set of particles/entities
+            M_configs (list): corresponding set of angular z-momentum (of the same length of J_config)
+            CG_values (list): list of intermediate Clebsh-Gordon coefficients, to be multiplied together for the overall CG coefficient of the J configuration.
+            pure_theory (bool, optional): If False, the theory also involves Flavorless Color 1/2 Dirac fermions. Defaults to True.
+            psi_vacuum (bool, optional): If it used, it specifies with type of 0 singlet the matter state is corresponding to. Defaults to None.
+
+        Raises:
+            TypeError: If the input arguments are of incorrect types or formats.
+            ValueError: If M_configs and CG_values do not have the same # of entries"
+            ValueError: If any of M config is NOT made of len(J_config)
+            ValueError: If any entry og M config does not have len(J_config)-1 CGs,
+        """
         # CHECK ON TYPES
         if not isinstance(J_config, list):
             raise TypeError(f"J_config must be a list, not {type(J_config)}")
@@ -158,14 +179,29 @@ class SU2_singlet:
             self.JM_configs.append(self.J_config + m)
 
     def show(self):
-        logger.info("====================================================")
-        logger.info(f"J: {self.J_config}")
+        print("====================================================")
+        print(f"J: {self.J_config}")
         for m, CG in zip(self.M_configs, self.CG_values):
-            logger.info(f"M:{m} CG:{CG}")
-        logger.info("----------------------------------------------------")
+            print(f"M:{m} CG:{CG}")
+        print("----------------------------------------------------")
 
 
 def get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None):
+    """
+    This function computes the form of an SU(2) singlet out of a list of
+    spin representations
+
+    Args:
+        spin_list (list): list of spins to be coupled in order to get a singlet
+
+        pure_theory (bool, optional): if True, only gauge fields
+
+        psi_vacuum (bool, optional): If True, the first element of spin_list is the vacuum of matter.
+        If False, the first element of spin_list is the pair (up & down) of matter. Default to None.
+
+    Returns:
+        list: list of instances of SU2_singlet; if there is no singlet, just None
+    """
     # CHECK ON TYPES
     if not isinstance(spin_list, list):
         raise TypeError(f"spin_list must be a list, not {type(spin_list)}")
@@ -174,21 +210,6 @@ def get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None):
     if psi_vacuum is not None:
         if not isinstance(psi_vacuum, bool):
             raise TypeError(f"psi_vacuum must be bool, not {type(psi_vacuum)}")
-    """
-    This function computes the form of an SU(2) singlet out of a list of
-    spin representations
-    Args:
-        spin_list (list): list of spins to be coupled in order to get a singlet
-        pure_theory (bool, optional): if True, only gauge fields
-
-        psi_vacuum (bool, optional):
-            If True, the first element of spin_list is the vacuum of matter
-            If False, the first element of spin_list is the pair (up & down) of matter
-            Default to None.
-    Returns:
-        list: list of instances of SU2_singlet; 
-            if there is no singlet, just None
-    """
     n_spins = len(spin_list)
     if n_spins < 2:
         raise ValueError("2 is the minimum number of spins to be coupled")

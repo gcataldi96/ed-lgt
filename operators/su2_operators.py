@@ -4,7 +4,6 @@ from sympy import S
 from numpy.linalg import matrix_rank
 from scipy.sparse import csr_matrix, diags, identity, block_diag, isspmatrix, kron
 from scipy.sparse.linalg import norm
-from simsio import logger
 from modeling import qmb_operator as qmb_op
 from tools import commutator as comm
 from tools import anti_commutator as anti_comm
@@ -192,7 +191,7 @@ def check_SU2_rishon_algebra(s):
         raise TypeError(f"s must be SCALAR & (semi)INTEGER, not {type(s)}")
     # Define the Rishon operators
     ops = SU2_rishon_operators(s)
-    logger.info("CHECK SU2 RISHON ALGEBRA")
+    print("CHECK SU2 RISHON ALGEBRA")
     # For each type of rishon operators (+ a, - b) check the following properties of the algebra
     for ii, kind in enumerate(["a", "b"]):
         sign = (-1) ** ii
@@ -531,7 +530,7 @@ def check_SU2_gauss_law(basis, gauss_law_op, threshold=1e-14):
     if not isspmatrix(gauss_law_op):
         raise TypeError(f"gauss_law_op shoul be csr_matrix, not {type(gauss_law_op)}")
     # This functions performs some checks on the SU2 gauge invariant basis
-    logger.info("CHECK GAUSS LAW")
+    print("CHECK GAUSS LAW")
     # True and the Effective dimensions of the gauge invariant dressed site
     site_dim = basis.shape[0]
     eff_site_dim = basis.shape[1]
@@ -550,11 +549,11 @@ def check_SU2_gauss_law(basis, gauss_law_op, threshold=1e-14):
         raise ValueError(f"Gauss Law Kernel with norm {norma_kernel}; expected 0")
     GL_rank = matrix_rank(gauss_law_op.todense())
     if site_dim - GL_rank != eff_site_dim:
-        logger.info(f"Large dimension {site_dim}")
-        logger.info(f"Effective dimension {eff_site_dim}")
-        logger.info(GL_rank)
-        logger.info(f"Some gauge basis states are missing")
-    logger.info("GAUSS LAW SATISFIED")
+        print(f"Large dimension {site_dim}")
+        print(f"Effective dimension {eff_site_dim}")
+        print(GL_rank)
+        print(f"Some gauge basis states are missing")
+    print("GAUSS LAW SATISFIED")
 
 
 def SU2_Hamiltonian_couplings(pure_theory, g, m=None):
@@ -591,7 +590,7 @@ j1 = 1 / 2
 basis, states = SU2_gauge_basis(S(j1), pure_theory=pure, dim=2)
 for s in states["site"]:
     s.show()
-logger.info(basis["site"].shape)
+print(basis["site"].shape)
 # Acquire dressed site operators
 ops = SU2_dressed_site_operators(j1, pure_theory=pure)
 # Check gauss law
