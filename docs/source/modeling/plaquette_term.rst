@@ -11,4 +11,4 @@ PlaquetteTerm2D Class
    :show-inheritance:
 
 .. seealso::
-    :ref:`plaquette_term Module <plaquette_term>`
+   :ref:`qmb_operations Module <qmb_operations>`

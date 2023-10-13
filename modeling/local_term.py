@@ -16,7 +16,7 @@ __all__ = ["LocalTerm2D"]
 class LocalTerm2D:
     def __init__(self, operator, op_name, staggered_basis=False, site_basis=None):
         """
-        This function introduce alla the fundamental information to define a Local Hamiltonian Term and
+        This function introduce all the fundamental information to define a Local Hamiltonian Term and
         possible eventual measures of it.
 
         Args:

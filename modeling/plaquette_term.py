@@ -14,6 +14,19 @@ __all__ = ["PlaquetteTerm2D"]
 
 class PlaquetteTerm2D:
     def __init__(self, op_list, op_name_list, staggered_basis=False, site_basis=None):
+        """
+        This function introduce all the fundamental information to define a Plaquette Hamiltonian Term and
+        possible eventual measures of it.
+
+        Args:
+            op_list (list of 2 scipy.sparse.matrices): list of the two operators involved in the 2Body Term
+            op_name_list (list of 2 str): list of the names of the two operators
+            staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
+            site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites (corners, borders, lattice core, even/odd sites). Defaults to None.
+
+        Raises:
+            TypeError: If the input arguments are of incorrect types or formats.
+        """
         if not isinstance(op_list, list):
             raise TypeError(f"op_list should be a list, not a {type(op_list)}")
         else:
@@ -49,6 +62,25 @@ class PlaquetteTerm2D:
     def get_Hamiltonian(
         self, lvals, strength, has_obc=True, add_dagger=False, mask=None
     ):
+        """
+        The function calculates the Plaquette Hamiltonian by summing up 4body terms for each lattice site,
+        potentially with some sites excluded based on the mask.
+        The result is scaled by the strength parameter before being returned.
+        Eventually, it is possible to sum also the dagger part of the Hamiltonian.
+
+        Args:
+            lvals (list): Dimensions (# of sites) of a 2D rectangular lattice ([nx,ny])
+            strength (scalar): Coupling of the Hamiltonian term.
+            has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+            add_dagger (bool, optional): If true, it add the hermitian conjugate of the resulting Hamiltonian. Defaults to False.
+            mask (np.ndarray, optional): 2D array with bool variables specifying (if True) where to apply the local term. Defaults to None.
+
+        Raises:
+            TypeError: If the input arguments are of incorrect types or formats.
+
+        Returns:
+            scipy.sparse: Plaquette Hamiltonian term ready to be used for exact diagonalization/expectation values.
+        """
         # CHECK ON TYPES
         if not isinstance(lvals, list):
             raise TypeError(f"lvals should be a list, not a {type(lvals)}")
@@ -117,6 +149,20 @@ class PlaquetteTerm2D:
         return H_plaq
 
     def get_expval(self, psi, lvals, has_obc=True, get_imag=False, site=None):
+        """
+        The function calculates the expectation value (and it variance) of the Plaquette Hamiltonian
+        and its average over all the lattice sites.
+
+        Args:
+            psi (numpy.ndarray): QMB state where the expectation value has to be computed
+            lvals (list): Dimensions (# of sites) of a 2D rectangular lattice ([nx,ny])
+            has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+            get_imag(bool, optional): if true, it results the imaginary part of the expectation value, otherwise, the real part. Default to False.
+            site (str, optional): if odd/even, then the expectation value is performed only on that kind of sites. Defaults to None.
+
+        Raises:
+            TypeError: If the input arguments are of incorrect types or formats.
+        """
         # CHECK ON TYPES
         if not isinstance(psi, np.ndarray):
             raise TypeError(f"psi should be an ndarray, not a {type(psi)}")

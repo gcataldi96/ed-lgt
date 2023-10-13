@@ -11,4 +11,4 @@ LocalTerm2D Class
    :show-inheritance:
 
 .. seealso::
-    :ref:`local_term Module <local_term>`
+   :ref:`qmb_operations Module <qmb_operations>`

@@ -17,7 +17,7 @@ class TwoBodyTerm2D:
         self, axis, op_list, op_name_list, staggered_basis=False, site_basis=None
     ):
         """
-        This function introduce alla the fundamental information to define a TwoBody Hamiltonian Term and
+        This function introduce all the fundamental information to define a TwoBody Hamiltonian Term and
         possible eventual measures of it.
 
         Args:

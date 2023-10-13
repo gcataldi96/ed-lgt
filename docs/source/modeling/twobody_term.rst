@@ -11,4 +11,4 @@ TwoBodyTerm2D Class
    :show-inheritance:
 
 .. seealso::
-    :ref:`twobody_term Module <twobody_term>`
+   :ref:`qmb_operations Module <qmb_operations>`
