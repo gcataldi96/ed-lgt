@@ -10,6 +10,7 @@ __all__ = [
     "get_QED_Hamiltonian_couplings",
     "QED_dressed_site_operators",
     "gauge_invariant_states",
+    "check_QED_gauss_law",
 ]
 
 
@@ -170,7 +171,7 @@ def QED_dressed_site_operators(spin, U="ladder", pure_theory=False, lattice_dim=
     if pure_theory:
         gauss_law_ops["site"] = 0
         for s in ["mx", "my", "px", "py"]:
-            gauss_law_ops["site"] += ops[f"n_{s}"]
+            gauss_law_ops["site"] += ops[f"E0_{s}"]
     else:
         for site in ["even", "odd"]:
             P_coeff = 0 if site == "even" else +1
@@ -239,7 +240,9 @@ def check_QED_gauss_law(gauge_basis, gauss_law_ops, pure_theory=False, threshold
                 f"Gauge basis on {site} sites must provide a projector P=M*M^T"
             )
         # Check that the basis is the one with ALL the states satisfying Gauss law
-        if norm(gauss_law_ops[site] * M[site]) > threshold:
+        norm_GL = norm(gauss_law_ops[site] * M[site])
+        if norm_GL > threshold:
+            print(f"Norm of GL * Basis: {norm_GL}, expected 0")
             raise ValueError(f"Gauss Law not satisfied for {site} sites")
         if site_dim - matrix_rank(gauss_law_ops[site].todense()) != eff_site_dim:
             print(site)
