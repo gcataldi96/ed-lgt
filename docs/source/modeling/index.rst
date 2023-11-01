@@ -15,3 +15,4 @@ Modeling
     local_term
     twobody_term
     plaquette_term
+    masks

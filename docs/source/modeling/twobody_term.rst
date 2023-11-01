@@ -1,10 +1,10 @@
 .. _twobody_term:
 
 =====================
-TwoBodyTerm2D Class
+TwoBodyTerm Class
 =====================
 
-.. autoclass:: modeling.twobody_term.TwoBodyTerm2D
+.. autoclass:: modeling.twobody_term.TwoBodyTerm
    :noindex:
    :members:
    :undoc-members:

@@ -1,10 +1,10 @@
 .. _local_term:
 
 =================
-LocalTerm2D Class
+LocalTerm Class
 =================
 
-.. autoclass:: modeling.local_term.LocalTerm2D
+.. autoclass:: modeling.local_term.LocalTerm
    :noindex:
    :members:
    :undoc-members:

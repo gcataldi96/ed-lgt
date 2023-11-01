@@ -1,10 +1,10 @@
 .. _plaquette_term:
 
 =====================
-PlaquetteTerm2D Class
+PlaquetteTerm Class
 =====================
 
-.. autoclass:: modeling.plaquette_term.PlaquetteTerm2D
+.. autoclass:: modeling.plaquette_term.PlaquetteTerm
    :noindex:
    :members:
    :undoc-members:
