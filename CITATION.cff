@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+title: ed-lgt
+message: >-
+  If you use this software, please cite it using the
+  metadata from this file.
+type: software
+authors:
+  - given-names: Giovanni
+    family-names: Cataldi
+    email: giovacataldi96@gmail.com
+    affiliation: University of Padua
+    orcid: 'https://orcid.org/0000-0002-9073-8978'
+repository-code: 'https://github.com/gcataldi96/ed-lgt'
+abstract: >-
+  The Exact Diagonalization Library for Lattice Gauge
+  Theories provides a powerful set of tools for performing
+  exact diagonalization calculations on d-dimensional
+  lattices, specifically targeting both Abelian and
+  non-Abelian Lattice Gauge Theories. This library empowers
+  researchers and practitioners in the field of quantum
+  many-body systems to analyze and explore the behavior of
+  complex lattice gauge theories through the precise
+  computation of Hamiltonian eigenvalues and eigenvectors.
+keywords:
+  - Lattice Gauge Theories
+  - Exact Diagonalization
+  - Quantum Many Body Systems
+license: Apache-2.0
