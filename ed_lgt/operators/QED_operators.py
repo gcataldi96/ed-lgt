@@ -485,13 +485,3 @@ def QED_Hamiltonian_couplings(pure_theory, g, m=None):
         }
     print(f"LINK SYMMETRY PENALTY {coeffs['eta']}")
     return coeffs
-
-
-"""
-# TESTS
-spin = 1
-pure_theory = False
-lattice_dim = 3
-basis, states = QED_gauge_invariant_states(spin, pure_theory, lattice_dim)
-print(basis)
-"""
