@@ -1,31 +1,45 @@
-"""
-:class:`TwoBodyTerm2D` provides methods for computing two-body terms along a specified axis in a 2D lattice model.
-Two-body terms are used to calculate properties related to lattice models and quantum systems. 
-It takes a list of operator matrices and names, along with an axis (x or y), and provides methods
-to calculate the Hamiltonian, expectation values, and check link symmetry.
-"""
 import numpy as np
+from math import prod
+from copy import deepcopy
 from scipy.sparse import isspmatrix, csr_matrix
 from tools import zig_zag, inverse_zig_zag
 from .qmb_operations import two_body_op
+from .qmb_state import expectation_value as exp_val
 
-__all__ = ["TwoBodyTerm2D"]
+__all__ = ["TwoBodyTerm"]
 
 
-class TwoBodyTerm2D:
+class TwoBodyTerm:
     def __init__(
-        self, axis, op_list, op_name_list, staggered_basis=False, site_basis=None
+        self,
+        axis,
+        op_list,
+        op_name_list,
+        lvals,
+        has_obc,
+        staggered_basis=False,
+        site_basis=None,
     ):
         """
-        This function introduce all the fundamental information to define a TwoBody Hamiltonian Term and
-        possible eventual measures of it.
+        This function provides methods for computing twobody terms in a d-dimensional lattice model along a certain axis.
+        It takes a list of two operators, their names, the lattice dimension and its topology/boundary conditions,
+        and provides methods to compute the Local Hamiltonian Term and expectation values.
 
         Args:
             axis (str): axis along which the 2Body Term is performed
+
             op_list (list of 2 scipy.sparse.matrices): list of the two operators involved in the 2Body Term
+
             op_name_list (list of 2 str): list of the names of the two operators
+
+            lvals (list of ints): Dimensions (# of sites) of a d-dimensional hypercubic lattice
+
+            has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+
             staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
-            site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites (corners, borders, lattice core, even/odd sites). Defaults to None.
+
+            site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
+            (corners, borders, lattice core, even/odd sites). Defaults to None.
 
         Raises:
             TypeError: If the input arguments are of incorrect types or formats.
@@ -49,25 +63,27 @@ class TwoBodyTerm2D:
                     raise TypeError(
                         f"op_name_list[{ii}] should be a STRING, not {type(name)}"
                     )
-        self.axis = axis
-        self.op_name_list = op_name_list
-        # print(f"twobody-term {self.op_name_list[0]}-{self.op_name_list[1]}")
-        if axis == "x":
-            self.op_list = op_list
-            self.Left = op_list[0]
-            self.Right = op_list[1]
-        elif axis == "y":
-            self.op_list = op_list
-            self.Bottom = op_list[0]
-            self.Top = op_list[1]
+        if not isinstance(lvals, list):
+            raise TypeError(f"lvals should be a list, not a {type(lvals)}")
+        elif not all(np.isscalar(dim) and isinstance(dim, int) for dim in lvals):
+            raise TypeError("All items of lvals must be scalar integers.")
+        if not isinstance(has_obc, bool):
+            raise TypeError(f"has_obc must be a BOOL, not a {type(has_obc)}")
+        dimensions = "xyz"[: len(lvals)]
+        if axis not in dimensions:
+            raise ValueError(f"axis should be in {dimensions}: got {axis}")
         else:
-            print(f"{axis} can be only x or y")
+            self.axis = axis
+        self.op_list = op_list
+        self.op_name_list = op_name_list
+        self.lvals = lvals
+        self.dimensions = dimensions
+        self.has_obc = has_obc
         self.stag_basis = staggered_basis
         self.site_basis = site_basis
+        print(f"twobody-term {self.op_name_list[0]}-{self.op_name_list[1]}")
 
-    def get_Hamiltonian(
-        self, lvals, strength, has_obc=True, add_dagger=False, mask=None
-    ):
+    def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
         """
         The function calculates the TwoBody Hamiltonian by summing up 2body terms for each lattice site,
         potentially with some sites excluded based on the mask.
@@ -75,10 +91,10 @@ class TwoBodyTerm2D:
         Eventually, it is possible to sum also the dagger part of the Hamiltonian.
 
         Args:
-            lvals (list): Dimensions (# of sites) of a 2D rectangular lattice ([nx,ny])
             strength (scalar): Coupling of the Hamiltonian term.
-            has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+
             add_dagger (bool, optional): If true, it add the hermitian conjugate of the resulting Hamiltonian. Defaults to False.
+
             mask (np.ndarray, optional): 2D array with bool variables specifying (if True) where to apply the local term. Defaults to None.
 
         Raises:
@@ -88,67 +104,37 @@ class TwoBodyTerm2D:
             scipy.sparse: TwoBody Hamiltonian term ready to be used for exact diagonalization/expectation values.
         """
         # CHECK ON TYPES
-        if not isinstance(lvals, list):
-            raise TypeError(f"lvals should be a list, not a {type(lvals)}")
-        else:
-            for ii, ll in enumerate(lvals):
-                if not isinstance(ll, int):
-                    raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
         if not np.isscalar(strength):
             raise TypeError(f"strength must be SCALAR, not {type(strength)}")
-        if not isinstance(has_obc, bool):
-            raise TypeError(f"has_obc must be a BOOL, not a {type(has_obc)}")
         if not isinstance(add_dagger, bool):
             raise TypeError(f"add_dagger must be a BOOL, not a {type(add_dagger)}")
-        # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
-        nx = lvals[0]
-        ny = lvals[1]
-        n = nx * ny
         # Hamiltonian
         H_twobody = 0
         # Run over all the single lattice sites, ordered with the ZIG ZAG CURVE
-        for ii in range(n):
-            # Compute the corresponding (x,y) coords
-            x, y = zig_zag(nx, ny, ii)
-            # HORIZONTAL 2BODY HAMILTONIAN
-            if self.axis == "x":
-                if x < nx - 1:
-                    sites_list = [ii, ii + 1]
-                else:
-                    # PERIODIC BOUNDARY CONDITIONS
-                    if not has_obc:
-                        jj = inverse_zig_zag(nx, ny, 0, y)
-                        sites_list = [ii, jj]
-                    else:
-                        continue
-            # VERTICAL 2BODY HAMILTONIAN
-            elif self.axis == "y":
-                if y < ny - 1:
-                    sites_list = [ii, ii + nx]
-                else:
-                    # PERIODIC BOUNDARY CONDITIONS
-                    if not has_obc:
-                        jj = inverse_zig_zag(nx, ny, x, 0)
-                        sites_list = [ii, jj]
-                    else:
-                        continue
-            # ADD THE TERM TO THE HAMILTONIAN
+        for ii in range(prod(self.lvals)):
+            # Compute the corresponding coords
+            coords = zig_zag(self.lvals, ii)
+            # Check if it admits a twobody term according to the lattice geometry
+            coords_list, sites_list = self.get_twobodyterm_sites(coords)
+            if sites_list is None:
+                continue
+            # Check Mask condition on that site
             if mask is None:
                 mask_conditions = True
             else:
-                if mask[x, y] == True:
+                if mask[coords] == True:
                     mask_conditions = True
                 else:
                     mask_conditions = False
+            # ADD THE TERM TO THE HAMILTONIAN
             if mask_conditions:
-                # Add the term to the Hamiltonian
                 H_twobody += strength * two_body_op(
-                    self.op_list,
-                    sites_list,
-                    lvals,
-                    has_obc,
-                    self.stag_basis,
-                    self.site_basis,
+                    op_list=self.op_list,
+                    op_sites_list=sites_list,
+                    lvals=self.lvals,
+                    has_obc=self.has_obc,
+                    staggered_basis=self.stag_basis,
+                    site_basis=self.site_basis,
                 )
         if not isspmatrix(H_twobody):
             H_twobody = csr_matrix(H_twobody)
@@ -156,15 +142,14 @@ class TwoBodyTerm2D:
             H_twobody += csr_matrix(H_twobody.conj().transpose())
         return H_twobody
 
-    def get_expval(self, psi, lvals, has_obc=False, site=None):
+    def get_expval(self, psi, site=None):
         """
         The function calculates the expectation value (and it variance) of the TwoBody Hamiltonian
         and its average over all the lattice sites.
 
         Args:
             psi (numpy.ndarray): QMB state where the expectation value has to be computed
-            lvals (list): Dimensions (# of sites) of a 2D rectangular lattice ([nx,ny])
-            has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+
             site (str, optional): if odd/even, then the expectation value is performed only on that kind of sites. Defaults to None.
 
         Raises:
@@ -173,50 +158,58 @@ class TwoBodyTerm2D:
         # CHECK ON TYPES
         if not isinstance(psi, np.ndarray):
             raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
-        if not isinstance(lvals, list):
-            raise TypeError(f"lvals should be a list, not a {type(lvals)}")
-        else:
-            for ii, ll in enumerate(lvals):
-                if not isinstance(ll, int):
-                    raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
-        if not isinstance(has_obc, bool):
-            raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
         if site is not None:
             if not isinstance(site, str):
                 raise TypeError(f"site should be STR ('even' / 'odd'), not {type(str)}")
-        # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
-        nx = lvals[0]
-        ny = lvals[1]
-        n_sites = nx * ny
-        # Compute the complex_conjugate of the ground state psi
-        psi_dag = np.conjugate(psi)
         # Create an array to store the correlator
-        self.corr = np.zeros((nx, ny, nx, ny))
+        self.corr = np.zeros(self.lvals + self.lvals)
         # RUN OVER THE LATTICE SITES
-        for ii in range(n_sites):
-            x1, y1 = zig_zag(nx, ny, ii)
-            for jj in range(n_sites):
-                x2, y2 = zig_zag(nx, ny, jj)
+        for ii in range(prod(self.lvals)):
+            coords1 = zig_zag(self.lvals, ii)
+            for jj in range(prod(self.lvals)):
+                coords2 = zig_zag(self.lvals, jj)
                 # AVOID SELF CORRELATIONS
                 if ii != jj:
-                    self.corr[x1, y1, x2, y2] = np.real(
-                        np.dot(
-                            psi_dag,
-                            two_body_op(
-                                self.op_list,
-                                [ii, jj],
-                                lvals,
-                                has_obc,
-                                self.stag_basis,
-                                self.site_basis,
-                            ).dot(psi),
-                        )
+                    self.corr[coords1 + coords2] = exp_val(
+                        psi,
+                        two_body_op(
+                            op_list=self.op_list,
+                            op_sites_list=[ii, jj],
+                            lvals=self.lvals,
+                            has_obc=self.has_obc,
+                            staggered_basis=self.stag_basis,
+                            site_basis=self.site_basis,
+                        ),
                     )
-                else:
-                    self.corr[x1, y1, x2, y2] = 0
 
+    def get_twobodyterm_sites(self, coords):
+        coords1 = list(coords)
+        i1 = inverse_zig_zag(self.lvals, coords1)
+        coords2 = deepcopy(coords1)
+        # Check if the site admits a neighbor where to apply the twobody term
+        # Look at the specific index of the axis
+        indx = self.dimensions.index(self.axis)
+        # If along that axis, there is space for a twobody term:
+        if coords1[indx] < self.lvals[indx] - 1:
+            coords2[indx] += 1
+            i2 = inverse_zig_zag(self.lvals, coords2)
+            sites_list = [i1, i2]
+            coords_list = [tuple(coords1), tuple(coords2)]
+        else:
+            # PERIODIC BOUNDARY CONDITIONS
+            if not self.has_obc:
+                coords2[indx] = 0
+                i2 = inverse_zig_zag(self.lvals, coords2)
+                sites_list = [i1, i2]
+                coords_list = [tuple(coords1), tuple(coords2)]
+            else:
+                sites_list = None
+                coords_list = None
+        return coords_list, sites_list
+
+
+"""
     def check_link_symm(self, value=1, threshold=1e-10, has_obc=True):
-        """
         This function checks the value of a 2body operator along the self.axis and compare it with an expected value.
 
         Args:
@@ -226,7 +219,6 @@ class TwoBodyTerm2D:
 
         Raises:
             ValueError: If any site of the chosen border has not the expected value of the observable
-        """
         # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
         nx = self.corr.shape[0]
         ny = self.corr.shape[1]
@@ -263,3 +255,4 @@ class TwoBodyTerm2D:
                                 f"W{self.axis}_({x},{y})-({x},{y+1})={self.corr[x,y,x,y+1]}: expected {value}"
                             )
         print(f"{self.axis} LINK SYMMETRIES SATISFIED")
+"""

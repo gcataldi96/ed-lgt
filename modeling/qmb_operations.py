@@ -1,4 +1,6 @@
 import numpy as np
+from math import prod
+from itertools import product
 from scipy.sparse import csr_matrix, identity, isspmatrix, kron
 from tools import zig_zag
 
@@ -8,6 +10,7 @@ __all__ = [
     "four_body_op",
     "qmb_operator",
     "lattice_base_configs",
+    "get_site_label",
 ]
 
 
@@ -57,8 +60,7 @@ def qmb_operator(ops, op_list, add_dagger=False, get_real=False, get_imag=False)
 
 def lattice_base_configs(base, lvals, has_obc=True, staggered=False):
     """
-    This function associate the basis to each lattice site
-    and the corresponding dimension.
+    This function associate the basis to each lattice site and the corresponding dimension.
 
     Args:
         base (dict of sparse matrices): dict with the proper hilbert basis
@@ -71,42 +73,34 @@ def lattice_base_configs(base, lvals, has_obc=True, staggered=False):
         staggered (bool, optional): if True, a staggered basis is required. Default to False.
 
     Returns:
-        (np.array((lvals)),np.array((lvals))): the 2D array with the labels of the site
-        and the 2D with the corresponding site-basis dimensions
+        (np.array((lvals)),np.array((lvals))): the d-dimensional array with the labels of the site and the d-dimensional array with the corresponding site-basis dimensions
     """
     if not isinstance(lvals, list):
         raise TypeError(f"lvals should be a list, not a {type(lvals)}")
-    else:
-        for ii, ll in enumerate(lvals):
-            if not isinstance(ll, int):
-                raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
+    elif not all(np.isscalar(dim) and isinstance(dim, int) for dim in lvals):
+        raise TypeError("All items of lvals must be scalar integers.")
     if not isinstance(has_obc, bool):
         raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
     if not isinstance(staggered, bool):
         raise TypeError(f"staggered should be a BOOL, not a {type(staggered)}")
     lattice_base = np.zeros(tuple(lvals), dtype=object)
     loc_dims = np.zeros(tuple(lvals), dtype=int)
-    for x in range(lvals[0]):
-        for y in range(lvals[1]):
-            # PROVIDE A LABEL TO THE LATTICE SITE
-            label = get_site_label(
-                x, y, lvals, has_obc, staggered, all_sites_equal=False
-            )
-            lattice_base[x, y] = label
-            loc_dims[x, y] = base[label].shape[1]
+    for coords in product(*[range(l) for l in lvals]):
+        # PROVIDE A LABEL TO THE LATTICE SITE
+        label = get_site_label(coords, lvals, has_obc, staggered, all_sites_equal=False)
+        lattice_base[tuple(coords)] = label
+        loc_dims[tuple(coords)] = base[label].shape[1]
     return lattice_base, loc_dims
 
 
-def get_site_label(x, y, lvals, has_obc, staggered=False, all_sites_equal=True):
+def get_site_label(coords, lvals, has_obc, staggered=False, all_sites_equal=True):
     """
     This function associate a label to each lattice site according
     to the presence of a staggered basis, the choice of the boundary
     conditions and the position of the site in the lattice.
 
     Args:
-        x (int): x-coordinate of the site
-
-        y (int): y-coordinate of the site
+        coords (tuple of ints): d-dimensional coordinates of a point in the lattice
 
         lvals (list of ints): lattice dimensions
 
@@ -115,22 +109,17 @@ def get_site_label(x, y, lvals, has_obc, staggered=False, all_sites_equal=True):
         staggered (bool, optional): if True, a staggered basis is required. Defaults to False.
 
         all_sites_equal (bool, optional): if False, a different basis can be used for sites
-        on borders and corners of the lattice
+            on borders and corners of the lattice
 
     Returns:
-        (np.array((lvals)),np.array((lvals))): the 2D array with the labels of the site
-        and the 2D with the corresponding site-basis dimensions
+        (np.array((lvals)),np.array((lvals))): the d-dimensional array with the labels of the site and the corresponding site-basis dimensions
     """
-    if not np.isscalar(x) and not isinstance(x, int):
-        raise TypeError(f"x must be SCALAR & INTEGER, not a {type(x)}")
-    if not np.isscalar(y) and not isinstance(x, int):
-        raise TypeError(f"y must be SCALAR & INTEGER, not a {type(y)}")
+    if not all(np.isscalar(c) and isinstance(c, int) for c in coords):
+        raise TypeError("All coords must be scalar integers.")
     if not isinstance(lvals, list):
         raise TypeError(f"lvals should be a list, not a {type(lvals)}")
-    else:
-        for ii, ll in enumerate(lvals):
-            if not isinstance(ll, int):
-                raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
+    elif not all(np.isscalar(dim) and isinstance(dim, int) for dim in lvals):
+        raise TypeError("All items of lvals must be scalar integers.")
     if not isinstance(has_obc, bool):
         raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
     if not isinstance(staggered, bool):
@@ -139,11 +128,10 @@ def get_site_label(x, y, lvals, has_obc, staggered=False, all_sites_equal=True):
         raise TypeError(
             f"all_sites_equal should be a BOOL, not a {type(all_sites_equal)}"
         )
-    # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
-    nx = lvals[0]
-    ny = lvals[1]
+    dim = len(lvals)
+    dimension = "xyz"[:dim]
     # STAGGERED LABEL
-    stag = (-1) ** (x + y)
+    stag = (-1) ** sum(coords)
     if staggered:
         if stag > 0:
             stag_label = "even"
@@ -152,31 +140,32 @@ def get_site_label(x, y, lvals, has_obc, staggered=False, all_sites_equal=True):
     else:
         stag_label = "site"
     # SITE LABEL
+    site_label = ""
     if not all_sites_equal:
         if has_obc:
-            if (x == 0) and (y == 0):
-                site_label = "_mx_my"
-            elif (x == 0) and (y == ny - 1):
-                site_label = "_mx_py"
-            elif (x == nx - 1) and (y == 0):
-                site_label = "_my_px"
-            elif (x == nx - 1) and (y == ny - 1):
-                site_label = "_px_py"
-            elif x == 0:
-                site_label = "_mx"
-            elif x == nx - 1:
-                site_label = "_px"
-            elif y == 0:
-                site_label = "_my"
-            elif y == ny - 1:
-                site_label = "_py"
-            else:
-                site_label = ""
-        else:
-            site_label = ""
-    else:
-        site_label = ""
-    return f"{stag_label}{site_label}"
+            for ii, c in enumerate(coords):
+                if c == 0:
+                    site_label += f"_m{dimension[ii]}"
+                elif c == lvals[ii] - 1:
+                    site_label += f"_p{dimension[ii]}"
+                elif c < 0 or c > lvals[ii] - 1:
+                    raise ValueError(
+                        f"coords[{ii}] must be in betweem 0 and {lvals[ii]}: got {c}"
+                    )
+    label = f"{stag_label}{site_label}"
+    return label
+
+
+"""
+coords = [0, 2, 1]
+lvals = [3, 3, 3]
+has_obc = True
+dim = len(lvals)
+dimension = "xyz"[:dim]
+
+llabel = get_site_label(coords, lvals, has_obc, staggered=True, all_sites_equal=False)
+lattice_base = lattice_base_configs(lvals, has_obc, staggered=True)
+"""
 
 
 def local_op(
@@ -191,13 +180,14 @@ def local_op(
 
         op_1D_site (scalar int): position of the site along a certain 1D ordering in the 2D lattice
 
-        lvals (list): Dimensions (# of sites) of a 2D rectangular lattice ([nx,ny])
+        lvals (list): Dimensions (# of sites) of a d-dimensional lattice
 
         has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
 
         staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
 
-        site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites (corners, borders, lattice core, even/odd sites). Defaults to None.
+        site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
+            (corners, borders, lattice core, even/odd sites). Defaults to None.
 
     Raises:
         TypeError: If the input arguments are of incorrect types or formats.
@@ -214,26 +204,20 @@ def local_op(
         )
     if not isinstance(lvals, list):
         raise TypeError(f"lvals should be a list, not a {type(lvals)}")
-    else:
-        for ii, ll in enumerate(lvals):
-            if not isinstance(ll, int):
-                raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
+    elif not all(np.isscalar(dim) and isinstance(dim, int) for dim in lvals):
+        raise TypeError("All items of lvals must be scalar integers.")
     if not isinstance(has_obc, bool):
         raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
     if not isinstance(staggered_basis, bool):
         raise TypeError(
             f"staggered_basis should be a BOOL, not a {type(staggered_basis)}"
         )
-    # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
-    nx = lvals[0]
-    ny = lvals[1]
-    n = nx * ny
     # DEFINE an IDENTITY operator
     ID = identity(operator.shape[0])
     # GENERATE empty dictionary and list to be filled with operators and names
     ops = {}
     ops_list = []
-    for ii in range(n):
+    for ii in range(prod(lvals)):
         if ii == op_1D_site:
             op = operator
             op_name = "op"
@@ -241,10 +225,10 @@ def local_op(
             op = ID
             op_name = "ID"
         # GET THE LABEL OF THE SITE
-        x, y = zig_zag(nx, ny, ii)
+        coords = zig_zag(lvals, ii)
         all_sites_equal = False if site_basis is not None else True
         basis_label = get_site_label(
-            x, y, lvals, has_obc, staggered_basis, all_sites_equal
+            coords, lvals, has_obc, staggered_basis, all_sites_equal
         )
         # PROJECT THE OPERATOR ON THE CORRESPONDING SITE BASIS
         if len(basis_label) > 0:
@@ -268,13 +252,14 @@ def two_body_op(
 
         op_sites_list (list of 2 int): list of the positions of two operators in the 1D chain ordering 2d lattice sites
 
-        lvals (list): Dimensions (# of sites) of a 2D rectangular lattice ([nx,ny])
+        lvals (list): Dimensions (# of sites) of a d-dimensional lattice
 
         has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
 
         staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
 
-        site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites (corners, borders, lattice core, even/odd sites). Defaults to None.
+        site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
+            (corners, borders, lattice core, even/odd sites). Defaults to None.
 
     Raises:
         TypeError: If the input arguments are of incorrect types or formats.
@@ -289,27 +274,21 @@ def two_body_op(
         raise TypeError(f"op_sites_list must be a LIST, not a {type(op_sites_list)}")
     if not isinstance(lvals, list):
         raise TypeError(f"lvals should be a list, not a {type(lvals)}")
-    else:
-        for ii, ll in enumerate(lvals):
-            if not isinstance(ll, int):
-                raise TypeError(f"lvals[{ii}] should be INTEGER, not {type(ll)}")
+    elif not all(np.isscalar(dim) and isinstance(dim, int) for dim in lvals):
+        raise TypeError("All items of lvals must be scalar integers.")
     if not isinstance(has_obc, bool):
         raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
     if not isinstance(staggered_basis, bool):
         raise TypeError(
             f"staggered_basis should be a BOOL, not a {type(staggered_basis)}"
         )
-    # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
-    nx = lvals[0]
-    ny = lvals[1]
-    n = nx * ny
     # DEFINE an IDENTITY operator
     ID = identity(op_list[0].shape[0])
     # GENERATE empty dictionary and list to be filled with operators and names
     ops = {}
     ops_list = []
     # Run over all the lattice sites
-    for ii in range(n):
+    for ii in range(prod(lvals)):
         if ii == op_sites_list[0]:
             op = op_list[0]
             op_name = "op1"
@@ -320,10 +299,10 @@ def two_body_op(
             op = ID
             op_name = "ID"
         # GET THE LABEL OF THE SITE
-        x, y = zig_zag(nx, ny, ii)
+        coords = zig_zag(lvals, ii)
         all_sites_equal = False if site_basis is not None else True
         basis_label = get_site_label(
-            x, y, lvals, has_obc, staggered_basis, all_sites_equal
+            coords, lvals, has_obc, staggered_basis, all_sites_equal
         )
         # PROJECT THE OPERATOR ON THE CORRESPONDING SITE BASIS
         if len(basis_label) > 0:
@@ -353,13 +332,14 @@ def four_body_op(
 
         op_sites_list (list of 4 int): list of the positions of two operators in the 1D chain ordering 2d lattice sites
 
-        lvals (list): Dimensions (# of sites) of a 2D rectangular lattice ([nx,ny])
+        lvals (list): Dimensions (# of sites) of a d-dimensional lattice
 
         has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
 
         staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
 
-        site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites (corners, borders, lattice core, even/odd sites). Defaults to None.
+        site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
+            (corners, borders, lattice core, even/odd sites). Defaults to None.
 
         get_real (bool, optional): If true, it yields the real part of the operator. Defaults to False.
 
@@ -386,17 +366,13 @@ def four_body_op(
         raise TypeError(
             f"staggered_basis should be a BOOL, not a {type(staggered_basis)}"
         )
-    # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
-    nx = lvals[0]
-    ny = lvals[1]
-    n = nx * ny
     # DEFINE an IDENTITY operator
     ID = identity(op_list[0].shape[0])
     # GENERATE empty dictionary and list to be filled with operators and names
     ops = {}
     ops_list = []
     # Run over all the lattice sites
-    for ii in range(n):
+    for ii in range(prod(lvals)):
         if ii == op_sites_list[0]:
             op = op_list[0]
             op_name = "op1"
@@ -413,10 +389,10 @@ def four_body_op(
             op = ID
             op_name = "ID"
         # GET THE LABEL OF THE SITE
-        x, y = zig_zag(nx, ny, ii)
+        coords = zig_zag(lvals, ii)
         all_sites_equal = False if site_basis is not None else True
         basis_label = get_site_label(
-            x, y, lvals, has_obc, staggered_basis, all_sites_equal
+            coords, lvals, has_obc, staggered_basis, all_sites_equal
         )
         # PROJECT THE OPERATOR ON THE CORRESPONDING SITE BASIS
         if len(basis_label) > 0:
