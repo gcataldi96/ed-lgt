@@ -3,9 +3,9 @@ from numpy.linalg import matrix_rank
 from itertools import product
 from scipy.sparse import csr_matrix, diags, identity, kron
 from scipy.sparse.linalg import norm
-from modeling import qmb_operator as qmb_op
-from modeling import get_lattice_borders_labels, LGT_border_configs
-from tools import anti_commutator as anti_comm
+from ed_lgt.modeling import qmb_operator as qmb_op
+from ed_lgt.modeling import get_lattice_borders_labels, LGT_border_configs
+from ed_lgt.tools import anti_commutator as anti_comm
 from .bose_fermi_operators import fermi_operators as QED_matter_operators
 
 __all__ = [

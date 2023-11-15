@@ -1,7 +1,7 @@
 import numpy as np
 from scipy.sparse import csr_matrix, diags
 from scipy.sparse import identity
-from modeling import qmb_operator as qmb_op
+from ed_lgt.modeling import qmb_operator as qmb_op
 
 __all__ = [
     "fermi_operators",
@@ -23,7 +23,8 @@ def fermi_operators(has_spin):
     ops["psi_dag"] = ops["psi"].transpose()
     ops["P_psi"] = diags(np.array([1, -1], dtype=float), 0, (2, 2))
     ops["N"] = ops["psi_dag"] * ops["psi"]
-    ops["ID_psi"] = identity(2)
+    ops["ID_psi"] = identity(2, dtype=float)
+    ops["ID"] = identity(2, dtype=float)
     if has_spin:
         # up & down MATTER OPERATORS
         ops["psi_up"] = qmb_op(ops, ["psi", "ID"])
