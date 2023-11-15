@@ -1,6 +1,6 @@
 # %%
 import numpy as np
-from tools.manage_data import load_data_from_textfile
+from ed_lgt.tools.manage_data import load_data_from_textfile
 from scipy.sparse import csr_matrix, identity
 
 __all__ = ["get_SU2_operators", "get_SU2_Hamiltonian_couplings"]
