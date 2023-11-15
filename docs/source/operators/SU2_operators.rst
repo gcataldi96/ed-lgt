@@ -4,7 +4,7 @@
 SU2 Operators
 ==============
 
-.. automodule:: operators.SU2_operators
+.. automodule:: ed_lgt.operators.SU2_operators
     :noindex:
     :members:
     :undoc-members:

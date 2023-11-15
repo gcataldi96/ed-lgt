@@ -4,7 +4,7 @@
 Quantum Many Body (QMB) Operations
 ==================================
 
-.. automodule:: modeling.qmb_operations
+.. automodule:: ed_lgt.modeling.qmb_operations
    :synopsis: Fundamental functions to construct many body Hamiltonian terms
    :noindex:
    :members:

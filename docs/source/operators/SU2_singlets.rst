@@ -4,7 +4,7 @@
 SU2 Singlets
 ==============
 
-.. automodule:: operators.SU2_singlets
+.. automodule:: ed_lgt.operators.SU2_singlets
     :noindex:
     :members:
     :undoc-members:
