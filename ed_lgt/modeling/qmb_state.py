@@ -3,7 +3,7 @@ from math import prod
 from scipy.linalg import eigh as array_eigh
 from scipy.sparse import csr_matrix, isspmatrix, isspmatrix_csr, save_npz, lil_matrix
 from scipy.sparse.linalg import eigsh as sparse_eigh
-from tools import pause, zig_zag
+from ed_lgt.tools import pause, zig_zag
 
 __all__ = [
     "Ground_State",

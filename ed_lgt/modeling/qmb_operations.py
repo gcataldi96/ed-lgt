@@ -2,7 +2,7 @@ import numpy as np
 from math import prod
 from itertools import product
 from scipy.sparse import csr_matrix, identity, isspmatrix, kron
-from tools import zig_zag
+from ed_lgt.tools import zig_zag
 
 __all__ = [
     "local_op",

@@ -8,7 +8,7 @@ import numpy as np
 from math import prod
 from copy import deepcopy
 from scipy.sparse import isspmatrix, csr_matrix
-from tools import zig_zag, inverse_zig_zag
+from ed_lgt.tools import zig_zag, inverse_zig_zag
 from .qmb_operations import four_body_op
 from .qmb_state import expectation_value as exp_val
 

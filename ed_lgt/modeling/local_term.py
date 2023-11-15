@@ -1,7 +1,7 @@
 import numpy as np
 from math import prod
 from scipy.sparse import isspmatrix
-from tools import zig_zag
+from ed_lgt.tools import zig_zag
 from .qmb_operations import local_op
 from .qmb_state import expectation_value as exp_val
 
