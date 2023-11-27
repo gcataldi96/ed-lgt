@@ -9,7 +9,7 @@ __all__ = [
 ]
 
 
-def fermi_operators(has_spin):
+def fermi_operators(has_spin, colors=False):
     """
     This functions define the matter field operators of the QED Hamiltonian.
     They are related to spinless Dirac Fermions occupying lattice sites
@@ -39,6 +39,13 @@ def fermi_operators(has_spin):
         ops["ID_psi"] = identity(4, dtype=float)
         for s in ["up", "down"]:
             ops[f"psi_{s}_dag"] = ops[f"psi_{s}"].transpose()
+        if colors:
+            ops["psi_r"] = ops["psi_up"]
+            ops["psi_g"] = ops["psi_down"]
+            ops["N_r"] = ops["N_up"]
+            ops["N_g"] = ops["N_down"]
+            for s in ["r", "g"]:
+                ops[f"psi_{s}_dag"] = ops[f"psi_{s}"].transpose()
     return ops
 
 
