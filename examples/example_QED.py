@@ -9,6 +9,7 @@ from ed_lgt.operators import (
 )
 from ed_lgt.modeling import Ground_State, LocalTerm, TwoBodyTerm, PlaquetteTerm
 from ed_lgt.modeling import (
+    check_link_symmetry,
     entanglement_entropy,
     get_reduced_density_matrix,
     diagonalize_density_matrix,
@@ -17,9 +18,8 @@ from ed_lgt.modeling import (
     truncation,
     lattice_base_configs,
 )
-from ed_lgt.tools import check_hermitian, anti_commutator as anti_comm
+from ed_lgt.tools import check_hermitian
 
-# %%
 # N eigenvalues
 n_eigs = 1
 # LATTICE DIMENSIONS
@@ -57,8 +57,6 @@ lattice_base = lattice_base.transpose().reshape(n_sites)
 print("local dimensions:", loc_dims)
 # ACQUIRE HAMILTONIAN COEFFICIENTS
 coeffs = QED_Hamiltonian_couplings(pure_theory, g, m)
-# %%
-# %%
 # CONSTRUCT THE HAMILTONIAN
 H = 0
 h_terms = {}
@@ -246,6 +244,9 @@ for ii in range(n_eigs):
     for obs in obs_list:
         h_terms[obs].get_expval(GS.Npsi[:, ii])
         res[obs].append(h_terms[obs].avg)
+    # CHECK LINK SYMMETRIES
+    for ax in directions:
+        check_link_symmetry(ax, h_terms[f"E_p{ax}"], h_terms[f"E_m{ax}"], value=0)
 print(f"Energies {res['energy']}")
 if not has_obc:
     print(f"DM eigvals {res['rho_eigvals']}")
