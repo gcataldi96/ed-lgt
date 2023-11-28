@@ -2,10 +2,10 @@ import numpy as np
 from math import prod
 from scipy.sparse import isspmatrix
 from ed_lgt.tools import zig_zag
-from .qmb_operations import local_op
+from .qmb_operations import local_op, get_close_sites_along_direction
 from .qmb_state import expectation_value as exp_val
 
-__all__ = ["LocalTerm"]
+__all__ = ["LocalTerm", "check_link_symmetry"]
 
 
 class LocalTerm:
@@ -171,36 +171,25 @@ class LocalTerm:
         self.std = np.sqrt(np.abs(self.std) / counter)
         print(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 
-    """
-    def check_on_borders(self, border, value=1, threshold=1e-10):
-        This function checks the value of an observable on a specific border of the lattice
 
-        Args:
-            border (str): lattice border where the expectation value of the observable (mx, px, my, py)
-
-            value (int, optional): Default value which is expected for the observable. Defaults to 1.
-            
-            threshold (scalar, real, optional): Tolerance for the checks. Defaults to 1e-10.
-
-        Raises:
-            ValueError: If any site of the chosen border has not the expected value of the observable
-        if border == "mx":
-            if np.any(np.abs(self.obs[0, :] - value) > threshold):
-                print(self.obs[0, :])
-                raise ValueError(f"{border} border penalty not satisfied")
-        elif border == "px":
-            if np.any(np.abs(self.obs[-1, :] - value) > threshold):
-                print(self.obs[-1, :])
-                raise ValueError(f"{border} border penalty not satisfied")
-        elif border == "my":
-            if np.any(np.abs(self.obs[:, 0] - value) > threshold):
-                print(self.obs[:, 0])
-                raise ValueError(f"{border} border penalty not satisfied")
-        elif border == "py":
-            if np.any(np.abs(self.obs[:, -1] - value) > threshold):
-                print(self.obs[:, -1])
-                raise ValueError(f"{border} border penalty not satisfied")
+def check_link_symmetry(axis, loc_op1, loc_op2, value, sign=1):
+    if not isinstance(loc_op1, LocalTerm):
+        raise TypeError(f"loc_op1 should be instance of LocalTerm, not {type(loc_op1)}")
+    if not isinstance(loc_op2, LocalTerm):
+        raise TypeError(f"loc_op2 should be instance of LocalTerm, not {type(loc_op2)}")
+    for ii in range(prod(loc_op1.lvals)):
+        coords = zig_zag(loc_op1.lvals, ii)
+        coords_list, sites_list = get_close_sites_along_direction(
+            coords, loc_op1.lvals, axis, loc_op1.has_obc
+        )
+        if sites_list is None:
+            continue
         else:
-            raise ValueError(f"border must be in (mx, px, my, py), not {border}")
-        print(f"{border}-BORDER PENALTIES SATISFIED")
-    """
+            c1 = coords_list[0]
+            c2 = coords_list[1]
+            tmp = loc_op1.obs[c1]
+            tmp += sign * loc_op2.obs[c2]
+        if np.abs(tmp - value) > 1e-15:
+            print(loc_op1.obs[c1], loc_op2.obs[c2])
+            raise ValueError(f"{axis}-Link Symmetry is violated at index {ii}")
+    print(f"{axis}-LINK SYMMETRY IS SATISFIED")

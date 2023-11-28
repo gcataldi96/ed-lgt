@@ -3,7 +3,7 @@ from math import prod
 from copy import deepcopy
 from scipy.sparse import isspmatrix, csr_matrix
 from ed_lgt.tools import zig_zag, inverse_zig_zag
-from .qmb_operations import two_body_op
+from .qmb_operations import two_body_op, get_close_sites_along_direction
 from .qmb_state import expectation_value as exp_val
 
 __all__ = ["TwoBodyTerm"]
@@ -115,7 +115,9 @@ class TwoBodyTerm:
             # Compute the corresponding coords
             coords = zig_zag(self.lvals, ii)
             # Check if it admits a twobody term according to the lattice geometry
-            coords_list, sites_list = self.get_twobodyterm_sites(coords)
+            coords_list, sites_list = get_close_sites_along_direction(
+                coords, self.lvals, self.axis, self.has_obc
+            )
             if sites_list is None:
                 continue
             # Check Mask condition on that site
@@ -206,53 +208,3 @@ class TwoBodyTerm:
                 sites_list = None
                 coords_list = None
         return coords_list, sites_list
-
-
-"""
-    def check_link_symm(self, value=1, threshold=1e-10, has_obc=True):
-        This function checks the value of a 2body operator along the self.axis and compare it with an expected value.
-
-        Args:
-            value (int, optional): Default value which is expected for the observable. Defaults to 1.
-            threshold (scalar, real, optional): Tolerance for the checks. Defaults to 1e-10.
-            has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus and there are more links to be checked
-
-        Raises:
-            ValueError: If any site of the chosen border has not the expected value of the observable
-        # COMPUTE THE TOTAL NUMBER OF LATTICE SITES
-        nx = self.corr.shape[0]
-        ny = self.corr.shape[1]
-        if self.axis == "x":
-            for y in range(ny):
-                for x in range(nx):
-                    if x == nx - 1:
-                        if not has_obc:
-                            if np.abs(self.corr[x, y, 0, y] - value) > threshold:
-                                raise ValueError(
-                                    f"W{self.axis}_({x},{y})-({0},{y})={self.corr[x,y,0,y]}: expected {value}"
-                                )
-                        else:
-                            continue
-                    else:
-                        if np.abs(self.corr[x, y, x + 1, y] - value) > threshold:
-                            raise ValueError(
-                                f"W{self.axis}_({x},{y})-({x+1},{y})={self.corr[x,y,x+1,y]}: expected {value}"
-                            )
-        else:
-            for x in range(nx):
-                for y in range(ny):
-                    if y == ny - 1:
-                        if not has_obc:
-                            if np.abs(self.corr[x, y, x, 0] - value) > threshold:
-                                raise ValueError(
-                                    f"W{self.axis}_({x},{y})-({x},{0})={self.corr[x,y,x,0]}: expected {value}"
-                                )
-                        else:
-                            continue
-                    else:
-                        if np.abs(self.corr[x, y, x, y + 1] - value) > threshold:
-                            raise ValueError(
-                                f"W{self.axis}_({x},{y})-({x},{y+1})={self.corr[x,y,x,y+1]}: expected {value}"
-                            )
-        print(f"{self.axis} LINK SYMMETRIES SATISFIED")
-"""
