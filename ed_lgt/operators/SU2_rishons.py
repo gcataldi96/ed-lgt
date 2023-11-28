@@ -22,9 +22,16 @@ class SU2_Rishon:
     def construct_rishons(self):
         # Define dictionary for operators
         self.ops = {}
+        # ---------------------------------------------------------------------
+        # Define SU2 Parity and Identity
+        P_diag = []
+        for s_size in range(self.largest_s_size):
+            P_diag += [((-1) ** s_size)] * (s_size + 1)
+        self.ops["P"] = diags(P_diag, 0, self.shape)
+        self.ops["IDz"] = identity(self.size, dtype=float)
+        # ---------------------------------------------------------------------
         # Starting diagonals of the s=0 case for the red and green rishon
         initial_diags = [1, 2]
-        # ---------------------------------------------------------------------
         # Define the Rishons Z_red and Z_green
         for ii, color in enumerate(["r", "g"]):
             # List of diagonal entries
@@ -57,17 +64,20 @@ class SU2_Rishon:
             # Compose the Rishon operators
             self.ops[f"Z{color}"] = diags(entries, diagonals, self.shape)
             self.ops[f"Z{color}_dag"] = self.ops[f"Z{color}"].transpose()
-        # ---------------------------------------------------------------------
-        # Define SU2 Parity and Identity
-        P_diag = []
-        for s_size in range(self.largest_s_size):
-            P_diag += [((-1) ** s_size)] * (s_size + 1)
-        self.ops["P"] = diags(P_diag, 0, self.shape)
-        self.ops["IDz"] = identity(self.size, dtype=float)
-        # ---------------------------------------------------------------------
-        # Useful operators for corner operators
-        self.ops[f"Z{color}_P"] = self.ops[f"Z{color}"] * self.ops["P"]
-        self.ops[f"P_Z{color}_dag"] = self.ops["P"] * self.ops[f"Z{color}_dag"]
+            self.ops[f"ZB_{color}"] = self.ops[f"Z{color}"]
+            self.ops[f"ZB_{color}_dag"] = self.ops[f"Z{color}_dag"]
+            # ---------------------------------------------------------------------
+            # Useful operators for corner operators
+            self.ops[f"ZB_{color}_P"] = self.ops[f"ZB_{color}"] * self.ops["P"]
+            self.ops[f"P_ZB_{color}_dag"] = self.ops["P"] * self.ops[f"ZB_{color}_dag"]
+        # Define eventually the two species of rishons
+        self.ops["ZA_r"] = self.ops["ZB_g_dag"]
+        self.ops["ZA_g"] = -self.ops["ZB_r_dag"]
+        for ii, color in enumerate(["r", "g"]):
+            self.ops[f"ZA_{color}_dag"] = self.ops[f"ZA_{color}"].transpose()
+            # Useful operators for corner operators
+            self.ops[f"ZA_{color}_P"] = self.ops[f"ZA_{color}"] * self.ops["P"]
+            self.ops[f"P_ZA_{color}_dag"] = self.ops["P"] * self.ops[f"ZA_{color}_dag"]
         # Add SU2 generators
         self.ops |= SU2_generators(self.s)
 
