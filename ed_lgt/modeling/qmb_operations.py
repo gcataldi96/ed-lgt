@@ -1,8 +1,9 @@
 import numpy as np
+from copy import deepcopy
 from math import prod
 from itertools import product
 from scipy.sparse import csr_matrix, identity, isspmatrix, kron
-from ed_lgt.tools import zig_zag
+from ed_lgt.tools import zig_zag, inverse_zig_zag
 
 __all__ = [
     "local_op",
@@ -11,6 +12,7 @@ __all__ = [
     "qmb_operator",
     "lattice_base_configs",
     "get_site_label",
+    "get_close_sites_along_direction",
 ]
 
 
@@ -154,18 +156,6 @@ def get_site_label(coords, lvals, has_obc, staggered=False, all_sites_equal=True
                     )
     label = f"{stag_label}{site_label}"
     return label
-
-
-"""
-coords = [0, 2, 1]
-lvals = [3, 3, 3]
-has_obc = True
-dim = len(lvals)
-dimension = "xyz"[:dim]
-
-llabel = get_site_label(coords, lvals, has_obc, staggered=True, all_sites_equal=False)
-lattice_base = lattice_base_configs(lvals, has_obc, staggered=True)
-"""
 
 
 def local_op(
@@ -402,3 +392,36 @@ def four_body_op(
         ops_list.append(op_name)
         ops[op_name] = op
     return qmb_operator(ops, ops_list, get_real)
+
+
+def get_close_sites_along_direction(coords, lvals, axis, has_obc):
+    if not isinstance(lvals, list):
+        raise TypeError(f"lvals should be a list, not a {type(lvals)}")
+    if not isinstance(axis, str):
+        raise TypeError(f"axis should be a STRING, not a {type(axis)}")
+    if not isinstance(has_obc, bool):
+        raise TypeError(f"has_obc must be a BOOL, not a {type(has_obc)}")
+    dimensions = "xyz"[: len(lvals)]
+    coords1 = list(coords)
+    i1 = inverse_zig_zag(lvals, coords1)
+    coords2 = deepcopy(coords1)
+    # Check if the site admits a neighbor along the direction axis
+    # Look at the specific index of the axis
+    indx = dimensions.index(axis)
+    # If along that axis, there is space for a twobody term:
+    if coords1[indx] < lvals[indx] - 1:
+        coords2[indx] += 1
+        i2 = inverse_zig_zag(lvals, coords2)
+        sites_list = [i1, i2]
+        coords_list = [tuple(coords1), tuple(coords2)]
+    else:
+        # PERIODIC BOUNDARY CONDITIONS
+        if not has_obc:
+            coords2[indx] = 0
+            i2 = inverse_zig_zag(lvals, coords2)
+            sites_list = [i1, i2]
+            coords_list = [tuple(coords1), tuple(coords2)]
+        else:
+            sites_list = None
+            coords_list = None
+    return coords_list, sites_list
