@@ -25,6 +25,7 @@ class PlaquetteTerm:
         has_obc,
         staggered_basis=False,
         site_basis=None,
+        print_plaq=True,
     ):
         """
         This function introduce all the fundamental information to define a Plaquette Hamiltonian Term and possible eventual measures of it.
@@ -74,6 +75,8 @@ class PlaquetteTerm:
             raise TypeError("All items of lvals must be scalar integers.")
         if not isinstance(has_obc, bool):
             raise TypeError(f"has_obc must be a BOOL, not a {type(has_obc)}")
+        if not isinstance(print_plaq, bool):
+            raise TypeError(f"print_plaq must be a BOOL, not a {type(print_plaq)}")
         self.axes = axes
         self.BL = op_list[0]
         self.BR = op_list[1]
@@ -89,8 +92,9 @@ class PlaquetteTerm:
         self.has_obc = has_obc
         self.stag_basis = staggered_basis
         self.site_basis = site_basis
+        self.print_plaq = print_plaq
         print(
-            f"PLAQUETTE {op_name_list[0]}-{op_name_list[1]}-{op_name_list[2]}-{op_name_list[3]}"
+            f"Plaquette {op_name_list[0]}-{op_name_list[1]}-{op_name_list[2]}-{op_name_list[3]}"
         )
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
@@ -176,16 +180,17 @@ class PlaquetteTerm:
                     f"site should be STR ('even' / 'odd'), not {type(site)}"
                 )
         # ADVERTISE OF THE CHOSEN PART OF THE PLAQUETTE YOU WANT TO COMPUTE
-        print(f"----------------------------------------------------")
-        if get_imag:
-            chosen_part = "IMAG"
-        else:
-            chosen_part = "REAL"
-        if site is None:
-            print(f"PLAQUETTE: {chosen_part}")
-        else:
-            print(f"PLAQUETTE: {chosen_part} PART {site}")
-        print(f"----------------------------------------------------")
+        if self.print_plaq:
+            print(f"----------------------------------------------------")
+            if get_imag:
+                chosen_part = "IMAG"
+            else:
+                chosen_part = "REAL"
+            if site is None:
+                print(f"PLAQUETTE: {chosen_part}")
+            else:
+                print(f"PLAQUETTE: {chosen_part} PART {site}")
+            print(f"----------------------------------------------------")
         self.avg = 0.0
         self.std = 0.0
         counter = 0
@@ -233,14 +238,16 @@ class PlaquetteTerm:
                 )
                 # PRINT THE PLAQUETTE
                 plaq_string = [f"{c}" for c in coords_list]
-                self.print_Plaquette(plaq_string, plaq)
+                if self.print_plaq:
+                    self.print_Plaquette(plaq_string, plaq)
                 # Update the average and the variance
                 counter += 1
                 self.avg += plaq
                 self.std += delta_plaq
         self.avg = self.avg / counter
         self.std = np.sqrt(np.abs(self.std) / counter)
-        print(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
+        if self.print_plaq:
+            print(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 
     def get_Plaquette_coords(self, coords1):
         coords1 = list(coords1)
