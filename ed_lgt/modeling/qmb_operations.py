@@ -222,8 +222,9 @@ def local_op(
         )
         # PROJECT THE OPERATOR ON THE CORRESPONDING SITE BASIS
         if len(basis_label) > 0:
-            op = site_basis[basis_label].transpose() * op * site_basis[basis_label]
             op_name = f"{op_name}_{basis_label}"
+            if site_basis is not None:
+                op = site_basis[basis_label].transpose() * op * site_basis[basis_label]
         # UPDATE THE LIST OF OPERATORS
         ops_list.append(op_name)
         ops[op_name] = op
@@ -296,8 +297,9 @@ def two_body_op(
         )
         # PROJECT THE OPERATOR ON THE CORRESPONDING SITE BASIS
         if len(basis_label) > 0:
-            op = site_basis[basis_label].transpose() * op * site_basis[basis_label]
             op_name = f"{op_name}_{basis_label}"
+            if site_basis is not None:
+                op = site_basis[basis_label].transpose() * op * site_basis[basis_label]
         # UPDATE THE LIST OF OPERATORS
         ops_list.append(op_name)
         ops[op_name] = op
@@ -386,8 +388,9 @@ def four_body_op(
         )
         # PROJECT THE OPERATOR ON THE CORRESPONDING SITE BASIS
         if len(basis_label) > 0:
-            op = site_basis[basis_label].transpose() * op * site_basis[basis_label]
             op_name = f"{op_name}_{basis_label}"
+            if site_basis is not None:
+                op = site_basis[basis_label].transpose() * op * site_basis[basis_label]
         # UPDATE THE LIST OF OPERATORS
         ops_list.append(op_name)
         ops[op_name] = op
