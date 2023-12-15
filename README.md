@@ -6,7 +6,7 @@ Read the Documentation on https://ed-su2.readthedocs.io/en/latest/
 # Setup
 1) Download from git the repository
 
-        git clone --recursive git@github.com:gcataldi96/ed-su2.git
+        git clone --recursive git@github.com:gcataldi96/ed-lgt.git
 
 2a) (ignore it unless you create the repo for the first time) Add the simsio library as a submodule (it should be already there)
 
@@ -19,9 +19,9 @@ Read the Documentation on https://ed-su2.readthedocs.io/en/latest/
         git submodule update
         git submodule recursive
 
-3) Create the Environment with all the needed python packages
+3) Create the Environment with all the needed Python packages
 
-        conda env create -f ed-su2/environment.yml
+        conda env create -f ed-lgt/environment.yml
         conda activate ed
 
 Enjoy 👏
