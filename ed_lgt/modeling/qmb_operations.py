@@ -16,6 +16,50 @@ __all__ = [
 ]
 
 
+# Helper function for parameter validation
+def validate_parameters(operator=None, positions=None, lvals=None, has_obc=None):
+    if operator is not None and not isspmatrix(operator):
+        raise TypeError(f"operator should be SPARSE, not a {type(operator)}")
+    if positions is not None and (
+        not isinstance(positions, list)
+        or not all(isinstance(x, int) for x in positions)
+    ):
+        raise TypeError(
+            f"positions must be a list of integers, not a {type(positions)}"
+        )
+    if lvals is not None and (
+        not isinstance(lvals, list) or not all(isinstance(x, int) for x in lvals)
+    ):
+        raise TypeError(f"lvals should be a list of integers, not a {type(lvals)}")
+    if has_obc is not None and not isinstance(has_obc, bool):
+        raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
+
+
+# Unified function for operator list construction
+def construct_operator_list(
+    operators, positions, lvals, has_obc, staggered_basis, site_basis
+):
+    validate_parameters(positions=positions, lvals=lvals, has_obc=has_obc)
+    ID = identity(operators[0].shape[0])
+    ops_list = []
+    for ii in range(np.prod(lvals)):
+        op = operators[positions.index(ii)] if ii in positions else ID
+        coords = zig_zag(lvals, ii)
+        basis_label = get_site_label(coords, lvals, has_obc, staggered_basis)
+        op = apply_basis_projection(op, basis_label, site_basis)
+        ops_list.append(op)
+    return ops_list
+
+
+def apply_basis_projection(operator, basis_label, site_basis):
+    # Helper function for basis projection
+    if len(basis_label) > 0 and site_basis is not None:
+        operator = (
+            site_basis[basis_label].transpose() * operator * site_basis[basis_label]
+        )
+    return operator
+
+
 def qmb_operator(ops, op_list, add_dagger=False, get_real=False, get_imag=False):
     """
     This function performs the QMB operation of an arbitrary long list
@@ -75,7 +119,8 @@ def lattice_base_configs(base, lvals, has_obc=True, staggered=False):
         staggered (bool, optional): if True, a staggered basis is required. Default to False.
 
     Returns:
-        (np.array((lvals)),np.array((lvals))): the d-dimensional array with the labels of the site and the d-dimensional array with the corresponding site-basis dimensions
+        (np.array((lvals)),np.array((lvals))): the d-dimensional array with the labels of
+            the site and the d-dimensional array with the corresponding site-basis dimensions
     """
     if not isinstance(lvals, list):
         raise TypeError(f"lvals should be a list, not a {type(lvals)}")
@@ -221,10 +266,8 @@ def local_op(
             coords, lvals, has_obc, staggered_basis, all_sites_equal
         )
         # PROJECT THE OPERATOR ON THE CORRESPONDING SITE BASIS
-        if len(basis_label) > 0:
-            op_name = f"{op_name}_{basis_label}"
-            if site_basis is not None:
-                op = site_basis[basis_label].transpose() * op * site_basis[basis_label]
+        op = apply_basis_projection(op, basis_label, site_basis)
+        op_name = f"{op_name}_{basis_label}" if len(basis_label) > 0 else op_name
         # UPDATE THE LIST OF OPERATORS
         ops_list.append(op_name)
         ops[op_name] = op
@@ -296,10 +339,8 @@ def two_body_op(
             coords, lvals, has_obc, staggered_basis, all_sites_equal
         )
         # PROJECT THE OPERATOR ON THE CORRESPONDING SITE BASIS
-        if len(basis_label) > 0:
-            op_name = f"{op_name}_{basis_label}"
-            if site_basis is not None:
-                op = site_basis[basis_label].transpose() * op * site_basis[basis_label]
+        op = apply_basis_projection(op, basis_label, site_basis)
+        op_name = f"{op_name}_{basis_label}" if len(basis_label) > 0 else op_name
         # UPDATE THE LIST OF OPERATORS
         ops_list.append(op_name)
         ops[op_name] = op
@@ -387,10 +428,8 @@ def four_body_op(
             coords, lvals, has_obc, staggered_basis, all_sites_equal
         )
         # PROJECT THE OPERATOR ON THE CORRESPONDING SITE BASIS
-        if len(basis_label) > 0:
-            op_name = f"{op_name}_{basis_label}"
-            if site_basis is not None:
-                op = site_basis[basis_label].transpose() * op * site_basis[basis_label]
+        op = apply_basis_projection(op, basis_label, site_basis)
+        op_name = f"{op_name}_{basis_label}" if len(basis_label) > 0 else op_name
         # UPDATE THE LIST OF OPERATORS
         ops_list.append(op_name)
         ops[op_name] = op
@@ -428,3 +467,45 @@ def get_close_sites_along_direction(coords, lvals, axis, has_obc):
             sites_list = None
             coords_list = None
     return coords_list, sites_list
+
+
+"""
+# Refactoring local_op
+def local_op(
+    operator, op_1D_site, lvals, has_obc, staggered_basis=False, site_basis=None
+):
+    validate_parameters(operator=operator, lvals=lvals, has_obc=has_obc)
+    ops_list = construct_operator_list(
+        [operator], [op_1D_site], lvals, has_obc, staggered_basis, site_basis
+    )
+    return qmb_operator(ops_list)
+
+
+# Refactoring two_body_op
+def two_body_op(
+    op_list, op_sites_list, lvals, has_obc, staggered_basis=False, site_basis=None
+):
+    validate_parameters(lvals=lvals, has_obc=has_obc)
+    ops_list = construct_operator_list(
+        op_list, op_sites_list, lvals, has_obc, staggered_basis, site_basis
+    )
+    return qmb_operator(ops_list)
+
+
+# Assuming a similar structure for four_body_op
+def four_body_op(
+    op_list, op_sites_list, lvals, has_obc, staggered_basis=False, site_basis=None
+):
+    validate_parameters(lvals=lvals, has_obc=has_obc)
+    ops_list = construct_operator_list(
+        op_list, op_sites_list, lvals, has_obc, staggered_basis, site_basis
+    )
+    return qmb_operator(ops_list)
+
+
+# Note: The functions zig_zag, get_site_label, and qmb_operator are assumed to be defined elsewhere in your code.
+
+# This refactored code should be more modular, easier to maintain, and potentially more efficient.
+
+
+"""
