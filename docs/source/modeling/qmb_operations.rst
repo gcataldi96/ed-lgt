@@ -10,4 +10,4 @@ Quantum Many Body (QMB) Operations
    :members:
 
 .. seealso::
-   :ref:`qmb_operations Module <qmb_operations>`
+   :ref:`qmb_state Module <qmb_state>`
