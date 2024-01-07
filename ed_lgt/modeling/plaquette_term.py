@@ -217,9 +217,10 @@ class PlaquetteTerm:
                         has_obc=self.has_obc,
                         staggered_basis=self.stag_basis,
                         site_basis=self.site_basis,
-                        get_real=True,
+                        get_real=False,
                     ),
                 )
+                print(plaq)
                 delta_plaq = (
                     exp_val(
                         psi,
@@ -230,7 +231,7 @@ class PlaquetteTerm:
                             has_obc=self.has_obc,
                             staggered_basis=self.stag_basis,
                             site_basis=self.site_basis,
-                            get_real=True,
+                            get_real=False,
                         )
                         ** 2,
                     )
