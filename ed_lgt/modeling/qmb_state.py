@@ -1,21 +1,19 @@
 import numpy as np
 from math import prod
 from scipy.linalg import eigh as array_eigh
-from scipy.sparse import csr_matrix, isspmatrix, isspmatrix_csr, save_npz, lil_matrix
 from scipy.sparse.linalg import eigsh as sparse_eigh
-from ed_lgt.tools import pause, zig_zag
+from scipy.sparse import csr_matrix, isspmatrix
+from ed_lgt.tools import zig_zag, validate_parameters
 
 __all__ = [
-    "Ground_State",
-    "expectation_value",
-    "entanglement_entropy",
+    "Ground_state",
+    "QMB_state",
     "truncation",
+    "get_norm",
     "get_loc_states_from_qmb_state",
-    "get_qmb_state_from_loc_state",
-    "get_submatrix_from_sparse",
-    "get_reduced_density_matrix",
+    "get_qmb_state_from_loc_states",
     "diagonalize_density_matrix",
-    "get_state_configurations",
+    "get_projector_for_efficient_density_matrix",
 ]
 
 
@@ -32,33 +30,131 @@ class Ground_State:
         self.energy = self.Nenergies[0]
         self.psi = self.Npsi[:, 0]
 
-    def normalize(self):
-        norm = np.linalg.norm(self.psi)
-        print(f"NORM {norm}")
-        self.psi /= norm
 
-    def truncate(self, threshold):
-        if not np.isscalar(threshold) and not isinstance(threshold, float):
-            raise TypeError(f"threshold must be a SCALAR FLOAT, not {type(threshold)}")
-        self.psi = np.where(np.abs(self.psi) > threshold, self.psi, 0)
+class QMB_state:
+    def __init__(self, psi, lvals=None, loc_dims=None):
+        """
+        Args:
+            psi (np.ndarray): QMB states
 
+            lvals (list, optional): list of the lattice spatial dimensions
 
-def expectation_value(psi, operator):
-    if not isspmatrix(operator):
-        raise TypeError(f"operator should be a sparse_matrix, not a {type(operator)}")
-    if not isinstance(psi, np.ndarray):
-        raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
-    return np.real(np.dot(np.conjugate(psi), (operator.dot(psi))))
+            loc_dims (list of ints, np.ndarray of ints, or int): list of lattice site dimensions
 
+        Returns:
+            sparse: reduced density matrix of the single site
+        """
+        validate_parameters(psi=psi, lvals=lvals, loc_dims=loc_dims)
+        self.psi = psi
+        if lvals is not None:
+            self.lvals = lvals
+        if loc_dims is not None:
+            self.loc_dims = loc_dims
 
-def get_norm(psi):
-    if not isinstance(psi, np.ndarray):
-        raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
-    norm = np.linalg.norm(psi)
-    if np.abs(norm - 1) > 1e-14:
-        print(f"NORM {norm}")
-        psi = psi / norm
-    return psi
+    def normalize(self, threshold=1e-14):
+        norm = get_norm(self.psi)
+        if np.abs(norm - 1) > threshold:
+            self.psi /= norm
+        return norm
+
+    def truncate(self, threshold=1e-14):
+        return truncation(self.psi, threshold)
+
+    def expectation_value(self, operator):
+        validate_parameters(op_list=[operator])
+        return np.real(np.dot(np.conjugate(self.psi), (operator.dot(self.psi))))
+
+    def reduced_density_matrix(self, qmb_index):
+        """
+        This function computes the reduced density matrix (in sparse format)
+        of a state psi with respect to sigle site in position "qmb_index".
+
+        Args:
+            psi (np.ndarray): QMB states
+
+            loc_dims (list of ints, np.ndarray of ints, or int): list of lattice site dimensions
+
+            lvals (list): list of the lattice spatial dimensions
+
+            qmb_index (int): position of the lattice site we want to look at
+        Returns:
+            sparse: reduced density matrix of the single site
+        """
+        validate_parameters(index=qmb_index)
+        # Get d-dimensional coordinates of
+        coords = zig_zag(self.lvals, qmb_index)
+        print("----------------------------------------------------")
+        print(f"DENSITY MATRIX OF SITE {coords}")
+        # RESHAPE psi
+        psi_copy = self.psi.reshape(*[loc_dim for loc_dim in self.loc_dims.tolist()])
+        # DEFINE A LIST OF SITES WE WANT TO TRACE OUT
+        indices = list(np.arange(0, prod(self.lvals)))
+        # The index we remove is the one wrt which we get the reduced DM
+        indices.remove(qmb_index)
+        # Get the reduced density matrix
+        rho = np.tensordot(psi_copy, np.conjugate(psi_copy), axes=(indices, indices))
+        # Return a truncated sparse version of rho
+        return csr_matrix(truncation(rho, 1e-10))
+
+    def entanglement_entropy(self, partition_size):
+        """
+        This function computes the bipartite entanglement entropy of a portion of a QMB state psi
+        related to a lattice model with dimension lvals where single sites have local hilbert spaces of dimensions loc_dims
+
+        Args:
+            psi (np.ndarray): QMB states
+
+            loc_dims (list, np.ndarray, or int): dimensions of the single site Hilbert space
+
+            lvals (list): list of the lattice spatial dimensions
+
+            partition_size (int): number of lattice sites to be involved in the partition
+        Returns:
+            sparse: reduced density matrix of the single site
+        """
+        if not np.isscalar(partition_size) and not isinstance(partition_size, int):
+            raise TypeError(
+                f"partition_size must be an SCALAR & INTEGER, not a {type(partition_size)}"
+            )
+        # COMPUTE THE ENTANGLEMENT ENTROPY OF A SPECIFIC SUBSYSTEM
+        partition = 1
+        for site in range(partition_size):
+            partition *= self.loc_dims[site]
+        _, V, _ = np.linalg.svd(
+            self.psi.reshape((partition, int(prod(self.loc_dims) / partition)))
+        )
+        tmp = np.array([-(llambda**2) * np.log2(llambda**2) for llambda in V])
+        print(f"ENTROPY: {format(np.sum(tmp), '.9f')}")
+        return np.sum(tmp)
+
+    def get_state_configurations(self):
+        """
+        This function express the main QMB state configurations associated to the
+        most relevant coefficients of the QMB state psi. Every state configuration
+        is expressed in terms of the single site local Hilber basis
+        """
+        print("----------------------------------------------------")
+        print("STATE CONFIGURATIONS")
+        psi = csr_matrix(self.psi.truncate(1e-10))
+        sing_vals = sorted(psi.data, key=lambda x: (abs(x), -x), reverse=True)
+        indices = [
+            x
+            for _, x in sorted(
+                zip(psi.data, psi.indices),
+                key=lambda pair: (abs(pair[0]), -pair[0]),
+                reverse=True,
+            )
+        ]
+        state_configurations = {"state_config": [], "coeff": []}
+        for ind, alpha in zip(indices, sing_vals):
+            loc_states = get_loc_states_from_qmb_state(
+                qmb_index=ind, loc_dims=self.loc_dims, lvals=self.lvals
+            )
+            print(f"{loc_states}  {alpha}")
+            state_configurations["state_config"].append(loc_states)
+            state_configurations["coeff"].append(alpha)
+        print("----------------------------------------------------")
+        self.state_configs = state_configurations
 
 
 def truncation(array, threshold=1e-14):
@@ -67,6 +163,67 @@ def truncation(array, threshold=1e-14):
     if not np.isscalar(threshold) and not isinstance(threshold, float):
         raise TypeError(f"threshold should be a SCALAR FLOAT, not a {type(threshold)}")
     return np.where(np.abs(array) > threshold, array, 0)
+
+
+def get_norm(psi):
+    validate_parameters(psi=psi)
+    norm = np.linalg.norm(psi)
+    return norm
+
+
+def get_loc_states_from_qmb_state(qmb_index, loc_dims, lvals):
+    """
+    Compute the state of each single lattice site given the index of the qmb state
+
+    Args:
+        qmb_index (int): qmb state index corresponding to a specific list of local sites configurations
+
+        loc_dims (list of ints, np.ndarray of ints, or int): list of lattice site dimensions
+
+        lvals (list): list of the lattice spatial dimensions
+
+    Returns:
+        ndarray(int): list of the states of the local Hilbert space associated to the given QMB state index
+    """
+    validate_parameters(index=qmb_index, lvals=lvals, loc_dims=loc_dims)
+    if qmb_index < 0 or qmb_index > (tot_dim - 1):
+        raise ValueError(f"index {qmb_index} should be in between 0 and {tot_dim-1}")
+    tot_dim = np.prod(loc_dims)
+    loc_states = np.zeros(prod(lvals), dtype=int)
+    for ii in range(prod(lvals)):
+        tot_dim /= loc_dims[ii]
+        loc_states[ii] = qmb_index // tot_dim
+        qmb_index -= loc_states[ii] * tot_dim
+    return loc_states
+
+
+def get_qmb_state_from_loc_states(loc_states, loc_dims):
+    """
+    This function generate the QMB index out the the indices of the single lattices sites.
+    The latter ones can display local Hilbert space with different dimension.
+    The order of the sites must match the order of the dimensionality of the local basis
+
+    Args:
+        loc_states (list of ints): list of numbered state of the lattice sites
+
+        loc_dims (list of ints, np.ndarray of ints, or int): list of lattice site dimensions
+            (in the same order as they are stored in the loc_states!)
+
+    Returns:
+        int: QMB index
+    """
+    validate_parameters(loc_dims=loc_dims)
+    if len(loc_dims) != len(loc_states):
+        raise ValueError(
+            f"dim loc_states = {len(loc_states)} != dim loc_dims = {len(loc_dims)}"
+        )
+    n_sites = len(loc_states)
+    qmb_index = 0
+    dim_factor = 1
+    for ii in reversed(range(n_sites)):
+        qmb_index += loc_states[ii] * dim_factor
+        dim_factor *= loc_dims[ii]
+    return qmb_index
 
 
 def diagonalize_density_matrix(rho):
@@ -78,328 +235,41 @@ def diagonalize_density_matrix(rho):
     return rho_eigvals, rho_eigvecs
 
 
-def get_reduced_density_matrix(psi, loc_dims, lvals, site):
+def get_projector_for_efficient_density_matrix(rho, loc_dim, threshold):
     """
-    This function computes the reduced density matrix (in sparse format)
-    of a state psi with respect to sigle site in position "site".
-
-    Args:
-        psi (np.ndarray): QMB states
-
-        loc_dims (list, np.ndarray, or int): dimensions of the single site Hilbert space
-
-        lvals (list): list of the lattice spatial dimensions
-
-        site (int): position of the lattice site we want to look at
-    Returns:
-        sparse: reduced density matrix of the single site
+    This function constructs the projector operator to reduce the single site dimension
+    according to the eigenvalues that mostly contributes to the reduced density matrix of the single-site
     """
-    if not isinstance(psi, np.ndarray):
-        raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
-    if not isinstance(lvals, list):
-        raise TypeError(f"lvals should be a list, not a {type(lvals)}")
-    elif not all(np.isscalar(dim) and isinstance(dim, int) for dim in lvals):
-        raise TypeError("All items of lvals must be scalar integers.")
-    if not isinstance(loc_dims, np.ndarray):
-        if isinstance(loc_dims, list):
-            loc_dims = np.asarray(loc_dims)
-        elif np.isscalar(loc_dims) and isinstance(loc_dims, int):
-            loc_dims = np.asarray([loc_dims for ii in range(prod(lvals))])
-        else:
-            raise TypeError(
-                f"loc_dims is neither INTEGER, LIST or ARRAY but a {type(loc_dims)}"
-            )
-    if not np.isscalar(site) and not isinstance(site, int):
-        raise TypeError(f"site must be an SCALAR & INTEGER, not a {type(site)}")
-    # GET THE COORDINATES OF THE SITE site
-    coords = zig_zag(lvals, site)
-    print("----------------------------------------------------")
-    print(f"DENSITY MATRIX OF SITE {coords}")
-    # RESHAPE psi
-    psi_copy = psi.reshape(*[loc_dim for loc_dim in loc_dims.tolist()])
-    # DEFINE A LIST OF SITES WE WANT TO TRACE OUT
-    indices = list(np.arange(0, prod(lvals)))
-    # The index we remove is the one wrt which we get the reduced DM
-    indices.remove(site)
-    # COMPUTE THE REDUCED DENSITY MATRIX
-    rho = np.tensordot(psi_copy, np.conjugate(psi_copy), axes=(indices, indices))
-    # TRUNCATE RHO
-    rho = truncation(rho, 10 ** (-10))
-    # PROMOTE RHO TO A SPARSE MATRIX
-    return csr_matrix(rho)
-
-
-def entanglement_entropy(psi, loc_dims, lvals, partition_size):
-    """
-    This function computes the bipartite entanglement entropy of a portion of a QMB state psi related to a lattice model with dimension lvals where single sites have local hilbert spaces of dimensions loc_dims
-
-    Args:
-        psi (np.ndarray): QMB states
-
-        loc_dims (list, np.ndarray, or int): dimensions of the single site Hilbert space
-
-        lvals (list): list of the lattice spatial dimensions
-
-        partition_size (int): number of lattice sites to be involved in the partition
-    Returns:
-        sparse: reduced density matrix of the single site
-    """
-    if not isinstance(psi, np.ndarray):
-        raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
-    if not isinstance(lvals, list):
-        raise TypeError(f"lvals should be a list, not a {type(lvals)}")
-    elif not all(np.isscalar(dim) and isinstance(dim, int) for dim in lvals):
-        raise TypeError("All items of lvals must be scalar integers.")
-    if not isinstance(loc_dims, np.ndarray):
-        if isinstance(loc_dims, list):
-            loc_dims = np.asarray(loc_dims)
-        elif np.isscalar(loc_dims) and isinstance(loc_dims, int):
-            loc_dims = np.asarray([loc_dims for ii in range(prod(lvals))])
-        else:
-            raise TypeError(
-                f"loc_dims is neither INTEGER, LIST or ARRAY but a {type(loc_dims)}"
-            )
-    if not np.isscalar(partition_size) and not isinstance(partition_size, int):
-        raise TypeError(
-            f"partition_size must be an SCALAR & INTEGER, not a {type(partition_size)}"
-        )
-    # COMPUTE THE ENTANGLEMENT ENTROPY OF A SPECIFIC SUBSYSTEM
-    tot_dim = prod(loc_dims)
-    partition = 1
-    for site in range(partition_size):
-        partition *= loc_dims[site]
-    S, V, D = np.linalg.svd(psi.reshape((partition, int(tot_dim / partition))))
-    tmp = np.array([-(llambda**2) * np.log2(llambda**2) for llambda in V])
-    print(f"ENTROPY: {format(np.sum(tmp), '.9f')}")
-    return np.sum(tmp)
-
-
-def get_loc_states_from_qmb_state(qmb_index, loc_dims, lvals):
-    """
-    Compute the state of each single lattice site given the index of the qmb state
-
-    Args:
-        index (int): qmb state index corresponding to a specific list of local sites configurations
-
-        loc_dim (int, list, np.array): dimensions of the local (single site) Hilbert Spaces
-
-        n_sites (int): number of sites
-
-    Returns:
-        ndarray(int): list of the states of the local Hilbert space associated to the given QMB state index
-    """
-    if not np.isscalar(qmb_index) and not isinstance(qmb_index, int):
-        raise TypeError(
-            f"qmb_index must be an SCALAR & INTEGER, not a {type(qmb_index)}"
-        )
-    if not isinstance(lvals, list):
-        raise TypeError(f"lvals should be a list, not a {type(lvals)}")
-    elif not all(np.isscalar(dim) and isinstance(dim, int) for dim in lvals):
-        raise TypeError("All items of lvals must be scalar integers.")
-    n_sites = prod(lvals)
-    if isinstance(loc_dims, list):
-        loc_dims = np.asarray(loc_dims)
-        tot_dim = np.prod(loc_dims)
-    elif isinstance(loc_dims, np.ndarray):
-        tot_dim = np.prod(loc_dims)
-    elif np.isscalar(loc_dims):
-        if isinstance(loc_dims, int):
-            loc_dims = np.asarray([loc_dims for ii in range(n_sites)])
-            tot_dim = loc_dims**n_sites
-        else:
-            raise TypeError(f"loc_dims must be INTEGER, not a {type(loc_dims)}")
-    else:
-        raise TypeError(
-            f"loc_dims is neither a SCALAR, a LIST or ARRAY but a {type(loc_dims)}"
-        )
-    if qmb_index < 0:
-        raise ValueError(f"index {qmb_index} should be positive")
-    if qmb_index > (tot_dim - 1):
-        raise ValueError(f"index {qmb_index} is too high")
-    loc_states = np.zeros(n_sites, dtype=int)
-    # print(f"TOT_DIM {tot_dim}")
-    for ii in range(n_sites):
-        # print(f"QMB index {qmb_index}")
-        tot_dim /= loc_dims[ii]
-        # print(f"TOT_DIM {tot_dim}")
-        loc_states[ii] = qmb_index // tot_dim
-        # print(f"loc_state {loc_states[ii]}")
-        qmb_index -= loc_states[ii] * tot_dim
-    # print(loc_states)
-    return loc_states
-
-
-"""
-qmb_index = 5
-loc_dim = [3, 4, 2]
-n_sites = 3
-locs = get_loc_states_from_qmb_state(qmb_index, loc_dim, n_sites)
-"""
-
-
-def get_qmb_state_from_loc_state(loc_states, loc_dims):
-    """
-    This function generate the QMB index out the the indices of the single lattices sites.
-    The latter ones can display local Hilbert space with different dimension.
-    The order of the sites must match the order of the dimensionality of the local basis
-
-    Args:
-        loc_states (list of ints): list of numbered state of the lattice sites
-
-        loc_dims (list of ints): list of lattice site dimensions (in the same order as they are stored in the loc_states!)
-
-    Returns:
-        int: QMB index
-    """
-    if not isinstance(loc_dims, np.ndarray):
-        if isinstance(loc_dims, list):
-            loc_dims = np.asarray(loc_dims)
-            if len(loc_dims) != len(loc_states):
-                raise ValueError(
-                    f"DIMENSION MISMATCH: dim loc_states = {len(loc_states)} != dim loc_dims = {len(loc_dims)}"
-                )
-        elif np.isscalar(loc_dims) and isinstance(loc_dims, int):
-            loc_dims = np.asarray([loc_dims for ii in range(len(loc_states))])
-        else:
-            raise TypeError(
-                f"loc_dims is neither INTEGER, LIST or ARRAY but a {type(loc_dims)}"
-            )
-    n_sites = len(loc_states)
-    qmb_index = 0
-    dim_factor = 1
-    for ii in reversed(range(n_sites)):
-        qmb_index += loc_states[ii] * dim_factor
-        dim_factor *= loc_dims[ii]
-    return qmb_index
+    if not isinstance(loc_dim, int) and not np.isscalar(loc_dim):
+        raise TypeError(f"loc_dim should be INT & SCALAR, not a {type(loc_dim)}")
+    if not isinstance(threshold, float) and not np.isscalar(threshold):
+        raise TypeError(f"threshold should be FLOAT & SCALAR, not a {type(threshold)}")
+    # Diagonalize the single-site density matrix rho
+    rho_eigvals, rho_eigvecs = diagonalize_density_matrix(rho)
+    # Counts the number of eigenvalues larger than threshold
+    P_columns = (rho_eigvals > threshold).sum()
+    while P_columns < 2:
+        threshold = threshold / 10
+        P_columns = (rho_eigvals > threshold).sum()
+    print(f"TOTAL NUMBER OF SIGNIFICANT EIGENVALUES {P_columns}")
+    column_indx = -1
+    # Define the projector operator Proj: it has dimension (loc_dim,P_columns)
+    proj = np.zeros((loc_dim, P_columns), dtype=complex)
+    # S eigenvalues in <reduced_dm> are stored in increasing order,
+    # in order to compute the columns of P_proj we proceed as follows
+    for ii in range(loc_dim):
+        if rho_eigvals[ii] > threshold:
+            column_indx += 1
+            proj[:, column_indx] = rho_eigvecs[:, ii]
+    # Truncate to 0 the entries below a certain threshold and promote to sparse matrix
+    return csr_matrix(truncation(proj, 1e-14))
 
 
 """
 loc_states = [0, 1, 1]
 qmb_state = get_qmb_state_from_loc_state(loc_states, [3, 4, 2])
+qmb_index = 5
+loc_dim = [3, 4, 2]
+n_sites = 3
+locs = get_loc_states_from_qmb_state(qmb_index, loc_dim, n_sites)
 """
-
-
-def get_state_configurations(psi, loc_dims, lvals):
-    """
-    This function express the main QMB state configurations associated to the
-    most relevant coefficients of the QMB state psi. Every state configuration
-    is expressed in terms of the single site local Hilber basis
-    Args:
-        psi (np.ndarray): QMB state
-        loc_dims (list/np.ndarray/int: dimension of every lattice site Hilbert space
-        n_sites (int): number of sites in the lattice
-    """
-    if not isinstance(psi, np.ndarray):
-        raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
-    if not isinstance(lvals, list):
-        raise TypeError(f"lvals should be a list, not a {type(lvals)}")
-    elif not all(np.isscalar(dim) and isinstance(dim, int) for dim in lvals):
-        raise TypeError("All items of lvals must be scalar integers.")
-    if not isinstance(loc_dims, np.ndarray):
-        if isinstance(loc_dims, list):
-            loc_dims = np.asarray(loc_dims)
-        elif np.isscalar(loc_dims) and isinstance(loc_dims, int):
-            loc_dims = np.asarray([loc_dims for ii in range(prod(lvals))])
-        else:
-            raise TypeError(
-                f"loc_dims is neither INTEGER, LIST or ARRAY but a {type(loc_dims)}"
-            )
-    print("----------------------------------------------------")
-    print("STATE CONFIGURATIONS")
-    psi = truncation(psi, 1e-10)
-    sing_vals = sorted(csr_matrix(psi).data, key=lambda x: (abs(x), -x), reverse=True)
-    indices = [
-        x
-        for _, x in sorted(
-            zip(csr_matrix(psi).data, csr_matrix(psi).indices),
-            key=lambda pair: (abs(pair[0]), -pair[0]),
-            reverse=True,
-        )
-    ]
-    state_configurations = {"state_config": [], "coeff": []}
-    for ind, alpha in zip(indices, sing_vals):
-        loc_states = get_loc_states_from_qmb_state(
-            qmb_index=ind, loc_dims=loc_dims, lvals=lvals
-        )
-        print(f"{loc_states}  {alpha}")
-        state_configurations["state_config"].append(loc_states)
-        state_configurations["coeff"].append(alpha)
-    print("----------------------------------------------------")
-    return state_configurations
-
-
-# ==============================================================================
-def get_submatrix_from_sparse(matrix, rows_list, cols_list):
-    # CHECK ON TYPES
-    if not isspmatrix(matrix):
-        raise TypeError(f"matrix must be a SPARSE MATRIX, not a {type(matrix)}")
-    if not isinstance(rows_list, list):
-        raise TypeError(f"rows_list must be a LIST, not a {type(rows_list)}")
-    if not isinstance(cols_list, list):
-        raise TypeError(f"cols_list must be a LIST, not a {type(cols_list)}")
-    matrix = lil_matrix(matrix)
-    # Get the Submatrix out of the list of rows and columns
-    sub_matrix = matrix[rows_list, :][:, cols_list]
-    return sub_matrix
-
-
-def get_projector(rho, loc_dim, threshold, debug, name_save):
-    # THIS FUNCTION CONSTRUCTS THE PROJECTOR OPERATOR TO REDUCE
-    # THE SINGLE SITE DIMENSION ACCORDING TO THE EIGENVALUES
-    # THAT MOSTLY CONTRIBUTES TO THE REDUCED DENSITY MATRIX OF THE SINGLE SITE
-    if not isinstance(loc_dim, int) and not np.isscalar(loc_dim):
-        raise TypeError(f"loc_dim should be INT & SCALAR, not a {type(loc_dim)}")
-    if not isinstance(threshold, float) and not np.isscalar(threshold):
-        raise TypeError(f"threshold should be FLOAT & SCALAR, not a {type(threshold)}")
-    if not isinstance(debug, bool):
-        raise TypeError(f"debug should be a BOOL, not a {type(debug)}")
-    if not isinstance(name_save, str):
-        raise TypeError(f"name_save should be a STR, not a {type(name_save)}")
-    # ------------------------------------------------------------------
-    # 1) DIAGONALIZE THE SINGLE SITE DENSITY MATRIX rho
-    phrase = "DIAGONALIZE THE SINGLE SITE DENSITY MATRIX"
-    pause(phrase, debug)
-    rho_eigvals, rho_eigvecs = diagonalize_density_matrix(rho, debug)
-    # ------------------------------------------------------------------
-    # 2) COMPUTE THE PROJECTOR STARTING FROM THE DIAGONALIZATION of rho
-    phrase = "COMPUTING THE PROJECTOR"
-    pause(phrase, debug)
-    # Counts the number of eigenvalues larger than <threshold>
-    P_columns = (rho_eigvals > threshold).sum()
-    # PREVENT THE CASE OF A SINGLE RELEVANT EIGENVALUE:
-    while P_columns < 2:
-        threshold = threshold / 10
-        # Counts the number of eigenvalues larger than <threshold>
-        P_columns = (rho_eigvals > threshold).sum()
-    phrase = "TOTAL NUMBER OF SIGNIFICANT EIGENVALUES " + str(P_columns)
-    pause(phrase, debug)
-
-    column_indx = -1
-    # Define the projector operator Proj: it has dimension (loc_dim,P_columns)
-    Proj = np.zeros((loc_dim, P_columns), dtype=complex)
-    # Now, recalling that eigenvalues in <reduced_dm> are stored in increasing order,
-    # in order to compute the columns of P_proj we proceed as follows
-    for ii in range(loc_dim):
-        if rho_eigvals[ii] > threshold:
-            column_indx += 1
-            Proj[:, column_indx] = rho_eigvecs[:, ii]
-    # Truncate to 0 all the entries of Proj that are below a certain threshold
-    Proj = truncation(Proj, 10 ** (-14))
-    # Promote the Projector Proj to a CSR_MATRIX
-    Proj = csr_matrix(Proj)
-    print(Proj)
-    # Save the Projector on a file
-    save_npz(f"{name_save}.npz", Proj)
-    return Proj
-
-
-def projection(Proj, Operator):
-    # THIS FUNCTION PERFORMS THE PROJECTION OF Operator
-    # WITH THE PROJECTOR Proj: Op' = Proj^{dagger} Op Proj
-    # NOTE: both Proj and Operator have to be CSR_MATRIX type!
-    if not isspmatrix_csr(Proj):
-        raise TypeError(f"Proj should be an CSR_MATRIX, not a {type(Proj)}")
-    if not isspmatrix_csr(Operator):
-        raise TypeError(f"Operator should be an CSR_MATRIX, not a {type(Operator)}")
-    # -----------------------------------------------------------------------
-    return csr_matrix(Proj).conj().transpose() * Operator * Proj

@@ -1,9 +1,8 @@
 import numpy as np
 from math import prod
-from scipy.sparse import isspmatrix
-from ed_lgt.tools import zig_zag
+from ed_lgt.tools import zig_zag, validate_parameters, get_close_sites_along_direction
 from .qmb_operations import local_op, get_close_sites_along_direction
-from .qmb_state import expectation_value as exp_val
+from .qmb_state import QMB_state
 
 __all__ = ["LocalTerm", "check_link_symmetry"]
 
@@ -28,22 +27,21 @@ class LocalTerm:
 
             staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
 
-            site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites (corners, borders, lattice core, even/odd sites). Defaults to None.
+            site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices)
+                for lattice sites (corners, borders, lattice core, even/odd sites). Defaults to None.
 
         Raises:
             TypeError: If the input arguments are of incorrect types or formats.
         """
-        # CHECK ON TYPES
-        if not isspmatrix(operator):
-            raise TypeError(f"operator should be SPARSE, not {type(operator)}")
-        if not isinstance(op_name, str):
-            raise TypeError(f"op_name should be a STRING, not a {type(op_name)}")
-        if not isinstance(lvals, list):
-            raise TypeError(f"lvals should be a list, not a {type(lvals)}")
-        elif not all(np.isscalar(dim) and isinstance(dim, int) for dim in lvals):
-            raise TypeError("All items of lvals must be scalar integers.")
-        if not isinstance(has_obc, bool):
-            raise TypeError(f"has_obc must be a BOOL, not a {type(has_obc)}")
+        # Validate type of parameters
+        validate_parameters(
+            op_list=[operator],
+            op_names_list=[op_name],
+            lvals=lvals,
+            has_obc=has_obc,
+            staggered_basis=staggered_basis,
+            site_basis=site_basis,
+        )
         self.op = operator
         self.op_name = op_name
         self.lvals = lvals
@@ -94,31 +92,28 @@ class LocalTerm:
                 )
         return strength * H_Local
 
-    def get_expval(self, psi, site=None):
+    def get_expval(self, psi, stag_label=None):
         """
         The function calculates the expectation value (and it variance) of the Local Hamiltonian
         and is averaged over all the lattice sites.
 
         Args:
-            psi (numpy.ndarray): QMB state where the expectation value has to be computed
+            psi (instance of QMB_state class): QMB state where the expectation value has to be computed
 
-            site (str, optional): if odd/even, then the expectation value is performed only on that kind of sites. Defaults to None.
+            stag_label (str, optional): if odd/even, then the expectation value is performed only on that kind of sites. Defaults to None.
 
         Raises:
             TypeError: If the input arguments are of incorrect types or formats.
         """
-        # CHECK ON TYPES
-        if not isinstance(psi, np.ndarray):
-            raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
-        if site is not None:
-            if not isinstance(site, str):
-                raise TypeError(f"site should be STR ('even' / 'odd'), not {type(str)}")
+        # Check on parameters
+        if not isinstance(psi, QMB_state):
+            raise TypeError(f"psi must be instance of class:QMB_state not {type(psi)}")
+        validate_parameters(stag_label=stag_label)
         # PRINT OBSERVABLE NAME
         print(f"----------------------------------------------------")
-        if site is None:
-            print(f"{self.op_name}")
-        else:
-            print(f"{self.op_name} {site}")
+        print(f"{self.op_name}") if stag_label is None else print(
+            f"{self.op_name} {stag_label}"
+        )
         # AVERAGE EXP VAL <O> & STD DEVIATION (<O^{2}>-<O>^{2})^{1/2}
         self.obs = np.zeros(self.lvals)
         self.avg = 0.0
@@ -130,13 +125,12 @@ class LocalTerm:
             coords = zig_zag(self.lvals, ii)
             stag = (-1) ** (sum(coords))
             mask_conditions = [
-                site is None,
-                ((site == "even") and (stag > 0)),
-                ((site == "odd") and (stag < 0)),
+                stag_label is None,
+                ((stag_label == "even") and (stag > 0)),
+                ((stag_label == "odd") and (stag < 0)),
             ]
             # Compute the average value in the site x,y
-            exp_obs = exp_val(
-                psi,
+            exp_obs = psi.expectation_value(
                 local_op(
                     operator=self.op,
                     op_1D_site=ii,
@@ -144,12 +138,11 @@ class LocalTerm:
                     has_obc=self.has_obc,
                     staggered_basis=self.stag_basis,
                     site_basis=self.site_basis,
-                ),
+                )
             )
             # Compute the corresponding quantum fluctuation
             exp_var = (
-                exp_val(
-                    psi,
+                psi.expectation_value(
                     local_op(
                         operator=self.op**2,
                         op_1D_site=ii,
@@ -157,7 +150,7 @@ class LocalTerm:
                         has_obc=self.has_obc,
                         staggered_basis=self.stag_basis,
                         site_basis=self.site_basis,
-                    ),
+                    )
                 )
                 - exp_obs**2
             )

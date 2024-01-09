@@ -1,6 +1,7 @@
 import os
 import pickle
 import numpy as np
+from .checks import validate_parameters
 
 __all__ = [
     "save_dictionary",
@@ -16,12 +17,11 @@ def save_dictionary(dictionary, filename):
 
     Args:
         dictionary (dict): dictionary to be saved
+
         filename (str): name of the file where to save the dictionary
     """
-    if not isinstance(dictionary, dict):
-        raise TypeError(f"dictionary should be a DICT, not a {type(dictionary)}")
-    if not isinstance(filename, str):
-        raise TypeError(f"filename should be a STRING, not a {type(filename)}")
+    # Validate type of parameters
+    validate_parameters(dictionary=dictionary, filename=filename)
     with open(filename, "wb") as outp:  # Overwrites any existing file.
         pickle.dump(dict, outp, pickle.HIGHEST_PROTOCOL)
     outp.close
@@ -34,8 +34,8 @@ def load_dictionary(filename):
     Args:
         filename (str): name of the file where the dictionary is saved
     """
-    if not isinstance(filename, str):
-        raise TypeError(f"filename should be a STRING, not a {type(filename)}")
+    # Validate type of parameters
+    validate_parameters(filename=filename)
     with open(filename, "rb") as outp:
         return pickle.load(outp)
 
@@ -47,8 +47,12 @@ def save_data_in_textfile(data_file, x_data, new_data):
 
     Args:
         data_file (str): Name of the file where to save the set of values
-        x_data (list): It contains the x values corresponding to the new set of values. The first entry is a string label
-        new_data (list): It contains the new set of y values corresponding to the x_data. The first entry is a string label (typicalliy referred to the simulation)
+
+        x_data (list): It contains the x values corresponding to the new set of values.
+            The first entry is a string label
+
+        new_data (list): It contains the new set of y values corresponding to the x_data.
+            The first entry is a string label (typicalliy referred to the simulation)
 
     Raises:
         TypeError: If the input arguments are of incorrect types or formats.
@@ -82,6 +86,7 @@ def load_data_from_textfile(data_file_name, row_for_labels=False):
 
     Args:
         data_file_name (str): name of the file
+
         row_for_labels (bool, optional): If True, the firs line contains the labels. Default to False.
 
     Raises:
