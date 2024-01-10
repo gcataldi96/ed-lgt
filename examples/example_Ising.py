@@ -24,11 +24,10 @@ for op in ["Sz", "Sx", "Sy"]:
     ops[op] = 2 * ops[op]
 loc_dims = np.array([int(2 * spin + 1) for i in range(n_sites)])
 # ACQUIRE HAMILTONIAN COEFFICIENTS
-coeffs = {"J": 1, "h": +100}
+coeffs = {"J": 1, "h": 10}
 # CONSTRUCT THE HAMILTONIAN
 H = 0
 h_terms = {}
-# %%
 # ---------------------------------------------------------------------------
 # NEAREST NEIGHBOR INTERACTION
 for d in directions:
@@ -76,7 +75,7 @@ for ii in range(n_eigs):
     if ii > 0:
         res["DeltaE"].append(res["energy"][ii] - res["energy"][0])
     # GET STATE CONFIGURATIONS
-    get_state_configurations(truncation(GS.Npsi[:, ii], 1e-4), loc_dims, lvals)
+    get_state_configurations(truncation(GS.Npsi[:, ii], 1e-3), loc_dims, lvals)
     # =======================================================================
     # MEASURE LOCAL OBSERVABLES:
     for obs in loc_obs:
@@ -93,10 +92,11 @@ for ii in range(n_eigs):
 if n_eigs > 1:
     print(f"Energy Gaps {res['DeltaE']}")
 # %%
+from scipy.sparse import csr_matrix
+
 # Compute the Matrices for the generalized Eigenvalue Problem: Mx = w Nx
 M = np.zeros((n_sites, n_sites), dtype=complex)
 N = np.zeros((n_sites, n_sites), dtype=complex)
-# N = h_terms["Sz"].obs
 
 for ii in range(n_sites):
     for jj in range(n_sites):
@@ -112,9 +112,8 @@ for ii in range(n_sites):
             # ---------------------------------------------------
             N[ii, jj] += h_terms["Sz"].obs[ii]
             # ---------------------------------------------------
-            M[ii, jj] += coeffs["h"] * h_terms["Sz"].obs[ii]
+            M[ii, jj] += 2 * coeffs["h"] * h_terms["Sz"].obs[ii]
             if ii < n_sites - 1:
-                # print(ii)
                 M[ii, jj] += (
                     complex(0, 0.5)
                     * coeffs["J"]
@@ -125,14 +124,12 @@ for ii in range(n_sites):
                 )
             else:
                 if not has_obc:
-                    # print(ii)
                     M[ii, jj] += (
                         complex(0, 0.5)
                         * coeffs["J"]
                         * (h_terms["Sm_Sx"].corr[ii, 0] - h_terms["Sp_Sx"].corr[ii, 0])
                     )
             if ii > 0:
-                # print(ii)
                 M[ii, jj] += (
                     complex(0, 0.5)
                     * coeffs["J"]
@@ -143,7 +140,6 @@ for ii in range(n_sites):
                 )
             else:
                 if not has_obc:
-                    # print(ii)
                     M[ii, jj] += (
                         complex(0, 0.5)
                         * coeffs["J"]
@@ -152,8 +148,9 @@ for ii in range(n_sites):
                             - h_terms["Sx_Sp"].corr[n_sites - 1, ii]
                         )
                     )
-
+print(csr_matrix(M))
 # %%
 # Solve the generalized egenvalue problem
-w = np.sum(eigh(a=M, b=N, eigvals_only=True)) / n_sites
+w = eigh(a=M, b=N, eigvals_only=True)
+gap = np.mean(w)
 # %%
