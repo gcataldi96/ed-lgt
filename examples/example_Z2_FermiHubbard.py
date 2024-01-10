@@ -132,15 +132,12 @@ res["rho_eigvals"] = []
 # LOCAL OBSERVABLE LIST
 local_obs = [f"n_{s}{d}" for d in directions for s in "mp"]
 local_obs += [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
-local_obs += ["C_px,py", "C_mx,my", "Z_Cross"]
+local_obs += ["X_Cross"]
 for obs in local_obs:
     h_terms[obs] = LocalTerm(ops[obs], obs, lvals, has_obc, site_basis=M)
     res[obs] = []
 # TWO BODY OBSERVABLE LIST
-twobody_obs = [
-    ["P_px", "P_mx"],
-    ["P_py", "P_my"],
-]
+twobody_obs = [["P_px", "P_mx"], ["P_py", "P_my"]]
 for obs1, obs2 in twobody_obs:
     op_list = [ops[obs1], ops[obs2]]
     h_terms[f"{obs1}_{obs2}"] = TwoBodyTerm(

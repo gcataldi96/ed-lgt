@@ -167,12 +167,12 @@ def Z2_FermiHubbard_dressed_site_operators(lattice_dim=2):
         )
     # --------------------------------------------------------------------------------
     if lattice_dim == 2:
-        # Sigma Z Cross Operator
-        ops["Z_Cross"] = qmb_op(in_ops, ["ID_psi", "Zp", "Zm", "Zm", "Zp"])
+        # Sigma X Cross Operator
+        ops["X_Cross"] = qmb_op(in_ops, ["ID_psi", "P", "P", "P", "P"])
         # ----------------------------------------------------------------------------
         # Corner Operators
-        ops["C_px,py"] = qmb_op(in_ops, ["ID_psi", "IDz", "IDz", "P", "P"])
-        ops["C_mx,my"] = qmb_op(in_ops, ["ID_psi", "P", "P", "IDz", "IDz"])
-        ops["C_py,mx"] = qmb_op(in_ops, ["ID_psi", "P", "IDz", "IDz", "P"])
-        ops["C_my,px"] = qmb_op(in_ops, ["ID_psi", "IDz", "P", "P", "IDz"])
+        ops["C_px,py"] = -qmb_op(in_ops, ["ID_psi", "IDz", "IDz", "Zp_P", "Zp_dag"])
+        ops["C_py,mx"] = qmb_op(in_ops, ["ID_psi", "P_Zm_dag", "P", "P", "Zp"])
+        ops["C_mx,my"] = qmb_op(in_ops, ["ID_psi", "Zm_P", "Zm_dag", "IDz", "IDz"])
+        ops["C_my,px"] = qmb_op(in_ops, ["ID_psi", "IDz", "Zm_P", "Zp_dag", "IDz"])
     return ops
