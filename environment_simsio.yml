@@ -36,4 +36,5 @@ dependencies:
   - yq=2.13
   - pip:
     - dpath @ git+https://github.com/rgbmrc/dpath-python@feature/negative-indexing
-    - -e simsio
+    - simsio
+    - -e .
