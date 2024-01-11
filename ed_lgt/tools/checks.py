@@ -22,7 +22,7 @@ def validate_parameters(
     lvals=None,
     loc_dims=None,
     has_obc=None,
-    axis=None,
+    axes=None,
     site_label=None,
     coords=None,
     ops_dict=None,
@@ -45,6 +45,7 @@ def validate_parameters(
     spmatrix=None,
     index=None,
     threshold=None,
+    print_plaq=None,
 ):
     """
     This is a function for type validation of parameters widely used in the library
@@ -65,14 +66,16 @@ def validate_parameters(
             )
     if has_obc is not None and not isinstance(has_obc, bool):
         raise TypeError(f"has_obc should be a BOOL, not {type(has_obc)}")
-    if axis is not None and not isinstance(axis, str):
-        raise TypeError(f"axis should be a STRING, not {type(axis)}")
+    if axes is not None and (
+        not isinstance(axes, list) or not all(isinstance(ax, str) for ax in axes)
+    ):
+        raise TypeError(f"axes should be a LIST of STRs, not {type(axes)}")
     if site_label is not None and not isinstance(site_label, str):
         raise TypeError(f"site_label should be a STRING, not {type(site_label)}")
-    if coords is not None and (
-        not isinstance(coords, tuple) or not all(isinstance(x, int) for x in coords)
+    if coords is not None and not (
+        (isinstance(coords, (tuple, list)) and all(isinstance(x, int) for x in coords))
     ):
-        raise TypeError(f"coords must be a TUPLE of INTs, not {type(coords)}")
+        raise TypeError(f"coords must be a TUPLE or LIST of INTs, not {type(coords)}")
     # -----------------------------------------------------------------------------
     if ops_dict is not None and not isinstance(ops_dict, dict):
         raise TypeError(f"ops_dict must be a DICT, not {type(ops_dict)}")
@@ -137,6 +140,8 @@ def validate_parameters(
     if threshold is not None and not isinstance(threshold, float):
         raise TypeError(f"threshold should be a SCALAR FLOAT, not {type(threshold)}")
     # -----------------------------------------------------------------------------
+    if print_plaq is not None and not isinstance(print_plaq, bool):
+        raise TypeError(f"print_plaq must be a BOOL, not a {type(print_plaq)}")
 
 
 def pause(phrase, debug):

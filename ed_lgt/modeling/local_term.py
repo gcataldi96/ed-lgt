@@ -1,8 +1,10 @@
 import numpy as np
 from math import prod
-from ed_lgt.tools import zig_zag, validate_parameters, get_close_sites_along_direction
-from .qmb_operations import local_op, get_close_sites_along_direction
+from ed_lgt.tools import validate_parameters
+from .qmb_operations import local_op
 from .qmb_state import QMB_state
+from .lattice_geometry import get_close_sites_along_direction
+from .lattice_mappings import zig_zag
 
 __all__ = ["LocalTerm", "check_link_symmetry"]
 

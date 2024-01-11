@@ -3,9 +3,7 @@ import numpy as np
 from math import prod
 from scipy.linalg import eigh
 from ed_lgt.operators import get_spin_operators
-from ed_lgt.modeling import Ground_State, LocalTerm, TwoBodyTerm
-from ed_lgt.modeling import get_state_configurations, truncation
-from ed_lgt.tools import check_hermitian
+from ed_lgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
 
 # Spin representation
 spin = 1 / 2
@@ -24,33 +22,34 @@ for op in ["Sz", "Sx", "Sy"]:
     ops[op] = 2 * ops[op]
 loc_dims = np.array([int(2 * spin + 1) for i in range(n_sites)])
 # ACQUIRE HAMILTONIAN COEFFICIENTS
-coeffs = {"J": 1, "h": +100}
+coeffs = {"J": 1, "h": +1}
 # CONSTRUCT THE HAMILTONIAN
-H = 0
+H = QMB_hamiltonian(0, lvals, loc_dims)
 h_terms = {}
-# %%
 # ---------------------------------------------------------------------------
 # NEAREST NEIGHBOR INTERACTION
 for d in directions:
-    op_name_list = ["Sx", "Sx"]
-    op_list = [ops[op] for op in op_name_list]
+    op_names_list = ["Sx", "Sx"]
+    op_list = [ops[op] for op in op_names_list]
     # Define the Hamiltonian term
     h_terms[f"NN_{d}"] = TwoBodyTerm(
-        axis=d, op_list=op_list, op_name_list=op_name_list, lvals=lvals, has_obc=has_obc
+        axis=d,
+        op_list=op_list,
+        op_names_list=op_names_list,
+        lvals=lvals,
+        has_obc=has_obc,
     )
-    H += h_terms[f"NN_{d}"].get_Hamiltonian(strength=-coeffs["J"])
+    H.Ham += h_terms[f"NN_{d}"].get_Hamiltonian(strength=-coeffs["J"])
 # EXTERNAL MAGNETIC FIELD
 op_name = "Sz"
 h_terms[op_name] = LocalTerm(ops[op_name], op_name, lvals=lvals, has_obc=has_obc)
-H += h_terms[op_name].get_Hamiltonian(strength=-coeffs["h"])
+H.Ham += h_terms[op_name].get_Hamiltonian(strength=-coeffs["h"])
 # ===========================================================================
-# CHECK THAT THE HAMILTONIAN IS HERMITIAN
-check_hermitian(H)
 # DIAGONALIZE THE HAMILTONIAN
-GS = Ground_State(H, n_eigs)
+H.diagonalize(n_eigs)
 # Dictionary for results
 res = {}
-res["energy"] = GS.Nenergies
+res["energy"] = H.Nenergies
 res["DeltaE"] = []
 # ===========================================================================
 # LIST OF LOCAL OBSERVABLES
@@ -65,7 +64,7 @@ for obs1, obs2 in twobody_obs:
     h_terms[f"{obs1}_{obs2}"] = TwoBodyTerm(
         axis="x",
         op_list=op_list,
-        op_name_list=[obs1, obs2],
+        op_names_list=[obs1, obs2],
         lvals=lvals,
         has_obc=has_obc,
     )
@@ -76,18 +75,18 @@ for ii in range(n_eigs):
     if ii > 0:
         res["DeltaE"].append(res["energy"][ii] - res["energy"][0])
     # GET STATE CONFIGURATIONS
-    get_state_configurations(truncation(GS.Npsi[:, ii], 1e-4), loc_dims, lvals)
+    H.Npsi[ii].get_state_configurations(threshold=1e-4)
     # =======================================================================
     # MEASURE LOCAL OBSERVABLES:
     for obs in loc_obs:
-        h_terms[obs].get_expval(GS.Npsi[:, ii])
+        h_terms[obs].get_expval(H.Npsi[ii])
         res[obs].append(h_terms[obs].avg)
     # MEASURE TWOBODY OBSERVABLES:
     for obs1, obs2 in twobody_obs:
         print("----------------------------------------------------")
         print(f"{obs1}_{obs2}")
         print("----------------------------------------------------")
-        h_terms[f"{obs1}_{obs2}"].get_expval(GS.Npsi[:, ii])
+        h_terms[f"{obs1}_{obs2}"].get_expval(H.Npsi[ii])
         # print(h_terms[f"{obs1}_{obs2}"].corr)
 
 if n_eigs > 1:

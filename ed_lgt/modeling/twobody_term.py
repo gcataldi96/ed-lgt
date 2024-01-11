@@ -2,9 +2,11 @@ import numpy as np
 from math import prod
 from copy import deepcopy
 from scipy.sparse import isspmatrix, csr_matrix
-from ed_lgt.tools import zig_zag, inverse_zig_zag
-from .qmb_operations import two_body_op, get_close_sites_along_direction
-from .qmb_state import expectation_value as exp_val
+from .lattice_mappings import zig_zag, inverse_zig_zag
+from .qmb_operations import two_body_op
+from .lattice_geometry import get_close_sites_along_direction
+from .qmb_state import QMB_state
+from ed_lgt.tools import validate_parameters
 
 __all__ = ["TwoBodyTerm"]
 
@@ -14,7 +16,7 @@ class TwoBodyTerm:
         self,
         axis,
         op_list,
-        op_name_list,
+        op_names_list,
         lvals,
         has_obc,
         staggered_basis=False,
@@ -45,37 +47,20 @@ class TwoBodyTerm:
             TypeError: If the input arguments are of incorrect types or formats.
         """
         # CHECK ON TYPES
-        if not isinstance(axis, str):
-            raise TypeError(f"axis should be a STRING, not a {type(axis)}")
-        if not isinstance(op_list, list):
-            raise TypeError(f"op_list should be a list, not a {type(op_list)}")
-        else:
-            for ii, op in enumerate(op_list):
-                if not isspmatrix(op):
-                    raise TypeError(f"op_list[{ii}] should be SPARSE, not {type(op)}")
-        if not isinstance(op_name_list, list):
-            raise TypeError(
-                f"op_name_list should be a list, not a {type(op_name_list)}"
-            )
-        else:
-            for ii, name in enumerate(op_name_list):
-                if not isinstance(name, str):
-                    raise TypeError(
-                        f"op_name_list[{ii}] should be a STRING, not {type(name)}"
-                    )
-        if not isinstance(lvals, list):
-            raise TypeError(f"lvals should be a list, not a {type(lvals)}")
-        elif not all(np.isscalar(dim) and isinstance(dim, int) for dim in lvals):
-            raise TypeError("All items of lvals must be scalar integers.")
-        if not isinstance(has_obc, bool):
-            raise TypeError(f"has_obc must be a BOOL, not a {type(has_obc)}")
+        validate_parameters(
+            axes=[axis],
+            op_list=op_list,
+            op_names_list=op_names_list,
+            lvals=lvals,
+            has_obc=has_obc,
+        )
         dimensions = "xyz"[: len(lvals)]
         if axis not in dimensions:
             raise ValueError(f"axis should be in {dimensions}: got {axis}")
         else:
             self.axis = axis
         self.op_list = op_list
-        self.op_name_list = op_name_list
+        self.op_name_list = op_names_list
         self.lvals = lvals
         self.dimensions = dimensions
         self.has_obc = has_obc
@@ -106,8 +91,7 @@ class TwoBodyTerm:
         # CHECK ON TYPES
         if not np.isscalar(strength):
             raise TypeError(f"strength must be SCALAR, not {type(strength)}")
-        if not isinstance(add_dagger, bool):
-            raise TypeError(f"add_dagger must be a BOOL, not a {type(add_dagger)}")
+        validate_parameters(add_dagger=add_dagger)
         # Hamiltonian
         H_twobody = 0
         # Run over all the single lattice sites, ordered with the ZIG ZAG CURVE
@@ -115,7 +99,7 @@ class TwoBodyTerm:
             # Compute the corresponding coords
             coords = zig_zag(self.lvals, ii)
             # Check if it admits a twobody term according to the lattice geometry
-            coords_list, sites_list = get_close_sites_along_direction(
+            _, sites_list = get_close_sites_along_direction(
                 coords, self.lvals, self.axis, self.has_obc
             )
             if sites_list is None:
@@ -144,7 +128,7 @@ class TwoBodyTerm:
             H_twobody += csr_matrix(H_twobody.conj().transpose())
         return H_twobody
 
-    def get_expval(self, psi, site=None):
+    def get_expval(self, psi, stag_label=None):
         """
         The function calculates the expectation value (and it variance) of the TwoBody Hamiltonian
         and its average over all the lattice sites.
@@ -152,17 +136,15 @@ class TwoBodyTerm:
         Args:
             psi (numpy.ndarray): QMB state where the expectation value has to be computed
 
-            site (str, optional): if odd/even, then the expectation value is performed only on that kind of sites. Defaults to None.
+            stag_label (str, optional): if odd/even, then the expectation value is performed only on that kind of sites. Defaults to None.
 
         Raises:
             TypeError: If the input arguments are of incorrect types or formats.
         """
-        # CHECK ON TYPES
-        if not isinstance(psi, np.ndarray):
-            raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
-        if site is not None:
-            if not isinstance(site, str):
-                raise TypeError(f"site should be STR ('even' / 'odd'), not {type(str)}")
+        # Check on parameters
+        if not isinstance(psi, QMB_state):
+            raise TypeError(f"psi must be instance of class:QMB_state not {type(psi)}")
+        validate_parameters(stag_label=stag_label)
         # Create an array to store the correlator
         self.corr = np.zeros(self.lvals + self.lvals)
         # RUN OVER THE LATTICE SITES
@@ -172,8 +154,7 @@ class TwoBodyTerm:
                 coords2 = zig_zag(self.lvals, jj)
                 # AVOID SELF CORRELATIONS
                 if ii != jj:
-                    self.corr[coords1 + coords2] = exp_val(
-                        psi,
+                    self.corr[coords1 + coords2] = psi.expectation_value(
                         two_body_op(
                             op_list=self.op_list,
                             op_sites_list=[ii, jj],
@@ -181,7 +162,7 @@ class TwoBodyTerm:
                             has_obc=self.has_obc,
                             staggered_basis=self.stag_basis,
                             site_basis=self.site_basis,
-                        ),
+                        )
                     )
 
     def get_twobodyterm_sites(self, coords):

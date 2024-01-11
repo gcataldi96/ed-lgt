@@ -3,10 +3,11 @@ from math import prod
 from scipy.linalg import eigh as array_eigh
 from scipy.sparse.linalg import eigsh as sparse_eigh
 from scipy.sparse import csr_matrix, isspmatrix
-from ed_lgt.tools import zig_zag, validate_parameters
+from ed_lgt.tools import validate_parameters, check_hermitian
+from .lattice_mappings import zig_zag
 
 __all__ = [
-    "Ground_state",
+    "QMB_hamiltonian",
     "QMB_state",
     "truncation",
     "get_norm",
@@ -15,20 +16,6 @@ __all__ = [
     "diagonalize_density_matrix",
     "get_projector_for_efficient_density_matrix",
 ]
-
-
-class Ground_State:
-    def __init__(self, Ham, n_eigs):
-        if not isspmatrix(Ham):
-            raise TypeError(f"Ham should be a sparse_matrix, not a {type(Ham)}")
-        if not np.isscalar(n_eigs) and not isinstance(n_eigs, int):
-            raise TypeError(f"n_eigs should be a SCALAR INT, not a {type(n_eigs)}")
-        # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
-        print("DIAGONALIZE HAMILTONIAN")
-        self.Nenergies, self.Npsi = sparse_eigh(Ham, k=n_eigs, which="SA")
-        # Save GROUND STATE PROPERTIES
-        self.energy = self.Nenergies[0]
-        self.psi = self.Npsi[:, 0]
 
 
 class QMB_state:
@@ -127,7 +114,7 @@ class QMB_state:
         print(f"ENTROPY: {format(np.sum(tmp), '.9f')}")
         return np.sum(tmp)
 
-    def get_state_configurations(self):
+    def get_state_configurations(self, threshold=1e-10):
         """
         This function express the main QMB state configurations associated to the
         most relevant coefficients of the QMB state psi. Every state configuration
@@ -135,7 +122,7 @@ class QMB_state:
         """
         print("----------------------------------------------------")
         print("STATE CONFIGURATIONS")
-        psi = csr_matrix(self.psi.truncate(1e-10))
+        psi = csr_matrix(self.truncate(threshold))
         sing_vals = sorted(psi.data, key=lambda x: (abs(x), -x), reverse=True)
         indices = [
             x
@@ -148,13 +135,36 @@ class QMB_state:
         state_configurations = {"state_config": [], "coeff": []}
         for ind, alpha in zip(indices, sing_vals):
             loc_states = get_loc_states_from_qmb_state(
-                qmb_index=ind, loc_dims=self.loc_dims, lvals=self.lvals
+                qmb_index=int(ind), loc_dims=self.loc_dims, lvals=self.lvals
             )
             print(f"{loc_states}  {alpha}")
             state_configurations["state_config"].append(loc_states)
             state_configurations["coeff"].append(alpha)
         print("----------------------------------------------------")
         self.state_configs = state_configurations
+
+
+class QMB_hamiltonian:
+    def __init__(self, Ham, lvals, loc_dims):
+        validate_parameters(lvals=lvals, loc_dims=loc_dims)
+        self.Ham = Ham
+        self.lvals = lvals
+        self.loc_dims = loc_dims
+
+    def diagonalize(self, n_eigs):
+        validate_parameters(op_list=[self.Ham])
+        if not np.isscalar(n_eigs) and not isinstance(n_eigs, int):
+            raise TypeError(f"n_eigs should be a SCALAR INT, not a {type(n_eigs)}")
+        # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
+        check_hermitian(self.Ham)
+        print("DIAGONALIZE HAMILTONIAN")
+        self.Nenergies, Npsi = sparse_eigh(self.Ham, k=n_eigs, which="SA")
+        self.Npsi = [
+            QMB_state(Npsi[:, ii], self.lvals, self.loc_dims) for ii in range(n_eigs)
+        ]
+        # Save GROUND STATE PROPERTIES
+        self.GSenergy = self.Nenergies[0]
+        self.GSpsi = self.Npsi[0]
 
 
 def truncation(array, threshold=1e-14):
@@ -186,8 +196,10 @@ def get_loc_states_from_qmb_state(qmb_index, loc_dims, lvals):
         ndarray(int): list of the states of the local Hilbert space associated to the given QMB state index
     """
     validate_parameters(index=qmb_index, lvals=lvals, loc_dims=loc_dims)
-    if qmb_index < 0 or qmb_index > (tot_dim - 1):
-        raise ValueError(f"index {qmb_index} should be in between 0 and {tot_dim-1}")
+    if qmb_index < 0 or qmb_index > (prod(loc_dims) - 1):
+        raise ValueError(
+            f"index {qmb_index} should be in between 0 and {prod(loc_dims)-1}"
+        )
     tot_dim = np.prod(loc_dims)
     loc_states = np.zeros(prod(lvals), dtype=int)
     for ii in range(prod(lvals)):

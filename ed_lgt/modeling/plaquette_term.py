@@ -8,9 +8,10 @@ import numpy as np
 from math import prod
 from copy import deepcopy
 from scipy.sparse import isspmatrix, csr_matrix
-from ed_lgt.tools import zig_zag, inverse_zig_zag
+from .lattice_mappings import zig_zag, inverse_zig_zag
 from .qmb_operations import four_body_op
-from .qmb_state import expectation_value as exp_val
+from .qmb_state import QMB_state
+from ed_lgt.tools import validate_parameters
 
 __all__ = ["PlaquetteTerm"]
 
@@ -20,7 +21,7 @@ class PlaquetteTerm:
         self,
         axes,
         op_list,
-        op_name_list,
+        op_names_list,
         lvals,
         has_obc,
         staggered_basis=False,
@@ -31,11 +32,11 @@ class PlaquetteTerm:
         This function introduce all the fundamental information to define a Plaquette Hamiltonian Term and possible eventual measures of it.
 
         Args:
-            axis (list of str): list of 2 axes along which the Plaquette term should be applied
+            axes (list of str): list of 2 axes along which the Plaquette term should be applied
 
             op_list (list of 2 scipy.sparse.matrices): list of the two operators involved in the 2Body Term
 
-            op_name_list (list of 2 str): list of the names of the two operators
+            op_names_list (list of 2 str): list of the names of the two operators
 
             lvals (list of ints): Dimensions (# of sites) of a d-dimensional hypercubic lattice
 
@@ -49,43 +50,23 @@ class PlaquetteTerm:
         Raises:
             TypeError: If the input arguments are of incorrect types or formats.
         """
-        if not isinstance(axes, list):
-            raise TypeError(f"axes should be a list of two strings: got {type(axes)}")
-        elif not all(isinstance(ax, str) for ax in axes):
-            raise TypeError("All items of axes must be strings.")
-        if not isinstance(op_list, list):
-            raise TypeError(f"op_list should be a list, not a {type(op_list)}")
-        else:
-            for ii, op in enumerate(op_list):
-                if not isspmatrix(op):
-                    raise TypeError(f"op_list[{ii}] should be SPARSE, not {type(op)}")
-        if not isinstance(op_name_list, list):
-            raise TypeError(
-                f"op_name_list should be a list, not a {type(op_name_list)}"
-            )
-        else:
-            for ii, name in enumerate(op_name_list):
-                if not isinstance(name, str):
-                    raise TypeError(
-                        f"op_name_list[{ii}] should be a STRING, not {type(name)}"
-                    )
-        if not isinstance(lvals, list):
-            raise TypeError(f"lvals should be a list, not a {type(lvals)}")
-        elif not all(np.isscalar(dim) and isinstance(dim, int) for dim in lvals):
-            raise TypeError("All items of lvals must be scalar integers.")
-        if not isinstance(has_obc, bool):
-            raise TypeError(f"has_obc must be a BOOL, not a {type(has_obc)}")
-        if not isinstance(print_plaq, bool):
-            raise TypeError(f"print_plaq must be a BOOL, not a {type(print_plaq)}")
+        validate_parameters(
+            axes=axes,
+            op_list=op_list,
+            op_names_list=op_names_list,
+            lvals=lvals,
+            has_obc=has_obc,
+            print_plaq=print_plaq,
+        )
         self.axes = axes
         self.BL = op_list[0]
         self.BR = op_list[1]
         self.TL = op_list[2]
         self.TR = op_list[3]
-        self.BL_name = op_name_list[0]
-        self.BR_name = op_name_list[1]
-        self.TL_name = op_name_list[2]
-        self.TR_name = op_name_list[3]
+        self.BL_name = op_names_list[0]
+        self.BR_name = op_names_list[1]
+        self.TL_name = op_names_list[2]
+        self.TR_name = op_names_list[3]
         self.op_list = [self.BL, self.BR, self.TL, self.TR]
         self.lvals = lvals
         self.dimensions = "xyz"[: len(lvals)]
@@ -94,7 +75,7 @@ class PlaquetteTerm:
         self.site_basis = site_basis
         self.print_plaq = print_plaq
         print(
-            f"Plaquette {op_name_list[0]}-{op_name_list[1]}-{op_name_list[2]}-{op_name_list[3]}"
+            f"Plaquette {op_names_list[0]}-{op_names_list[1]}-{op_names_list[2]}-{op_names_list[3]}"
         )
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
@@ -120,24 +101,22 @@ class PlaquetteTerm:
         # CHECK ON TYPES
         if not np.isscalar(strength):
             raise TypeError(f"strength must be SCALAR not a {type(strength)}")
-        if not isinstance(add_dagger, bool):
-            raise TypeError(f"add_dagger must be a BOOL, not a {type(add_dagger)}")
+        validate_parameters(add_dagger=add_dagger)
         # Define the Hamiltonian
         H_plaq = 0
         for ii in range(prod(self.lvals)):
             # Compute the corresponding coords of the BL site of the Plaquette
             coords1 = zig_zag(self.lvals, ii)
-            coords_list, sites_list = self.get_Plaquette_coords(coords1)
+            _, sites_list = self.get_Plaquette_coords(coords1)
             if sites_list is None:
                 continue
             # Check Mask conditions:
             if mask is None:
                 mask_conditions = True
-            else:
-                if mask[coords1] == True:
-                    mask_conditions = True
-                else:
-                    mask_conditions = False
+            elif mask is not None and mask[coords1]:
+                mask_conditions = True
+            elif mask is not None and not mask[coords1]:
+                mask_conditions = False
             # Add the Plaquette to the Hamiltonian
             if mask_conditions:
                 H_plaq += strength * four_body_op(
@@ -154,7 +133,7 @@ class PlaquetteTerm:
             H_plaq += csr_matrix(H_plaq.conj().transpose())
         return H_plaq
 
-    def get_expval(self, psi, get_imag=False, site=None):
+    def get_expval(self, psi, get_imag=False, stag_label=None):
         """
         The function calculates the expectation value (and it variance) of the Plaquette Hamiltonian
         and its average over all the lattice sites.
@@ -164,21 +143,15 @@ class PlaquetteTerm:
 
             get_imag(bool, optional): if true, it results the imaginary part of the expectation value, otherwise, the real part. Default to False.
 
-            site (str, optional): if odd/even, then the expectation value is performed only on that kind of sites. Defaults to None.
+            stag_label (str, optional): if odd/even, then the expectation value is performed only on that kind of sites. Defaults to None.
 
         Raises:
             TypeError: If the input arguments are of incorrect types or formats.
         """
-        # CHECK ON TYPES
-        if not isinstance(psi, np.ndarray):
-            raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
-        if not isinstance(get_imag, bool):
-            raise TypeError(f"get_imag should be a BOOL, not a {type(get_imag)}")
-        if site is not None:
-            if not isinstance(site, str):
-                raise TypeError(
-                    f"site should be STR ('even' / 'odd'), not {type(site)}"
-                )
+        # Check on parameters
+        if not isinstance(psi, QMB_state):
+            raise TypeError(f"psi must be instance of class:QMB_state not {type(psi)}")
+        validate_parameters(stag_label=stag_label, get_imag=get_imag)
         # ADVERTISE OF THE CHOSEN PART OF THE PLAQUETTE YOU WANT TO COMPUTE
         if self.print_plaq:
             print(f"----------------------------------------------------")
@@ -186,10 +159,10 @@ class PlaquetteTerm:
                 chosen_part = "IMAG"
             else:
                 chosen_part = "REAL"
-            if site is None:
+            if stag_label is None:
                 print(f"PLAQUETTE: {chosen_part}")
             else:
-                print(f"PLAQUETTE: {chosen_part} PART {site}")
+                print(f"PLAQUETTE: {chosen_part} PART {stag_label}")
             print(f"----------------------------------------------------")
         self.avg = 0.0
         self.std = 0.0
@@ -203,13 +176,12 @@ class PlaquetteTerm:
             # COMPUTE THE PLAQUETTE only for the appropriate site
             stag = (-1) ** sum(coords)
             site_conditions = [
-                site is None,
-                (site == "even" and stag > 0),
-                (site == "odd" and stag < 0),
+                stag_label is None,
+                (stag_label == "even" and stag > 0),
+                (stag_label == "odd" and stag < 0),
             ]
             if any(site_conditions):
-                plaq = exp_val(
-                    psi,
+                plaq = psi.expectation_value(
                     four_body_op(
                         op_list=self.op_list,
                         op_sites_list=sites_list,
@@ -218,12 +190,11 @@ class PlaquetteTerm:
                         staggered_basis=self.stag_basis,
                         site_basis=self.site_basis,
                         get_real=False,
-                    ),
+                    )
                 )
                 print(plaq)
                 delta_plaq = (
-                    exp_val(
-                        psi,
+                    psi.expectation_value(
                         four_body_op(
                             op_list=self.op_list,
                             op_sites_list=sites_list,

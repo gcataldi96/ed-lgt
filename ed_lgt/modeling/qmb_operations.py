@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.sparse import csr_matrix, identity, kron
-from ed_lgt.tools import zig_zag, validate_parameters, get_site_label
+from ed_lgt.tools import validate_parameters
+from .lattice_mappings import zig_zag
+from .lattice_geometry import get_site_label
 
 __all__ = [
     "qmb_operator",

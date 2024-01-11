@@ -1,6 +1,6 @@
 import numpy as np
 from math import prod
-from .checks import validate_parameters
+from ed_lgt.tools import validate_parameters
 
 __all__ = [
     "zig_zag",

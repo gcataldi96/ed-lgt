@@ -3,7 +3,7 @@ import numpy as np
 from copy import deepcopy
 from itertools import product
 from .lattice_mappings import inverse_zig_zag
-from .checks import validate_parameters
+from ed_lgt.tools import validate_parameters
 
 __all__ = [
     "get_site_label",
@@ -102,7 +102,7 @@ def lattice_base_configs(base, lvals, has_obc=True, staggered=False):
 
 def get_close_sites_along_direction(coords, lvals, axis, has_obc):
     # Validate type of parameters
-    validate_parameters(lvals=lvals, axis=axis, has_obc=has_obc)
+    validate_parameters(lvals=lvals, axes=[axis], has_obc=has_obc)
     dimensions = "xyz"[: len(lvals)]
     coords1 = list(coords)
     i1 = inverse_zig_zag(lvals, coords1)
