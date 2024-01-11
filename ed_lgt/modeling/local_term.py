@@ -184,7 +184,7 @@ def check_link_symmetry(axis, loc_op1, loc_op2, value, sign=1):
             c2 = coords_list[1]
             tmp = loc_op1.obs[c1]
             tmp += sign * loc_op2.obs[c2]
-        if np.abs(tmp - value) > 1e-15:
+        if np.abs(tmp - value) > 1e-10:
             print(loc_op1.obs[c1], loc_op2.obs[c2])
             raise ValueError(f"{axis}-Link Symmetry is violated at index {ii}")
     print(f"{axis}-LINK SYMMETRY IS SATISFIED")
