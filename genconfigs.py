@@ -71,3 +71,13 @@ gen_configs("template", params, f"QED/DM_scaling_PBC")
 # QED ENTANGLEMENT vs spin REP
 params = {"spin": np.arange(1, 6, 1), "g": np.logspace(-2, 0, 15)}
 gen_configs("template", params, f"QED/entanglement")
+# %%
+# Z2 FERMI HUBBARD MODEL
+params = {"V": np.logspace(-1, 1, 15)}
+gen_configs("template", params, f"Z2_FermiHubbard/V_potential")
+
+# %%
+# Z2 FERMI HUBBARD MODEL
+params = {"h": np.logspace(-2, 2, 10)}
+gen_configs("template", params, f"Ising/Ising1D")
+# %%
