@@ -22,7 +22,7 @@ for op in ["Sz", "Sx", "Sy"]:
     ops[op] = 2 * ops[op]
 loc_dims = np.array([int(2 * spin + 1) for i in range(n_sites)])
 # ACQUIRE HAMILTONIAN COEFFICIENTS
-coeffs = {"J": 1, "h": +1}
+coeffs = {"J": 1, "h": +10}
 # CONSTRUCT THE HAMILTONIAN
 H = QMB_hamiltonian(0, lvals, loc_dims)
 h_terms = {}
@@ -75,7 +75,7 @@ for ii in range(n_eigs):
     if ii > 0:
         res["DeltaE"].append(res["energy"][ii] - res["energy"][0])
     # GET STATE CONFIGURATIONS
-    H.Npsi[ii].get_state_configurations(threshold=1e-4)
+    H.Npsi[ii].get_state_configurations(threshold=1e-3)
     # =======================================================================
     # MEASURE LOCAL OBSERVABLES:
     for obs in loc_obs:
@@ -111,9 +111,8 @@ for ii in range(n_sites):
             # ---------------------------------------------------
             N[ii, jj] += h_terms["Sz"].obs[ii]
             # ---------------------------------------------------
-            M[ii, jj] += coeffs["h"] * h_terms["Sz"].obs[ii]
+            M[ii, jj] += 2 * coeffs["h"] * h_terms["Sz"].obs[ii]
             if ii < n_sites - 1:
-                # print(ii)
                 M[ii, jj] += (
                     complex(0, 0.5)
                     * coeffs["J"]
@@ -124,14 +123,12 @@ for ii in range(n_sites):
                 )
             else:
                 if not has_obc:
-                    # print(ii)
                     M[ii, jj] += (
                         complex(0, 0.5)
                         * coeffs["J"]
                         * (h_terms["Sm_Sx"].corr[ii, 0] - h_terms["Sp_Sx"].corr[ii, 0])
                     )
             if ii > 0:
-                # print(ii)
                 M[ii, jj] += (
                     complex(0, 0.5)
                     * coeffs["J"]
@@ -142,7 +139,6 @@ for ii in range(n_sites):
                 )
             else:
                 if not has_obc:
-                    # print(ii)
                     M[ii, jj] += (
                         complex(0, 0.5)
                         * coeffs["J"]
