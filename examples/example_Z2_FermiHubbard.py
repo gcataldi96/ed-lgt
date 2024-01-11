@@ -1,17 +1,12 @@
 # %%
-import numpy as np
 from scipy.sparse import identity as ID
 from math import prod
-from ed_lgt.modeling import Ground_State, LocalTerm, TwoBodyTerm, PlaquetteTerm
+from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm, QMB_hamiltonian
 from ed_lgt.modeling import (
     check_link_symmetry,
-    get_reduced_density_matrix,
     diagonalize_density_matrix,
-    get_state_configurations,
-    truncation,
     lattice_base_configs,
 )
-from ed_lgt.tools import check_hermitian
 from ed_lgt.operators import (
     Z2_FermiHubbard_dressed_site_operators,
     Z2_FermiHubbard_gauge_invariant_states,
@@ -46,23 +41,23 @@ coeffs = {"t": -1, "V": 10, "eta": 100}
 # Symmetry sector (# of particles)
 sector = None
 # CONSTRUCT THE HAMILTONIAN
-H = 0
+H = QMB_hamiltonian(0, lvals, loc_dims)
 h_terms = {}
 # -------------------------------------------------------------------------------
 # LINK PENALTIES & Border penalties
 for d in directions:
-    op_name_list = [f"n_p{d}", f"n_m{d}"]
-    op_list = [ops[op] for op in op_name_list]
+    op_names_list = [f"n_p{d}", f"n_m{d}"]
+    op_list = [ops[op] for op in op_names_list]
     # Define the Hamiltonian term
     h_terms[f"W{d}"] = TwoBodyTerm(
         axis=d,
         op_list=op_list,
-        op_name_list=op_name_list,
+        op_names_list=op_names_list,
         lvals=lvals,
         has_obc=has_obc,
         site_basis=M,
     )
-    H += h_terms[f"W{d}"].get_Hamiltonian(strength=-2 * coeffs["eta"], add_dagger=False)
+    H.Ham += h_terms[f"W{d}"].get_Hamiltonian(strength=-2 * coeffs["eta"])
     # SINGLE SITE OPERATORS needed for the LINK SYMMETRY/OBC PENALTIES
     for s in "mp":
         op_name = f"n_{s}{d}"
@@ -73,7 +68,7 @@ for d in directions:
             has_obc=has_obc,
             site_basis=M,
         )
-        H += h_terms[op_name].get_Hamiltonian(strength=coeffs["eta"])
+        H.Ham += h_terms[op_name].get_Hamiltonian(strength=coeffs["eta"])
 # -------------------------------------------------------------------------------
 # COULOMB POTENTIAL
 h_terms["V"] = LocalTerm(
@@ -83,24 +78,24 @@ h_terms["V"] = LocalTerm(
     has_obc=has_obc,
     site_basis=M,
 )
-H += h_terms["V"].get_Hamiltonian(strength=coeffs["V"])
+H.Ham += h_terms["V"].get_Hamiltonian(strength=coeffs["V"])
 # -------------------------------------------------------------------------------
 # HOPPING
 for d in directions:
     for s in ["up", "down"]:
         # Define the list of the 2 non trivial operators
-        op_name_list = [f"Q{s}_p{d}_dag", f"Q{s}_m{d}"]
-        op_list = [ops[op] for op in op_name_list]
+        op_names_list = [f"Q{s}_p{d}_dag", f"Q{s}_m{d}"]
+        op_list = [ops[op] for op in op_names_list]
         # Define the Hamiltonian term
         h_terms[f"{d}_hop_{s}"] = TwoBodyTerm(
             d,
             op_list,
-            op_name_list,
+            op_names_list,
             lvals=lvals,
             has_obc=has_obc,
             site_basis=M,
         )
-        H += h_terms[f"{d}_hop_{s}"].get_Hamiltonian(
+        H.Ham += h_terms[f"{d}_hop_{s}"].get_Hamiltonian(
             strength=coeffs["t"], add_dagger=True
         )
 # ===========================================================================
@@ -114,20 +109,17 @@ if sector is not None:
         has_obc=has_obc,
         site_basis=M,
     )
-    H += (
+    H.Ham += (
         0.5
         * coeffs["eta"]
         * (h_terms[op_name].get_Hamiltonian(strength=1) - sector * ID(tot_dim)) ** 2
     )
 # ===========================================================================
-# CHECK THAT THE HAMILTONIAN IS HERMITIAN
-check_hermitian(H)
 # DIAGONALIZE THE HAMILTONIAN
-GS = Ground_State(H, n_eigs)
+H.diagonalize(n_eigs)
 # Dictionary for results
 res = {}
-res["energy"] = GS.Nenergies
-res["rho_eigvals"] = []
+res["energy"] = H.Nenergies
 # ===========================================================================
 # LOCAL OBSERVABLE LIST
 local_obs = [f"n_{s}{d}" for d in directions for s in "mp"]
@@ -137,16 +129,13 @@ for obs in local_obs:
     h_terms[obs] = LocalTerm(ops[obs], obs, lvals, has_obc, site_basis=M)
     res[obs] = []
 # TWO BODY OBSERVABLE LIST
-twobody_obs = [
-    ["P_px", "P_mx"],
-    ["P_py", "P_my"],
-]
+twobody_obs = [["P_px", "P_mx"], ["P_py", "P_my"]]
 for obs1, obs2 in twobody_obs:
     op_list = [ops[obs1], ops[obs2]]
     h_terms[f"{obs1}_{obs2}"] = TwoBodyTerm(
         axis="x",
         op_list=op_list,
-        op_name_list=[obs1, obs2],
+        op_names_list=[obs1, obs2],
         lvals=lvals,
         has_obc=has_obc,
         site_basis=M,
@@ -157,7 +146,7 @@ op_list = [ops[op] for op in plaq_name_list]
 h_terms["Plaq_Sx"] = PlaquetteTerm(
     axes=["x", "y"],
     op_list=op_list,
-    op_name_list=plaq_name_list,
+    op_names_list=plaq_name_list,
     lvals=lvals,
     has_obc=has_obc,
     site_basis=M,
@@ -166,19 +155,17 @@ h_terms["Plaq_Sx"] = PlaquetteTerm(
 for ii in range(n_eigs):
     print("====================================================")
     print(f"{ii} ENERGY: {format(res['energy'][ii], '.9f')}")
+    # GET STATE CONFIGURATIONS
+    H.Npsi[ii].get_state_configurations(threshold=1e-3)
     # COMPUTE THE REDUCED DENSITY MATRIX
-    rho = get_reduced_density_matrix(GS.Npsi[:, ii], loc_dims, lvals, 0)
+    rho = H.Npsi[ii].reduced_density_matrix(0)
     eigvals, _ = diagonalize_density_matrix(rho)
-    res["rho_eigvals"].append(eigvals)
-    print(f"DM eigvals {res['rho_eigvals']}")
-    if has_obc:
-        # GET STATE CONFIGURATIONS
-        get_state_configurations(truncation(GS.Npsi[:, ii], 1e-10), loc_dims, lvals)
+    print(f"DM eigvals {eigvals}")
     # ===========================================================================
     # LOCAL OBSERVABLES:
     # ===========================================================================
     for obs in local_obs:
-        h_terms[obs].get_expval(GS.Npsi[:, ii])
+        h_terms[obs].get_expval(H.Npsi[ii])
         res[obs].append(h_terms[obs].avg)
     # CHECK LINK SYMMETRIES
     for ax in directions:
@@ -192,15 +179,10 @@ for ii in range(n_eigs):
         print("----------------------------------------------------")
         print(f"{obs1}_{obs2}")
         print("----------------------------------------------------")
-        h_terms[f"{obs1}_{obs2}"].get_expval(GS.Npsi[:, ii])
+        h_terms[f"{obs1}_{obs2}"].get_expval(H.Npsi[ii])
         print(h_terms[f"{obs1}_{obs2}"].corr)
     # ===========================================================================
     # PLAQUETTE OBSERVABLES:
     # ===========================================================================
-    h_terms["Plaq_Sx"].get_expval(GS.Npsi[:, ii])
-
-if n_eigs > 1:
-    print(f"Energies {res['energy']}")
-    res["DeltaE"] = np.abs(res["energy"][0] - res["energy"][1])
-
+    h_terms["Plaq_Sx"].get_expval(H.Npsi[ii])
 # %%
