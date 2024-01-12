@@ -32,10 +32,14 @@ loc_dims = loc_dims.transpose().reshape(n_sites)
 lattice_base = lattice_base.transpose().reshape(n_sites)
 tot_dim = prod(loc_dims)
 print("local dimensions:", loc_dims)
+"""
 # OBTAIN OPERATORS FOR TTN SIMULATIONS
+from ed_lgt.tools import save_sparse_matrix_to_dat
 TTN_ops = {}
 for op in ops.keys():
     TTN_ops[op] = M["site"].transpose() * ops[op] * M["site"]
+    # save_sparse_matrix_to_dat(TTN_ops[op], f"Z2_FermiHubbard_ops/{op}.dat")
+"""
 # Hamiltonian Couplings
 coeffs = {"t": -1, "V": 10, "eta": 100}
 # Symmetry sector (# of particles)
@@ -124,7 +128,7 @@ res["energy"] = H.Nenergies
 # LOCAL OBSERVABLE LIST
 local_obs = [f"n_{s}{d}" for d in directions for s in "mp"]
 local_obs += [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
-local_obs += ["C_px,py", "C_mx,my", "Z_Cross"]
+local_obs += ["C_px,py", "C_mx,my", "X_Cross"]
 for obs in local_obs:
     h_terms[obs] = LocalTerm(ops[obs], obs, lvals, has_obc, site_basis=M)
     res[obs] = []
