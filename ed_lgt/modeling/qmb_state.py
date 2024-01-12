@@ -155,6 +155,7 @@ class QMB_hamiltonian:
         validate_parameters(op_list=[self.Ham])
         if not np.isscalar(n_eigs) and not isinstance(n_eigs, int):
             raise TypeError(f"n_eigs should be a SCALAR INT, not a {type(n_eigs)}")
+        self.n_eigs = n_eigs
         # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
         check_hermitian(self.Ham)
         print("DIAGONALIZE HAMILTONIAN")
@@ -165,6 +166,10 @@ class QMB_hamiltonian:
         # Save GROUND STATE PROPERTIES
         self.GSenergy = self.Nenergies[0]
         self.GSpsi = self.Npsi[0]
+
+    def print_energy(self, en_state):
+        print("====================================================")
+        print(f"{en_state} ENERGY: {format(self.Nenergies[en_state], '.9f')}")
 
 
 def truncation(array, threshold=1e-14):
