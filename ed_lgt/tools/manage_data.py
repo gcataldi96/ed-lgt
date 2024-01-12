@@ -8,6 +8,7 @@ __all__ = [
     "load_dictionary",
     "save_data_in_textfile",
     "load_data_from_textfile",
+    "save_sparse_matrix_to_dat",
 ]
 
 
@@ -129,3 +130,25 @@ def load_data_from_textfile(data_file_name, row_for_labels=False):
     for ii in range(len(n)):
         data[str(ii)] = np.asarray(data[str(ii)])
     return data
+
+
+def save_sparse_matrix_to_dat(sparse_matrix, filename):
+    """
+    Save the non-zero entries of a scipy.sparse.csr_matrix to a .dat file.
+
+    Parameters:
+    A (scipy.sparse.csr_matrix): The sparse matrix to save.
+
+    filename (str): The name of the file where the matrix will be saved.
+    """
+    validate_parameters(op_list=[sparse_matrix], filename=filename)
+
+    with open(filename, "w") as f:
+        # Write the dimension of the matrix
+        f.write("# dimension\n")
+        f.write(f"{sparse_matrix.shape[0]}\n")
+        # Write the non-zero elements
+        f.write("# Non-zero elements: coordinates and coefficients\n")
+        coo = sparse_matrix.tocoo()
+        for i, j, v in zip(coo.row, coo.col, coo.data):
+            f.write(f"{i}, {j}; ({v.real}, {v.imag})\n")
