@@ -104,7 +104,7 @@ class ThreeBodyTerm:
                 coords2 = zig_zag(self.lvals, j2)
                 for j3 in range(prod(self.lvals)):
                     coords3 = zig_zag(self.lvals, j3)
-                    if all[j1 != j2, j1 != j3, j2 != j3]:
+                    if all([j1 != j2, j1 != j3, j2 != j3]):
                         self.corr[coords1 + coords2 + coords3] = exp_val(
                             psi,
                             three_body_op(
