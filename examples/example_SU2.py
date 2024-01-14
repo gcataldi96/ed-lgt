@@ -4,14 +4,11 @@ from math import prod
 from ed_lgt.operators import (
     SU2_Hamiltonian_couplings,
     SU2_dressed_site_operators,
-    SU2_rishon_operators,
     SU2_gauge_invariant_states,
-    SU2_check_gauss_law,
 )
 from ed_lgt.modeling import Ground_State, LocalTerm, TwoBodyTerm, PlaquetteTerm
 from ed_lgt.modeling import (
     check_link_symmetry,
-    entanglement_entropy,
     get_reduced_density_matrix,
     diagonalize_density_matrix,
     staggered_mask,
@@ -196,11 +193,6 @@ GS = Ground_State(H, n_eigs)
 for ii in range(n_eigs):
     print("====================================================")
     print(f"{ii} ENERGY: {format(GS.Nenergies[ii], '.9f')}")
-    # ===========================================================================
-    # ENTROPY of a BIPARTITION
-    # res["entropy"].append(
-    #    entanglement_entropy(GS.Npsi[:, ii], loc_dims, lvals, lvals[0])
-    # )
     # ===========================================================================
     # GET STATE CONFIGURATIONS
     get_state_configurations(truncation(GS.Npsi[:, ii], 1e-10), loc_dims, lvals)
