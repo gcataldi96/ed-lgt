@@ -8,6 +8,7 @@ from ed_lgt.tools import zig_zag, inverse_zig_zag
 __all__ = [
     "local_op",
     "two_body_op",
+    "three_body_op",
     "four_body_op",
     "qmb_operator",
     "lattice_base_configs",
@@ -337,6 +338,76 @@ def two_body_op(
         all_sites_equal = False if site_basis is not None else True
         basis_label = get_site_label(
             coords, lvals, has_obc, staggered_basis, all_sites_equal
+        )
+        # PROJECT THE OPERATOR ON THE CORRESPONDING SITE BASIS
+        op = apply_basis_projection(op, basis_label, site_basis)
+        op_name = f"{op_name}_{basis_label}" if len(basis_label) > 0 else op_name
+        # UPDATE THE LIST OF OPERATORS
+        ops_list.append(op_name)
+        ops[op_name] = op
+    return qmb_operator(ops, ops_list)
+
+
+def three_body_op(op_list, op_sites_list, lvals, has_obc, site_basis=None):
+    """
+    This function compute the single twobody operator term on the lattice with 2 operators
+    acting on two specific lattice sites (the rest is occupied by identities).
+
+    Args:
+        op_list (list of 2 scipy.sparse.matrices): list of the 4 operators involved in the Plaquette Term
+
+        op_sites_list (list of 2 int): list of the positions of two operators in the 1D chain ordering 2d lattice sites
+
+        lvals (list): Dimensions (# of sites) of a d-dimensional lattice
+
+        has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+
+        staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
+
+        site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
+            (corners, borders, lattice core, even/odd sites). Defaults to None.
+
+    Raises:
+        TypeError: If the input arguments are of incorrect types or formats.
+
+    Returns:
+        scipy.sparse.matrix: QMB Hamiltonian in sparse form
+    """
+    # CHECK ON TYPES
+    if not isinstance(op_list, list):
+        raise TypeError(f"op_list must be a LIST, not a {type(op_list)}")
+    if not isinstance(op_sites_list, list):
+        raise TypeError(f"op_sites_list must be a LIST, not a {type(op_sites_list)}")
+    if not isinstance(lvals, list):
+        raise TypeError(f"lvals should be a list, not a {type(lvals)}")
+    elif not all(np.isscalar(dim) and isinstance(dim, int) for dim in lvals):
+        raise TypeError("All items of lvals must be scalar integers.")
+    if not isinstance(has_obc, bool):
+        raise TypeError(f"has_obc should be a BOOL, not a {type(has_obc)}")
+    # DEFINE an IDENTITY operator
+    ID = identity(op_list[0].shape[0])
+    # GENERATE empty dictionary and list to be filled with operators and names
+    ops = {}
+    ops_list = []
+    # Run over all the lattice sites
+    for ii in range(prod(lvals)):
+        if ii == op_sites_list[0]:
+            op = op_list[0]
+            op_name = "op1"
+        elif ii == op_sites_list[1]:
+            op = op_list[1]
+            op_name = "op2"
+        elif ii == op_sites_list[2]:
+            op = op_list[2]
+            op_name = "op3"
+        else:
+            op = ID
+            op_name = "ID"
+        # GET THE LABEL OF THE SITE
+        coords = zig_zag(lvals, ii)
+        all_sites_equal = False if site_basis is not None else True
+        basis_label = get_site_label(
+            coords, lvals, has_obc, all_sites_equal=all_sites_equal
         )
         # PROJECT THE OPERATOR ON THE CORRESPONDING SITE BASIS
         op = apply_basis_projection(op, basis_label, site_basis)
