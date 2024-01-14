@@ -1,7 +1,6 @@
 # %%
 import numpy as np
 from math import prod
-from scipy.linalg import eigh
 from ed_lgt.operators import get_spin_operators
 from ed_lgt.modeling import (
     Ground_State,
@@ -12,7 +11,13 @@ from ed_lgt.modeling import (
 )
 from ed_lgt.modeling import get_state_configurations, truncation
 from ed_lgt.tools import check_hermitian
-from .ising_gaps import get_M_operator, get_N_operator, get_P_operator, get_Q_operator
+
+from ed_lgt.operators import (
+    get_M_operator,
+    get_N_operator,
+    get_P_operator,
+    get_Q_operator,
+)
 
 # Spin representation
 spin = 1 / 2
@@ -96,28 +101,20 @@ for op_name_list in threebody_obs:
     )
 # ---------------------------------------------------------------------------
 # LIST OF FOURBODY CORRELATORS
-fourbody_obs = [
-    ["Sm", "Sz", "Sz"],
-    ["Sp", "Sz", "Sz"],
-    ["Sx", "Sp", "Sp"],
-    ["Sx", "Sm", "Sm"],
-    ["Sz", "Sm", "Sm"],
-    ["Sz", "Sp", "Sp"],
-]
-op_list = [ops[op] for op in op_name_list]
-h_terms["_".join(op_name_list)] = PlaquetteTerm(
-    axes=["x", "y"],
-    op_list=op_list,
-    op_name_list=op_name_list,
-    lvals=lvals,
-    has_obc=has_obc,
-)
+fourbody_obs = []
+for op_name_list in fourbody_obs:
+    op_list = [ops[op] for op in op_name_list]
+    h_terms["_".join(op_name_list)] = PlaquetteTerm(
+        axes=["x", "y"],
+        op_list=op_list,
+        op_name_list=op_name_list,
+        lvals=lvals,
+        has_obc=has_obc,
+    )
 # ===========================================================================
 for ii in range(n_eigs):
     print("====================================================")
     print(f"{ii} ENERGY: {format(res['energy'][ii], '.9f')}")
-    if ii > 0:
-        res["DeltaE"].append(res["energy"][ii] - res["energy"][0])
     # GET STATE CONFIGURATIONS
     get_state_configurations(truncation(GS.Npsi[:, ii], 1e-3), loc_dims, lvals)
     # =======================================================================
@@ -146,3 +143,8 @@ for ii in range(n_eigs):
         print(obs_name)
         print("----------------------------------------------------")
         h_terms[obs_name].get_expval(GS.Npsi[:, ii])
+    # SAVE TRUE ENERGY GAP
+    if ii > 0:
+        res["DeltaE"].append(res["energy"][ii] - res["energy"][0])
+    # COMPUTE THE ENERGY GAP WITH THE NEW METHOD
+# %%
