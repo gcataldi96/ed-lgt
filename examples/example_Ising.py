@@ -1,7 +1,7 @@
 # %%
 import numpy as np
 from math import prod
-from ed_lgt.operators import get_spin_operators
+from ed_lgt.operators import get_Pauli_operators
 from ed_lgt.modeling import (
     Ground_State,
     LocalTerm,
@@ -31,9 +31,7 @@ n_sites = prod(lvals)
 # BOUNDARY CONDITIONS
 has_obc = False
 # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
-ops = get_spin_operators(spin)
-for op in ["Sz", "Sx", "Sy"]:
-    ops[op] = 2 * ops[op]
+ops = get_Pauli_operators(spin)
 loc_dims = np.array([int(2 * spin + 1) for i in range(n_sites)])
 # ACQUIRE HAMILTONIAN COEFFICIENTS
 coeffs = {"J": 1, "h": 10}
