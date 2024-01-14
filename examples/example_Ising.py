@@ -87,68 +87,8 @@ for ii in range(n_eigs):
         print(f"{obs1}_{obs2}")
         print("----------------------------------------------------")
         h_terms[f"{obs1}_{obs2}"].get_expval(H.Npsi[ii])
-        # print(h_terms[f"{obs1}_{obs2}"].corr)
+    # COMPUTE THE ENERGY GAP WITH EXPVAL METHOD
+
 
 if n_eigs > 1:
     print(f"Energy Gaps {res['DeltaE']}")
-# %%
-# Compute the Matrices for the generalized Eigenvalue Problem: Mx = w Nx
-M = np.zeros((n_sites, n_sites), dtype=complex)
-N = np.zeros((n_sites, n_sites), dtype=complex)
-# N = h_terms["Sz"].obs
-
-for ii in range(n_sites):
-    for jj in range(n_sites):
-        nn_condition = [
-            (ii > 0) and (jj == ii - 1),
-            (ii < n_sites - 1) and (jj == ii + 1),
-            np.all([not has_obc, ii == 0, jj == n_sites - 1]),
-            np.all([not has_obc, ii == n_sites - 1, jj == 0]),
-        ]
-        if np.any(nn_condition):
-            M[ii, jj] += coeffs["J"] * h_terms["Sz_Sz"].corr[ii, jj]
-        elif jj == ii:
-            # ---------------------------------------------------
-            N[ii, jj] += h_terms["Sz"].obs[ii]
-            # ---------------------------------------------------
-            M[ii, jj] += 2 * coeffs["h"] * h_terms["Sz"].obs[ii]
-            if ii < n_sites - 1:
-                M[ii, jj] += (
-                    complex(0, 0.5)
-                    * coeffs["J"]
-                    * (
-                        h_terms["Sm_Sx"].corr[ii, ii + 1]
-                        - h_terms["Sp_Sx"].corr[ii, ii + 1]
-                    )
-                )
-            else:
-                if not has_obc:
-                    M[ii, jj] += (
-                        complex(0, 0.5)
-                        * coeffs["J"]
-                        * (h_terms["Sm_Sx"].corr[ii, 0] - h_terms["Sp_Sx"].corr[ii, 0])
-                    )
-            if ii > 0:
-                M[ii, jj] += (
-                    complex(0, 0.5)
-                    * coeffs["J"]
-                    * (
-                        h_terms["Sx_Sm"].corr[ii - 1, ii]
-                        - h_terms["Sx_Sp"].corr[ii - 1, ii]
-                    )
-                )
-            else:
-                if not has_obc:
-                    M[ii, jj] += (
-                        complex(0, 0.5)
-                        * coeffs["J"]
-                        * (
-                            h_terms["Sx_Sm"].corr[n_sites - 1, ii]
-                            - h_terms["Sx_Sp"].corr[n_sites - 1, ii]
-                        )
-                    )
-
-# %%
-# Solve the generalized egenvalue problem
-w = np.sum(eigh(a=M, b=N, eigvals_only=True)) / n_sites
-# %%
