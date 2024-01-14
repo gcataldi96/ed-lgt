@@ -96,22 +96,21 @@ class ThreeBodyTerm:
             if not isinstance(site, str):
                 raise TypeError(f"site should be STR ('even' / 'odd'), not {type(str)}")
         # Create an array to store the correlator
-        self.corr = np.zeros(self.lvals + self.lvals)
+        self.corr = np.zeros(self.lvals + self.lvals + self.lvals)
         # RUN OVER THE LATTICE SITES
-        for ii in range(prod(self.lvals)):
-            coords1 = zig_zag(self.lvals, ii)
-            for jj in range(prod(self.lvals)):
-                coords2 = zig_zag(self.lvals, jj)
-                # AVOID SELF CORRELATIONS
-                if ii != jj:
-                    self.corr[coords1 + coords2] = exp_val(
+        for j1 in range(prod(self.lvals)):
+            coords1 = zig_zag(self.lvals, j1)
+            for j2 in range(prod(self.lvals)):
+                coords2 = zig_zag(self.lvals, j2)
+                for j3 in range(prod(self.lvals)):
+                    coords3 = zig_zag(self.lvals, j3)
+                    self.corr[coords1 + coords2 + coords3] = exp_val(
                         psi,
                         three_body_op(
                             op_list=self.op_list,
-                            op_sites_list=[ii, jj],
+                            op_sites_list=[j1, j2, j3],
                             lvals=self.lvals,
                             has_obc=self.has_obc,
-                            staggered_basis=self.stag_basis,
                             site_basis=self.site_basis,
                         ),
                     )
