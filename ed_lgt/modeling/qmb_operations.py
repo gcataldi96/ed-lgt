@@ -225,6 +225,7 @@ def construct_operator_list(
         staggered_basis=staggered_basis,
         site_basis=site_basis,
     )
+    all_sites_equal = True if site_basis is None else False
     # Define the identity operator
     ID = identity(op_list[0].shape[0])
     # Empty dictionary of operators and list of their names
@@ -243,12 +244,13 @@ def construct_operator_list(
         # Get the coordinates of ii in the d-dim lattice
         coords = zig_zag(lvals, ii)
         # Get the site label according to its position in the lattice (border, corner, core)
-        basis_label = get_site_label(coords, lvals, has_obc, staggered_basis)
+        basis_label = get_site_label(
+            coords, lvals, has_obc, staggered_basis, all_sites_equal
+        )
         # Apply projection of the operator on the proper basis for that lattice position (and update its name)
         op, op_name = apply_basis_projection(op, op_name, basis_label, site_basis)
         # Save operator and its name
         ops_dict[op_name] = op
-        op_names_list.append(op_name)
     return ops_dict, op_names_list
 
 
@@ -276,7 +278,9 @@ def apply_basis_projection(op, op_name, basis_label, site_basis):
     )
     if len(basis_label) > 0 and site_basis is not None:
         # Apply projection of the operator on the proper basis for that lattice position
+        print(op.shape)
         op = site_basis[basis_label].transpose() * op * site_basis[basis_label]
         # Update the name of the operator with the label
         op_name = f"{op_name}_{basis_label}"
+        print(op.shape)
     return op, op_name

@@ -21,7 +21,7 @@ directions = "xyz"[:dim]
 # TOTAL NUMBER OF LATTICE SITES & particles
 n_sites = prod(lvals)
 # BOUNDARY CONDITIONS
-has_obc = False
+has_obc = True
 # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
 ops = Z2_FermiHubbard_dressed_site_operators(lattice_dim=dim)
 # ACQUIRE SU2 BASIS and GAUGE INVARIANT STATES
@@ -41,7 +41,7 @@ for op in ops.keys():
     # save_sparse_matrix_to_dat(TTN_ops[op], f"Z2_FermiHubbard_ops/{op}.dat")
 """
 # Hamiltonian Couplings
-coeffs = {"t": -1, "V": 10, "eta": 100}
+coeffs = {"t": -1, "V": 1, "eta": 100}
 # Symmetry sector (# of particles)
 sector = None
 # CONSTRUCT THE HAMILTONIAN
