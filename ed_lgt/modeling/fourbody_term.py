@@ -3,13 +3,13 @@ from math import prod
 from itertools import product
 from scipy.sparse import isspmatrix
 from ed_lgt.tools import zig_zag
-from .qmb_operations import three_body_op
+from .qmb_operations import four_body_op
 from .qmb_state import expectation_value as exp_val
 
-__all__ = ["ThreeBodyTerm"]
+__all__ = ["FourBodyTerm"]
 
 
-class ThreeBodyTerm:
+class FourBodyTerm:
     def __init__(
         self,
         op_list,
@@ -21,14 +21,14 @@ class ThreeBodyTerm:
     ):
         """
         This function provides methods for computing 3body terms in a d-dimensional lattice model along a certain axis.
-        It takes a list of 3 operators, their names, the lattice dimension and its topology/boundary conditions,
+        It takes a list of 4 operators, their names, the lattice dimension and its topology/boundary conditions,
         and provides methods to compute the Local Hamiltonian Term and expectation values.
 
         Args:
 
-            op_list (list of 3 scipy.sparse.matrices): list of the 3 operators involved in the 2Body Term
+            op_list (list of 4 scipy.sparse.matrices): list of the 4 operators involved in the 2Body Term
 
-            op_name_list (list of 3 str): list of the names of the 3 operators
+            op_name_list (list of 4 str): list of the names of the 4 operators
 
             lvals (list of ints): Dimensions (# of sites) of a d-dimensional hypercubic lattice
 
@@ -74,7 +74,7 @@ class ThreeBodyTerm:
         self.stag_basis = staggered_basis
         self.site_basis = site_basis
         print(
-            f"Threebody-term {self.op_name_list[0]}-{self.op_name_list[1]}-{self.op_name_list[2]}"
+            f"Fourbody-term {self.op_name_list[0]}-{self.op_name_list[1]}-{self.op_name_list[2]}-{self.op_name_list[3]}"
         )
 
     def get_expval(self, psi, site=None):
@@ -97,18 +97,19 @@ class ThreeBodyTerm:
             if not isinstance(site, str):
                 raise TypeError(f"site should be STR ('even' / 'odd'), not {type(str)}")
         # Create an array to store the correlator
-        self.corr = np.zeros(self.lvals + self.lvals + self.lvals)
+        self.corr = np.zeros(self.lvals + self.lvals + self.lvals + self.lvals)
         # RUN OVER THE LATTICE SITES
-        for j1, j2, j3 in product(range(prod(self.lvals)), repeat=3):
+        for j1, j2, j3, j4 in product(range(prod(self.lvals)), repeat=4):
             coords1 = zig_zag(self.lvals, j1)
             coords2 = zig_zag(self.lvals, j2)
             coords3 = zig_zag(self.lvals, j3)
-            if len([j1, j2, j3]) == len(set([j1, j2, j3])):
-                self.corr[coords1 + coords2 + coords3] = exp_val(
+            coords4 = zig_zag(self.lvals, j4)
+            if len([j1, j2, j3, j4]) == len(set([j1, j2, j3, j4])):
+                self.corr[coords1 + coords2 + coords3 + coords4] = exp_val(
                     psi,
-                    three_body_op(
+                    four_body_op(
                         op_list=self.op_list,
-                        op_sites_list=[j1, j2, j3],
+                        op_sites_list=[j1, j2, j3, j4],
                         lvals=self.lvals,
                         has_obc=self.has_obc,
                         site_basis=self.site_basis,
