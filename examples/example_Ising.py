@@ -1,27 +1,19 @@
 # %%
 import numpy as np
 from math import prod
-from ed_lgt.operators import get_Pauli_operators
+from ed_lgt.operators import get_Pauli_operators, energy_gap
 from ed_lgt.modeling import (
     Ground_State,
     LocalTerm,
     TwoBodyTerm,
     ThreeBodyTerm,
-    PlaquetteTerm,
+    FourBodyTerm,
 )
 from ed_lgt.modeling import get_state_configurations, truncation
 from ed_lgt.tools import check_hermitian
 
-from ed_lgt.operators import (
-    get_M_operator,
-    get_N_operator,
-    get_P_operator,
-    get_Q_operator,
-)
 
-# Spin representation
-spin = 1 / 2
-# N eigenvalues
+# N EIGENVALUES
 n_eigs = 2
 # LATTICE DIMENSIONS
 lvals = [10]
@@ -31,7 +23,9 @@ n_sites = prod(lvals)
 # BOUNDARY CONDITIONS
 has_obc = False
 # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
-ops = get_Pauli_operators(spin)
+ops = get_Pauli_operators()
+# GET LOCAL DIMENSIONS
+spin = 1 / 2
 loc_dims = np.array([int(2 * spin + 1) for i in range(n_sites)])
 # ACQUIRE HAMILTONIAN COEFFICIENTS
 coeffs = {"J": 1, "h": 10}
@@ -60,7 +54,6 @@ GS = Ground_State(H, n_eigs)
 # Dictionary for results
 res = {}
 res["energy"] = GS.Nenergies
-res["DeltaE"] = []
 # ===========================================================================
 # LIST OF LOCAL OBSERVABLES
 loc_obs = ["Sx", "Sz"]
@@ -69,7 +62,19 @@ for obs in loc_obs:
     h_terms[obs] = LocalTerm(ops[obs], obs, lvals=lvals, has_obc=has_obc)
 # ---------------------------------------------------------------------------
 # LIST OF TWOBODY CORRELATORS
-twobody_obs = [["Sz", "Sz"], ["Sx", "Sm"], ["Sx", "Sp"], ["Sp", "Sx"], ["Sm", "Sx"]]
+twobody_obs = [
+    ["Sz", "Sz"],
+    ["Sx", "Sm"],
+    ["Sx", "Sp"],
+    ["Sp", "Sx"],
+    ["Sm", "Sx"],
+    ["Sz", "Sm"],
+    ["Sm", "Sz"],
+    ["Sp", "Sz"],
+    ["Sz", "Sp"],
+    ["Sp", "Sp"],
+    ["Sm", "Sm"],
+]
 for op_name_list in twobody_obs:
     op_list = [ops[op] for op in op_name_list]
     h_terms["_".join(op_name_list)] = TwoBodyTerm(
@@ -82,12 +87,26 @@ for op_name_list in twobody_obs:
 # ---------------------------------------------------------------------------
 # LIST OF THREEBODY CORRELATORS
 threebody_obs = [
-    ["Sm", "Sz", "Sz"],
-    ["Sp", "Sz", "Sz"],
+    ["Sm", "Sz", "Sp"],
+    ["Sp", "Sz", "Sm"],
     ["Sx", "Sp", "Sp"],
     ["Sx", "Sm", "Sm"],
-    ["Sz", "Sm", "Sm"],
+    ["Sp", "Sz", "Sz"],
+    ["Sm", "Sz", "Sz"],
+    ["Sp", "Sz", "Sx"],
+    ["Sm", "Sz", "Sx"],
+    ["Sp", "Sp", "Sz"],
+    ["Sm", "Sm", "Sz"],
+    ["Sx", "Sp", "Sz"],
+    ["Sx", "Sm", "Sz"],
+    ["Sz", "Sp", "Sx"],
+    ["Sz", "Sp", "Sm"],
     ["Sz", "Sp", "Sp"],
+    ["Sz", "Sm", "Sx"],
+    ["Sz", "Sm", "Sp"],
+    ["Sz", "Sm", "Sm"],
+    ["Sp", "Sm", "Sz"],
+    ["Sm", "Sp", "Sz"],
 ]
 for op_name_list in threebody_obs:
     op_list = [ops[op] for op in op_name_list]
@@ -99,11 +118,17 @@ for op_name_list in threebody_obs:
     )
 # ---------------------------------------------------------------------------
 # LIST OF FOURBODY CORRELATORS
-fourbody_obs = []
+fourbody_obs = [
+    ["Sp", "Sz", "Sz", "Sm"],
+    ["Sm", "Sz", "Sz", "Sp"],
+    ["Sp", "Sz", "Sz", "Sx"],
+    ["Sm", "Sz", "Sz", "Sx"],
+    ["Sx", "Sz", "Sz", "Sm"],
+    ["Sx", "Sz", "Sz", "Sp"],
+]
 for op_name_list in fourbody_obs:
     op_list = [ops[op] for op in op_name_list]
-    h_terms["_".join(op_name_list)] = PlaquetteTerm(
-        axes=["x", "y"],
+    h_terms["_".join(op_name_list)] = FourBodyTerm(
         op_list=op_list,
         op_name_list=op_name_list,
         lvals=lvals,
@@ -142,7 +167,14 @@ for ii in range(n_eigs):
         print("----------------------------------------------------")
         h_terms[obs_name].get_expval(GS.Npsi[:, ii])
     # SAVE TRUE ENERGY GAP
-    if ii > 0:
-        res["DeltaE"].append(res["energy"][ii] - res["energy"][0])
+    if ii == 1:
+        res["DeltaE"] = res["energy"][ii] - res["energy"][0]
+        # print(res["DeltaE"])
     # COMPUTE THE ENERGY GAP WITH THE NEW METHOD
+    elif ii == 0:
+        res["gap"] = energy_gap(lvals, has_obc, h_terms, coeffs)
+
+if n_eigs > 1:
+    print((res["gap"] - res["DeltaE"]) / (-res["DeltaE"]))
+
 # %%
