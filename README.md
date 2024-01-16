@@ -76,9 +76,13 @@ where
 $i$ is the $i^{th}$ simulation corresponding to the model with the g-parameter (which is not common to all the other simulations) equal to $j$.
 
 # Run Simulations
-To run simulations, just type on the command shell the following command:
+To run simulations, just type on the command shell the following command. On linux:
 
-    nohup bash -c "printf 'n%s\n' {0..N} | shuf | xargs -PA -i python SU2_model.py config_NAME_FILE.yaml {} B" &>/dev/null &
+    nohup bash -c "printf 'n%s\n' {0..N} | shuf | xargs -PA -i python script.py config_NAME_FILE {} B" &>/dev/null &
+
+On MAC:
+
+    nohup bash -c "printf 'n%s\n' {0..N} | xargs -PA -I% python script.py config_NAME_FILE % B" &>/dev/null &
 
 where 
 
