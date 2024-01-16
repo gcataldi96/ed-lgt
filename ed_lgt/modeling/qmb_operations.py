@@ -231,9 +231,9 @@ def construct_operator_list(
     # Empty dictionary of operators and list of their names
     ops_dict = {}
     op_names_list = []
+    # Assign a name to the operator at position ii
+    tmp = 0
     for ii in range(np.prod(lvals)):
-        # Assign a name to the operator at position ii
-        tmp = 0
         if ii in op_sites_list:
             tmp += 1
             op_name = f"op{tmp}"
@@ -251,6 +251,7 @@ def construct_operator_list(
         op, op_name = apply_basis_projection(op, op_name, basis_label, site_basis)
         # Save operator and its name
         ops_dict[op_name] = op
+        op_names_list.append(op_name)
     return ops_dict, op_names_list
 
 
