@@ -8,10 +8,25 @@ from copy import deepcopy
 
 __all__ = [
     "get_spin_operators",
+    "get_Pauli_operators",
     "SU2_singlet",
     "SU2_generators",
     "get_SU2_singlets",
 ]
+
+
+def spin_space(s):
+    if not np.isscalar(s):
+        raise TypeError(f"s must be scalar (int or real), not {type(s)}")
+    # Given the spin value s, it returns the size of its Hilber space
+    return int(2 * s + 1)
+
+
+def m_values(s):
+    if not np.isscalar(s):
+        raise TypeError(f"s must be scalar (int or real), not {type(s)}")
+    # Given the spin value s, it returns an array with the possible spin-z components
+    return np.arange(-s, s + 1)[::-1]
 
 
 def get_spin_operators(s):
@@ -38,9 +53,20 @@ def get_spin_operators(s):
     ops["Sz"] = diags(sz_diag, 0, shape)
     ops["Sp"] = diags(sp_diag, 1, shape)
     ops["Sm"] = ops["Sp"].transpose()
-    ops["Sx"] = 0.5 * (ops["Sp"] + ops["Sm"])
+    ops["Sx"] = (ops["Sp"] + ops["Sm"]) / 2
     ops["Sy"] = complex(0, -0.5) * (ops["Sp"] - ops["Sm"])
     ops["S2"] = diags([s * (s + 1) for i in range(size)], 0, shape)
+    return ops
+
+
+def get_Pauli_operators():
+    shape = (2, 2)
+    ops = {}
+    ops["Sz"] = diags([1, -1], 0, shape)
+    ops["Sp"] = diags([1], 1, shape)
+    ops["Sm"] = ops["Sp"].transpose()
+    ops["Sx"] = ops["Sp"] + ops["Sm"]
+    ops["Sy"] = complex(0, -1) * (ops["Sp"] - ops["Sm"])
     return ops
 
 
@@ -94,20 +120,6 @@ def SU2_generators(s, matter=False):
         SU2_gen["Sx_psi"] = 0.5 * (SU2_gen["Sp_psi"] + SU2_gen["Sm_psi"])
         SU2_gen["Sy_psi"] = complex(0, -0.5) * (SU2_gen["Sp_psi"] - SU2_gen["Sm_psi"])
     return SU2_gen
-
-
-def spin_space(s):
-    if not np.isscalar(s):
-        raise TypeError(f"s must be scalar (int or real), not {type(s)}")
-    # Given the spin value s, it returns the size of its Hilber space
-    return int(2 * s + 1)
-
-
-def m_values(s):
-    if not np.isscalar(s):
-        raise TypeError(f"s must be scalar (int or real), not {type(s)}")
-    # Given the spin value s, it returns an array with the possible spin-z components
-    return np.arange(-s, s + 1)[::-1]
 
 
 def spin_couple(j1, j2, singlet=False, M=None):
