@@ -77,7 +77,7 @@ params = {"V": np.logspace(-1, 1, 15)}
 gen_configs("template", params, f"Z2_FermiHubbard/V_potential")
 
 # %%
-# Z2 FERMI HUBBARD MODEL
+# ISING MODEL
 params = {"h": np.logspace(-2, 2, 10)}
 gen_configs("template", params, f"Ising/Ising1D")
 # %%
