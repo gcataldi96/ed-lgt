@@ -78,6 +78,6 @@ gen_configs("template", params, f"Z2_FermiHubbard/V_potential")
 
 # %%
 # ISING MODEL
-params = {"h": np.logspace(-2, 2, 10)}
+params = {"h": np.logspace(-2, 2, 10), "lvals": [[6], [8], [10], [12]]}
 gen_configs("template", params, f"Ising/Ising1D")
 # %%
