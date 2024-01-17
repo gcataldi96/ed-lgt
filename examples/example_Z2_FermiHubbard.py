@@ -38,10 +38,10 @@ from ed_lgt.tools import save_sparse_matrix_to_dat
 TTN_ops = {}
 for op in ops.keys():
     TTN_ops[op] = M["site"].transpose() * ops[op] * M["site"]
-    # save_sparse_matrix_to_dat(TTN_ops[op], f"Z2_FermiHubbard_ops/{op}.dat")
+    save_sparse_matrix_to_dat(TTN_ops[op], f"Z2_FermiHubbard_ops/{op}.dat")
 """
 # Hamiltonian Couplings
-coeffs = {"t": -1, "V": 1, "eta": 100}
+coeffs = {"t": -1, "U": 1, "eta": 100}
 # Symmetry sector (# of particles)
 sector = None
 # CONSTRUCT THE HAMILTONIAN
@@ -75,14 +75,14 @@ for d in directions:
         H.Ham += h_terms[op_name].get_Hamiltonian(strength=coeffs["eta"])
 # -------------------------------------------------------------------------------
 # COULOMB POTENTIAL
-h_terms["V"] = LocalTerm(
+h_terms["U"] = LocalTerm(
     ops["N_pair_half"],
     "N_pair_half",
     lvals=lvals,
     has_obc=has_obc,
     site_basis=M,
 )
-H.Ham += h_terms["V"].get_Hamiltonian(strength=coeffs["V"])
+H.Ham += h_terms["U"].get_Hamiltonian(strength=coeffs["U"])
 # -------------------------------------------------------------------------------
 # HOPPING
 for d in directions:
@@ -160,11 +160,12 @@ for ii in range(n_eigs):
     print("====================================================")
     print(f"{ii} ENERGY: {format(res['energy'][ii], '.9f')}")
     # GET STATE CONFIGURATIONS
-    H.Npsi[ii].get_state_configurations(threshold=1e-3)
+    H.Npsi[ii].get_state_configurations(threshold=1e-2)
     # COMPUTE THE REDUCED DENSITY MATRIX
-    rho = H.Npsi[ii].reduced_density_matrix(0)
-    eigvals, _ = diagonalize_density_matrix(rho)
-    print(f"DM eigvals {eigvals}")
+    if not has_obc:
+        rho = H.Npsi[ii].reduced_density_matrix(0)
+        eigvals, _ = diagonalize_density_matrix(rho)
+        print(eigvals)
     # ===========================================================================
     # LOCAL OBSERVABLES:
     # ===========================================================================
