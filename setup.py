@@ -27,12 +27,14 @@ setuptools.setup(
     package_dir={
         "ed_lgt": "ed_lgt",
         "ed_lgt.modeling": "ed_lgt/modeling",
+        "ed_lgt.models": "ed_lgt/models",
         "ed_lgt.operators": "ed_lgt/operators",
         "ed_lgt.tools": "ed_lgt/tools",
     },
     packages=[
         "ed_lgt",
         "ed_lgt.modeling",
+        "ed_lgt.models",
         "ed_lgt.operators",
         "ed_lgt.tools",
     ],

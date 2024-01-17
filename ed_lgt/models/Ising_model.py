@@ -5,6 +5,8 @@ from scipy.linalg import eigh
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
 from ed_lgt.operators import get_Pauli_operators
 
+__all__ = ["Ising_Model"]
+
 
 class Ising_Model:
     def __init__(self, params):
@@ -15,8 +17,9 @@ class Ising_Model:
         self.has_obc = params["has_obc"]
         self.coeffs = params["coeffs"]
         self.n_eigs = params["n_eigs"]
+        self.ops = get_Pauli_operators()
         self.loc_dims = np.array([int(2 * 0.5 + 1) for i in range(prod(self.lvals))])
-        self.ops = get_Pauli_operators(0.5)
+        self.res = {}
 
     def build_Hamiltonian(self):
         # CONSTRUCT THE HAMILTONIAN
@@ -44,59 +47,57 @@ class Ising_Model:
         self.H.Ham += h_terms[op_name].get_Hamiltonian(strength=-self.coeffs["h"])
         # DIAGONALIZE THE HAMILTONIAN
         self.H.diagonalize(self.n_eigs)
+        self.res["energies"] = self.H.Nenergies
+        if self.n_eigs > 1:
+            self.res["true_gap"] = self.H.Nenergies[1] - self.H.Nenergies[0]
 
-    def get_observables(self, local_obs, twobody_obs, state_number):
+    def get_observables(self, local_obs, twobody_obs, plaquette_obs):
+        self.local_obs = local_obs
+        self.twobody_obs = twobody_obs
+        self.plaquette_obs = plaquette_obs
         self.obs_list = {}
         # ---------------------------------------------------------------------------
         # LIST OF LOCAL OBSERVABLES
         for obs in local_obs:
             self.obs_list[obs] = LocalTerm(
-                self.ops[obs], obs, lvals=self.lvals, has_obc=self.has_obc
-            )
-            self.obs_list[obs].get_expval(self.H.Npsi[state_number])
-        # ---------------------------------------------------------------------------
-        # LIST OF TWOBODY CORRELATORS
-        for op_name_list in twobody_obs:
-            op_list = [self.ops[op] for op in op_name_list]
-            self.obs_list["_".join(op_name_list)] = TwoBodyTerm(
-                axis="x",
-                op_list=op_list,
-                op_name_list=op_name_list,
+                self.ops[obs],
+                obs,
                 lvals=self.lvals,
                 has_obc=self.has_obc,
             )
-            self.obs_list[obs].get_expval(self.H.Npsi[state_number])
+        # ---------------------------------------------------------------------------
+        # LIST OF TWOBODY CORRELATORS
+        for op_names_list in twobody_obs:
+            obs = "_".join(op_names_list)
+            op_list = [self.ops[op] for op in op_names_list]
+            self.obs_list[obs] = TwoBodyTerm(
+                axis="x",
+                op_list=op_list,
+                op_names_list=op_names_list,
+                lvals=self.lvals,
+                has_obc=self.has_obc,
+            )
 
-    def get_qmb_state_properties(
-        self,
-        state_number,
-        state_configs=False,
-        entanglement_entropy=False,
-        reduced_density_matrix=False,
-    ):
-        # PRINT ENERGY
-        self.H.print_energy(state_number)
-        # STATE CONFIGURATIONS
-        if state_configs:
-            self.H.Npsi[state_number].get_state_configurations(threshold=1e-3)
-        # ENTANGLEMENT ENTROPY
-        if entanglement_entropy:
-            self.H.Npsi[state_number].entanglement_entropy(int(self.n_sites / 2))
-        # REDUCED DENSITY MATRIX EIGVALS
-        if reduced_density_matrix:
-            self.H.Npsi[state_number].reduced_density_matrix(0)
+    def measure_observables(self, state_number):
+        for obs in self.local_obs:
+            self.obs_list[obs].get_expval(self.H.Npsi[state_number])
+            self.res[obs] = self.obs_list[obs].obs
+        for op_names_list in self.twobody_obs:
+            obs = "_".join(op_names_list)
+            self.obs_list[obs].get_expval(self.H.Npsi[state_number])
+            self.res[obs] = self.obs_list[obs].corr
 
     def get_energy_gap(self):
-        N = get_N_operator(self.lvals, self.obs_list)
-        M = get_M_operator(self.lvals, self.has_obc, self.obs_list, self.coeffs)
-        return eigh(a=M, b=N, eigvals_only=True)[0]
+        N = get_N_operator(self.lvals, self.res)
+        M = get_M_operator(self.lvals, self.has_obc, self.res, self.coeffs)
+        self.res["th_gap"] = eigh(a=M, b=N, eigvals_only=True)[0]
 
 
 def get_N_operator(lvals, obs):
     n_sites = prod(lvals)
     N = np.zeros((n_sites, n_sites), dtype=float)
     for ii in range(n_sites):
-        N[ii, ii] += obs["Sz"].obs[ii]
+        N[ii, ii] += obs["Sz"][ii]
     return N
 
 
@@ -111,16 +112,16 @@ def get_M_operator(lvals, has_obc, obs, coeffs):
             all([not has_obc, ii == n_sites - 1, jj == 0]),
         ]
         if any(nn_condition):
-            M[ii, jj] += coeffs["J"] * obs["Sz_Sz"].corr[ii, jj]
+            M[ii, jj] += coeffs["J"] * obs["Sz_Sz"][ii, jj]
         elif jj == ii:
-            M[ii, jj] += 2 * coeffs["h"] * obs["Sz"].obs[ii]
+            M[ii, jj] += 2 * coeffs["h"] * obs["Sz"][ii]
             if 0 < ii < n_sites - 1 or all(
                 [(ii == 0 or ii == n_sites - 1), not has_obc]
             ):
                 M[ii, jj] += complex(0, 0.5 * coeffs["J"]) * (
-                    obs["Sm_Sx"].corr[ii, (ii + 1) % n_sites]
-                    - obs["Sp_Sx"].corr[ii, (ii + 1) % n_sites]
-                    + obs["Sx_Sm"].corr[(ii - 1) % n_sites, ii]
-                    - obs["Sx_Sp"].corr[(ii - 1) % n_sites, ii]
+                    obs["Sm_Sx"][ii, (ii + 1) % n_sites]
+                    - obs["Sp_Sx"][ii, (ii + 1) % n_sites]
+                    + obs["Sx_Sm"][(ii - 1) % n_sites, ii]
+                    - obs["Sx_Sp"][(ii - 1) % n_sites, ii]
                 )
     return M
