@@ -1,12 +1,9 @@
 # %%
 import numpy as np
 from math import prod
-from scipy.linalg import eigh
-from ed_lgt.operators import get_spin_operators
+from ed_lgt.operators import get_Pauli_operators
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
 
-# Spin representation
-spin = 1 / 2
 # N eigenvalues
 n_eigs = 2
 # LATTICE DIMENSIONS
@@ -17,12 +14,10 @@ n_sites = prod(lvals)
 # BOUNDARY CONDITIONS
 has_obc = False
 # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
-ops = get_spin_operators(spin)
-for op in ["Sz", "Sx", "Sy"]:
-    ops[op] = 2 * ops[op]
-loc_dims = np.array([int(2 * spin + 1) for i in range(n_sites)])
+ops = get_Pauli_operators()
+loc_dims = np.array([2 for i in range(n_sites)])
 # ACQUIRE HAMILTONIAN COEFFICIENTS
-coeffs = {"J": 1, "h": +10}
+coeffs = {"J": 1, "h": 10}
 # CONSTRUCT THE HAMILTONIAN
 H = QMB_hamiltonian(0, lvals, loc_dims)
 h_terms = {}
@@ -50,7 +45,6 @@ H.diagonalize(n_eigs)
 # Dictionary for results
 res = {}
 res["energy"] = H.Nenergies
-res["DeltaE"] = []
 # ===========================================================================
 # LIST OF LOCAL OBSERVABLES
 loc_obs = ["Sx", "Sz"]
@@ -73,7 +67,7 @@ for ii in range(n_eigs):
     print("====================================================")
     print(f"{ii} ENERGY: {format(res['energy'][ii], '.9f')}")
     if ii > 0:
-        res["DeltaE"].append(res["energy"][ii] - res["energy"][0])
+        res["DeltaE"] = res["energy"][ii] - res["energy"][0]
     # GET STATE CONFIGURATIONS
     H.Npsi[ii].get_state_configurations(threshold=1e-3)
     # =======================================================================
@@ -87,8 +81,4 @@ for ii in range(n_eigs):
         print(f"{obs1}_{obs2}")
         print("----------------------------------------------------")
         h_terms[f"{obs1}_{obs2}"].get_expval(H.Npsi[ii])
-    # COMPUTE THE ENERGY GAP WITH EXPVAL METHOD
-
-
-if n_eigs > 1:
-    print(f"Energy Gaps {res['DeltaE']}")
+# %%
