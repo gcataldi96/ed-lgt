@@ -279,9 +279,7 @@ def apply_basis_projection(op, op_name, basis_label, site_basis):
     )
     if len(basis_label) > 0 and site_basis is not None:
         # Apply projection of the operator on the proper basis for that lattice position
-        print(op.shape)
         op = site_basis[basis_label].transpose() * op * site_basis[basis_label]
         # Update the name of the operator with the label
         op_name = f"{op_name}_{basis_label}"
-        print(op.shape)
     return op, op_name
