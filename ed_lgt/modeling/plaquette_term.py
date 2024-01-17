@@ -192,7 +192,6 @@ class PlaquetteTerm:
                         get_real=False,
                     )
                 )
-                print(plaq)
                 delta_plaq = (
                     psi.expectation_value(
                         four_body_op(
