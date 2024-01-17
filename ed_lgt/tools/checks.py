@@ -111,7 +111,7 @@ def validate_parameters(
         raise TypeError(f"staggered should be a BOOL, not {type(staggered)}")
     if staggered_basis is not None and not isinstance(staggered_basis, bool):
         raise TypeError(f"staggered_basis must be a BOOL, not {type(staggered_basis)}")
-    if stag_label is not None and not any(stag_label == "even", stag_label == "odd"):
+    if stag_label is not None and not any([stag_label == "even", stag_label == "odd"]):
         raise ValueError(f"stag_label must be 'even' or 'odd', not {stag_label}")
     if all_sites_equal is not None and not isinstance(all_sites_equal, bool):
         raise TypeError(
