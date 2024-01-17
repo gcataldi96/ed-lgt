@@ -5,7 +5,7 @@ from scipy.linalg import eigh
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
 from ed_lgt.operators import get_Pauli_operators
 
-__all__ = ["Ising_Model"]
+__all__ = ["Ising_Model", "get_N_operator", "get_M_operator", "get_Q_operator"]
 
 
 class Ising_Model:
@@ -125,3 +125,28 @@ def get_M_operator(lvals, has_obc, obs, coeffs):
                     - obs["Sx_Sp"][(ii - 1) % n_sites, ii]
                 )
     return M
+
+
+def get_Q_operator(lvals, has_obc, obs):
+    n_sites = prod(lvals)
+    Q = np.zeros((2, 2), dtype=object)
+    for alpha, beta in product(range(2), repeat=2):
+        Q[alpha, beta] = np.zeros((n_sites, n_sites), dtype=float)
+        if alpha == beta == 0:
+            return get_N_operator(lvals, obs)
+        elif alpha == 1 and beta == 0:
+            for ii, jj in product(range(n_sites), repeat=2):
+                if jj == ii - 2 and any([ii > 1, ii <= 1 and not has_obc]):
+                    Q[alpha, beta][ii, jj] += obs["Sp_Sp_Sz"][
+                        (ii - 2) % n_sites, (ii - 1) % n_sites, ii
+                    ]
+        elif alpha == 1 and beta == 1:
+            for ii, jj in product(range(n_sites), repeat=2):
+                if ii == jj and any(
+                    [ii < n_sites - 2, ii >= n_sites - 2 and not has_obc]
+                ):
+                    Q[alpha, beta][ii, jj] += obs["Sz_Sz_Sz"][
+                        ii, (ii + 1) % n_sites, (ii + 2) % n_sites
+                    ]
+    Q[0, 1] = Q[1, 0].transpose()
+    return Q
