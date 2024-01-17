@@ -167,6 +167,12 @@ def Z2_FermiHubbard_dressed_site_operators(lattice_dim=2):
         )
     # --------------------------------------------------------------------------------
     if lattice_dim == 2:
+        # LOCAL OPERATOR WITH THE SUM OF RISHON NUMBERS ALONG EACH LINK
+        ops["n_total"] = 0
+        for s in "mp":
+            for d in "xyz"[:lattice_dim]:
+                ops["n_total"] += ops[f"n_{s}{d}"]
+
         # Sigma X Cross Operator
         ops["X_Cross"] = qmb_op(in_ops, ["ID_psi", "P", "P", "P", "P"])
         # ----------------------------------------------------------------------------
