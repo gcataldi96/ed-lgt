@@ -167,7 +167,7 @@ class LocalTerm:
         print(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 
 
-def check_link_symmetry(axis, loc_op1, loc_op2, value, sign=1):
+def check_link_symmetry(axis, loc_op1, loc_op2, value=0, sign=1):
     if not isinstance(loc_op1, LocalTerm):
         raise TypeError(f"loc_op1 should be instance of LocalTerm, not {type(loc_op1)}")
     if not isinstance(loc_op2, LocalTerm):
