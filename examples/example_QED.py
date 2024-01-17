@@ -16,7 +16,7 @@ from ed_lgt.modeling import (
 # N eigenvalues
 n_eigs = 1
 # LATTICE DIMENSIONS
-lvals = [2, 2, 2]
+lvals = [2, 2]
 dim = len(lvals)
 directions = "xyz"[:dim]
 # TOTAL NUMBER OF LATTICE SITES & particles
@@ -49,6 +49,7 @@ lattice_base = lattice_base.transpose().reshape(n_sites)
 print("local dimensions:", loc_dims)
 # ACQUIRE HAMILTONIAN COEFFICIENTS
 coeffs = QED_Hamiltonian_couplings(pure_theory, g, m)
+# ===============================================================================
 # CONSTRUCT THE HAMILTONIAN
 H = QMB_hamiltonian(0, lvals, loc_dims)
 h_terms = {}
@@ -67,9 +68,7 @@ for d in directions:
         staggered_basis=staggered_basis,
         site_basis=M,
     )
-    H.Ham += h_terms[f"W_{d}"].get_Hamiltonian(
-        strength=2 * coeffs["eta"], add_dagger=False
-    )
+    H.Ham += h_terms[f"W_{d}"].get_Hamiltonian(strength=2 * coeffs["eta"])
     # SINGLE SITE OPERATORS needed for the LINK SYMMETRY/OBC PENALTIES
     for s in "mp":
         op_name = f"E_square_{s}{d}"
@@ -227,8 +226,8 @@ for ii in range(n_eigs):
         res[obs].append(h_terms[obs].avg)
     # CHECK LINK SYMMETRIES
     for ax in directions:
-        check_link_symmetry(ax, h_terms[f"E_p{ax}"], h_terms[f"E_m{ax}"], value=0)
-    # MEASURE FOUR-BODY OBSERVABLES:
+        check_link_symmetry(ax, h_terms[f"E_p{ax}"], h_terms[f"E_m{ax}"])
+    # MEASURE PLAQUETTE OBSERVABLES:
     for plaq_name in plaquette_obs:
         print("----------------------------------------------------")
         print(plaq_name)
