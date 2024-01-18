@@ -77,6 +77,9 @@ for ii, has_obc in enumerate(vals["has_obc"]):
 plt.legend()
 
 # %%
+# ========================================================================
+# ISING MODEL 1D ENERGY GAPS
+# ========================================================================
 config_filename = "Ising/Ising1D"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["lvals", "h"])
@@ -106,16 +109,29 @@ for obs in ["Sz", "Sx"]:
             res[obs][ii, jj] = np.mean(get_sim(ugrid[ii][jj]).res[obs])
 
 fig = plt.figure()
-plt.ylabel(r"abs distance")
+plt.ylabel(r"True_Gap")
+plt.xlabel(r"h")
+plt.xscale("log")
+plt.yscale("log")
+plt.grid()
+for ii, lvals in enumerate(vals["lvals"]):
+    plt.plot(vals["h"][:], res["true_gap"][ii, :], "-o", label=f"L={lvals}")
+plt.legend()
+plt.savefig("True_Gap_log.pdf")
+
+
+fig = plt.figure()
+plt.ylabel(r"Abs difference (true gap - th gap)")
 plt.xlabel(r"h")
 plt.xscale("log")
 plt.grid()
 for ii, lvals in enumerate(vals["lvals"]):
     plt.plot(vals["h"], res["abs_distance"][ii, :], "-o", label=f"L={lvals}")
 plt.legend()
+plt.savefig("abs_diff.pdf")
 
 fig = plt.figure()
-plt.ylabel(r"rel distance")
+plt.ylabel(r"Rel difference (true gap - th gap)/(true gap)")
 plt.xlabel(r"h")
 plt.xscale("log")
 plt.yscale("log")
@@ -123,6 +139,7 @@ plt.grid()
 for ii, lvals in enumerate(vals["lvals"]):
     plt.plot(vals["h"][4:], res["rel_distance"][ii, 4:], "-o", label=f"L={lvals}")
 plt.legend()
+plt.savefig("rel_diff.pdf")
 
 fig = plt.figure()
 plt.ylabel(r"Sz")
@@ -132,16 +149,7 @@ plt.grid()
 for ii, lvals in enumerate(vals["lvals"]):
     plt.plot(vals["h"], res["Sz"][ii, :], "-o", label=f"L={lvals}")
 plt.legend()
-# %%
-
-fig = plt.figure()
-plt.ylabel(r"True Gap")
-plt.xlabel(r"h")
-plt.xscale("log")
-plt.grid()
-for ii, lvals in enumerate(vals["lvals"]):
-    plt.plot(vals["h"][:], res["true_gap"][ii, :], "-o", label=f"L={lvals}")
-plt.legend()
+plt.savefig("Sz.pdf")
 
 
 # %%
