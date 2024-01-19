@@ -57,19 +57,16 @@ class Z2_FermiHubbard_Model:
             self.H.Ham += h_terms[f"W{d}"].get_Hamiltonian(
                 strength=-2 * self.coeffs["eta"]
             )
-            # SINGLE SITE OPERATORS needed for the LINK SYMMETRY/OBC PENALTIES
-            for s in "mp":
-                op_name = f"n_{s}{d}"
-                h_terms[op_name] = LocalTerm(
-                    self.ops[op_name],
-                    op_name,
-                    lvals=self.lvals,
-                    has_obc=self.has_obc,
-                    site_basis=self.basis,
-                )
-                self.H.Ham += h_terms[op_name].get_Hamiltonian(
-                    strength=self.coeffs["eta"]
-                )
+        # SINGLE SITE OPERATORS needed for the LINK SYMMETRY/OBC PENALTIES
+        op_name = f"n_total"
+        h_terms[op_name] = LocalTerm(
+            self.ops[op_name],
+            op_name,
+            lvals=self.lvals,
+            has_obc=self.has_obc,
+            site_basis=self.basis,
+        )
+        self.H.Ham += h_terms[op_name].get_Hamiltonian(strength=self.coeffs["eta"])
         # -------------------------------------------------------------------------------
         # COULOMB POTENTIAL
         op_name = "N_pair_half"

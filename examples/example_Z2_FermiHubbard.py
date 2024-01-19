@@ -21,7 +21,7 @@ directions = "xyz"[:dim]
 # TOTAL NUMBER OF LATTICE SITES & particles
 n_sites = prod(lvals)
 # BOUNDARY CONDITIONS
-has_obc = True
+has_obc = [False, True]
 # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
 ops = Z2_FermiHubbard_dressed_site_operators(lattice_dim=dim)
 # ACQUIRE SU2 BASIS and GAUGE INVARIANT STATES
@@ -41,7 +41,7 @@ for op in ops.keys():
     save_sparse_matrix_to_dat(TTN_ops[op], f"Z2_FermiHubbard_ops/{op}.dat")
 """
 # Hamiltonian Couplings
-coeffs = {"t": -1, "U": 1, "eta": 100}
+coeffs = {"t": -1, "U": 0, "eta": 100}
 # Symmetry sector (# of particles)
 sector = None
 # CONSTRUCT THE HAMILTONIAN
@@ -62,17 +62,16 @@ for d in directions:
         site_basis=M,
     )
     H.Ham += h_terms[f"W{d}"].get_Hamiltonian(strength=-2 * coeffs["eta"])
-    # SINGLE SITE OPERATORS needed for the LINK SYMMETRY/OBC PENALTIES
-    for s in "mp":
-        op_name = f"n_{s}{d}"
-        h_terms[op_name] = LocalTerm(
-            ops[op_name],
-            op_name,
-            lvals=lvals,
-            has_obc=has_obc,
-            site_basis=M,
-        )
-        H.Ham += h_terms[op_name].get_Hamiltonian(strength=coeffs["eta"])
+# SINGLE SITE OPERATORS needed for the LINK SYMMETRY/OBC PENALTIES
+op_name = f"n_total"
+h_terms[op_name] = LocalTerm(
+    ops[op_name],
+    op_name,
+    lvals=lvals,
+    has_obc=has_obc,
+    site_basis=M,
+)
+H.Ham += h_terms[op_name].get_Hamiltonian(strength=coeffs["eta"])
 # -------------------------------------------------------------------------------
 # COULOMB POTENTIAL
 h_terms["U"] = LocalTerm(
