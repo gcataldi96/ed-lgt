@@ -3,7 +3,7 @@ from math import prod
 from ed_lgt.tools import validate_parameters
 from .qmb_operations import local_op
 from .qmb_state import QMB_state
-from .lattice_geometry import get_close_sites_along_direction
+from .lattice_geometry import get_neighbor_sites
 from .lattice_mappings import zig_zag
 
 __all__ = ["LocalTerm", "check_link_symmetry"]
@@ -25,7 +25,7 @@ class LocalTerm:
 
             lvals (list of ints): Dimensions (# of sites) of a d-dimensional hypercubic lattice
 
-            has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+            has_obc (list of bool): true for OBC, false for PBC along each direction
 
             staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
 
@@ -174,7 +174,7 @@ def check_link_symmetry(axis, loc_op1, loc_op2, value=0, sign=1):
         raise TypeError(f"loc_op2 should be instance of LocalTerm, not {type(loc_op2)}")
     for ii in range(prod(loc_op1.lvals)):
         coords = zig_zag(loc_op1.lvals, ii)
-        coords_list, sites_list = get_close_sites_along_direction(
+        coords_list, sites_list = get_neighbor_sites(
             coords, loc_op1.lvals, axis, loc_op1.has_obc
         )
         if sites_list is None:
