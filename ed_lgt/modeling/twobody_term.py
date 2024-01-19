@@ -1,10 +1,10 @@
 import numpy as np
 from math import prod
-from copy import deepcopy
+from itertools import product
 from scipy.sparse import isspmatrix, csr_matrix
-from .lattice_mappings import zig_zag, inverse_zig_zag
+from .lattice_mappings import zig_zag
 from .qmb_operations import two_body_op
-from .lattice_geometry import get_close_sites_along_direction
+from .lattice_geometry import get_neighbor_sites
 from .qmb_state import QMB_state
 from ed_lgt.tools import validate_parameters
 
@@ -36,7 +36,7 @@ class TwoBodyTerm:
 
             lvals (list of ints): Dimensions (# of sites) of a d-dimensional hypercubic lattice
 
-            has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+            has_obc (list of bool): true for OBC, false for PBC along each direction
 
             staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
 
@@ -99,7 +99,7 @@ class TwoBodyTerm:
             # Compute the corresponding coords
             coords = zig_zag(self.lvals, ii)
             # Check if it admits a twobody term according to the lattice geometry
-            _, sites_list = get_close_sites_along_direction(
+            _, sites_list = get_neighbor_sites(
                 coords, self.lvals, self.axis, self.has_obc
             )
             if sites_list is None:
@@ -148,44 +148,18 @@ class TwoBodyTerm:
         # Create an array to store the correlator
         self.corr = np.zeros(self.lvals + self.lvals)
         # RUN OVER THE LATTICE SITES
-        for ii in range(prod(self.lvals)):
+        for ii, jj in product(range(prod(self.lvals)), repeat=2):
             coords1 = zig_zag(self.lvals, ii)
-            for jj in range(prod(self.lvals)):
-                coords2 = zig_zag(self.lvals, jj)
-                # AVOID SELF CORRELATIONS
-                if ii != jj:
-                    self.corr[coords1 + coords2] = psi.expectation_value(
-                        two_body_op(
-                            op_list=self.op_list,
-                            op_sites_list=[ii, jj],
-                            lvals=self.lvals,
-                            has_obc=self.has_obc,
-                            staggered_basis=self.stag_basis,
-                            site_basis=self.site_basis,
-                        )
+            coords2 = zig_zag(self.lvals, jj)
+            # AVOID SELF CORRELATIONS
+            if ii != jj:
+                self.corr[coords1 + coords2] = psi.expectation_value(
+                    two_body_op(
+                        op_list=self.op_list,
+                        op_sites_list=[ii, jj],
+                        lvals=self.lvals,
+                        has_obc=self.has_obc,
+                        staggered_basis=self.stag_basis,
+                        site_basis=self.site_basis,
                     )
-
-    def get_twobodyterm_sites(self, coords):
-        coords1 = list(coords)
-        i1 = inverse_zig_zag(self.lvals, coords1)
-        coords2 = deepcopy(coords1)
-        # Check if the site admits a neighbor where to apply the twobody term
-        # Look at the specific index of the axis
-        indx = self.dimensions.index(self.axis)
-        # If along that axis, there is space for a twobody term:
-        if coords1[indx] < self.lvals[indx] - 1:
-            coords2[indx] += 1
-            i2 = inverse_zig_zag(self.lvals, coords2)
-            sites_list = [i1, i2]
-            coords_list = [tuple(coords1), tuple(coords2)]
-        else:
-            # PERIODIC BOUNDARY CONDITIONS
-            if not self.has_obc:
-                coords2[indx] = 0
-                i2 = inverse_zig_zag(self.lvals, coords2)
-                sites_list = [i1, i2]
-                coords_list = [tuple(coords1), tuple(coords2)]
-            else:
-                sites_list = None
-                coords_list = None
-        return coords_list, sites_list
+                )
