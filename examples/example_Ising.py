@@ -7,12 +7,12 @@ from ed_lgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
 # N eigenvalues
 n_eigs = 2
 # LATTICE DIMENSIONS
-lvals = [10]
+lvals = [4, 3]
 dim = len(lvals)
 directions = "xyz"[:dim]
 n_sites = prod(lvals)
 # BOUNDARY CONDITIONS
-has_obc = False
+has_obc = [False, False]
 # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
 ops = get_Pauli_operators()
 loc_dims = np.array([2 for i in range(n_sites)])
