@@ -8,7 +8,8 @@ from ed_lgt.tools import validate_parameters
 __all__ = [
     "get_site_label",
     "lattice_base_configs",
-    "get_close_sites_along_direction",
+    "get_neighbor_sites",
+    "get_plaquette_neighbors",
     "get_lattice_borders_labels",
     "LGT_border_configs",
 ]
@@ -25,7 +26,7 @@ def get_site_label(coords, lvals, has_obc, staggered=False, all_sites_equal=True
 
         lvals (list of ints): lattice dimensions
 
-        has_obc (bool, optional): true for OBC, false for PBC
+        has_obc (list of bool): true for OBC, false for PBC along each direction
 
         staggered (bool, optional): if True, a staggered basis is required. Defaults to False.
 
@@ -55,21 +56,22 @@ def get_site_label(coords, lvals, has_obc, staggered=False, all_sites_equal=True
     )
     # SITE LABEL
     site_label = ""
-    if not all_sites_equal and has_obc:
+    if not all_sites_equal:
         for ii, c in enumerate(coords):
-            if c == 0:
-                site_label += f"_m{dimension[ii]}"
-            elif c == lvals[ii] - 1:
-                site_label += f"_p{dimension[ii]}"
-            elif c < 0 or c > lvals[ii] - 1:
-                raise ValueError(
-                    f"coords[{ii}] must be in betweem 0 and {lvals[ii]-1}: got {c}"
-                )
+            if has_obc[ii]:
+                if c == 0:
+                    site_label += f"_m{dimension[ii]}"
+                elif c == lvals[ii] - 1:
+                    site_label += f"_p{dimension[ii]}"
+                elif c < 0 or c > lvals[ii] - 1:
+                    raise ValueError(
+                        f"coords[{ii}] must be in betweem 0 and {lvals[ii]-1}: got {c}"
+                    )
     label = f"{stag_label}{site_label}"
     return label
 
 
-def lattice_base_configs(base, lvals, has_obc=True, staggered=False):
+def lattice_base_configs(base, lvals, has_obc, staggered=False):
     """
     This function associates the basis to each lattice site and the corresponding dimension.
 
@@ -79,7 +81,7 @@ def lattice_base_configs(base, lvals, has_obc=True, staggered=False):
 
         lvals (list of ints): lattice dimensions
 
-        has_obc (bool, optional): true for OBC, false for PBC
+        has_obc (list of bool): true for OBC, false for PBC along each direction
 
         staggered (bool, optional): if True, a staggered basis is required. Default to False.
 
@@ -100,9 +102,42 @@ def lattice_base_configs(base, lvals, has_obc=True, staggered=False):
     return lattice_base, loc_dims
 
 
-def get_close_sites_along_direction(coords, lvals, axis, has_obc):
+def get_neighbor_sites(coords, lvals, axis, has_obc):
+    """
+    Calculates the neighboring sites along a specified axis for a given lattice site.
+
+    This function is used to determine the neighboring sites in a lattice system,
+    taking into account the lattice dimensions, specified axis, and whether periodic
+    boundary conditions (PBC) along that axis are applied.
+    It is applicable for finding close sites and two-body term sites in a lattice.
+
+    Args:
+        coords (tuple/list of ints): The coordinates of the initial site in the lattice.
+
+        lvals (list of ints ): The dimensions of the lattice. Represents the number of
+            sites along each axis (e.g., (Lx, Ly, Lz) for a 3D lattice).
+
+        axis (str): The axis along which the neighboring sites are to be found.
+            Should be a character 'x', 'y', or 'z', corresponding to the axis.
+
+        has_obc (list of bools): Indicates whether open boundary conditions (OBC) are
+            applied along each axis. List of booleans corresponding to each axis in 'lvals'.
+            True for OBC, False for PBC.
+
+    Returns:
+        coords_list: A list of tuples representing the coordinates of the initial
+            site and its neighbor. Returns None if no neighbor is found.
+
+        sites_list: A list of integers representing the 1D lattice indices of the
+            initial site and its neighbor, as converted by the inverse_zig_zag
+            function. Returns None if no neighbor is found.
+
+    Example:
+        >>> get_neighbor_sites(coords=[0, 0], lvals=[3, 3], axis='x', has_obc=[False, False])
+            ([(0, 0), (1, 0)], [0, 1])
+    """
     # Validate type of parameters
-    validate_parameters(lvals=lvals, axes=[axis], has_obc=has_obc)
+    validate_parameters(coords=coords, lvals=lvals, axes=[axis], has_obc=has_obc)
     dimensions = "xyz"[: len(lvals)]
     coords1 = list(coords)
     i1 = inverse_zig_zag(lvals, coords1)
@@ -110,22 +145,85 @@ def get_close_sites_along_direction(coords, lvals, axis, has_obc):
     # Check if the site admits a neighbor along the direction axis
     # Look at the specific index of the axis
     indx = dimensions.index(axis)
-    # If along that axis, there is space for a twobody term:
-    if coords1[indx] < lvals[indx] - 1:
-        coords2[indx] += 1
+    # Handles both normal and PBC cases
+    if coords1[indx] < lvals[indx] - 1 or (
+        coords1[indx] == lvals[indx] - 1 and not has_obc[indx]
+    ):
+        coords2[indx] = (coords2[indx] + 1) % lvals[indx]
         i2 = inverse_zig_zag(lvals, coords2)
         sites_list = [i1, i2]
         coords_list = [tuple(coords1), tuple(coords2)]
     else:
-        # PERIODIC BOUNDARY CONDITIONS
-        if not has_obc:
-            coords2[indx] = 0
-            i2 = inverse_zig_zag(lvals, coords2)
-            sites_list = [i1, i2]
-            coords_list = [tuple(coords1), tuple(coords2)]
+        sites_list, coords_list = None, None
+    return coords_list, sites_list
+
+
+def get_plaquette_neighbors(coords, lvals, axes, has_obc):
+    """
+    Calculates the neighboring sites forming a plaquette for a given lattice site.
+
+    This function determines the neighboring sites in a lattice system that can
+    form a plaquette with the given site. It considers the lattice dimensions,
+    specified axes for the plaquette, and whether periodic boundary conditions
+    (PBC) are applied.
+
+    Args:
+        coords (tuple/list of ints): The coordinates of the initial site in the lattice.
+
+        lvals (list of ints ): The dimensions of the lattice. Represents the number of
+            sites along each axis (e.g., (Lx, Ly, Lz) for a 3D lattice).
+
+        axis (str): The axis along which the neighboring sites are to be found.
+            Should be a character 'x', 'y', or 'z', corresponding to the axis.
+
+        has_obc (list of bools): Indicates whether open boundary conditions (OBC) are
+            applied along each axis. List of booleans corresponding to each axis in 'lvals'.
+            True for OBC, False for PBC.
+
+    Returns:
+        coords_list: A list of tuples representing the coordinates of the initial
+            site and its plaquette neighbors. Returns None if neighbors
+            are not found or plaquette cannot be formed.
+
+        sites_list: A list of integers representing the 1D lattice indices of the
+            initial site and its plaquette neighbors, as converted by the
+            inverse_zig_zag function. Returns None if neighbors are not found
+            or plaquette cannot be formed.
+
+    Example:
+        >>> get_plaquette_neighbors(coords=[0, 0], lvals=[3, 3], axes=['x', 'y'], has_obc=[False, False])
+            ([(0, 0), (1, 0), (0, 1), (1, 1)], [0, 1, 3, 4])
+    """
+    # Validate type of parameters
+    validate_parameters(coords=coords, lvals=lvals, axes=axes, has_obc=has_obc)
+    dimensions = "xyz"[: len(lvals)]
+    coords1 = list(coords)
+    i1 = inverse_zig_zag(lvals, coords1)
+    coords_list = [tuple(coords1)]
+    sites_list = [i1]
+    # Build the neighboring sites along the 2 axes. At the end of the cycle, we have 3 Plaquette sites out of 4.
+    for ax in axes:
+        coords2 = deepcopy(coords1)
+        # Get the indices of the axis
+        indx = dimensions.index(ax)
+        # Look at the neighbor site along each axis
+        if coords1[indx] < lvals[indx] - 1 or (
+            coords1[indx] == lvals[indx] - 1 and not has_obc[indx]
+        ):
+            coords2[indx] = (coords2[indx] + 1) % lvals[indx]
+            coords_list.append(tuple(coords2))
+            sites_list.append(inverse_zig_zag(lvals, coords2))
         else:
-            sites_list = None
-            coords_list = None
+            # Plaquette cannot be formed in this case
+            return None, None
+    # Add the last diagonal neighbor, in case both axes adimts neighbors
+    if len(coords_list) == 3:
+        coords3 = [coords_list[1][0], coords_list[2][1]]
+        if len(lvals) > 2:
+            # For 3D lattices, maintain the third coordinate
+            coords3.append(coords1[2])
+        coords_list.append(tuple(coords3))
+        sites_list.append(inverse_zig_zag(lvals, coords3))
     return coords_list, sites_list
 
 
@@ -273,3 +371,6 @@ def LGT_border_configs(config, offset, pure_theory):
         if (config[3] == offset) and (config[4] == offset) and (config[5] == offset):
             label.append("px_py_pz")
     return label
+
+
+# %%
