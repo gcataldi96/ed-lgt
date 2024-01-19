@@ -69,7 +69,7 @@ def local_op(
 
         lvals (list): Dimensions (# of sites) of a d-dimensional lattice
 
-        has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+        has_obc (list of bool): true for OBC, false for PBC along each direction
 
         staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
 
@@ -112,7 +112,7 @@ def two_body_op(
 
         lvals (list): Dimensions (# of sites) of a d-dimensional lattice
 
-        has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+        has_obc (list of bool): true for OBC, false for PBC along each direction
 
         staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
 
@@ -161,7 +161,7 @@ def four_body_op(
 
         lvals (list): Dimensions (# of sites) of a d-dimensional lattice
 
-        has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+        has_obc (list of bool): true for OBC, false for PBC along each direction
 
         staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
 
@@ -201,13 +201,13 @@ def construct_operator_list(
     Each operator is placed at specified positions on the lattice, and its basis is projected according to the site's characteristics.
 
     Args:
-        operators (list of scipy.sparse matrices): Single-site operators to be placed on the lattice.
+        op_list (list of scipy.sparse matrices): Single-site operators to be placed on the lattice.
 
         op_sites_list (list of ints): Indices in the lattice where each operator from 'operators' should be placed.
 
         lvals (list of ints): Dimensions of the lattice, representing the number of sites in each dimension.
 
-        has_obc (bool): Specifies if the lattice has open boundary conditions (True) or periodic boundary conditions (False).
+        has_obc (list of bool): true for OBC, false for PBC along each direction
 
         staggered_basis (bool): Indicates if a staggered basis is used for the lattice.
 
