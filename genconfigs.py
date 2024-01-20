@@ -73,8 +73,8 @@ params = {"spin": np.arange(1, 6, 1), "g": np.logspace(-2, 0, 15)}
 gen_configs("template", params, f"QED/entanglement")
 # %%
 # Z2 FERMI HUBBARD MODEL
-params = {"has_obc": [True, False], "U": np.logspace(-1, 1, 15)}
-gen_configs("template", params, f"Z2_FermiHubbard/U_potential")
+params = {"U": np.logspace(-1, 1, 15)}
+gen_configs("template", params, f"Z2_FermiHubbard/4x2_OBCxy")
 
 # %%
 # ISING MODEL

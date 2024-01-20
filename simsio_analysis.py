@@ -74,8 +74,44 @@ plt.grid()
 for ii, has_obc in enumerate(vals["has_obc"]):
     BC_label = "OBC" if has_obc else "PBC"
     plt.plot(vals["U"], res["energy"][ii, :], "-o", label=BC_label)
-plt.legend()
+plt.legend(loc="lower right")
 
+
+# %%
+# List of local observables
+local_obs = [f"n_{s}{d}" for d in "xy" for s in "mp"]
+local_obs += [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
+local_obs += ["X_Cross"]
+res = {}
+for obs in local_obs + ["energy"]:
+    res[obs] = []
+
+label_list = ["2x2_PBCxy", "2x2_PBCx", "2x2_OBCxy", "3x2_OBCxy"]
+for ii, label in enumerate(label_list):
+    config_filename = f"Z2_FermiHubbard/{label}"
+    match = SimsQuery(group_glob=config_filename)
+    ugrid, vals = uids_grid(match.uids, ["U"])
+    for obs in local_obs + ["energy"]:
+        res[obs].append(np.zeros(vals["U"].shape[0]))
+
+    for jj, U in enumerate(vals["U"]):
+        lvals = get_sim(ugrid[jj]).par["lvals"]
+        res["energy"][ii][jj] = get_sim(ugrid[jj]).res["energies"][0] / (prod(lvals))
+        for obs in local_obs:
+            res[obs][ii][jj] = np.mean(get_sim(ugrid[jj]).res[obs])
+
+
+for obs in ["X_Cross", "N_pair", "N_single", "energy"]:
+    print(obs)
+    fig = plt.figure()
+    plt.ylabel(rf"{obs}")
+    plt.xlabel(r"U")
+    plt.xscale("log")
+    plt.grid()
+    for ii, label in enumerate(label_list):
+        plt.plot(vals["U"], res[obs][ii], "-o", label=label)
+    plt.legend(loc=(0.05, 0.11))
+    plt.savefig(f"{obs}.pdf")
 # %%
 # ========================================================================
 # ISING MODEL 1D ENERGY GAPS

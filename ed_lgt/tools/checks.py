@@ -64,8 +64,10 @@ def validate_parameters(
             raise TypeError(
                 f"loc_dims must be INT, LIST, or np.ndarray, not {type(loc_dims)}"
             )
-    if has_obc is not None and not isinstance(has_obc, bool):
-        raise TypeError(f"has_obc should be a BOOL, not {type(has_obc)}")
+    if has_obc is not None and (
+        not isinstance(has_obc, list) or not all(isinstance(x, bool) for x in has_obc)
+    ):
+        raise TypeError(f"has_obc should be a LIST of BOOLs, not {type(has_obc)}")
     if axes is not None and (
         not isinstance(axes, list) or not all(isinstance(ax, str) for ax in axes)
     ):

@@ -89,7 +89,7 @@ class Ising_Model:
 
     def get_energy_gap(self):
         N = get_N_operator(self.lvals, self.res)
-        M = get_M_operator(self.lvals, self.has_obc, self.res, self.coeffs)
+        M = get_M_operator(self.lvals, self.has_obc[0], self.res, self.coeffs)
         self.res["th_gap"] = eigh(a=M, b=N, eigvals_only=True)[0]
 
 

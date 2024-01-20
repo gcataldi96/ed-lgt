@@ -6,9 +6,9 @@ Plaquette terms are used to compute properties relevant to lattice gauge theorie
 
 import numpy as np
 from math import prod
-from copy import deepcopy
 from scipy.sparse import isspmatrix, csr_matrix
-from .lattice_mappings import zig_zag, inverse_zig_zag
+from .lattice_geometry import get_plaquette_neighbors
+from .lattice_mappings import zig_zag
 from .qmb_operations import four_body_op
 from .qmb_state import QMB_state
 from ed_lgt.tools import validate_parameters
@@ -40,7 +40,7 @@ class PlaquetteTerm:
 
             lvals (list of ints): Dimensions (# of sites) of a d-dimensional hypercubic lattice
 
-            has_obc (bool): It specifies the type of boundary conditions. If False, the topology is a thorus
+            has_obc (list of bool): true for OBC, false for PBC along each direction
 
             staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
 
@@ -107,7 +107,9 @@ class PlaquetteTerm:
         for ii in range(prod(self.lvals)):
             # Compute the corresponding coords of the BL site of the Plaquette
             coords1 = zig_zag(self.lvals, ii)
-            _, sites_list = self.get_Plaquette_coords(coords1)
+            _, sites_list = get_plaquette_neighbors(
+                coords1, self.lvals, self.axes, self.has_obc
+            )
             if sites_list is None:
                 continue
             # Check Mask conditions:
@@ -170,7 +172,9 @@ class PlaquetteTerm:
         for ii in range(prod(self.lvals)):
             # Compute the corresponding coords of the BL site of the Plaquette
             coords = zig_zag(self.lvals, ii)
-            coords_list, sites_list = self.get_Plaquette_coords(coords)
+            coords_list, sites_list = get_plaquette_neighbors(
+                coords, self.lvals, self.axes, self.has_obc
+            )
             if sites_list is None:
                 continue
             # COMPUTE THE PLAQUETTE only for the appropriate site
@@ -219,78 +223,6 @@ class PlaquetteTerm:
         self.std = np.sqrt(np.abs(self.std) / counter)
         if self.print_plaq:
             print(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
-
-    def get_Plaquette_coords(self, coords1):
-        coords1 = list(coords1)
-        i1 = inverse_zig_zag(self.lvals, coords1)
-        coords2 = deepcopy(coords1)
-        coords3 = deepcopy(coords1)
-        coords4 = deepcopy(coords1)
-        # Look at the specific indices of the two axis along which plaquettes are applied
-        indx1 = self.dimensions.index(self.axes[0])
-        indx2 = self.dimensions.index(self.axes[1])
-        # Check the possibility of applying the plaquette according to the position of the first site
-        if (
-            coords1[indx1] < self.lvals[indx1] - 1
-            and coords1[indx2] < self.lvals[indx2] - 1
-        ):
-            # Coordinates of sites where to apply Operators
-            coords2[indx1] += 1
-            coords3[indx2] += 1
-            coords4[indx1] += 1
-            coords4[indx2] += 1
-            i2 = inverse_zig_zag(self.lvals, coords2)
-            i3 = inverse_zig_zag(self.lvals, coords3)
-            i4 = inverse_zig_zag(self.lvals, coords4)
-            sites_list = [i1, i2, i3, i4]
-            coords_list = [
-                tuple(coords1),
-                tuple(coords2),
-                tuple(coords3),
-                tuple(coords4),
-            ]
-        else:
-            # PERIODIC BOUNDARY CONDITIONS
-            if not self.has_obc:
-                # UPPER BORDER
-                if (
-                    coords1[indx1] < self.lvals[indx1] - 1
-                    and coords1[indx2] == self.lvals[indx2] - 1
-                ):
-                    coords2[indx1] += 1
-                    coords3[indx2] = 0
-                    coords4[indx1] += 1
-                    coords4[indx2] = 0
-                # RIGHT BORDER
-                elif (
-                    coords1[indx1] == self.lvals[indx1] - 1
-                    and coords1[indx2] < self.lvals[indx2] - 1
-                ):
-                    coords2[indx1] = 0
-                    coords3[indx2] += 1
-                    coords4[indx1] = 0
-                    coords4[indx2] += 1
-                # UPPER RIGHT CORNER
-                else:
-                    coords2[indx1] = 0
-                    coords3[indx2] = 0
-                    coords4[indx1] = 0
-                    coords4[indx2] = 0
-                # Get the corresponding 1d coordinates of the lattice sites
-                i2 = inverse_zig_zag(self.lvals, coords2)
-                i3 = inverse_zig_zag(self.lvals, coords3)
-                i4 = inverse_zig_zag(self.lvals, coords4)
-                sites_list = [i1, i2, i3, i4]
-                coords_list = [
-                    tuple(coords1),
-                    tuple(coords2),
-                    tuple(coords3),
-                    tuple(coords4),
-                ]
-            else:
-                sites_list = None
-                coords_list = None
-        return coords_list, sites_list
 
     def print_Plaquette(self, sites_list, value):
         if not isinstance(sites_list, list):
