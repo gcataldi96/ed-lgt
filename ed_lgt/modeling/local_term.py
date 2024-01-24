@@ -11,7 +11,14 @@ __all__ = ["LocalTerm", "check_link_symmetry"]
 
 class LocalTerm:
     def __init__(
-        self, operator, op_name, lvals, has_obc, staggered_basis=False, site_basis=None
+        self,
+        operator,
+        op_name,
+        lvals,
+        has_obc,
+        staggered_basis=False,
+        site_basis=None,
+        sector_indices=None,
     ):
         """
         This function provides methods for computing local terms in a d-dimensional lattice model.
@@ -50,6 +57,7 @@ class LocalTerm:
         self.has_obc = has_obc
         self.stag_basis = staggered_basis
         self.site_basis = site_basis
+        self.sector_indices = sector_indices
 
     def get_Hamiltonian(self, strength, mask=None):
         """
@@ -140,6 +148,7 @@ class LocalTerm:
                     has_obc=self.has_obc,
                     staggered_basis=self.stag_basis,
                     site_basis=self.site_basis,
+                    sector_indices=self.sector_indices,
                 )
             )
             # Compute the corresponding quantum fluctuation
@@ -152,6 +161,7 @@ class LocalTerm:
                         has_obc=self.has_obc,
                         staggered_basis=self.stag_basis,
                         site_basis=self.site_basis,
+                        sector_indices=self.sector_indices,
                     )
                 )
                 - exp_obs**2

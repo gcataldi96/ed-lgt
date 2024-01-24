@@ -14,7 +14,14 @@ __all__ = [
 ]
 
 
-def qmb_operator(ops, op_names_list, add_dagger=False, get_real=False, get_imag=False):
+def qmb_operator(
+    ops,
+    op_names_list,
+    add_dagger=False,
+    get_real=False,
+    get_imag=False,
+    sector_indices=None,
+):
     """
     This function performs the QMB operation of an arbitrary long list
     of operators of arbitrary dimensions.
@@ -52,11 +59,20 @@ def qmb_operator(ops, op_names_list, add_dagger=False, get_real=False, get_imag=
         tmp = csr_matrix(tmp + tmp.conj().transpose()) / 2
     elif get_imag:
         tmp = complex(0.0, -0.5) * (csr_matrix(tmp - tmp.conj().transpose()))
-    return tmp
+    if sector_indices is not None:
+        return (tmp.tocsc()[:, sector_indices]).tocsr()[sector_indices, :]
+    else:
+        return tmp
 
 
 def local_op(
-    operator, op_1D_site, lvals, has_obc, staggered_basis=False, site_basis=None
+    operator,
+    op_1D_site,
+    lvals,
+    has_obc,
+    staggered_basis=False,
+    site_basis=None,
+    sector_indices=None,
 ):
     """
     This function compute the single local operator term on the lattice where the operator
@@ -95,11 +111,17 @@ def local_op(
     ops, op_names_list = construct_operator_list(
         [operator], [op_1D_site], lvals, has_obc, staggered_basis, site_basis
     )
-    return qmb_operator(ops, op_names_list)
+    return qmb_operator(ops, op_names_list, sector_indices=sector_indices)
 
 
 def two_body_op(
-    op_list, op_sites_list, lvals, has_obc, staggered_basis=False, site_basis=None
+    op_list,
+    op_sites_list,
+    lvals,
+    has_obc,
+    staggered_basis=False,
+    site_basis=None,
+    sector_indices=None,
 ):
     """
     This function compute the single twobody operator term on the lattice with 2 operators
@@ -138,7 +160,7 @@ def two_body_op(
     ops, op_names_list = construct_operator_list(
         op_list, op_sites_list, lvals, has_obc, staggered_basis, site_basis
     )
-    return qmb_operator(ops, op_names_list)
+    return qmb_operator(ops, op_names_list, sector_indices=sector_indices)
 
 
 def four_body_op(
@@ -148,6 +170,7 @@ def four_body_op(
     has_obc,
     staggered_basis=False,
     site_basis=None,
+    sector_indices=None,
     get_real=False,
 ):
     """
@@ -190,7 +213,9 @@ def four_body_op(
     ops, op_names_list = construct_operator_list(
         op_list, op_sites_list, lvals, has_obc, staggered_basis, site_basis
     )
-    return qmb_operator(ops, op_names_list, get_real)
+    return qmb_operator(
+        ops, op_names_list, get_real=get_real, sector_indices=sector_indices
+    )
 
 
 def construct_operator_list(

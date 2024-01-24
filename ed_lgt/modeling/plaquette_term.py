@@ -26,6 +26,7 @@ class PlaquetteTerm:
         has_obc,
         staggered_basis=False,
         site_basis=None,
+        sector_indices=None,
         print_plaq=True,
     ):
         """
@@ -74,6 +75,7 @@ class PlaquetteTerm:
         self.stag_basis = staggered_basis
         self.site_basis = site_basis
         self.print_plaq = print_plaq
+        self.sector_indices = sector_indices
         print(
             f"Plaquette {op_names_list[0]}-{op_names_list[1]}-{op_names_list[2]}-{op_names_list[3]}"
         )
@@ -193,6 +195,7 @@ class PlaquetteTerm:
                         has_obc=self.has_obc,
                         staggered_basis=self.stag_basis,
                         site_basis=self.site_basis,
+                        sector_indices=self.sector_indices,
                         get_real=False,
                     )
                 )
@@ -205,6 +208,7 @@ class PlaquetteTerm:
                             has_obc=self.has_obc,
                             staggered_basis=self.stag_basis,
                             site_basis=self.site_basis,
+                            sector_indices=self.sector_indices,
                             get_real=False,
                         )
                         ** 2,

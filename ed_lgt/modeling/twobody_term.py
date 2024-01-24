@@ -21,6 +21,7 @@ class TwoBodyTerm:
         has_obc,
         staggered_basis=False,
         site_basis=None,
+        sector_indices=None,
     ):
         """
         This function provides methods for computing twobody terms in a d-dimensional lattice model along a certain axis.
@@ -66,6 +67,7 @@ class TwoBodyTerm:
         self.has_obc = has_obc
         self.stag_basis = staggered_basis
         self.site_basis = site_basis
+        self.sector_indices = sector_indices
         print(f"twobody-term {self.op_name_list[0]}-{self.op_name_list[1]}")
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
@@ -161,5 +163,6 @@ class TwoBodyTerm:
                         has_obc=self.has_obc,
                         staggered_basis=self.stag_basis,
                         site_basis=self.site_basis,
+                        sector_indices=self.sector_indices,
                     )
                 )
