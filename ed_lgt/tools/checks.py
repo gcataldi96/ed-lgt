@@ -15,7 +15,12 @@ __all__ = [
     "check_commutator",
     "check_matrix",
     "check_hermitian",
+    "remove_items_from_list",
 ]
+
+
+def remove_items_from_list(my_list, indices_list):
+    return [item for i, item in enumerate(my_list) if i not in indices_list]
 
 
 def validate_parameters(
