@@ -2,7 +2,7 @@ import numpy as np
 from math import prod
 from scipy.linalg import eigh as array_eigh
 from scipy.sparse.linalg import eigsh as sparse_eigh
-from scipy.sparse import csr_matrix, isspmatrix
+from scipy.sparse import csr_matrix, isspmatrix, csr_array
 from ed_lgt.tools import validate_parameters, check_hermitian
 from .lattice_mappings import zig_zag
 
@@ -114,7 +114,7 @@ class QMB_state:
         print(f"ENTROPY: {format(np.sum(tmp), '.9f')}")
         return np.sum(tmp)
 
-    def get_state_configurations(self, threshold=1e-10):
+    def get_state_configurations(self, threshold=1e-10, sector_indices=None):
         """
         This function express the main QMB state configurations associated to the
         most relevant coefficients of the QMB state psi. Every state configuration
@@ -122,12 +122,17 @@ class QMB_state:
         """
         print("----------------------------------------------------")
         print("STATE CONFIGURATIONS")
-        psi = csr_matrix(self.truncate(threshold))
+        psi = csr_array(self.truncate(threshold))
+        psi_indices = (
+            [sector_indices[i] for i in psi.indices]
+            if sector_indices is not None
+            else psi.indices
+        )
         sing_vals = sorted(psi.data, key=lambda x: (abs(x), -x), reverse=True)
         indices = [
             x
             for _, x in sorted(
-                zip(psi.data, psi.indices),
+                zip(psi.data, psi_indices),
                 key=lambda pair: (abs(pair[0]), -pair[0]),
                 reverse=True,
             )
@@ -137,7 +142,7 @@ class QMB_state:
             loc_states = get_loc_states_from_qmb_state(
                 qmb_index=int(ind), loc_dims=self.loc_dims, lvals=self.lvals
             )
-            print(f"{loc_states}  {alpha}")
+            print(f"{loc_states}  {format(alpha,'.9f')}  {ind}")
             state_configurations["state_config"].append(loc_states)
             state_configurations["coeff"].append(alpha)
         print("----------------------------------------------------")
