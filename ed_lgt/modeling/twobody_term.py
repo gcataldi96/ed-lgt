@@ -6,7 +6,7 @@ from .lattice_mappings import zig_zag
 from .qmb_operations import two_body_op
 from .lattice_geometry import get_neighbor_sites
 from .qmb_state import QMB_state
-from ed_lgt.tools import validate_parameters
+from ed_lgt.tools import validate_parameters, remove_items_from_list
 
 __all__ = ["TwoBodyTerm"]
 
@@ -22,6 +22,7 @@ class TwoBodyTerm:
         staggered_basis=False,
         site_basis=None,
         sector_indices=None,
+        sector_basis=None,
     ):
         """
         This function provides methods for computing twobody terms in a d-dimensional lattice model along a certain axis.
@@ -68,6 +69,7 @@ class TwoBodyTerm:
         self.stag_basis = staggered_basis
         self.site_basis = site_basis
         self.sector_indices = sector_indices
+        self.sector_basis = sector_basis
         print(f"twobody-term {self.op_name_list[0]}-{self.op_name_list[1]}")
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
@@ -106,24 +108,28 @@ class TwoBodyTerm:
             )
             if sites_list is None:
                 continue
-            # Check Mask condition on that site
-            if mask is None:
-                mask_conditions = True
-            else:
-                if mask[coords] == True:
-                    mask_conditions = True
-                else:
-                    mask_conditions = False
+            # CHECK MASK CONDITION ON THE SITE
+            mask_conditions = (
+                True if mask is None or all([mask is not None, mask[coords]]) else False
+            )
             # ADD THE TERM TO THE HAMILTONIAN
             if mask_conditions:
-                H_twobody += strength * two_body_op(
-                    op_list=self.op_list,
-                    op_sites_list=sites_list,
-                    lvals=self.lvals,
-                    has_obc=self.has_obc,
-                    staggered_basis=self.stag_basis,
-                    site_basis=self.site_basis,
-                )
+                if self.sector_basis is None:
+                    H_twobody += strength * two_body_op(
+                        op_list=self.op_list,
+                        op_sites_list=sites_list,
+                        lvals=self.lvals,
+                        has_obc=self.has_obc,
+                        staggered_basis=self.stag_basis,
+                        site_basis=self.site_basis,
+                    )
+                else:
+                    # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
+                    H_twobody += strength * twobody_sector(
+                        op_list=self.op_list,
+                        op_sites_list=sites_list,
+                        sector_basis=self.sector_basis,
+                    )
         if not isspmatrix(H_twobody):
             H_twobody = csr_matrix(H_twobody)
         if add_dagger:
@@ -155,14 +161,58 @@ class TwoBodyTerm:
             coords2 = zig_zag(self.lvals, jj)
             # AVOID SELF CORRELATIONS
             if ii != jj:
-                self.corr[coords1 + coords2] = psi.expectation_value(
-                    two_body_op(
-                        op_list=self.op_list,
-                        op_sites_list=[ii, jj],
-                        lvals=self.lvals,
-                        has_obc=self.has_obc,
-                        staggered_basis=self.stag_basis,
-                        site_basis=self.site_basis,
-                        sector_indices=self.sector_indices,
+                if self.sector_basis is None:
+                    self.corr[coords1 + coords2] = psi.expectation_value(
+                        two_body_op(
+                            op_list=self.op_list,
+                            op_sites_list=[ii, jj],
+                            lvals=self.lvals,
+                            has_obc=self.has_obc,
+                            staggered_basis=self.stag_basis,
+                            site_basis=self.site_basis,
+                            sector_indices=self.sector_indices,
+                        )
                     )
-                )
+                else:
+                    # GET THE EXPVAL ON THE SYMMETRY SECTOR
+                    self.corr[coords1 + coords2] = psi.expectation_value(
+                        twobody_sector(
+                            op_list=self.op_list,
+                            op_sites_list=[ii, jj],
+                            sector_basis=self.sector_basis,
+                        )
+                    )
+
+
+def twobody_sector(op_list, op_sites_list, sector_basis):
+    i1 = op_sites_list[0]
+    i2 = op_sites_list[1]
+    # Dimension of the symmetry sector
+    sector_dim = len(sector_basis)
+    # Preallocate arrays with estimated sizes
+    row_list = np.zeros(sector_dim, dtype=int)
+    col_list = np.zeros(sector_dim, dtype=int)
+    value_list = np.zeros(sector_dim, dtype=op_list[0].dtype)
+    # Run over pairs of states config
+    nnz = 0
+    # Remove entries
+    m_states = [remove_items_from_list(state, op_sites_list) for state in sector_basis]
+    for (row, mstate1), (col, mstate2) in product(enumerate(m_states), repeat=2):
+        if mstate1 == mstate2:
+            element = (
+                op_list[0][sector_basis[row][i1], sector_basis[col][i1]]
+                * op_list[1][sector_basis[row][i2], sector_basis[col][i2]]
+            )
+            if abs(element) != 0:
+                row_list[nnz] = row
+                col_list[nnz] = col
+                value_list[nnz] = element
+                nnz += 1
+    # Trim the arrays to actual size
+    value_list = value_list[:nnz]
+    row_list = row_list[:nnz]
+    col_list = col_list[:nnz]
+    return csr_matrix(
+        (value_list, (row_list, col_list)),
+        shape=(sector_dim, sector_dim),
+    )

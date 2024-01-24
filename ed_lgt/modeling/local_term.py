@@ -1,6 +1,8 @@
 import numpy as np
+from itertools import product
 from math import prod
-from ed_lgt.tools import validate_parameters
+from scipy.sparse import csr_matrix
+from ed_lgt.tools import validate_parameters, remove_items_from_list
 from .qmb_operations import local_op
 from .qmb_state import QMB_state
 from .lattice_geometry import get_neighbor_sites
@@ -19,6 +21,7 @@ class LocalTerm:
         staggered_basis=False,
         site_basis=None,
         sector_indices=None,
+        sector_basis=None,
     ):
         """
         This function provides methods for computing local terms in a d-dimensional lattice model.
@@ -58,6 +61,7 @@ class LocalTerm:
         self.stag_basis = staggered_basis
         self.site_basis = site_basis
         self.sector_indices = sector_indices
+        self.sector_basis = sector_basis
 
     def get_Hamiltonian(self, strength, mask=None):
         """
@@ -83,23 +87,23 @@ class LocalTerm:
         H_Local = 0
         for ii in range(prod(self.lvals)):
             coords = zig_zag(self.lvals, ii)
-            # ADD THE TERM TO THE HAMILTONIAN
-            if mask is None:
-                mask_conditions = True
-            else:
-                if mask[coords] == True:
-                    mask_conditions = True
-                else:
-                    mask_conditions = False
+            # CHECK MASK CONDITION ON THE SITE
+            mask_conditions = (
+                True if mask is None or all([mask is not None, mask[coords]]) else False
+            )
             if mask_conditions:
-                H_Local += local_op(
-                    operator=self.op,
-                    op_1D_site=ii,
-                    lvals=self.lvals,
-                    has_obc=self.has_obc,
-                    staggered_basis=self.stag_basis,
-                    site_basis=self.site_basis,
-                )
+                if self.sector_basis is None:
+                    H_Local += local_op(
+                        operator=self.op,
+                        op_1D_site=ii,
+                        lvals=self.lvals,
+                        has_obc=self.has_obc,
+                        staggered_basis=self.stag_basis,
+                        site_basis=self.site_basis,
+                    )
+                else:
+                    # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
+                    H_Local += local_sector(self.op, ii, self.sector_basis)
         return strength * H_Local
 
     def get_expval(self, psi, stag_label=None):
@@ -140,22 +144,10 @@ class LocalTerm:
                 ((stag_label == "odd") and (stag < 0)),
             ]
             # Compute the average value in the site x,y
-            exp_obs = psi.expectation_value(
-                local_op(
-                    operator=self.op,
-                    op_1D_site=ii,
-                    lvals=self.lvals,
-                    has_obc=self.has_obc,
-                    staggered_basis=self.stag_basis,
-                    site_basis=self.site_basis,
-                    sector_indices=self.sector_indices,
-                )
-            )
-            # Compute the corresponding quantum fluctuation
-            exp_var = (
-                psi.expectation_value(
+            if self.sector_basis is None:
+                exp_obs = psi.expectation_value(
                     local_op(
-                        operator=self.op**2,
+                        operator=self.op,
                         op_1D_site=ii,
                         lvals=self.lvals,
                         has_obc=self.has_obc,
@@ -164,8 +156,33 @@ class LocalTerm:
                         sector_indices=self.sector_indices,
                     )
                 )
-                - exp_obs**2
-            )
+                # Compute the corresponding quantum fluctuation
+                exp_var = (
+                    psi.expectation_value(
+                        local_op(
+                            operator=self.op**2,
+                            op_1D_site=ii,
+                            lvals=self.lvals,
+                            has_obc=self.has_obc,
+                            staggered_basis=self.stag_basis,
+                            site_basis=self.site_basis,
+                            sector_indices=self.sector_indices,
+                        )
+                    )
+                    - exp_obs**2
+                )
+            else:
+                # GET THE EXPVAL ON THE SYMMETRY SECTOR
+                exp_obs = psi.expectation_value(
+                    local_sector(self.op, ii, self.sector_basis)
+                )
+                # Compute the corresponding quantum fluctuation
+                exp_var = (
+                    psi.expectation_value(
+                        local_sector(self.op**2, ii, self.sector_basis)
+                    )
+                    - exp_obs**2
+                )
             if any(mask_conditions):
                 print(f"{coords} {format(exp_obs, '.12f')}")
                 counter += 1
@@ -198,3 +215,31 @@ def check_link_symmetry(axis, loc_op1, loc_op2, value=0, sign=1):
             print(loc_op1.obs[c1], loc_op2.obs[c2])
             raise ValueError(f"{axis}-Link Symmetry is violated at index {ii}")
     print(f"{axis}-LINK SYMMETRY IS SATISFIED")
+
+
+def local_sector(operator, op_site, sector_basis):
+    # Dimension of the symmetry sector
+    sector_dim = len(sector_basis)
+    # Preallocate arrays with estimated sizes
+    row_list = np.zeros(sector_dim, dtype=int)
+    col_list = np.zeros(sector_dim, dtype=int)
+    value_list = np.zeros(sector_dim, dtype=operator.dtype)
+    # Run over pairs of states config
+    nnz = 0
+    m_states = [remove_items_from_list(state, [op_site]) for state in sector_basis]
+    for (row, mstate1), (col, mstate2) in product(enumerate(m_states), repeat=2):
+        if mstate1 == mstate2:
+            element = operator[sector_basis[row][op_site], sector_basis[col][op_site]]
+            if abs(element) != 0:
+                row_list[nnz] = row
+                col_list[nnz] = col
+                value_list[nnz] = element
+                nnz += 1
+    # Trim the arrays to actual size
+    value_list = value_list[:nnz]
+    row_list = row_list[:nnz]
+    col_list = col_list[:nnz]
+    return csr_matrix(
+        (value_list, (row_list, col_list)),
+        shape=(sector_dim, sector_dim),
+    )
