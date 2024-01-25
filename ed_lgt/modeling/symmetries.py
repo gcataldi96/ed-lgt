@@ -20,7 +20,7 @@ def P_sector_indices(loc_dims, op_list, sectors_list):
         ):
             basis.append(n)
             config_basis.append(list(config))
-    return basis, config_basis
+    return np.array(basis, dtype=int), np.array(config_basis, dtype=int)
 
 
 def U_sector_indices(loc_dims, op_list, sectors_list):
@@ -38,4 +38,4 @@ def U_sector_indices(loc_dims, op_list, sectors_list):
         ):
             basis.append(n)
             config_basis.append(list(config))
-    return basis, config_basis
+    return np.array(basis, dtype=int), np.array(config_basis, dtype=int)
