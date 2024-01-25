@@ -6,7 +6,7 @@ from .lattice_mappings import zig_zag
 from .qmb_operations import two_body_op
 from .lattice_geometry import get_neighbor_sites
 from .qmb_state import QMB_state
-from ed_lgt.tools import validate_parameters, remove_items_from_list
+from ed_lgt.tools import validate_parameters
 
 __all__ = ["TwoBodyTerm"]
 
@@ -188,7 +188,7 @@ def twobody_sector(op_list, op_sites_list, sector_basis):
     i1 = op_sites_list[0]
     i2 = op_sites_list[1]
     # Dimension of the symmetry sector
-    sector_dim = len(sector_basis)
+    sector_dim = sector_basis.shape[0]
     # Preallocate arrays with estimated sizes
     row_list = np.zeros(sector_dim, dtype=int)
     col_list = np.zeros(sector_dim, dtype=int)
@@ -196,12 +196,14 @@ def twobody_sector(op_list, op_sites_list, sector_basis):
     # Run over pairs of states config
     nnz = 0
     # Remove entries
-    m_states = [remove_items_from_list(state, op_sites_list) for state in sector_basis]
-    for (row, mstate1), (col, mstate2) in product(enumerate(m_states), repeat=2):
-        if mstate1 == mstate2:
+    m_states = np.delete(sector_basis, op_sites_list, axis=1)
+    for row, mstate1 in enumerate(m_states):
+        mstate_good = np.equal(m_states, mstate1).all(axis=1)
+        idxs = np.nonzero(mstate_good)[0]
+        for col in idxs:
             element = (
-                op_list[0][sector_basis[row][i1], sector_basis[col][i1]]
-                * op_list[1][sector_basis[row][i2], sector_basis[col][i2]]
+                op_list[0][sector_basis[row, i1], sector_basis[col, i1]]
+                * op_list[1][sector_basis[row, i2], sector_basis[col, i2]]
             )
             if abs(element) != 0:
                 row_list[nnz] = row

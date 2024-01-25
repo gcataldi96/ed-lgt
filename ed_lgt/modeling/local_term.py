@@ -1,14 +1,13 @@
 import numpy as np
-from itertools import product
 from math import prod
 from scipy.sparse import csr_matrix
-from ed_lgt.tools import validate_parameters, remove_items_from_list
+from ed_lgt.tools import validate_parameters
 from .qmb_operations import local_op
 from .qmb_state import QMB_state
 from .lattice_geometry import get_neighbor_sites
 from .lattice_mappings import zig_zag
 
-__all__ = ["LocalTerm", "check_link_symmetry"]
+__all__ = ["LocalTerm", "check_link_symmetry", "local_sector"]
 
 
 class LocalTerm:
@@ -219,17 +218,19 @@ def check_link_symmetry(axis, loc_op1, loc_op2, value=0, sign=1):
 
 def local_sector(operator, op_site, sector_basis):
     # Dimension of the symmetry sector
-    sector_dim = len(sector_basis)
+    sector_dim = sector_basis.shape[0]
     # Preallocate arrays with estimated sizes
     row_list = np.zeros(sector_dim, dtype=int)
     col_list = np.zeros(sector_dim, dtype=int)
     value_list = np.zeros(sector_dim, dtype=operator.dtype)
     # Run over pairs of states config
     nnz = 0
-    m_states = [remove_items_from_list(state, [op_site]) for state in sector_basis]
-    for (row, mstate1), (col, mstate2) in product(enumerate(m_states), repeat=2):
-        if mstate1 == mstate2:
-            element = operator[sector_basis[row][op_site], sector_basis[col][op_site]]
+    m_states = np.delete(sector_basis, [op_site], axis=1)
+    for row, mstate1 in enumerate(m_states):
+        mstate_good = np.equal(m_states, mstate1).all(axis=1)
+        idxs = np.nonzero(mstate_good)[0]
+        for col in idxs:
+            element = operator[sector_basis[row, op_site], sector_basis[col, op_site]]
             if abs(element) != 0:
                 row_list[nnz] = row
                 col_list[nnz] = col
