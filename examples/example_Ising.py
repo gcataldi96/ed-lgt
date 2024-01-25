@@ -1,23 +1,34 @@
 # %%
 import numpy as np
 from math import prod
+from ed_lgt.modeling import P_sector_indices, U_sector_indices
 from ed_lgt.operators import get_Pauli_operators
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
+from time import time
+
 
 # N eigenvalues
 n_eigs = 2
-# LATTICE DIMENSIONS
-lvals = [4, 3]
+# LATTICE GEOMETRY
+lvals = [16]
 dim = len(lvals)
 directions = "xyz"[:dim]
 n_sites = prod(lvals)
-# BOUNDARY CONDITIONS
-has_obc = [False, False]
-# ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
-ops = get_Pauli_operators()
+has_obc = [False]
 loc_dims = np.array([2 for i in range(n_sites)])
 # ACQUIRE HAMILTONIAN COEFFICIENTS
 coeffs = {"J": 1, "h": 10}
+# SYMMETRY SECTOR
+sector = True
+if sector:
+    ops = get_Pauli_operators(sparse=not sector)
+    sector_indices, sector_basis = U_sector_indices(loc_dims, [ops["Sz"]], [0])
+    print(sector_indices.shape[0])
+else:
+    ops = get_Pauli_operators()
+    sector_indices = None
+    sector_basis = None
+start = time()
 # CONSTRUCT THE HAMILTONIAN
 H = QMB_hamiltonian(0, lvals, loc_dims)
 h_terms = {}
@@ -33,11 +44,20 @@ for d in directions:
         op_names_list=op_names_list,
         lvals=lvals,
         has_obc=has_obc,
+        sector_basis=sector_basis,
+        sector_indices=sector_indices,
     )
     H.Ham += h_terms[f"NN_{d}"].get_Hamiltonian(strength=-coeffs["J"])
 # EXTERNAL MAGNETIC FIELD
 op_name = "Sz"
-h_terms[op_name] = LocalTerm(ops[op_name], op_name, lvals=lvals, has_obc=has_obc)
+h_terms[op_name] = LocalTerm(
+    ops[op_name],
+    op_name,
+    lvals=lvals,
+    has_obc=has_obc,
+    sector_basis=sector_basis,
+    sector_indices=sector_indices,
+)
 H.Ham += h_terms[op_name].get_Hamiltonian(strength=-coeffs["h"])
 # ===========================================================================
 # DIAGONALIZE THE HAMILTONIAN
@@ -50,9 +70,17 @@ res["energy"] = H.Nenergies
 loc_obs = ["Sx", "Sz"]
 for obs in loc_obs:
     res[obs] = []
-    h_terms[obs] = LocalTerm(ops[obs], obs, lvals=lvals, has_obc=has_obc)
+    h_terms[obs] = LocalTerm(
+        ops[obs],
+        obs,
+        lvals=lvals,
+        has_obc=has_obc,
+        sector_basis=sector_basis,
+        sector_indices=sector_indices,
+    )
 # LIST OF TWOBODY CORRELATORS
-twobody_obs = [["Sz", "Sz"], ["Sx", "Sm"], ["Sx", "Sp"], ["Sp", "Sx"], ["Sm", "Sx"]]
+twobody_obs = []
+# [["Sz", "Sz"], ["Sx", "Sm"], ["Sx", "Sp"], ["Sp", "Sx"], ["Sm", "Sx"]]
 for obs1, obs2 in twobody_obs:
     op_list = [ops[obs1], ops[obs2]]
     h_terms[f"{obs1}_{obs2}"] = TwoBodyTerm(
@@ -61,6 +89,8 @@ for obs1, obs2 in twobody_obs:
         op_names_list=[obs1, obs2],
         lvals=lvals,
         has_obc=has_obc,
+        sector_basis=sector_basis,
+        sector_indices=sector_indices,
     )
 # ===========================================================================
 for ii in range(n_eigs):
@@ -69,7 +99,7 @@ for ii in range(n_eigs):
     if ii > 0:
         res["DeltaE"] = res["energy"][ii] - res["energy"][0]
     # GET STATE CONFIGURATIONS
-    H.Npsi[ii].get_state_configurations(threshold=1e-3)
+    H.Npsi[ii].get_state_configurations(threshold=1e-3, sector_indices=sector_indices)
     # =======================================================================
     # MEASURE LOCAL OBSERVABLES:
     for obs in loc_obs:
@@ -81,4 +111,8 @@ for ii in range(n_eigs):
         print(f"{obs1}_{obs2}")
         print("----------------------------------------------------")
         h_terms[f"{obs1}_{obs2}"].get_expval(H.Npsi[ii])
+end = time()
+tot_time = end - start
+print("")
+print("TOT TIME", tot_time)
 # %%
