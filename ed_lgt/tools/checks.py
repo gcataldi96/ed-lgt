@@ -19,10 +19,6 @@ __all__ = [
 ]
 
 
-def remove_items_from_list(my_list, indices_list):
-    return [item for i, item in enumerate(my_list) if i not in indices_list]
-
-
 def validate_parameters(
     lvals=None,
     loc_dims=None,
@@ -86,11 +82,19 @@ def validate_parameters(
     # -----------------------------------------------------------------------------
     if ops_dict is not None and not isinstance(ops_dict, dict):
         raise TypeError(f"ops_dict must be a DICT, not {type(ops_dict)}")
-    if op_list is not None and (
-        not isinstance(op_list, list) or not all(isspmatrix(op) for op in op_list)
+    if op_list is not None and not any(
+        [
+            isinstance(axes, list),
+            any(
+                [
+                    all([isspmatrix(op) for op in op_list]),
+                    all([isinstance(op, np.ndarray) for op in op_list]),
+                ]
+            ),
+        ]
     ):
         raise TypeError(
-            f"op_list must be a LIST of SPARSE matrices, not {type(op_list)}"
+            f"op_list must be a LIST of SPARSE/Numpy matrices, not {type(op_list)}"
         )
     if op_sites_list is not None and (
         not isinstance(op_sites_list, list)
