@@ -1,7 +1,7 @@
 # %%
 import numpy as np
 from math import prod
-from ed_lgt.modeling import P_sector_indices, U_sector_indices
+from ed_lgt.modeling import abelian_sector_indices
 from ed_lgt.operators import get_Pauli_operators
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
 from time import time
@@ -10,7 +10,7 @@ from time import time
 # N eigenvalues
 n_eigs = 2
 # LATTICE GEOMETRY
-lvals = [16]
+lvals = [10]
 dim = len(lvals)
 directions = "xyz"[:dim]
 n_sites = prod(lvals)
@@ -18,16 +18,21 @@ has_obc = [False]
 loc_dims = np.array([2 for i in range(n_sites)])
 # ACQUIRE HAMILTONIAN COEFFICIENTS
 coeffs = {"J": 1, "h": 10}
+# ACQUIRE OPERATORS
+ops = get_Pauli_operators()
 # SYMMETRY SECTOR
 sector = True
 if sector:
-    ops = get_Pauli_operators(sparse=not sector)
-    sector_indices, sector_basis = U_sector_indices(loc_dims, [ops["Sz"]], [0])
+    for op in ops.keys():
+        ops[op] = ops[op].toarray()
+    sector_indices, sector_basis = abelian_sector_indices(
+        loc_dims, [ops["Sz"]], [1], sym_type="P"
+    )
     print(sector_indices.shape[0])
 else:
-    ops = get_Pauli_operators()
     sector_indices = None
     sector_basis = None
+# %%
 start = time()
 # CONSTRUCT THE HAMILTONIAN
 H = QMB_hamiltonian(0, lvals, loc_dims)
