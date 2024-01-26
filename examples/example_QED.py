@@ -22,7 +22,7 @@ directions = "xyz"[:dim]
 # TOTAL NUMBER OF LATTICE SITES & particles
 n_sites = prod(lvals)
 # BOUNDARY CONDITIONS
-has_obc = True
+has_obc = [True, True]
 # DEFINE the truncation of the gauge field and the type of U
 spin = 1
 U = "ladder"

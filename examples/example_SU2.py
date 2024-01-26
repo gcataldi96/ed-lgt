@@ -21,7 +21,7 @@ dim = len(lvals)
 directions = "xyz"[:dim]
 n_sites = prod(lvals)
 # BOUNDARY CONDITIONS
-has_obc = True
+has_obc = [True, True]
 # DEFINE the maximal truncation of the gauge link
 j_max = 1 / 2
 # PURE or FULL THEORY
