@@ -1,11 +1,18 @@
-from ed_lgt.models import Ising_Model
+from ed_lgt.models import IsingModel
 from simsio import run_sim
 
 with run_sim() as sim:
     sim.par["coeffs"] = {"J": sim.par["J"], "h": sim.par["h"]}
-    model = Ising_Model(sim.par)
+    model = IsingModel(sim.par)
+    # GET OPERATORS
+    model.get_operators(sparse=False)
+    # GET SYMMETRY SECTOR
+    sym_sector = sim.par["sym_sector"]
+    if sym_sector is not None:
+        model.get_abelian_symmetry_sector(["Sz"], [sym_sector], sym_type="P")
     # BUILD AND DIAGONALIZE HAMILTONIAN
     model.build_Hamiltonian()
+    model.diagonalize_Hamiltonian()
     # LIST OF LOCAL OBSERVABLES
     local_obs = ["Sx", "Sz"]
     # LIST OF TWOBODY CORRELATORS
@@ -16,18 +23,8 @@ with run_sim() as sim:
         ["Sp", "Sx"],
         ["Sm", "Sx"],
     ]
-    """
-        ["Sz", "Sm"],
-        ["Sm", "Sz"],
-        ["Sp", "Sz"],
-        ["Sz", "Sp"],
-        ["Sp", "Sp"],
-        ["Sm", "Sm"],
-    """
-    # LIST OF PLAQUETTE CORRELATORS
-    plaquette_obs = []
     # DEFINE OBSERVABLES
-    model.get_observables(local_obs, twobody_obs, plaquette_obs)
+    model.get_observables(local_obs, twobody_obs)
     for ii in range(model.n_eigs):
         # PRINT ENERGY
         model.H.print_energy(ii)
