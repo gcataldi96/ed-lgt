@@ -15,7 +15,6 @@ __all__ = [
     "check_commutator",
     "check_matrix",
     "check_hermitian",
-    "remove_items_from_list",
 ]
 
 
