@@ -4,12 +4,15 @@ from simsio import run_sim
 with run_sim() as sim:
     sim.par["coeffs"] = {"J": sim.par["J"], "h": sim.par["h"]}
     model = IsingModel(sim.par)
-    # GET OPERATORS
-    model.get_operators(sparse=False)
     # GET SYMMETRY SECTOR
     sym_sector = sim.par["sym_sector"]
     if sym_sector is not None:
+        # GET OPERATORS
+        model.get_operators(sparse=False)
         model.get_abelian_symmetry_sector(["Sz"], [sym_sector], sym_type="P")
+    else:
+        # GET OPERATORS
+        model.get_operators()
     # BUILD AND DIAGONALIZE HAMILTONIAN
     model.build_Hamiltonian()
     model.diagonalize_Hamiltonian()
