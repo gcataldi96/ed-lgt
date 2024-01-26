@@ -10,7 +10,7 @@ class XYZModel(QuantumModel):
     def __init__(self, params):
         # Initialize base class with the common parameters
         super().__init__(params)
-        # Initialize specific attributes for IsingModel
+        # Initialize specific attributes for XYZModel
         self.loc_dims = np.array([2 for _ in range(self.n_sites)])
 
     def get_operators(self, sparse=True):
