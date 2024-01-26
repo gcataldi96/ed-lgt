@@ -4,22 +4,23 @@ from itertools import product
 from scipy.linalg import eigh
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
 from ed_lgt.operators import get_Pauli_operators
+from .quantum_model import QuantumModel
 
-__all__ = ["Ising_Model", "get_N_operator", "get_M_operator", "get_Q_operator"]
+__all__ = ["IsingModel", "get_N_operator", "get_M_operator", "get_Q_operator"]
 
 
-class Ising_Model:
+class IsingModel(QuantumModel):
     def __init__(self, params):
-        self.lvals = params["lvals"]
-        self.dim = len(self.lvals)
-        self.directions = "xyz"[: self.dim]
-        self.n_sites = prod(self.lvals)
-        self.has_obc = params["has_obc"]
-        self.coeffs = params["coeffs"]
-        self.n_eigs = params["n_eigs"]
+        # Initialize base class with the common parameters
+        super().__init__(params)
+        # Initialize specific attributes for IsingModel
+        self.loc_dims = np.array([2 for _ in range(self.n_sites)])
+
+    def get_operators(self, sparse=True):
         self.ops = get_Pauli_operators()
-        self.loc_dims = np.array([int(2 * 0.5 + 1) for i in range(prod(self.lvals))])
-        self.res = {}
+        if not sparse:
+            for op in self.ops.keys():
+                self.ops[op] = self.ops[op].toarray()
 
     def build_Hamiltonian(self):
         # CONSTRUCT THE HAMILTONIAN
@@ -37,55 +38,21 @@ class Ising_Model:
                 op_names_list=op_names_list,
                 lvals=self.lvals,
                 has_obc=self.has_obc,
+                sector_indices=self.sector_indices,
+                sector_basis=self.sector_basis,
             )
             self.H.Ham += h_terms[f"NN_{d}"].get_Hamiltonian(strength=-self.coeffs["J"])
         # EXTERNAL MAGNETIC FIELD
         op_name = "Sz"
         h_terms[op_name] = LocalTerm(
-            self.ops[op_name], op_name, lvals=self.lvals, has_obc=self.has_obc
+            self.ops[op_name],
+            op_name,
+            lvals=self.lvals,
+            has_obc=self.has_obc,
+            sector_indices=self.sector_indices,
+            sector_basis=self.sector_basis,
         )
         self.H.Ham += h_terms[op_name].get_Hamiltonian(strength=-self.coeffs["h"])
-        # DIAGONALIZE THE HAMILTONIAN
-        self.H.diagonalize(self.n_eigs)
-        self.res["energies"] = self.H.Nenergies
-        if self.n_eigs > 1:
-            self.res["true_gap"] = self.H.Nenergies[1] - self.H.Nenergies[0]
-
-    def get_observables(self, local_obs, twobody_obs, plaquette_obs):
-        self.local_obs = local_obs
-        self.twobody_obs = twobody_obs
-        self.plaquette_obs = plaquette_obs
-        self.obs_list = {}
-        # ---------------------------------------------------------------------------
-        # LIST OF LOCAL OBSERVABLES
-        for obs in local_obs:
-            self.obs_list[obs] = LocalTerm(
-                self.ops[obs],
-                obs,
-                lvals=self.lvals,
-                has_obc=self.has_obc,
-            )
-        # ---------------------------------------------------------------------------
-        # LIST OF TWOBODY CORRELATORS
-        for op_names_list in twobody_obs:
-            obs = "_".join(op_names_list)
-            op_list = [self.ops[op] for op in op_names_list]
-            self.obs_list[obs] = TwoBodyTerm(
-                axis="x",
-                op_list=op_list,
-                op_names_list=op_names_list,
-                lvals=self.lvals,
-                has_obc=self.has_obc,
-            )
-
-    def measure_observables(self, state_number):
-        for obs in self.local_obs:
-            self.obs_list[obs].get_expval(self.H.Npsi[state_number])
-            self.res[obs] = self.obs_list[obs].obs
-        for op_names_list in self.twobody_obs:
-            obs = "_".join(op_names_list)
-            self.obs_list[obs].get_expval(self.H.Npsi[state_number])
-            self.res[obs] = self.obs_list[obs].corr
 
     def get_energy_gap(self):
         N = get_N_operator(self.lvals, self.res)
