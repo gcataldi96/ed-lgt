@@ -50,14 +50,13 @@ def fermi_operators(has_spin, colors=False):
 
 
 def bose_operators(n_max):
+    ops = {}
     entries = np.arange(1, n_max + 1, 1)
     entries = np.sqrt(entries)
     x_coords = np.arange(0, n_max, 1)
     y_coords = np.arange(1, n_max + 1, 1)
-    b_dagger_Op = csr_matrix(
-        (entries, (x_coords, y_coords)), shape=(n_max + 1, n_max + 1)
-    )
-    b_Op = csr_matrix(b_dagger_Op.conj().transpose())
-    num_Op = b_dagger_Op * b_Op
-    ID = identity(n_max + 1)
-    return b_dagger_Op, b_Op, num_Op, ID
+    ops["b"] = csr_matrix((entries, (x_coords, y_coords)), shape=(n_max + 1, n_max + 1))
+    ops["b_dagger"] = csr_matrix(ops["b"].conj().transpose())
+    ops["N"] = ops["b_dagger"] * ops["b"]
+    ops["N2"] = ops["N"] ** 2
+    return ops
