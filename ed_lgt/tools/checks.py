@@ -2,9 +2,11 @@
 This module provides utility functions for manipulating quantum many-body operators and matrices.
 """
 import numpy as np
+from functools import wraps
 from math import prod
 from scipy.sparse import isspmatrix
 from scipy.sparse.linalg import norm
+from time import perf_counter
 
 __all__ = [
     "validate_parameters",
@@ -15,7 +17,23 @@ __all__ = [
     "check_commutator",
     "check_matrix",
     "check_hermitian",
+    "get_time",
 ]
+
+
+def get_time(func):
+    """Times any function"""
+
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start_time = perf_counter()
+        result = func(*args, **kwargs)
+        end_time = perf_counter()
+        tot_time = end_time - start_time
+        print(f"Total time {func.__name__}", tot_time)
+        return result
+
+    return wrapper
 
 
 def validate_parameters(
