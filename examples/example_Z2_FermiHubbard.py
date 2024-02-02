@@ -41,7 +41,7 @@ for op in ops.keys():
     save_sparse_matrix_to_dat(TTN_ops[op], f"Z2_FermiHubbard_ops/{op}.dat")
 """
 # Hamiltonian Couplings
-coeffs = {"t": -1, "U": 0, "eta": 100}
+coeffs = {"t": -1, "U": 10, "eta": 100}
 # Symmetry sector (# of particles)
 sector = None
 # CONSTRUCT THE HAMILTONIAN
@@ -127,12 +127,12 @@ res["energy"] = H.Nenergies
 # LOCAL OBSERVABLE LIST
 local_obs = [f"n_{s}{d}" for d in directions for s in "mp"]
 local_obs += [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
-local_obs += ["C_px,py", "C_mx,my", "X_Cross"]
+local_obs += ["X_Cross"]
 for obs in local_obs:
     h_terms[obs] = LocalTerm(ops[obs], obs, lvals, has_obc, site_basis=M)
     res[obs] = []
 # TWO BODY OBSERVABLE LIST
-twobody_obs = [["P_px", "P_mx"], ["P_py", "P_my"]]
+twobody_obs = [["P_px", "P_mx"], ["P_py", "P_my"], ["N_up", "N_down"]]
 for obs1, obs2 in twobody_obs:
     op_list = [ops[obs1], ops[obs2]]
     h_terms[f"{obs1}_{obs2}"] = TwoBodyTerm(
@@ -146,7 +146,7 @@ for obs1, obs2 in twobody_obs:
 # PLAQUETTE OBSERVABLE
 plaq_name_list = ["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]
 op_list = [ops[op] for op in plaq_name_list]
-h_terms["Plaq_Sx"] = PlaquetteTerm(
+h_terms["Plaq_Sz"] = PlaquetteTerm(
     axes=["x", "y"],
     op_list=op_list,
     op_names_list=plaq_name_list,
@@ -188,5 +188,4 @@ for ii in range(n_eigs):
     # ===========================================================================
     # PLAQUETTE OBSERVABLES:
     # ===========================================================================
-    h_terms["Plaq_Sx"].get_expval(H.Npsi[ii])
-# %%
+    h_terms["Plaq_Sz"].get_expval(H.Npsi[ii])
