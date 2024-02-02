@@ -6,6 +6,7 @@ from .lattice_mappings import zig_zag
 from .qmb_operations import two_body_op
 from .lattice_geometry import get_neighbor_sites
 from .qmb_state import QMB_state
+from .symmetries import nbody_sector
 from ed_lgt.tools import validate_parameters
 
 __all__ = ["TwoBodyTerm"]
@@ -125,7 +126,7 @@ class TwoBodyTerm:
                     )
                 else:
                     # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
-                    H_twobody += strength * twobody_sector(
+                    H_twobody += strength * nbody_sector(
                         op_list=self.op_list,
                         op_sites_list=sites_list,
                         sector_basis=self.sector_basis,
@@ -176,45 +177,9 @@ class TwoBodyTerm:
                 else:
                     # GET THE EXPVAL ON THE SYMMETRY SECTOR
                     self.corr[coords1 + coords2] = psi.expectation_value(
-                        twobody_sector(
+                        nbody_sector(
                             op_list=self.op_list,
                             op_sites_list=[ii, jj],
                             sector_basis=self.sector_basis,
                         )
                     )
-
-
-def twobody_sector(op_list, op_sites_list, sector_basis):
-    i1 = op_sites_list[0]
-    i2 = op_sites_list[1]
-    # Dimension of the symmetry sector
-    sector_dim = sector_basis.shape[0]
-    # Preallocate arrays with estimated sizes
-    row_list = np.zeros(sector_dim, dtype=int)
-    col_list = np.zeros(sector_dim, dtype=int)
-    value_list = np.zeros(sector_dim, dtype=op_list[0].dtype)
-    # Run over pairs of states config
-    nnz = 0
-    # Remove entries
-    m_states = np.delete(sector_basis, op_sites_list, axis=1)
-    for row, mstate1 in enumerate(m_states):
-        mstate_good = np.equal(m_states, mstate1).all(axis=1)
-        idxs = np.nonzero(mstate_good)[0]
-        for col in idxs:
-            element = (
-                op_list[0][sector_basis[row, i1], sector_basis[col, i1]]
-                * op_list[1][sector_basis[row, i2], sector_basis[col, i2]]
-            )
-            if abs(element) != 0:
-                row_list[nnz] = row
-                col_list[nnz] = col
-                value_list[nnz] = element
-                nnz += 1
-    # Trim the arrays to actual size
-    value_list = value_list[:nnz]
-    row_list = row_list[:nnz]
-    col_list = col_list[:nnz]
-    return csr_matrix(
-        (value_list, (row_list, col_list)),
-        shape=(sector_dim, sector_dim),
-    )
