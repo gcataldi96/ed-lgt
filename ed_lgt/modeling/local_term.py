@@ -1,13 +1,13 @@
 import numpy as np
 from math import prod
-from scipy.sparse import csr_matrix
 from ed_lgt.tools import validate_parameters
 from .qmb_operations import local_op
 from .qmb_state import QMB_state
 from .lattice_geometry import get_neighbor_sites
 from .lattice_mappings import zig_zag
+from .symmetries import nbody_sector
 
-__all__ = ["LocalTerm", "check_link_symmetry", "local_sector"]
+__all__ = ["LocalTerm", "check_link_symmetry"]
 
 
 class LocalTerm:
@@ -102,7 +102,7 @@ class LocalTerm:
                     )
                 else:
                     # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
-                    H_Local += local_sector(self.op, ii, self.sector_basis)
+                    H_Local += nbody_sector([self.op], [ii], self.sector_basis)
         return strength * H_Local
 
     def get_expval(self, psi, stag_label=None):
@@ -124,8 +124,10 @@ class LocalTerm:
         validate_parameters(stag_label=stag_label)
         # PRINT OBSERVABLE NAME
         print(f"----------------------------------------------------")
-        print(f"{self.op_name}") if stag_label is None else print(
-            f"{self.op_name} {stag_label}"
+        (
+            print(f"{self.op_name}")
+            if stag_label is None
+            else print(f"{self.op_name} {stag_label}")
         )
         # AVERAGE EXP VAL <O> & STD DEVIATION (<O^{2}>-<O>^{2})^{1/2}
         self.obs = np.zeros(self.lvals)
@@ -173,12 +175,12 @@ class LocalTerm:
             else:
                 # GET THE EXPVAL ON THE SYMMETRY SECTOR
                 exp_obs = psi.expectation_value(
-                    local_sector(self.op, ii, self.sector_basis)
+                    nbody_sector([self.op], [ii], self.sector_basis)
                 )
                 # Compute the corresponding quantum fluctuation
                 exp_var = (
                     psi.expectation_value(
-                        local_sector(self.op**2, ii, self.sector_basis)
+                        nbody_sector([self.op**2], [ii], self.sector_basis)
                     )
                     - exp_obs**2
                 )
@@ -214,33 +216,3 @@ def check_link_symmetry(axis, loc_op1, loc_op2, value=0, sign=1):
             print(loc_op1.obs[c1], loc_op2.obs[c2])
             raise ValueError(f"{axis}-Link Symmetry is violated at index {ii}")
     print(f"{axis}-LINK SYMMETRY IS SATISFIED")
-
-
-def local_sector(operator, op_site, sector_basis):
-    # Dimension of the symmetry sector
-    sector_dim = sector_basis.shape[0]
-    # Preallocate arrays with estimated sizes
-    row_list = np.zeros(sector_dim, dtype=int)
-    col_list = np.zeros(sector_dim, dtype=int)
-    value_list = np.zeros(sector_dim, dtype=operator.dtype)
-    # Run over pairs of states config
-    nnz = 0
-    m_states = np.delete(sector_basis, [op_site], axis=1)
-    for row, mstate1 in enumerate(m_states):
-        mstate_good = np.equal(m_states, mstate1).all(axis=1)
-        idxs = np.nonzero(mstate_good)[0]
-        for col in idxs:
-            element = operator[sector_basis[row, op_site], sector_basis[col, op_site]]
-            if abs(element) != 0:
-                row_list[nnz] = row
-                col_list[nnz] = col
-                value_list[nnz] = element
-                nnz += 1
-    # Trim the arrays to actual size
-    value_list = value_list[:nnz]
-    row_list = row_list[:nnz]
-    col_list = col_list[:nnz]
-    return csr_matrix(
-        (value_list, (row_list, col_list)),
-        shape=(sector_dim, sector_dim),
-    )
