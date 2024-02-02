@@ -3,6 +3,7 @@ from scipy.sparse import csr_matrix, identity, kron
 from ed_lgt.tools import validate_parameters
 from .lattice_mappings import zig_zag
 from .lattice_geometry import get_site_label
+from ed_lgt.tools import get_time
 
 __all__ = [
     "qmb_operator",
@@ -14,6 +15,7 @@ __all__ = [
 ]
 
 
+@get_time
 def qmb_operator(
     ops,
     op_names_list,
