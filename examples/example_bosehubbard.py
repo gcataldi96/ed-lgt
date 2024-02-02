@@ -26,7 +26,7 @@ if sector:
     for op in ops.keys():
         ops[op] = ops[op].toarray()
     sector_indices, sector_basis = abelian_sector_indices(
-        loc_dims, [ops["N"]], [3], sym_type="U"
+        loc_dims, [ops["N"]], [8], sym_type="U"
     )
     print(np.prod(loc_dims))
     print(sector_indices.shape[0])
@@ -75,8 +75,8 @@ h_terms[op_name] = LocalTerm(
 H.Ham += h_terms[op_name].get_Hamiltonian(strength=-0.5 * coeffs["U"])
 # ADD SINGLE SITE NOISE
 noise = np.random.rand(n_sites)
-for ii in n_sites:
-    mask = np.zeros(dtype=bool)
+for ii in range(n_sites):
+    mask = np.zeros(n_sites, dtype=bool)
     mask[ii] = True
     H.Ham += h_terms["N"].get_Hamiltonian(strength=noise[ii], mask=mask)
 # ===========================================================================
@@ -118,7 +118,7 @@ for ii in range(n_eigs):
     if ii > 0:
         res["DeltaE"] = res["energy"][ii] - res["energy"][0]
     # GET STATE CONFIGURATIONS
-    H.Npsi[ii].get_state_configurations(threshold=1e-2, sector_indices=sector_indices)
+    H.Npsi[ii].get_state_configurations(threshold=1e-1, sector_indices=sector_indices)
     # =======================================================================
     # MEASURE LOCAL OBSERVABLES:
     for obs in loc_obs:
