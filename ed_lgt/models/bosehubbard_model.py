@@ -1,5 +1,4 @@
 import numpy as np
-from ed_lgt.modeling import abelian_sector_indices
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
 from ed_lgt.operators import bose_operators
 from .quantum_model import QuantumModel
@@ -16,7 +15,7 @@ class BoseHubbard_Model(QuantumModel):
         self.loc_dims = np.array([self.n_max + 1 for _ in range(self.n_sites)])
 
     def get_operators(self, sparse=True):
-        self.ops = bose_operators()
+        self.ops = bose_operators(self.n_max)
         if not sparse:
             for op in self.ops.keys():
                 self.ops[op] = self.ops[op].toarray()
@@ -66,7 +65,7 @@ class BoseHubbard_Model(QuantumModel):
         self.H.Ham += h_terms[op_name].get_Hamiltonian(strength=-0.5 * self.coeffs["U"])
         # ADD SINGLE SITE NOISE
         noise = np.random.rand(self.n_sites)
-        for ii in self.n_sites:
-            mask = np.zeros(dtype=bool)
+        for ii in range(self.n_sites):
+            mask = np.zeros(self.n_sites, dtype=bool)
             mask[ii] = True
             self.H.Ham += h_terms["N"].get_Hamiltonian(strength=noise[ii], mask=mask)
