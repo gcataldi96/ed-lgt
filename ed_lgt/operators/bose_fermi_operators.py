@@ -35,6 +35,9 @@ def fermi_operators(has_spin, colors=False):
         ops["N_pair"] = ops["N_up"] * ops["N_down"]
         ops["N_tot"] = ops["N_up"] + ops["N_down"]
         ops["N_single"] = ops["N_tot"] - 2 * ops["N_pair"]
+        # Spin matter operators
+        ops["Sz"] = 0.5 * (ops["N_up"] - ops["N_down"])
+        ops["S2"] = 0.75 * (ops["N_up"] - ops["N_down"]) ** 2
         # identity on the whole matter site
         ops["ID_psi"] = identity(4, dtype=float)
         for s in ["up", "down"]:
