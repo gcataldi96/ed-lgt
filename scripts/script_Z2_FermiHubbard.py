@@ -22,9 +22,13 @@ with run_sim() as sim:
     # LIST OF LOCAL OBSERVABLES
     local_obs = [f"n_{s}{d}" for d in model.directions for s in "mp"]
     local_obs += [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
-    local_obs += ["X_Cross"]
+    local_obs += ["X_Cross", "Sz", "S2"]
     # LIST OF TWOBODY CORRELATORS
-    twobody_obs = [["P_px", "P_mx"], ["P_py", "P_my"]]
+    twobody_obs = [["P_px", "P_mx"], ["P_py", "P_my"], ["N_up", "N_down"]]
+    if not model.has_obc[0]:
+        twobody_obs += [["Sz_py,my", "Sz_py,my"]]
+    if not model.has_obc[1]:
+        twobody_obs += [["Sz_px,mx", "Sz_px,mx"]]
     # DEFINE OBSERVABLES
     model.get_observables(local_obs, twobody_obs)
     # MEASUREMENTS
