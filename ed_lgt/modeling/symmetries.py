@@ -1,8 +1,10 @@
 import numpy as np
 from math import prod
 from itertools import product
+from scipy.sparse import csr_matrix
+from ed_lgt.tools import get_time
 
-__all__ = ["abelian_sector_indices", "abelian_sector_indices1"]
+__all__ = ["abelian_sector_indices", "abelian_sector_indices1", "nbody_sector"]
 
 
 def apply_basis_projection(op, basis_label, site_basis):
@@ -10,7 +12,8 @@ def apply_basis_projection(op, basis_label, site_basis):
     return op.toarray()
 
 
-def abelian_sector_indices(loc_dims, op_list, op_sectors_list, sym_type="U"):
+@get_time
+def abelian_sector_indices(loc_dims, op_list, op_sectors_list, sym_type):
     # Precompute the diagonals of the operators
     op_diagonals = [np.diag(op) for op in op_list]
     # Precompute the ranges for each dimension
@@ -96,3 +99,39 @@ def abelian_sector_indices1(
             sector_indices.append(n)
             sector_basis.append(list(config))
     return np.array(sector_indices, dtype=int), np.array(sector_basis, dtype=int)
+
+
+def nbody_sector(op_list, op_sites_list, sector_basis):
+    # Dimension of the symmetry sector
+    sector_dim = sector_basis.shape[0]
+    # Preallocate arrays with estimated sizes
+    row_list = np.zeros(sector_dim, dtype=int)
+    col_list = np.zeros(sector_dim, dtype=int)
+    value_list = np.zeros(sector_dim, dtype=op_list[0].dtype)
+    # Run over pairs of states config
+    nnz = 0
+    # Remove entries
+    m_states = np.delete(sector_basis, op_sites_list, axis=1)
+    for row, mstate1 in enumerate(m_states):
+        mstate_good = np.equal(m_states, mstate1).all(axis=1)
+        idxs = np.nonzero(mstate_good)[0]
+        for col in idxs:
+            element = prod(
+                [
+                    op[sector_basis[row, ii], sector_basis[col, ii]]
+                    for op, ii in zip(op_list, op_sites_list)
+                ]
+            )
+            if abs(element) != 0:
+                row_list[nnz] = row
+                col_list[nnz] = col
+                value_list[nnz] = element
+                nnz += 1
+    # Trim the arrays to actual size
+    value_list = value_list[:nnz]
+    row_list = row_list[:nnz]
+    col_list = col_list[:nnz]
+    return csr_matrix(
+        (value_list, (row_list, col_list)),
+        shape=(sector_dim, sector_dim),
+    )
