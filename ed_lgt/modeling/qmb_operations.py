@@ -15,7 +15,6 @@ __all__ = [
 ]
 
 
-@get_time
 def qmb_operator(
     ops,
     op_names_list,
