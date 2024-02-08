@@ -6,6 +6,9 @@ from .qmb_state import QMB_state
 from .lattice_geometry import get_neighbor_sites
 from .lattice_mappings import zig_zag
 from .symmetries import nbody_sector
+import logging
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["LocalTerm", "check_link_symmetry"]
 
@@ -123,11 +126,11 @@ class LocalTerm:
             raise TypeError(f"psi must be instance of class:QMB_state not {type(psi)}")
         validate_parameters(stag_label=stag_label)
         # PRINT OBSERVABLE NAME
-        print(f"----------------------------------------------------")
+        logger.info(f"----------------------------------------------------")
         (
-            print(f"{self.op_name}")
+            logger.info(f"{self.op_name}")
             if stag_label is None
-            else print(f"{self.op_name} {stag_label}")
+            else logger.info(f"{self.op_name} {stag_label}")
         )
         # AVERAGE EXP VAL <O> & STD DEVIATION (<O^{2}>-<O>^{2})^{1/2}
         self.obs = np.zeros(self.lvals)
@@ -185,14 +188,14 @@ class LocalTerm:
                     - exp_obs**2
                 )
             if any(mask_conditions):
-                print(f"{coords} {format(exp_obs, '.12f')}")
+                logger.info(f"{coords} {format(exp_obs, '.12f')}")
                 counter += 1
                 self.obs[coords] = exp_obs
                 self.avg += exp_obs
                 self.std += exp_var
         self.avg = self.avg / counter
         self.std = np.sqrt(np.abs(self.std) / counter)
-        print(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
+        logger.info(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 
 
 def check_link_symmetry(axis, loc_op1, loc_op2, value=0, sign=1):
@@ -213,6 +216,6 @@ def check_link_symmetry(axis, loc_op1, loc_op2, value=0, sign=1):
             tmp = loc_op1.obs[c1]
             tmp += sign * loc_op2.obs[c2]
         if np.abs(tmp - value) > 1e-10:
-            print(loc_op1.obs[c1], loc_op2.obs[c2])
+            logger.info(loc_op1.obs[c1], loc_op2.obs[c2])
             raise ValueError(f"{axis}-Link Symmetry is violated at index {ii}")
-    print(f"{axis}-LINK SYMMETRY IS SATISFIED")
+    logger.info(f"{axis}-LINK SYMMETRY IS SATISFIED")

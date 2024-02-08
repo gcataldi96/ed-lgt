@@ -8,6 +8,9 @@ from .lattice_geometry import get_neighbor_sites
 from .qmb_state import QMB_state
 from .symmetries import nbody_sector
 from ed_lgt.tools import validate_parameters
+import logging
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["TwoBodyTerm"]
 
@@ -71,7 +74,7 @@ class TwoBodyTerm:
         self.site_basis = site_basis
         self.sector_indices = sector_indices
         self.sector_basis = sector_basis
-        print(f"twobody-term {self.op_name_list[0]}-{self.op_name_list[1]}")
+        logger.info(f"twobody-term {self.op_name_list[0]}-{self.op_name_list[1]}")
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
         """

@@ -12,6 +12,9 @@ from .lattice_mappings import zig_zag
 from .qmb_operations import four_body_op
 from .qmb_state import QMB_state
 from ed_lgt.tools import validate_parameters
+import logging
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["PlaquetteTerm"]
 
@@ -76,7 +79,7 @@ class PlaquetteTerm:
         self.site_basis = site_basis
         self.print_plaq = print_plaq
         self.sector_indices = sector_indices
-        print(
+        logger.info(
             f"Plaquette {op_names_list[0]}-{op_names_list[1]}-{op_names_list[2]}-{op_names_list[3]}"
         )
 
@@ -158,16 +161,16 @@ class PlaquetteTerm:
         validate_parameters(stag_label=stag_label, get_imag=get_imag)
         # ADVERTISE OF THE CHOSEN PART OF THE PLAQUETTE YOU WANT TO COMPUTE
         if self.print_plaq:
-            print(f"----------------------------------------------------")
+            logger.info(f"----------------------------------------------------")
             if get_imag:
                 chosen_part = "IMAG"
             else:
                 chosen_part = "REAL"
             if stag_label is None:
-                print(f"PLAQUETTE: {chosen_part}")
+                logger.info(f"PLAQUETTE: {chosen_part}")
             else:
-                print(f"PLAQUETTE: {chosen_part} PART {stag_label}")
-            print(f"----------------------------------------------------")
+                logger.info(f"PLAQUETTE: {chosen_part} PART {stag_label}")
+            logger.info(f"----------------------------------------------------")
         self.avg = 0.0
         self.std = 0.0
         counter = 0
@@ -226,7 +229,7 @@ class PlaquetteTerm:
         self.avg = self.avg / counter
         self.std = np.sqrt(np.abs(self.std) / counter)
         if self.print_plaq:
-            print(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
+            logger.info(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 
     def print_Plaquette(self, sites_list, value):
         if not isinstance(sites_list, list):
@@ -246,9 +249,9 @@ class PlaquetteTerm:
                 value = format(np.abs(value), ".10f")
             else:
                 value = format(value, ".9f")
-        print(f"{sites_list[2]}------------{sites_list[3]}")
-        print(f"  |                  |")
-        print(f"  |   {value}   |")
-        print(f"  |                  |")
-        print(f"{sites_list[0]}------------{sites_list[1]}")
-        print("")
+        logger.info(f"{sites_list[2]}------------{sites_list[3]}")
+        logger.info(f"  |                  |")
+        logger.info(f"  |   {value}   |")
+        logger.info(f"  |                  |")
+        logger.info(f"{sites_list[0]}------------{sites_list[1]}")
+        logger.info("")

@@ -1,6 +1,9 @@
 import numpy as np
 from itertools import product
 from ed_lgt.tools import validate_parameters
+import logging
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["border_mask", "staggered_mask"]
 

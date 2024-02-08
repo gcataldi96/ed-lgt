@@ -4,6 +4,9 @@ from itertools import product, chain
 from .lattice_mappings import zig_zag
 from .qmb_state import QMB_state
 from .symmetries import nbody_sector
+import logging
+
+logger = logging.getLogger(__name__)
 
 __all__ = ["NBodyTerm"]
 
@@ -54,7 +57,7 @@ class NBodyTerm:
         self.site_basis = site_basis
         self.sector_indices = sector_indices
         self.sector_basis = sector_basis
-        print(" N_body-term_" + "_".join(op_names_list))
+        logger.info(" N_body-term_" + "_".join(op_names_list))
 
     def get_expval(self, psi):
         """

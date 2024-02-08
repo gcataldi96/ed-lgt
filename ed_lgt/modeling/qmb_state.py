@@ -5,6 +5,9 @@ from scipy.sparse.linalg import eigsh as sparse_eigh
 from scipy.sparse import csr_matrix, isspmatrix, csr_array
 from ed_lgt.tools import validate_parameters, check_hermitian
 from .lattice_mappings import zig_zag
+import logging
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "QMB_hamiltonian",
@@ -70,8 +73,8 @@ class QMB_state:
         validate_parameters(index=qmb_index)
         # Get d-dimensional coordinates of
         coords = zig_zag(self.lvals, qmb_index)
-        print("----------------------------------------------------")
-        print(f"DENSITY MATRIX OF SITE {coords}")
+        logger.info("----------------------------------------------------")
+        logger.info(f"DENSITY MATRIX OF SITE {coords}")
         # RESHAPE psi
         psi_copy = self.psi.reshape(*[loc_dim for loc_dim in self.loc_dims.tolist()])
         # DEFINE A LIST OF SITES WE WANT TO TRACE OUT
@@ -111,7 +114,7 @@ class QMB_state:
             self.psi.reshape((partition, int(prod(self.loc_dims) / partition)))
         )
         tmp = np.array([-(llambda**2) * np.log2(llambda**2) for llambda in V])
-        print(f"ENTROPY: {format(np.sum(tmp), '.9f')}")
+        logger.info(f"ENTROPY: {format(np.sum(tmp), '.9f')}")
         return np.sum(tmp)
 
     def get_state_configurations(self, threshold=1e-10, sector_indices=None):
@@ -120,8 +123,8 @@ class QMB_state:
         most relevant coefficients of the QMB state psi. Every state configuration
         is expressed in terms of the single site local Hilber basis
         """
-        print("----------------------------------------------------")
-        print("STATE CONFIGURATIONS")
+        logger.info("----------------------------------------------------")
+        logger.info("STATE CONFIGURATIONS")
         psi = csr_array(self.truncate(threshold))
         psi_indices = (
             [sector_indices[i] for i in psi.indices]
@@ -142,10 +145,10 @@ class QMB_state:
             loc_states = get_loc_states_from_qmb_state(
                 qmb_index=int(ind), loc_dims=self.loc_dims, lvals=self.lvals
             )
-            print(f"{loc_states}  {format(alpha,'.9f')}  {ind}")
+            logger.info(f"{loc_states}  {format(alpha,'.9f')}  {ind}")
             state_configurations["state_config"].append(loc_states)
             state_configurations["coeff"].append(alpha)
-        print("----------------------------------------------------")
+        logger.info("----------------------------------------------------")
         self.state_configs = state_configurations
 
 
@@ -163,7 +166,7 @@ class QMB_hamiltonian:
         self.n_eigs = n_eigs
         # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
         check_hermitian(self.Ham)
-        print("DIAGONALIZE HAMILTONIAN")
+        logger.info("DIAGONALIZE HAMILTONIAN")
         self.Nenergies, Npsi = sparse_eigh(self.Ham, k=n_eigs, which="SA")
         self.Npsi = [
             QMB_state(Npsi[:, ii], self.lvals, self.loc_dims) for ii in range(n_eigs)
@@ -173,8 +176,8 @@ class QMB_hamiltonian:
         self.GSpsi = self.Npsi[0]
 
     def print_energy(self, en_state):
-        print("====================================================")
-        print(f"{en_state} ENERGY: {format(self.Nenergies[en_state], '.9f')}")
+        logger.info("====================================================")
+        logger.info(f"{en_state} ENERGY: {format(self.Nenergies[en_state], '.9f')}")
 
 
 def truncation(array, threshold=1e-14):
@@ -273,7 +276,7 @@ def get_projector_for_efficient_density_matrix(rho, loc_dim, threshold):
     while P_columns < 2:
         threshold = threshold / 10
         P_columns = (rho_eigvals > threshold).sum()
-    print(f"TOTAL NUMBER OF SIGNIFICANT EIGENVALUES {P_columns}")
+    logger.info(f"TOTAL NUMBER OF SIGNIFICANT EIGENVALUES {P_columns}")
     column_indx = -1
     # Define the projector operator Proj: it has dimension (loc_dim,P_columns)
     proj = np.zeros((loc_dim, P_columns), dtype=complex)

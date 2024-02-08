@@ -4,6 +4,9 @@ from ed_lgt.tools import validate_parameters
 from .lattice_mappings import zig_zag
 from .lattice_geometry import get_site_label
 from ed_lgt.tools import get_time
+import logging
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "qmb_operator",
