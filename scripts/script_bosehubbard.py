@@ -26,7 +26,9 @@ with run_sim() as sim:
         # PRINT ENERGY
         model.H.print_energy(ii)
         # PRINT STATE CONFIGURATIONS
-        model.H.Npsi[ii].get_state_configurations()
+        model.H.Npsi[ii].get_state_configurations(
+            threshold=1e-3, sector_indices=model.sector_indices
+        )
         # MEASURE OBSERVABLES
         model.measure_observables(ii)
         if ii == 0:
