@@ -13,9 +13,9 @@ from ed_lgt.operators import (
 )
 
 # N eigenvalues
-n_eigs = 1
+n_eigs = 2
 # LATTICE DIMENSIONS
-lvals = [2, 2]
+lvals = [3, 2]
 dim = len(lvals)
 directions = "xyz"[:dim]
 # TOTAL NUMBER OF LATTICE SITES & particles
@@ -132,7 +132,12 @@ for obs in local_obs:
     h_terms[obs] = LocalTerm(ops[obs], obs, lvals, has_obc, site_basis=M)
     res[obs] = []
 # TWO BODY OBSERVABLE LIST
-twobody_obs = [["P_px", "P_mx"], ["P_py", "P_my"], ["N_up", "N_down"]]
+twobody_obs = [
+    ["P_px", "P_mx"],
+    ["P_py", "P_my"],
+    ["N_up", "N_down"],
+    ["Sz_py,my", "Sz_py,my"],
+]
 for obs1, obs2 in twobody_obs:
     op_list = [ops[obs1], ops[obs2]]
     h_terms[f"{obs1}_{obs2}"] = TwoBodyTerm(
@@ -189,3 +194,5 @@ for ii in range(n_eigs):
     # PLAQUETTE OBSERVABLES:
     # ===========================================================================
     h_terms["Plaq_Sz"].get_expval(H.Npsi[ii])
+
+# %%
