@@ -23,7 +23,7 @@ def sitebased_sym_sector_configs(
     pair_list,
 ):
     total_configs = np.prod(loc_dims)
-    print("TOTAL DIM", total_configs, np.log2(total_configs))
+    print("TOTAL DIM 2**", np.log2(total_configs))
     # Pre-allocate an array large enough to hold all configurations
     all_configs = np.zeros((total_configs, len(loc_dims)), dtype=np.uint8)
     # Use an auxiliary array to mark valid configurations
@@ -36,9 +36,9 @@ def sitebased_sym_sector_configs(
             all_configs[ii] = config
             valid_marks[ii] = True
     # Filter to keep only valid configurations
-    valid_configs = all_configs[valid_marks]
-    print("SECTOR DIM", len(valid_configs), np.log2(len(valid_configs)))
-    return valid_configs
+    sector_configs = all_configs[valid_marks]
+    print("TOTAL DIM 2**", np.log2(len(sector_configs)))
+    return sector_configs
 
 
 def get_symmetry_sector_generators(
