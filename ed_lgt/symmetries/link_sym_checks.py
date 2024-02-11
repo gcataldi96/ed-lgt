@@ -10,6 +10,7 @@ __all__ = [
     "check_link_sym",
     "check_link_sym_sitebased",
     "check_link_sym_configs_sitebased",
+    "link_abelian_sector",
 ]
 
 
@@ -101,13 +102,13 @@ def check_link_sym_sitebased(config, sym_op_diags, sym_sectors, pair_list):
 
 @njit(parallel=True)
 def check_link_sym_configs_sitebased(
-    config_batch, sym_op_diags, sym_sectors, pair_list, loc_dims
+    config_batch, sym_op_diags, sym_sectors, pair_list
 ):
     num_configs = config_batch.shape[0]
     checks = np.zeros(num_configs, dtype=np.bool_)
     for ii in prange(num_configs):
         checks[ii] = check_link_sym_sitebased(
-            config_batch[ii], sym_op_diags, sym_sectors, pair_list, loc_dims
+            config_batch[ii], sym_op_diags, sym_sectors, pair_list
         )
     return checks
 
@@ -117,7 +118,7 @@ def link_abelian_sector(loc_dims, sym_op_diags, sym_sectors, pair_list, configs=
     if configs is None:
         # Get QMB state configurations
         configs = get_state_configs(loc_dims)
-    print("TOT DIM", len(configs), np.log2(len(configs)))
+    logger.info(f"TOT DIM: 2**{round(np.log2(len(configs)),1)}")
 
     checks = check_link_sym_configs_sitebased(
         configs, sym_op_diags, sym_sectors, pair_list
@@ -125,5 +126,5 @@ def link_abelian_sector(loc_dims, sym_op_diags, sym_sectors, pair_list, configs=
     # Filter configs based on checks
     sector_configs = configs[checks]
     sector_indices = np.ravel_multi_index(sector_configs.T, loc_dims)
-    print("SECTOR DIM", len(sector_configs), np.log2(len(sector_configs)))
+    logger.info(f"SECTOR DIM: 2**{round(np.log2(len(sector_configs)),1)}")
     return (sector_indices, sector_configs)
