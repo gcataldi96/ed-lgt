@@ -1,12 +1,16 @@
 """
 This module provides utility functions for manipulating quantum many-body operators and matrices.
 """
+
 import numpy as np
 from functools import wraps
 from math import prod
 from scipy.sparse import isspmatrix
 from scipy.sparse.linalg import norm
 from time import perf_counter
+import logging
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "validate_parameters",
@@ -30,7 +34,7 @@ def get_time(func):
         result = func(*args, **kwargs)
         end_time = perf_counter()
         tot_time = end_time - start_time
-        print(f"Total time {func.__name__}", tot_time)
+        logger.info(f"TIME {func.__name__} {round(tot_time, 5)}")
         return result
 
     return wrapper
