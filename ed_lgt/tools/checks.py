@@ -34,7 +34,7 @@ def get_time(func):
         result = func(*args, **kwargs)
         end_time = perf_counter()
         tot_time = end_time - start_time
-        logger.info(f"TIME {func.__name__} {round(tot_time, 5)}")
+        logger.debug(f"TIME {func.__name__} {round(tot_time, 5)}")
         return result
 
     return wrapper
@@ -192,11 +192,11 @@ def pause(phrase, debug):
     validate_parameters(phrase=phrase, debug=debug)
     if debug == True:
         # IT PROVIDES A PAUSE in a given point of the PYTHON CODE
-        print("----------------------------------------------------")
+        logger.debug("----------------------------------------------------")
         # Press the <ENTER> key to continue
         programPause = input(phrase)
-        print("----------------------------------------------------")
-        print("")
+        logger.debug("----------------------------------------------------")
+        logger.debug("")
 
 
 def alert(phrase, debug):
@@ -215,8 +215,8 @@ def alert(phrase, debug):
     validate_parameters(phrase=phrase, debug=debug)
     if debug == True:
         # IT PRINTS A PHRASE IN A GIVEN POINT OF A PYTHON CODE
-        print("")
-        print(phrase)
+        logger.debug("")
+        logger.debug(phrase)
 
 
 def commutator(A, B):
@@ -281,10 +281,10 @@ def check_commutator(A, B):
     ratio = norma / norma_max
     # check=(AB!=BA).nnz
     if ratio > 10 ** (-15):
-        print("    ERROR: A and B do NOT COMMUTE")
-        print("    NORM", norma)
-        print("    RATIO", ratio)
-    print("")
+        logger.debug("    ERROR: A and B do NOT COMMUTE")
+        logger.debug("    NORM", norma)
+        logger.debug("    RATIO", ratio)
+    logger.debug("")
 
 
 def check_matrix(A, B):
@@ -308,7 +308,7 @@ def check_matrix(A, B):
     norma_max = max(norm(A + B), norm(A), norm(B))
     ratio = norma / norma_max
     if ratio > 1e-15:
-        print("    ERROR: A and B are DIFFERENT MATRICES")
+        logger.debug("    ERROR: A and B are DIFFERENT MATRICES")
         raise ValueError(f"    NORM {norma}, RATIO {ratio}")
 
 
@@ -326,4 +326,4 @@ def check_hermitian(A):
     A_dag = A.getH()
     check_matrix(A, A_dag)
     # Get the Hermitian
-    print("HERMITICITY VALIDATED")
+    logger.debug("HERMITICITY VALIDATED")
