@@ -3,7 +3,6 @@ from scipy.sparse import csr_matrix, identity, kron
 from ed_lgt.tools import validate_parameters
 from .lattice_mappings import zig_zag
 from .lattice_geometry import get_site_label
-from ed_lgt.tools import get_time
 import logging
 
 logger = logging.getLogger(__name__)
@@ -24,7 +23,6 @@ def qmb_operator(
     add_dagger=False,
     get_real=False,
     get_imag=False,
-    sector_indices=None,
 ):
     """
     This function performs the QMB operation of an arbitrary long list
@@ -63,20 +61,16 @@ def qmb_operator(
         tmp = csr_matrix(tmp + tmp.conj().transpose()) / 2
     elif get_imag:
         tmp = complex(0.0, -0.5) * (csr_matrix(tmp - tmp.conj().transpose()))
-    if sector_indices is not None:
-        return (tmp.tocsc()[:, sector_indices]).tocsr()[sector_indices, :]
-    else:
-        return tmp
+    return tmp
 
 
 def local_op(
     operator,
-    op_1D_site,
+    op_site,
     lvals,
     has_obc,
     staggered_basis=False,
     site_basis=None,
-    sector_indices=None,
 ):
     """
     This function compute the single local operator term on the lattice where the operator
@@ -85,7 +79,7 @@ def local_op(
     Args:
         operator (scipy.sparse): A single site sparse operator matrix.
 
-        op_1D_site (scalar int): position of the site along a certain 1D ordering in the 2D lattice
+        op_site (scalar int): position of the site along a certain 1D ordering in the 2D lattice
 
         lvals (list): Dimensions (# of sites) of a d-dimensional lattice
 
@@ -105,7 +99,7 @@ def local_op(
     # Validate type of parameters
     validate_parameters(
         op_list=[operator],
-        op_sites_list=[op_1D_site],
+        op_sites_list=[op_site],
         lvals=lvals,
         has_obc=has_obc,
         staggered_basis=staggered_basis,
@@ -113,9 +107,9 @@ def local_op(
     )
     # Construct the dictionary of operators and their names needed to construct the QMB local term
     ops, op_names_list = construct_operator_list(
-        [operator], [op_1D_site], lvals, has_obc, staggered_basis, site_basis
+        [operator], [op_site], lvals, has_obc, staggered_basis, site_basis
     )
-    return qmb_operator(ops, op_names_list, sector_indices=sector_indices)
+    return qmb_operator(ops, op_names_list)
 
 
 def two_body_op(
@@ -125,7 +119,6 @@ def two_body_op(
     has_obc,
     staggered_basis=False,
     site_basis=None,
-    sector_indices=None,
 ):
     """
     This function compute the single twobody operator term on the lattice with 2 operators
@@ -164,7 +157,7 @@ def two_body_op(
     ops, op_names_list = construct_operator_list(
         op_list, op_sites_list, lvals, has_obc, staggered_basis, site_basis
     )
-    return qmb_operator(ops, op_names_list, sector_indices=sector_indices)
+    return qmb_operator(ops, op_names_list)
 
 
 def four_body_op(
@@ -174,7 +167,6 @@ def four_body_op(
     has_obc,
     staggered_basis=False,
     site_basis=None,
-    sector_indices=None,
     get_real=False,
 ):
     """
@@ -217,9 +209,7 @@ def four_body_op(
     ops, op_names_list = construct_operator_list(
         op_list, op_sites_list, lvals, has_obc, staggered_basis, site_basis
     )
-    return qmb_operator(
-        ops, op_names_list, get_real=get_real, sector_indices=sector_indices
-    )
+    return qmb_operator(ops, op_names_list, get_real=get_real)
 
 
 def construct_operator_list(
