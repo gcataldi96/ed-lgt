@@ -185,7 +185,7 @@ def global_abelian_sector(loc_dims, sym_op_diags, sym_sectors, sym_type, configs
     if configs is None:
         # Get QMB state configurations
         configs = get_state_configs(loc_dims)
-    logger.info(f"TOT DIM: 2**{round(np.log2(len(configs)),1)}")
+    logger.debug(f"TOT DIM: 2**{round(np.log2(len(configs)),1)}")
     # Convert sym_type to a flag
     sym_type_flag = 0 if sym_type == "U" else 1
     # Compute the check on the whole set of config
@@ -200,5 +200,5 @@ def global_abelian_sector(loc_dims, sym_op_diags, sym_sectors, sym_type, configs
     # Select only the correct configs
     sector_configs = configs[checks]
     sector_indices = np.ravel_multi_index(sector_configs.T, loc_dims)
-    logger.info(f"SECTOR DIM: 2**{round(np.log2(len(sector_configs)),1)}")
+    logger.debug(f"SECTOR DIM: 2**{round(np.log2(len(sector_configs)),1)}")
     return (sector_indices, sector_configs)
