@@ -1,8 +1,10 @@
 # %%
 import numpy as np
+from math import prod
 from copy import deepcopy
 from itertools import product
-from .lattice_mappings import inverse_zig_zag
+from numba import typed
+from .lattice_mappings import inverse_zig_zag, zig_zag
 from ed_lgt.tools import validate_parameters
 
 __all__ = [
@@ -12,6 +14,7 @@ __all__ = [
     "get_plaquette_neighbors",
     "get_lattice_borders_labels",
     "LGT_border_configs",
+    "get_lattice_link_site_pairs",
 ]
 
 
@@ -34,7 +37,8 @@ def get_site_label(coords, lvals, has_obc, staggered=False, all_sites_equal=True
             on borders and corners of the lattice
 
     Returns:
-        (np.array((lvals)),np.array((lvals))): the d-dimensional array with the labels of the site and the corresponding site-basis dimensions
+        (np.array((lvals)),np.array((lvals))): the d-dimensional array with the labels
+            of the site and the corresponding site-basis dimensions
     """
     # Validate type of parameters
     validate_parameters(
@@ -50,9 +54,7 @@ def get_site_label(coords, lvals, has_obc, staggered=False, all_sites_equal=True
     stag_label = (
         "even"
         if staggered and (-1) ** sum(coords) > 0
-        else "odd"
-        if staggered
-        else "site"
+        else "odd" if staggered else "site"
     )
     # SITE LABEL
     site_label = ""
@@ -201,7 +203,8 @@ def get_plaquette_neighbors(coords, lvals, axes, has_obc):
     i1 = inverse_zig_zag(lvals, coords1)
     coords_list = [tuple(coords1)]
     sites_list = [i1]
-    # Build the neighboring sites along the 2 axes. At the end of the cycle, we have 3 Plaquette sites out of 4.
+    # Build the neighboring sites along the 2 axes.
+    # At the end of the cycle, we have 3 Plaquette sites out of 4.
     for ax in axes:
         coords2 = deepcopy(coords1)
         # Get the indices of the axis
@@ -225,6 +228,25 @@ def get_plaquette_neighbors(coords, lvals, axes, has_obc):
         coords_list.append(tuple(coords3))
         sites_list.append(inverse_zig_zag(lvals, coords3))
     return coords_list, sites_list
+
+
+def get_lattice_link_site_pairs(lvals, has_obc):
+    """
+    Acquire all the pairs of sites sharing a lattice link.
+    Pairs form an array for each lattice dimension
+    """
+    site_pairs = typed.List()
+    for d in "xyz"[: len(lvals)]:
+        dir_list = []
+        for ii in range(prod(lvals)):
+            # Compute the corresponding coords
+            coords = zig_zag(lvals, ii)
+            # Check if it admits a twobody term according to the lattice geometry
+            _, sites_list = get_neighbor_sites(coords, lvals, d, has_obc)
+            if sites_list is not None:
+                dir_list.append(sites_list)
+        site_pairs.append(np.array(dir_list, dtype=np.uint8))
+    return site_pairs
 
 
 def get_lattice_borders_labels(lattice_dim):
