@@ -1,11 +1,12 @@
 import numpy as np
 from math import prod
-from ed_lgt.tools import validate_parameters
+from .lattice_mappings import zig_zag
+from .lattice_geometry import get_neighbor_sites
 from .qmb_operations import local_op
 from .qmb_state import QMB_state
-from .lattice_geometry import get_neighbor_sites
-from .lattice_mappings import zig_zag
-from .symmetries import nbody_sector
+from .qmb_term import QMBTerm
+from ed_lgt.tools import validate_parameters
+from ed_lgt.symmetries import nbody_term
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,74 +14,42 @@ logger = logging.getLogger(__name__)
 __all__ = ["LocalTerm", "check_link_symmetry"]
 
 
-class LocalTerm:
-    def __init__(
-        self,
-        operator,
-        op_name,
-        lvals,
-        has_obc,
-        staggered_basis=False,
-        site_basis=None,
-        sector_indices=None,
-        sector_basis=None,
-    ):
+class LocalTerm(QMBTerm):
+    def __init__(self, operator, op_name, **kwargs):
         """
-        This function provides methods for computing local terms in a d-dimensional lattice model.
-        It takes an operator matrix, its name, the lattice dimension and its topology/boundary conditions,
-        and provides methods to compute the Local Hamiltonian Term and expectation values.
+        This function provides methods for computing local Hamiltonian terms in
+        a d-dimensional lattice model.
 
         Args:
             operator (scipy.sparse): A single site sparse operator matrix.
 
             op_name (str): Operator name
 
-            lvals (list of ints): Dimensions (# of sites) of a d-dimensional hypercubic lattice
-
-            has_obc (list of bool): true for OBC, false for PBC along each direction
-
-            staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
-
-            site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices)
-                for lattice sites (corners, borders, lattice core, even/odd sites). Defaults to None.
-
-        Raises:
-            TypeError: If the input arguments are of incorrect types or formats.
+            **kwargs: Additional keyword arguments for QMBTerm.
         """
         # Validate type of parameters
-        validate_parameters(
-            op_list=[operator],
-            op_names_list=[op_name],
-            lvals=lvals,
-            has_obc=has_obc,
-            staggered_basis=staggered_basis,
-            site_basis=site_basis,
-        )
-        self.op = operator
-        self.op_name = op_name
-        self.lvals = lvals
-        self.has_obc = has_obc
-        self.stag_basis = staggered_basis
-        self.site_basis = site_basis
-        self.sector_indices = sector_indices
-        self.sector_basis = sector_basis
+        validate_parameters(op_list=[operator], op_names_list=[op_name])
+        # Preprocess arguments
+        super().__init__(operator=operator, op_name=op_name, **kwargs)
 
     def get_Hamiltonian(self, strength, mask=None):
         """
-        The function calculates the Local Hamiltonian by summing up local terms for each lattice site,
-        potentially with some sites excluded based on the mask.
+        The function calculates the Local Hamiltonian by summing up local terms
+        for each lattice site, potentially with some sites excluded based on the mask.
         The result is scaled by the strength parameter before being returned.
 
         Args:
             strength (scalar): Coupling of the Hamiltonian term.
 
-            mask (np.ndarray, optional): d-dimensional array with bool variables specifying (if True) where to apply the local term. Defaults to None.
+            mask (np.ndarray, optional): d-dimensional array with bool variables
+                specifying (if True) where to apply the local term. Defaults to None.
 
         Raises:
             TypeError: If the input arguments are of incorrect types or formats.
 
         Returns:
-            scipy.sparse: Local Hamiltonian term ready to be used for exact diagonalization/expectation values.
+            scipy.sparse: Local Hamiltonian term ready to be used for exact diagonalization/
+                expectation values.
         """
         # CHECK ON TYPES
         if not np.isscalar(strength):
@@ -90,22 +59,21 @@ class LocalTerm:
         for ii in range(prod(self.lvals)):
             coords = zig_zag(self.lvals, ii)
             # CHECK MASK CONDITION ON THE SITE
-            mask_conditions = (
-                True if mask is None or all([mask is not None, mask[coords]]) else False
-            )
-            if mask_conditions:
-                if self.sector_basis is None:
+            if self.get_mask_conditions(coords, mask):
+                if self.sector_configs is None:
                     H_Local += local_op(
                         operator=self.op,
-                        op_1D_site=ii,
+                        op_site=ii,
                         lvals=self.lvals,
                         has_obc=self.has_obc,
-                        staggered_basis=self.stag_basis,
+                        staggered_basis=self.staggered_basis,
                         site_basis=self.site_basis,
                     )
                 else:
                     # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
-                    H_Local += nbody_sector([self.op], [ii], self.sector_basis)
+                    H_Local += nbody_term(
+                        self.sym_ops, np.array([ii]), self.sector_configs
+                    )
         return strength * H_Local
 
     def get_expval(self, psi, stag_label=None):
@@ -116,7 +84,8 @@ class LocalTerm:
         Args:
             psi (instance of QMB_state class): QMB state where the expectation value has to be computed
 
-            stag_label (str, optional): if odd/even, then the expectation value is performed only on that kind of sites. Defaults to None.
+            stag_label (str, optional): if odd/even, then the expectation value
+                is performed only on that kind of sites. Defaults to None.
 
         Raises:
             TypeError: If the input arguments are of incorrect types or formats.
@@ -141,23 +110,16 @@ class LocalTerm:
         for ii in range(prod(self.lvals)):
             # Given the 1D point on the d-dimensional lattice, get the corresponding coords
             coords = zig_zag(self.lvals, ii)
-            stag = (-1) ** (sum(coords))
-            mask_conditions = [
-                stag_label is None,
-                ((stag_label == "even") and (stag > 0)),
-                ((stag_label == "odd") and (stag < 0)),
-            ]
             # Compute the average value in the site x,y
-            if self.sector_basis is None:
+            if self.sector_configs is None:
                 exp_obs = psi.expectation_value(
                     local_op(
                         operator=self.op,
-                        op_1D_site=ii,
+                        op_site=ii,
                         lvals=self.lvals,
                         has_obc=self.has_obc,
-                        staggered_basis=self.stag_basis,
+                        staggered_basis=self.staggered_basis,
                         site_basis=self.site_basis,
-                        sector_indices=self.sector_indices,
                     )
                 )
                 # Compute the corresponding quantum fluctuation
@@ -165,12 +127,11 @@ class LocalTerm:
                     psi.expectation_value(
                         local_op(
                             operator=self.op**2,
-                            op_1D_site=ii,
+                            op_site=ii,
                             lvals=self.lvals,
                             has_obc=self.has_obc,
-                            staggered_basis=self.stag_basis,
+                            staggered_basis=self.staggered_basis,
                             site_basis=self.site_basis,
-                            sector_indices=self.sector_indices,
                         )
                     )
                     - exp_obs**2
@@ -178,16 +139,17 @@ class LocalTerm:
             else:
                 # GET THE EXPVAL ON THE SYMMETRY SECTOR
                 exp_obs = psi.expectation_value(
-                    nbody_sector([self.op], [ii], self.sector_basis)
+                    nbody_term(self.sym_ops, np.array([ii]), self.sector_configs)
                 )
                 # Compute the corresponding quantum fluctuation
                 exp_var = (
                     psi.expectation_value(
-                        nbody_sector([self.op**2], [ii], self.sector_basis)
+                        nbody_term(self.sym_ops, np.array([ii]), self.sector_configs)
+                        ** 2
                     )
                     - exp_obs**2
                 )
-            if any(mask_conditions):
+            if self.get_staggered_conditions(coords, stag_label):
                 logger.info(f"{coords} {format(exp_obs, '.12f')}")
                 counter += 1
                 self.obs[coords] = exp_obs

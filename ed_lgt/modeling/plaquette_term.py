@@ -1,5 +1,5 @@
 """
-:class:`PlaquetteTerm2D` computes plaquette terms on a 2D lattice model, 
+:class:`PlaquetteTerm` computes plaquette terms on a D>=2 lattice model, 
 providing methods for their calculation and visualization. 
 Plaquette terms are used to compute properties relevant to lattice gauge theories.
 """
@@ -11,7 +11,9 @@ from .lattice_geometry import get_plaquette_neighbors
 from .lattice_mappings import zig_zag
 from .qmb_operations import four_body_op
 from .qmb_state import QMB_state
+from .qmb_term import QMBTerm
 from ed_lgt.tools import validate_parameters
+from ed_lgt.symmetries import nbody_term
 import logging
 
 logger = logging.getLogger(__name__)
@@ -19,21 +21,11 @@ logger = logging.getLogger(__name__)
 __all__ = ["PlaquetteTerm"]
 
 
-class PlaquetteTerm:
-    def __init__(
-        self,
-        axes,
-        op_list,
-        op_names_list,
-        lvals,
-        has_obc,
-        staggered_basis=False,
-        site_basis=None,
-        sector_indices=None,
-        print_plaq=True,
-    ):
+class PlaquetteTerm(QMBTerm):
+    def __init__(self, axes, op_list, op_names_list, print_plaq=True, **kwargs):
         """
-        This function introduce all the fundamental information to define a Plaquette Hamiltonian Term and possible eventual measures of it.
+        This function introduce all the fundamental information to define a Plaquette Hamiltonian
+        Term and possible eventual measures of it.
 
         Args:
             axes (list of str): list of 2 axes along which the Plaquette term should be applied
@@ -41,47 +33,18 @@ class PlaquetteTerm:
             op_list (list of 2 scipy.sparse.matrices): list of the two operators involved in the 2Body Term
 
             op_names_list (list of 2 str): list of the names of the two operators
-
-            lvals (list of ints): Dimensions (# of sites) of a d-dimensional hypercubic lattice
-
-            has_obc (list of bool): true for OBC, false for PBC along each direction
-
-            staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
-
-            site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
-            (corners, borders, lattice core, even/odd sites). Defaults to None.
-
-        Raises:
-            TypeError: If the input arguments are of incorrect types or formats.
         """
         validate_parameters(
             axes=axes,
             op_list=op_list,
             op_names_list=op_names_list,
-            lvals=lvals,
-            has_obc=has_obc,
             print_plaq=print_plaq,
         )
+        # Preprocess arguments
+        super().__init__(op_list=op_list, op_names_list=op_names_list, **kwargs)
         self.axes = axes
-        self.BL = op_list[0]
-        self.BR = op_list[1]
-        self.TL = op_list[2]
-        self.TR = op_list[3]
-        self.BL_name = op_names_list[0]
-        self.BR_name = op_names_list[1]
-        self.TL_name = op_names_list[2]
-        self.TR_name = op_names_list[3]
-        self.op_list = [self.BL, self.BR, self.TL, self.TR]
-        self.lvals = lvals
-        self.dimensions = "xyz"[: len(lvals)]
-        self.has_obc = has_obc
-        self.stag_basis = staggered_basis
-        self.site_basis = site_basis
         self.print_plaq = print_plaq
-        self.sector_indices = sector_indices
-        logger.info(
-            f"Plaquette {op_names_list[0]}-{op_names_list[1]}-{op_names_list[2]}-{op_names_list[3]}"
-        )
+        logger.info(f"Plaquette " + "_".join(op_names_list))
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
         """
@@ -93,12 +56,11 @@ class PlaquetteTerm:
         Args:
             strength (scalar): Coupling of the Hamiltonian term.
 
-            add_dagger (bool, optional): If true, it add the hermitian conjugate of the resulting Hamiltonian. Defaults to False.
+            add_dagger (bool, optional): If true, it add the hermitian conjugate of
+                the resulting Hamiltonian. Defaults to False.
 
-            mask (np.ndarray, optional): 2D array with bool variables specifying (if True) where to apply the local term. Defaults to None.
-
-        Raises:
-            TypeError: If the input arguments are of incorrect types or formats.
+            mask (np.ndarray, optional): 2D array with bool variables specifying
+                (if True) where to apply the local term. Defaults to None.
 
         Returns:
             scipy.sparse: Plaquette Hamiltonian term ready to be used for exact diagonalization/expectation values.
@@ -111,29 +73,28 @@ class PlaquetteTerm:
         H_plaq = 0
         for ii in range(prod(self.lvals)):
             # Compute the corresponding coords of the BL site of the Plaquette
-            coords1 = zig_zag(self.lvals, ii)
+            coords = zig_zag(self.lvals, ii)
             _, sites_list = get_plaquette_neighbors(
-                coords1, self.lvals, self.axes, self.has_obc
+                coords, self.lvals, self.axes, self.has_obc
             )
             if sites_list is None:
                 continue
-            # Check Mask conditions:
-            if mask is None:
-                mask_conditions = True
-            elif mask is not None and mask[coords1]:
-                mask_conditions = True
-            elif mask is not None and not mask[coords1]:
-                mask_conditions = False
-            # Add the Plaquette to the Hamiltonian
-            if mask_conditions:
-                H_plaq += strength * four_body_op(
-                    op_list=self.op_list,
-                    op_sites_list=sites_list,
-                    lvals=self.lvals,
-                    has_obc=self.has_obc,
-                    staggered_basis=self.stag_basis,
-                    site_basis=self.site_basis,
-                )
+            # CHECK MASK CONDITION ON THE SITE
+            if self.get_mask_conditions(coords, mask):
+                # ADD THE TERM TO THE HAMILTONIAN
+                if self.sector_configs is None:
+                    H_plaq += strength * four_body_op(
+                        op_list=self.op_list,
+                        op_sites_list=sites_list,
+                        lvals=self.lvals,
+                        has_obc=self.has_obc,
+                        staggered_basis=self.staggered_basis,
+                        site_basis=self.site_basis,
+                    )
+                else:
+                    H_plaq += strength * nbody_term(
+                        self.sym_ops, np.array(sites_list), self.sector_configs
+                    )
         if not isspmatrix(H_plaq):
             H_plaq = csr_matrix(H_plaq)
         if add_dagger:
@@ -182,43 +143,55 @@ class PlaquetteTerm:
             )
             if sites_list is None:
                 continue
-            # COMPUTE THE PLAQUETTE only for the appropriate site
-            stag = (-1) ** sum(coords)
-            site_conditions = [
-                stag_label is None,
-                (stag_label == "even" and stag > 0),
-                (stag_label == "odd" and stag < 0),
-            ]
-            if any(site_conditions):
-                plaq = psi.expectation_value(
-                    four_body_op(
-                        op_list=self.op_list,
-                        op_sites_list=sites_list,
-                        lvals=self.lvals,
-                        has_obc=self.has_obc,
-                        staggered_basis=self.stag_basis,
-                        site_basis=self.site_basis,
-                        sector_indices=self.sector_indices,
-                        get_real=False,
-                    )
-                )
-                delta_plaq = (
-                    psi.expectation_value(
+
+            if self.get_staggered_conditions(coords, stag_label):
+                if self.sector_configs is None:
+                    plaq = psi.expectation_value(
                         four_body_op(
                             op_list=self.op_list,
                             op_sites_list=sites_list,
                             lvals=self.lvals,
                             has_obc=self.has_obc,
-                            staggered_basis=self.stag_basis,
+                            staggered_basis=self.staggered_basis,
                             site_basis=self.site_basis,
-                            sector_indices=self.sector_indices,
                             get_real=False,
                         )
-                        ** 2,
                     )
-                    - plaq**2
-                )
+                    delta_plaq = (
+                        psi.expectation_value(
+                            four_body_op(
+                                op_list=self.op_list,
+                                op_sites_list=sites_list,
+                                lvals=self.lvals,
+                                has_obc=self.has_obc,
+                                staggered_basis=self.staggered_basis,
+                                site_basis=self.site_basis,
+                                get_real=False,
+                            )
+                            ** 2,
+                        )
+                        - plaq**2
+                    )
+                else:
+                    plaq = psi.expectation_value(
+                        nbody_term(
+                            self.sym_ops, np.array(sites_list), self.sector_configs
+                        )
+                    )
+                    delta_plaq = (
+                        psi.expectation_value(
+                            nbody_term(
+                                self.sym_ops,
+                                np.array(sites_list),
+                                self.sector_configs,
+                            )
+                            ** 2
+                        )
+                        - plaq**2
+                    )
                 # PRINT THE PLAQUETTE
+                logger.info(f"{plaq}")
+                logger.info(f"{delta_plaq}")
                 plaq_string = [f"{c}" for c in coords_list]
                 if self.print_plaq:
                     self.print_Plaquette(plaq_string, plaq)
