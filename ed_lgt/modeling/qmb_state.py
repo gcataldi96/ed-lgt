@@ -145,11 +145,17 @@ class QMB_state:
             loc_states = get_loc_states_from_qmb_state(
                 qmb_index=int(ind), loc_dims=self.loc_dims, lvals=self.lvals
             )
-            logger.info(f"{loc_states}  {format(alpha,'.9f')}  {ind}")
+            ploc_states = print_loc_states(loc_states)
+            logger.info(f"[{ploc_states}]  {format(alpha,'.9f')}  {ind}")
             state_configurations["state_config"].append(loc_states)
             state_configurations["coeff"].append(alpha)
         logger.info("----------------------------------------------------")
         self.state_configs = state_configurations
+
+
+def print_loc_states(loc_states):
+    ploc_states = [str(s).zfill(2) for s in loc_states]
+    return " ".join(ploc_states)
 
 
 class QMB_hamiltonian:
