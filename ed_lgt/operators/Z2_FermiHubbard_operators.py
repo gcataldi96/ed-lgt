@@ -161,10 +161,17 @@ def Z2_FermiHubbard_dressed_site_operators(lattice_dim=2):
     ops |= Qs
     # --------------------------------------------------------------------------------
     # Psi NUMBER OPERATORS
-    for label in ["up", "down", "tot", "single", "pair", "pair_half"]:
-        ops[f"N_{label}"] = qmb_op(
-            in_ops, [f"N_{label}"] + ["IDz" for i in range(2 * lattice_dim)]
-        )
+    for label in [
+        "N_up",
+        "N_down",
+        "N_tot",
+        "N_single",
+        "N_pair",
+        "N_pair_half",
+        "Sz",
+        "S2",
+    ]:
+        ops[label] = qmb_op(in_ops, [label] + ["IDz" for i in range(2 * lattice_dim)])
     # --------------------------------------------------------------------------------
     if lattice_dim == 2:
         # LOCAL OPERATOR WITH THE SUM OF RISHON NUMBERS ALONG EACH LINK
