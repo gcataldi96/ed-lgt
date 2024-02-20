@@ -42,20 +42,20 @@ def sitebased_sym_sector_configs(
 
 
 def get_symmetry_sector_generators(
-    op_list, loc_dims, action="global", site_basis=None, lattice_labels=None
+    op_list, loc_dims, action="global", gauge_basis=None, lattice_labels=None
 ):
-    def apply_basis_projection(op, basis_label, site_basis):
-        return site_basis[basis_label].transpose() @ op @ site_basis[basis_label]
+    def apply_basis_projection(op, basis_label, gauge_basis):
+        return gauge_basis[basis_label].transpose() @ op @ gauge_basis[basis_label]
 
     n_sites = len(loc_dims)
     if action == "global":
         # Generators of Global Abelian Symmetry sector
-        if site_basis is not None:
+        if gauge_basis is not None:
             op_diagonals = np.zeros((len(op_list), n_sites, max(loc_dims)), dtype=float)
             for ii, op in enumerate(op_list):
                 for jj, loc_dim in enumerate(loc_dims):
                     op_diag = apply_basis_projection(
-                        op, lattice_labels[jj], site_basis
+                        op, lattice_labels[jj], gauge_basis
                     ).diagonal()
                     op_diagonals[ii, jj, :loc_dim] = op_diag
         else:
@@ -64,7 +64,7 @@ def get_symmetry_sector_generators(
         # Generators of Link Abelian symmetry sector
         num_directions = len(op_list)
 
-        if site_basis is not None:
+        if gauge_basis is not None:
             op_diagonals = np.zeros(
                 (num_directions, 2, n_sites, max(loc_dims)), dtype=float
             )
@@ -72,7 +72,7 @@ def get_symmetry_sector_generators(
                 for jj in range(2):
                     for kk, loc_dim in enumerate(loc_dims):
                         op_diag = apply_basis_projection(
-                            op_list[ii][jj], lattice_labels[kk], site_basis
+                            op_list[ii][jj], lattice_labels[kk], gauge_basis
                         ).diagonal()
                         op_diagonals[ii, jj, kk, :loc_dim] = op_diag
         else:
