@@ -118,13 +118,17 @@ def link_abelian_sector(loc_dims, sym_op_diags, sym_sectors, pair_list, configs=
     if configs is None:
         # Get QMB state configurations
         configs = get_state_configs(loc_dims)
-    logger.debug(f"TOT DIM: 2**{round(np.log2(len(configs)),1)}")
-
+    # Acquire Sector dimension
+    sector_dim = len(configs)
+    logger.info(f"TOT DIM: {sector_dim}, 2^{round(np.log2(sector_dim),1)}")
+    sym_sectors = np.array(sym_sectors, dtype=float)
     checks = check_link_sym_configs_sitebased(
         configs, sym_op_diags, sym_sectors, pair_list
     )
     # Filter configs based on checks
     sector_configs = configs[checks]
     sector_indices = np.ravel_multi_index(sector_configs.T, loc_dims)
-    logger.debug(f"SECTOR DIM: 2**{round(np.log2(len(sector_configs)),1)}")
+    # Acquire dimension of the new sector
+    sector_dim = len(sector_configs)
+    logger.info(f"SEC DIM: {sector_dim}, 2^{round(np.log2(sector_dim),1)}")
     return (sector_indices, sector_configs)
