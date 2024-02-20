@@ -44,7 +44,6 @@ class PlaquetteTerm(QMBTerm):
         super().__init__(op_list=op_list, op_names_list=op_names_list, **kwargs)
         self.axes = axes
         self.print_plaq = print_plaq
-        logger.info(f"Plaquette " + "_".join(op_names_list))
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
         """
@@ -86,10 +85,7 @@ class PlaquetteTerm(QMBTerm):
                     H_plaq += strength * four_body_op(
                         op_list=self.op_list,
                         op_sites_list=sites_list,
-                        lvals=self.lvals,
-                        has_obc=self.has_obc,
-                        staggered_basis=self.staggered_basis,
-                        site_basis=self.site_basis,
+                        **self.def_params,
                     )
                 else:
                     H_plaq += strength * nbody_term(
@@ -123,14 +119,10 @@ class PlaquetteTerm(QMBTerm):
         # ADVERTISE OF THE CHOSEN PART OF THE PLAQUETTE YOU WANT TO COMPUTE
         if self.print_plaq:
             logger.info(f"----------------------------------------------------")
-            if get_imag:
-                chosen_part = "IMAG"
-            else:
-                chosen_part = "REAL"
             if stag_label is None:
-                logger.info(f"PLAQUETTE: {chosen_part}")
+                logger.info(f"PLAQUETTE: {'_'.join(self.op_names_list)}")
             else:
-                logger.info(f"PLAQUETTE: {chosen_part} PART {stag_label}")
+                logger.info(f"PLAQUETTE: {'_'.join(self.op_names_list)}")
             logger.info(f"----------------------------------------------------")
         self.avg = 0.0
         self.std = 0.0
@@ -150,11 +142,7 @@ class PlaquetteTerm(QMBTerm):
                         four_body_op(
                             op_list=self.op_list,
                             op_sites_list=sites_list,
-                            lvals=self.lvals,
-                            has_obc=self.has_obc,
-                            staggered_basis=self.staggered_basis,
-                            site_basis=self.site_basis,
-                            get_real=False,
+                            **self.def_params,
                         )
                     )
                     delta_plaq = (
@@ -162,11 +150,7 @@ class PlaquetteTerm(QMBTerm):
                             four_body_op(
                                 op_list=self.op_list,
                                 op_sites_list=sites_list,
-                                lvals=self.lvals,
-                                has_obc=self.has_obc,
-                                staggered_basis=self.staggered_basis,
-                                site_basis=self.site_basis,
-                                get_real=False,
+                                **self.def_params,
                             )
                             ** 2,
                         )
@@ -190,8 +174,6 @@ class PlaquetteTerm(QMBTerm):
                         - plaq**2
                     )
                 # PRINT THE PLAQUETTE
-                logger.info(f"{plaq}")
-                logger.info(f"{delta_plaq}")
                 plaq_string = [f"{c}" for c in coords_list]
                 if self.print_plaq:
                     self.print_Plaquette(plaq_string, plaq)
@@ -208,13 +190,9 @@ class PlaquetteTerm(QMBTerm):
         if not isinstance(sites_list, list):
             raise TypeError(f"sites_list should be a LIST, not a {type(sites_list)}")
         if len(sites_list) != 4:
-            raise ValueError(
-                f"sites_list should have 4 elements, not {str(len(sites_list))}"
-            )
+            raise ValueError(f"sites_list has 4 elements, not {str(len(sites_list))}")
         if not isinstance(value, float):
-            raise TypeError(
-                f"sites_list should be a FLOAT REAL NUMBER, not a {type(value)}"
-            )
+            raise TypeError(f"sites_list should be FLOAT, not a {type(value)}")
         if value > 0:
             value = format(value, ".10f")
         else:

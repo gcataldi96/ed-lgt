@@ -61,14 +61,7 @@ class LocalTerm(QMBTerm):
             # CHECK MASK CONDITION ON THE SITE
             if self.get_mask_conditions(coords, mask):
                 if self.sector_configs is None:
-                    H_Local += local_op(
-                        operator=self.op,
-                        op_site=ii,
-                        lvals=self.lvals,
-                        has_obc=self.has_obc,
-                        staggered_basis=self.staggered_basis,
-                        site_basis=self.site_basis,
-                    )
+                    H_Local += local_op(operator=self.op, op_site=ii, **self.def_params)
                 else:
                     # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
                     H_Local += nbody_term(
@@ -113,26 +106,12 @@ class LocalTerm(QMBTerm):
             # Compute the average value in the site x,y
             if self.sector_configs is None:
                 exp_obs = psi.expectation_value(
-                    local_op(
-                        operator=self.op,
-                        op_site=ii,
-                        lvals=self.lvals,
-                        has_obc=self.has_obc,
-                        staggered_basis=self.staggered_basis,
-                        site_basis=self.site_basis,
-                    )
+                    local_op(operator=self.op, op_site=ii, **self.def_params)
                 )
                 # Compute the corresponding quantum fluctuation
                 exp_var = (
                     psi.expectation_value(
-                        local_op(
-                            operator=self.op**2,
-                            op_site=ii,
-                            lvals=self.lvals,
-                            has_obc=self.has_obc,
-                            staggered_basis=self.staggered_basis,
-                            site_basis=self.site_basis,
-                        )
+                        local_op(operator=self.op**2, op_site=ii, **self.def_params)
                     )
                     - exp_obs**2
                 )
@@ -180,4 +159,5 @@ def check_link_symmetry(axis, loc_op1, loc_op2, value=0, sign=1):
         if np.abs(tmp - value) > 1e-10:
             logger.info(loc_op1.obs[c1], loc_op2.obs[c2])
             raise ValueError(f"{axis}-Link Symmetry is violated at index {ii}")
+    logger.info("----------------------------------------------------")
     logger.info(f"{axis}-LINK SYMMETRY IS SATISFIED")

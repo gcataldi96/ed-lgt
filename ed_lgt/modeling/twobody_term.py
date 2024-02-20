@@ -42,7 +42,6 @@ class TwoBodyTerm(QMBTerm):
             raise ValueError(f"axis should be in {self.dimensions}: got {axis}")
         else:
             self.axis = axis
-        logger.info(f"twobody-term " + "_".join(op_names_list))
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
         """
@@ -87,10 +86,7 @@ class TwoBodyTerm(QMBTerm):
                     H_twobody += strength * two_body_op(
                         op_list=self.op_list,
                         op_sites_list=sites_list,
-                        lvals=self.lvals,
-                        has_obc=self.has_obc,
-                        staggered_basis=self.staggered_basis,
-                        site_basis=self.site_basis,
+                        **self.def_params,
                     )
                 else:
                     # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
@@ -116,6 +112,9 @@ class TwoBodyTerm(QMBTerm):
         # Check on parameters
         if not isinstance(psi, QMB_state):
             raise TypeError(f"psi must be instance of class:QMB_state not {type(psi)}")
+        # PRINT OBSERVABLE NAME
+        logger.info(f"----------------------------------------------------")
+        logger.info(f"{'-'.join(self.op_names_list)}")
         # Create an array to store the correlator
         self.corr = np.zeros(self.lvals + self.lvals)
         # RUN OVER THE LATTICE SITES
@@ -129,10 +128,7 @@ class TwoBodyTerm(QMBTerm):
                         two_body_op(
                             op_list=self.op_list,
                             op_sites_list=[ii, jj],
-                            lvals=self.lvals,
-                            has_obc=self.has_obc,
-                            staggered_basis=self.staggered_basis,
-                            site_basis=self.site_basis,
+                            **self.def_params,
                         )
                     )
                 else:
@@ -144,3 +140,18 @@ class TwoBodyTerm(QMBTerm):
                             sector_configs=self.sector_configs,
                         )
                     )
+
+    def print_nearest_neighbors(self):
+        for ii in range(prod(self.lvals)):
+            # Compute the corresponding coords
+            coords = zig_zag(self.lvals, ii)
+            # Check if it admits a twobody term according to the lattice geometry
+            coords_list, sites_list = get_neighbor_sites(
+                coords, self.lvals, self.axis, self.has_obc
+            )
+            if sites_list is None:
+                continue
+            else:
+                c1 = coords_list[0]
+                c2 = coords_list[1]
+                logger.info(f"{c1}-{c2} {self.corr[c1 + c2]}")
