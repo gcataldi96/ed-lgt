@@ -18,7 +18,7 @@ __all__ = [
 ]
 
 
-def get_site_label(coords, lvals, has_obc, staggered=False, all_sites_equal=True):
+def get_site_label(coords, lvals, has_obc, staggered_basis=False, all_sites_equal=True):
     """
     This function associate a label to each lattice site according
     to the presence of a staggered basis, the choice of the boundary
@@ -31,7 +31,7 @@ def get_site_label(coords, lvals, has_obc, staggered=False, all_sites_equal=True
 
         has_obc (list of bool): true for OBC, false for PBC along each direction
 
-        staggered (bool, optional): if True, a staggered basis is required. Defaults to False.
+        staggered_basis (bool, optional): if True, a staggered basis is required. Defaults to False.
 
         all_sites_equal (bool, optional): if False, a different basis can be used for sites
             on borders and corners of the lattice
@@ -45,7 +45,7 @@ def get_site_label(coords, lvals, has_obc, staggered=False, all_sites_equal=True
         coords=coords,
         lvals=lvals,
         has_obc=has_obc,
-        staggered=staggered,
+        staggered_basis=staggered_basis,
         all_sites_equal=all_sites_equal,
     )
     # Define the list of lattice axes
@@ -53,8 +53,8 @@ def get_site_label(coords, lvals, has_obc, staggered=False, all_sites_equal=True
     # STAGGERED LABEL
     stag_label = (
         "even"
-        if staggered and (-1) ** sum(coords) > 0
-        else "odd" if staggered else "site"
+        if staggered_basis and (-1) ** sum(coords) > 0
+        else "odd" if staggered_basis else "site"
     )
     # SITE LABEL
     site_label = ""
@@ -73,34 +73,36 @@ def get_site_label(coords, lvals, has_obc, staggered=False, all_sites_equal=True
     return label
 
 
-def lattice_base_configs(base, lvals, has_obc, staggered=False):
+def lattice_base_configs(gauge_basis, lvals, has_obc, staggered_basis=False):
     """
     This function associates the basis to each lattice site and the corresponding dimension.
 
     Args:
-        base (dict of sparse matrices): dict with the proper hilbert basis
+        gauge_basis (dict of sparse matrices): dict with the proper hilbert basis
             of a given LGT for each lattice site
 
         lvals (list of ints): lattice dimensions
 
         has_obc (list of bool): true for OBC, false for PBC along each direction
 
-        staggered (bool, optional): if True, a staggered basis is required. Default to False.
+        staggered_basis (bool, optional): if True, a staggered  basis is required. Default to False.
 
     Returns:
         (np.array((lvals)),np.array((lvals))): the d-dimensional array with the labels of
             the site and the d-dimensional array with the corresponding site-basis dimensions
     """
     # Validate type of parameters
-    validate_parameters(lvals=lvals, has_obc=has_obc, staggered=staggered)
+    validate_parameters(lvals=lvals, has_obc=has_obc, staggered_basis=staggered_basis)
     # Construct the lattice base
     lattice_base = np.zeros(tuple(lvals), dtype=object)
     loc_dims = np.zeros(tuple(lvals), dtype=int)
     for coords in product(*[range(l) for l in lvals]):
         # PROVIDE A LABEL TO THE LATTICE SITE
-        label = get_site_label(coords, lvals, has_obc, staggered, all_sites_equal=False)
+        label = get_site_label(
+            coords, lvals, has_obc, staggered_basis, all_sites_equal=False
+        )
         lattice_base[tuple(coords)] = label
-        loc_dims[tuple(coords)] = base[label].shape[1]
+        loc_dims[tuple(coords)] = gauge_basis[label].shape[1]
     return lattice_base, loc_dims
 
 

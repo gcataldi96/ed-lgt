@@ -55,10 +55,9 @@ def validate_parameters(
     get_real=None,
     get_imag=None,
     staggered_basis=None,
-    staggered=None,
     stag_label=None,
     all_sites_equal=None,
-    site_basis=None,
+    gauge_basis=None,
     dictionary=None,
     filename=None,
     phrase=None,
@@ -139,8 +138,6 @@ def validate_parameters(
     if get_imag is not None and not isinstance(get_imag, bool):
         raise TypeError(f"get_imag should be a BOOL, not {type(get_imag)}")
     # -----------------------------------------------------------------------------
-    if staggered is not None and not isinstance(staggered, bool):
-        raise TypeError(f"staggered should be a BOOL, not {type(staggered)}")
     if staggered_basis is not None and not isinstance(staggered_basis, bool):
         raise TypeError(f"staggered_basis must be a BOOL, not {type(staggered_basis)}")
     if stag_label is not None and not any([stag_label == "even", stag_label == "odd"]):
@@ -149,8 +146,8 @@ def validate_parameters(
         raise TypeError(
             f"all_sites_equal should be a BOOL, not {type(all_sites_equal)}"
         )
-    if site_basis is not None and not isinstance(site_basis, dict):
-        raise TypeError(f"site_basis must be a DICT, not {type(site_basis)}")
+    if gauge_basis is not None and not isinstance(gauge_basis, dict):
+        raise TypeError(f"gauge_basis must be a DICT, not {type(gauge_basis)}")
     # -----------------------------------------------------------------------------
     if dictionary is not None and not isinstance(dictionary, dict):
         raise TypeError(f"dictionary should be a DICT, not {type(dictionary)}")
