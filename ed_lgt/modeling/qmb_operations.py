@@ -70,7 +70,7 @@ def local_op(
     lvals,
     has_obc,
     staggered_basis=False,
-    site_basis=None,
+    gauge_basis=None,
 ):
     """
     This function compute the single local operator term on the lattice where the operator
@@ -87,7 +87,7 @@ def local_op(
 
         staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
 
-        site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
+        gauge_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
             (corners, borders, lattice core, even/odd sites). Defaults to None.
 
     Raises:
@@ -103,11 +103,11 @@ def local_op(
         lvals=lvals,
         has_obc=has_obc,
         staggered_basis=staggered_basis,
-        site_basis=site_basis,
+        gauge_basis=gauge_basis,
     )
     # Construct the dictionary of operators and their names needed to construct the QMB local term
     ops, op_names_list = construct_operator_list(
-        [operator], [op_site], lvals, has_obc, staggered_basis, site_basis
+        [operator], [op_site], lvals, has_obc, staggered_basis, gauge_basis
     )
     return qmb_operator(ops, op_names_list)
 
@@ -118,7 +118,7 @@ def two_body_op(
     lvals,
     has_obc,
     staggered_basis=False,
-    site_basis=None,
+    gauge_basis=None,
 ):
     """
     This function compute the single twobody operator term on the lattice with 2 operators
@@ -135,7 +135,7 @@ def two_body_op(
 
         staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
 
-        site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
+        gauge_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
             (corners, borders, lattice core, even/odd sites). Defaults to None.
 
     Raises:
@@ -151,11 +151,11 @@ def two_body_op(
         lvals=lvals,
         has_obc=has_obc,
         staggered_basis=staggered_basis,
-        site_basis=site_basis,
+        gauge_basis=gauge_basis,
     )
     # Construct the dictionary of operators and their names needed to construct the QMB twobody term
     ops, op_names_list = construct_operator_list(
-        op_list, op_sites_list, lvals, has_obc, staggered_basis, site_basis
+        op_list, op_sites_list, lvals, has_obc, staggered_basis, gauge_basis
     )
     return qmb_operator(ops, op_names_list)
 
@@ -166,7 +166,7 @@ def four_body_op(
     lvals,
     has_obc,
     staggered_basis=False,
-    site_basis=None,
+    gauge_basis=None,
     get_real=False,
 ):
     """
@@ -184,7 +184,7 @@ def four_body_op(
 
         staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
 
-        site_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
+        gauge_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
             (corners, borders, lattice core, even/odd sites). Defaults to None.
 
         get_real (bool, optional): If true, it yields the real part of the operator. Defaults to False.
@@ -203,17 +203,17 @@ def four_body_op(
         has_obc=has_obc,
         get_real=get_real,
         staggered_basis=staggered_basis,
-        site_basis=site_basis,
+        gauge_basis=gauge_basis,
     )
     # Construct the dictionary of operators and their names needed to construct the QMB twobody term
     ops, op_names_list = construct_operator_list(
-        op_list, op_sites_list, lvals, has_obc, staggered_basis, site_basis
+        op_list, op_sites_list, lvals, has_obc, staggered_basis, gauge_basis
     )
     return qmb_operator(ops, op_names_list, get_real=get_real)
 
 
 def construct_operator_list(
-    op_list, op_sites_list, lvals, has_obc, staggered_basis, site_basis
+    op_list, op_sites_list, lvals, has_obc, staggered_basis, gauge_basis
 ):
     """
     Constructs a dictionary of operators and a list of their names for a quantum many-body lattice.
@@ -230,7 +230,7 @@ def construct_operator_list(
 
         staggered_basis (bool): Indicates if a staggered basis is used for the lattice.
 
-        site_basis (dict): A dictionary containing the basis projectors for each site, keyed by site labels.
+        gauge_basis (dict): A dictionary containing the basis projectors for each site, keyed by site labels.
 
     Returns:
         tuple: A tuple containing a dictionary of operators keyed by their names and a list of operator names.
@@ -242,9 +242,9 @@ def construct_operator_list(
         lvals=lvals,
         has_obc=has_obc,
         staggered_basis=staggered_basis,
-        site_basis=site_basis,
+        gauge_basis=gauge_basis,
     )
-    all_sites_equal = True if site_basis is None else False
+    all_sites_equal = True if gauge_basis is None else False
     # Define the identity operator
     ID = identity(op_list[0].shape[0])
     # Empty dictionary of operators and list of their names
@@ -267,14 +267,14 @@ def construct_operator_list(
             coords, lvals, has_obc, staggered_basis, all_sites_equal
         )
         # Apply projection of the operator on the proper basis for that lattice position (and update its name)
-        op, op_name = apply_basis_projection(op, op_name, basis_label, site_basis)
+        op, op_name = apply_basis_projection(op, op_name, basis_label, gauge_basis)
         # Save operator and its name
         ops_dict[op_name] = op
         op_names_list.append(op_name)
     return ops_dict, op_names_list
 
 
-def apply_basis_projection(op, op_name, basis_label, site_basis):
+def apply_basis_projection(op, op_name, basis_label, gauge_basis):
     """
     Applies basis projection to an operator for a specific lattice site and updates its name.
 
@@ -285,7 +285,7 @@ def apply_basis_projection(op, op_name, basis_label, site_basis):
 
         basis_label (str): The label identifying the basis projection applicable to the lattice site.
 
-        site_basis (dict of scipy.sparse matrices): Dictionary containing the basis projectors for each site, keyed by site labels.
+        gauge_basis (dict of scipy.sparse matrices): Dictionary containing the basis projectors for each site, keyed by site labels.
 
     Returns:
         tuple: A tuple containing the projected operator and its updated name.
@@ -294,11 +294,11 @@ def apply_basis_projection(op, op_name, basis_label, site_basis):
     validate_parameters(
         op_list=[op],
         op_names_list=[op_name],
-        site_basis=site_basis,
+        gauge_basis=gauge_basis,
     )
-    if len(basis_label) > 0 and site_basis is not None:
+    if len(basis_label) > 0 and gauge_basis is not None:
         # Apply projection of the operator on the proper basis for that lattice position
-        op = site_basis[basis_label].transpose() * op * site_basis[basis_label]
+        op = gauge_basis[basis_label].transpose() * op * gauge_basis[basis_label]
         # Update the name of the operator with the label
         op_name = f"{op_name}_{basis_label}"
     return op, op_name
