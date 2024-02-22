@@ -63,7 +63,7 @@ def SU2_dressed_site_operators(s, pure_theory, lattice_dim=2):
     ops = {}
     if lattice_dim == 1:
         # T generators for electric term
-        for op in ["T2", "T4", "Tx", "Ty", "Tz"]:
+        for op in ["T2", "T4", "Tx", "Ty", "Tz", "P"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz"])
             ops[f"{op}_px"] = qmb_op(in_ops, ["IDz", op])
         if not pure_theory:
@@ -92,7 +92,7 @@ def SU2_dressed_site_operators(s, pure_theory, lattice_dim=2):
             ops |= Qs
     elif lattice_dim == 2:
         # T generators for electric term
-        for op in ["T2", "T4", "Tx", "Ty", "Tz"]:
+        for op in ["T2", "T4", "Tx", "Ty", "Tz", "P"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz", "IDz", "IDz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["IDz", op, "IDz", "IDz"])
             ops[f"{op}_px"] = qmb_op(in_ops, ["IDz", "IDz", op, "IDz"])
@@ -151,7 +151,7 @@ def SU2_dressed_site_operators(s, pure_theory, lattice_dim=2):
             ops |= Qs
     elif lattice_dim == 3:
         # T generators for electric term
-        for op in ["T2", "T4", "Tx", "Ty", "Tz"]:
+        for op in ["T2", "T4", "Tx", "Ty", "Tz", "P"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz", "IDz", "IDz", "IDz", "IDz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["IDz", op, "IDz", "IDz", "IDz", "IDz"])
             ops[f"{op}_mz"] = qmb_op(in_ops, ["IDz", "IDz", op, "IDz", "IDz", "IDz"])
