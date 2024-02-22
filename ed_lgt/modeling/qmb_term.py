@@ -73,7 +73,7 @@ class QMBTerm:
                     else self.op_list[0].shape[0]
                 )
                 self.loc_dims = np.array(
-                    [loc_dim for _ in range(prod(self.lvals))], dype=np.uint8
+                    [loc_dim for _ in range(prod(self.lvals))], dtype=np.uint8
                 )
             # Construct the symmetry operators
             sym_op_list = [self.op] if self.op is not None else self.op_list
