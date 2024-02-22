@@ -157,7 +157,8 @@ def check_link_symmetry(axis, loc_op1, loc_op2, value=0, sign=1):
             tmp = loc_op1.obs[c1]
             tmp += sign * loc_op2.obs[c2]
         if np.abs(tmp - value) > 1e-10:
-            logger.info(loc_op1.obs[c1], loc_op2.obs[c2])
+            logger.info(f"{loc_op1.obs[c1]}")
+            logger.info(f"{loc_op2.obs[c2]}")
             raise ValueError(f"{axis}-Link Symmetry is violated at index {ii}")
     logger.info("----------------------------------------------------")
     logger.info(f"{axis}-LINK SYMMETRY IS SATISFIED")
