@@ -7,6 +7,9 @@ from ed_lgt.modeling import qmb_operator as qmb_op
 from ed_lgt.modeling import get_lattice_borders_labels, LGT_border_configs
 from ed_lgt.tools import anti_commutator as anti_comm
 from .bose_fermi_operators import fermi_operators as QED_matter_operators
+import logging
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "QED_Hamiltonian_couplings",
@@ -133,7 +136,7 @@ def QED_dressed_site_operators(spin, pure_theory, U, lattice_dim):
     ops = {}
     if lattice_dim == 1:
         # Rishon Electric operators
-        for op in ["E", "E_square", "n"]:
+        for op in ["E", "E_square", "n", "P"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz"])
             ops[f"{op}_px"] = qmb_op(in_ops, ["IDz", op])
         if not pure_theory:
@@ -153,7 +156,7 @@ def QED_dressed_site_operators(spin, pure_theory, U, lattice_dim):
             ops["N"] = qmb_op(in_ops, ["N", "IDz", "IDz"])
     elif lattice_dim == 2:
         # Rishon Electric operators
-        for op in ["E", "E_square", "n"]:
+        for op in ["E", "E_square", "n", "P"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz", "IDz", "IDz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["IDz", op, "IDz", "IDz"])
             ops[f"{op}_px"] = qmb_op(in_ops, ["IDz", "IDz", op, "IDz"])
@@ -182,7 +185,7 @@ def QED_dressed_site_operators(spin, pure_theory, U, lattice_dim):
             ops["N"] = qmb_op(in_ops, ["N", "IDz", "IDz", "IDz", "IDz"])
     elif lattice_dim == 3:
         # Rishon Electric operators
-        for op in ["E", "E_square", "n"]:
+        for op in ["E", "E_square", "n", "P"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz", "IDz", "IDz", "IDz", "IDz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["IDz", op, "IDz", "IDz", "IDz", "IDz"])
             ops[f"{op}_mz"] = qmb_op(in_ops, ["IDz", "IDz", op, "IDz", "IDz", "IDz"])
@@ -333,15 +336,15 @@ def QED_check_gauss_law(spin, pure_theory, lattice_dim, gauss_law_ops, threshold
         # Check that the basis is the one with ALL the states satisfying Gauss law
         norm_GL = norm(gauss_law_ops[site] * M[site])
         if norm_GL > threshold:
-            print(f"Norm of GL * Basis: {norm_GL}, expected 0")
+            logger.info(f"Norm of GL * Basis: {norm_GL}, expected 0")
             raise ValueError(f"Gauss Law not satisfied for {site} sites")
         if site_dim - matrix_rank(gauss_law_ops[site].todense()) != eff_site_dim:
-            print(site)
-            print(f"Large dimension {site_dim}")
-            print(f"Effective dimension {eff_site_dim}")
-            print(matrix_rank(gauss_law_ops[site].todense()))
-            print(f"Some gauge basis states of {site} sites are missing")
-    print("QED GAUSS LAW SATISFIED")
+            logger.info(site)
+            logger.info(f"Large dimension {site_dim}")
+            logger.info(f"Effective dimension {eff_site_dim}")
+            logger.info(matrix_rank(gauss_law_ops[site].todense()))
+            logger.info(f"Some gauge basis states of {site} sites are missing")
+    logger.info("QED GAUSS LAW SATISFIED")
 
 
 def QED_gauge_invariant_states(spin, pure_theory, lattice_dim):
@@ -483,5 +486,5 @@ def QED_Hamiltonian_couplings(pure_theory, g, m=None):
             "m_even": m,
             "m_odd": -m,
         }
-    print(f"LINK SYMMETRY PENALTY {coeffs['eta']}")
+    logger.info(f"LINK SYMMETRY PENALTY {coeffs['eta']}")
     return coeffs
