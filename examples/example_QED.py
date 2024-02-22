@@ -12,9 +12,11 @@ from ed_lgt.modeling import (
     staggered_mask,
     lattice_base_configs,
 )
+import logging
 
+logger = logging.getLogger(__name__)
 # N eigenvalues
-n_eigs = 1
+n_eigs = 2
 # LATTICE DIMENSIONS
 lvals = [2, 2]
 dim = len(lvals)
@@ -24,7 +26,7 @@ n_sites = prod(lvals)
 # BOUNDARY CONDITIONS
 has_obc = [True, True]
 # DEFINE the truncation of the gauge field and the type of U
-spin = 1
+spin = 3
 U = "ladder"
 # PURE or FULL THEORY
 pure_theory = False
@@ -34,7 +36,7 @@ if pure_theory:
     m = None
     staggered_basis = False
 else:
-    m = 0.1
+    m = 1
     staggered_basis = True
 # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
 ops = QED_dressed_site_operators(spin, pure_theory, U, lattice_dim=dim)
@@ -42,11 +44,11 @@ ops = QED_dressed_site_operators(spin, pure_theory, U, lattice_dim=dim)
 M, states = QED_gauge_invariant_states(spin, pure_theory, lattice_dim=dim)
 # ACQUIRE LOCAL DIMENSION OF EVERY SINGLE SITE
 lattice_base, loc_dims = lattice_base_configs(
-    M, lvals, has_obc, staggered=staggered_basis
+    M, lvals, has_obc, staggered_basis=staggered_basis
 )
 loc_dims = loc_dims.transpose().reshape(n_sites)
 lattice_base = lattice_base.transpose().reshape(n_sites)
-print("local dimensions:", loc_dims)
+logger.info(f"local dimensions: {loc_dims}")
 # ACQUIRE HAMILTONIAN COEFFICIENTS
 coeffs = QED_Hamiltonian_couplings(pure_theory, g, m)
 # ===============================================================================
@@ -66,7 +68,7 @@ for d in directions:
         lvals=lvals,
         has_obc=has_obc,
         staggered_basis=staggered_basis,
-        site_basis=M,
+        gauge_basis=M,
     )
     H.Ham += h_terms[f"W_{d}"].get_Hamiltonian(strength=2 * coeffs["eta"])
     # SINGLE SITE OPERATORS needed for the LINK SYMMETRY/OBC PENALTIES
@@ -78,7 +80,7 @@ for d in directions:
             lvals=lvals,
             has_obc=has_obc,
             staggered_basis=staggered_basis,
-            site_basis=M,
+            gauge_basis=M,
         )
         H.Ham += h_terms[op_name].get_Hamiltonian(strength=coeffs["eta"])
 # -------------------------------------------------------------------------------
@@ -90,7 +92,7 @@ h_terms[op_name] = LocalTerm(
     lvals=lvals,
     has_obc=has_obc,
     staggered_basis=staggered_basis,
-    site_basis=M,
+    gauge_basis=M,
 )
 H.Ham += h_terms[op_name].get_Hamiltonian(strength=coeffs["E"])
 # -------------------------------------------------------------------------------
@@ -105,7 +107,7 @@ if dim > 1:
         lvals=lvals,
         has_obc=has_obc,
         staggered_basis=staggered_basis,
-        site_basis=M,
+        gauge_basis=M,
     )
     H.Ham += h_terms["plaq_xy"].get_Hamiltonian(strength=coeffs["B"], add_dagger=True)
 if dim == 3:
@@ -119,7 +121,7 @@ if dim == 3:
         lvals=lvals,
         has_obc=has_obc,
         staggered_basis=staggered_basis,
-        site_basis=M,
+        gauge_basis=M,
     )
     H.Ham += h_terms["plaq_xz"].get_Hamiltonian(strength=coeffs["B"], add_dagger=True)
     # YZ Plane
@@ -132,7 +134,7 @@ if dim == 3:
         lvals=lvals,
         has_obc=has_obc,
         staggered_basis=staggered_basis,
-        site_basis=M,
+        gauge_basis=M,
     )
     H.Ham += h_terms["plaq_yz"].get_Hamiltonian(strength=coeffs["B"], add_dagger=True)
 # -------------------------------------------------------------------------------
@@ -146,7 +148,7 @@ if not pure_theory:
             lvals=lvals,
             has_obc=has_obc,
             staggered_basis=staggered_basis,
-            site_basis=M,
+            gauge_basis=M,
         )
         H.Ham += h_terms[f"N_{site}"].get_Hamiltonian(
             coeffs[f"m_{site}"], staggered_mask(lvals, site)
@@ -166,7 +168,7 @@ if not pure_theory:
                 lvals=lvals,
                 has_obc=has_obc,
                 staggered_basis=staggered_basis,
-                site_basis=M,
+                gauge_basis=M,
             )
             H.Ham += h_terms[f"{d}_hop_{site}"].get_Hamiltonian(
                 strength=coeffs[f"t{d}_{site}"],
@@ -194,7 +196,7 @@ for obs in local_obs:
         lvals=lvals,
         has_obc=has_obc,
         staggered_basis=staggered_basis,
-        site_basis=M,
+        gauge_basis=M,
     )
     res[obs] = []
 # LIST OF PLAQUETTE OBSERVABLES
@@ -207,8 +209,8 @@ for plaq_name in plaquette_obs:
     res[plaq_name] = []
 # ===========================================================================
 for ii in range(n_eigs):
-    print("====================================================")
-    print(f"{ii} ENERGY: {format(res['energy'][ii], '.9f')}")
+    logger.info("====================================================")
+    logger.info(f"{ii} ENERGY: {format(res['energy'][ii], '.9f')}")
     if dim < 3:
         # ENTROPY of a BIPARTITION
         res["entropy"].append(H.Npsi[ii].entanglement_entropy(int(prod(lvals) / 2)))
@@ -229,9 +231,9 @@ for ii in range(n_eigs):
         check_link_symmetry(ax, h_terms[f"E_p{ax}"], h_terms[f"E_m{ax}"])
     # MEASURE PLAQUETTE OBSERVABLES:
     for plaq_name in plaquette_obs:
-        print("----------------------------------------------------")
-        print(plaq_name)
-        print("----------------------------------------------------")
+        logger.info("----------------------------------------------------")
+        logger.info(plaq_name)
+        logger.info("----------------------------------------------------")
         h_terms[plaq_name].get_expval(H.Npsi[ii])
         res[plaq_name].append(h_terms[plaq_name].avg)
 
