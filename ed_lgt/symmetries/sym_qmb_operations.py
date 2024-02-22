@@ -9,10 +9,10 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "nbody_operator_data_sitebased",
-    "nbody_term",
-    "get_operators_nbody_term",
     "nbody_operator_data",
+    "nbody_term",
     "nbody_term_par",
+    "get_operators_nbody_term",
 ]
 
 
@@ -78,27 +78,27 @@ def nbody_term_par(op_list, op_sites_list, sector_configs):
     )
 
 
-def get_operators_nbody_term(op_list, loc_dims, site_basis=None, lattice_labels=None):
-    def apply_basis_projection(op, basis_label, site_basis):
+def get_operators_nbody_term(op_list, loc_dims, gauge_basis=None, lattice_labels=None):
+    def apply_basis_projection(op, basis_label, gauge_basis):
         return (
-            site_basis[basis_label].transpose() @ op @ site_basis[basis_label]
+            gauge_basis[basis_label].transpose() @ op @ gauge_basis[basis_label]
         ).toarray()
 
     n_sites = len(loc_dims)
-    # For Lattice Gauge Theories where sites have different Hilbert Bases
-    if site_basis is not None:
-        new_op_list = np.zeros(
-            (len(op_list), n_sites, max(loc_dims), max(loc_dims)), dtype=float
-        )
-        for ii, op in enumerate(op_list):
-            for jj, loc_dim in enumerate(loc_dims):
+    new_op_list = np.zeros(
+        (len(op_list), n_sites, max(loc_dims), max(loc_dims)), dtype=float
+    )
+    for ii, op in enumerate(op_list):
+        for jj, loc_dim in enumerate(loc_dims):
+            # For Lattice Gauge Theories where sites have different Hilbert Bases
+            if gauge_basis is not None:
                 # Get the projected operator
-                proj_op = apply_basis_projection(op, lattice_labels[jj], site_basis)
-                # Save it inside the new list of operators
-                new_op_list[ii, jj, :loc_dim, :loc_dim] = proj_op
-    # For Theories where all the sites have the same Hilber basis
-    else:
-        new_op_list = np.array([op.toarray() for op in op_list], dtype=float)
+                proj_op = apply_basis_projection(op, lattice_labels[jj], gauge_basis)
+            # For Theories where all the sites have the same Hilber basis
+            else:
+                proj_op = op.toarray()
+            # Save it inside the new list of operators
+            new_op_list[ii, jj, :loc_dim, :loc_dim] = proj_op
     return new_op_list
 
 
