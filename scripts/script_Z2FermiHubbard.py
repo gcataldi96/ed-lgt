@@ -1,5 +1,6 @@
 from ed_lgt.models import Z2_FermiHubbard_Model
 from simsio import run_sim
+from ed_lgt.tools import analyze_correlator
 
 with run_sim() as sim:
     model = Z2_FermiHubbard_Model(**sim.par["model"])
@@ -25,12 +26,18 @@ with run_sim() as sim:
     model.build_Hamiltonian(coeffs)
     model.diagonalize_Hamiltonian(n_eigs=sim.par["hamiltonian"]["n_eigs"])
     # LIST OF LOCAL OBSERVABLES
-    local_obs = [f"n_{s}{d}" for d in model.directions for s in "mp"]
-    local_obs += [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
+    # local_obs = [f"n_{s}{d}" for d in model.directions for s in "mp"]
+    local_obs = [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
     local_obs += ["X_Cross", "S2"]
     # LIST OF TWOBODY CORRELATORS
-    twobody_obs = [["P_px", "P_mx"], ["P_py", "P_my"]]
-    twobody_axes = ["x", "y"]
+    twobody_obs = [["Sz", "Sz"]]
+    """[
+        ["Sz_px,mx", "Sz_px,mx"],
+        ["Sz_py,my", "Sz_py,my"],
+        ["Sx_px,mx", "Sx_px,mx"],
+        ["Sx_py,my", "Sx_py,my"],
+    ]"""
+    twobody_axes = None  # []  # ["x", "y", "x", "y"]
     # LIST OF PLAQUETTE OPERATORS
     plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
     # DEFINE OBSERVABLES
@@ -42,10 +49,12 @@ with run_sim() as sim:
     for ii in range(model.n_eigs):
         # PRINT ENERGY
         model.H.print_energy(ii)
+        model.H.Npsi[ii].get_state_configurations(sector_indices=model.sector_indices)
         # MEASURE OBSERVABLES
         model.measure_observables(ii)
+        sim.res["Sz_Sz"] = analyze_correlator(model.res["Sz_Sz"])
         # CHECK LINK SYMMETRIES
-        model.check_symmetries()
+        # model.check_symmetries()
         if ii == 0:
             # SAVE RESULTS
             for measure in model.res.keys():
