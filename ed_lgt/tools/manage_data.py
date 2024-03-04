@@ -24,7 +24,7 @@ def save_dictionary(dictionary, filename):
     # Validate type of parameters
     validate_parameters(dictionary=dictionary, filename=filename)
     with open(filename, "wb") as outp:  # Overwrites any existing file.
-        pickle.dump(dict, outp, pickle.HIGHEST_PROTOCOL)
+        pickle.dump(dictionary, outp, pickle.HIGHEST_PROTOCOL)
     outp.close
 
 
