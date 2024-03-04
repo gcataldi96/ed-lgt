@@ -1,48 +1,162 @@
-import numpy as np
-from math import prod
-from itertools import product
-from scipy.linalg import eigh
-from ed_lgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
-from ed_lgt.operators import (
-    SU2_dressed_site_operators,
-    SU2_gauge_invariant_states,
-    SU2_Hamiltonian_couplings,
-)
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm, QMB_hamiltonian
-from ed_lgt.modeling import (
-    check_link_symmetry,
-    diagonalize_density_matrix,
-    staggered_mask,
-    truncation,
-    lattice_base_configs,
-)
+from ed_lgt.modeling import check_link_symmetry, staggered_mask
+from .quantum_model import QuantumModel
+from ed_lgt.operators import SU2_dressed_site_operators, SU2_gauge_invariant_states
 
 __all__ = ["SU2_Model"]
 
 
-class SU2_Model:
-    def __init__(self, params):
-        self.lvals = params["lvals"]
-        self.dim = len(self.lvals)
-        self.directions = "xyz"[: self.dim]
-        self.n_sites = prod(self.lvals)
-        self.has_obc = params["has_obc"]
-        self.coeffs = params["coeffs"]
-        self.n_eigs = params["n_eigs"]
-        self.spin = params["spin"]
-        self.pure_theory = params["pure_theory"]
-        staggered_basis = False if self.pure_theory else True
-        # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
+class SU2_Model(QuantumModel):
+    def __init__(self, spin, pure_theory, **kwargs):
+        # Initialize base class with the common parameters
+        super().__init__(**kwargs)
+        self.spin = spin
+        self.pure_theory = pure_theory
+        self.staggered_basis = False
+        # Acquire operators
         self.ops = SU2_dressed_site_operators(
             self.spin, self.pure_theory, lattice_dim=self.dim
         )
-        # ACQUIRE BASIS AND GAUGE INVARIANT SITES
-        M, _ = SU2_gauge_invariant_states(
+        # Acquire gauge invariant basis and states
+        self.gauge_basis, self.gauge_states = SU2_gauge_invariant_states(
             self.spin, self.pure_theory, lattice_dim=self.dim
         )
-        # ACQUIRE LOCAL DIMENSION OF EVERY SINGLE SITE
-        lattice_base, loc_dims = lattice_base_configs(
-            M, self.lvals, self.has_obc, staggered=staggered_basis
-        )
-        self.loc_dims = loc_dims.transpose().reshape(self.n_sites)
-        self.lattice_base = lattice_base.transpose().reshape(self.n_sites)
+        # Acquire local dimension and lattice label
+        self.get_local_site_dimensions()
+
+    def buil_Hamiltonian(self, coeffs):
+        # Hamiltonian Coefficients
+        self.coeffs = coeffs
+        # CONSTRUCT THE HAMILTONIAN
+        self.H = QMB_hamiltonian(0, self.lvals, self.loc_dims)
+        h_terms = {}
+        # -------------------------------------------------------------------------------
+        # LINK PENALTIES & Border penalties
+        for d in self.directions:
+            op_names_list = [f"T2_p{d}", f"T2_m{d}"]
+            op_list = [self.ops[op] for op in op_names_list]
+            # Define the Hamiltonian term
+            h_terms[f"W_{d}"] = TwoBodyTerm(
+                axis=d, op_list=op_list, op_names_list=op_names_list, **self.def_params
+            )
+            self.H.Ham += h_terms[f"W_{d}"].get_Hamiltonian(strength=-2 * coeffs["eta"])
+            # SINGLE SITE OPERATORS needed for the LINK SYMMETRY/OBC PENALTIES
+            for s in "mp":
+                op_name = f"T4_{s}{d}"
+                h_terms[op_name] = LocalTerm(
+                    self.ops[op_name], op_name, **self.def_params
+                )
+                self.H.Ham += h_terms[op_name].get_Hamiltonian(strength=coeffs["eta"])
+        # -------------------------------------------------------------------------------
+        # ELECTRIC ENERGY
+        op_name = "E_square"
+        h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
+        self.H.Ham += h_terms[op_name].get_Hamiltonian(strength=coeffs["E"])
+        # -------------------------------------------------------------------------------
+        if not self.pure_theory:
+            # -----------------------------------------------------------------------
+            # STAGGERED MASS TERM
+            for site in ["even", "odd"]:
+                h_terms[f"N_{site}"] = LocalTerm(
+                    self.ops["N_tot"], "N_tot", **self.def_params
+                )
+                self.H.Ham += h_terms[f"N_{site}"].get_Hamiltonian(
+                    coeffs[f"m_{site}"], staggered_mask(self.lvals, site)
+                )
+            # ------------------------------------------------------------------------
+            # HOPPING
+            for d in self.directions:
+                for site in ["even", "odd"]:
+                    hopping_terms = [
+                        [f"Q1_p{d}_dag", f"Q2_m{d}"],
+                        [f"Q2_p{d}_dag", f"Q1_m{d}"],
+                    ]
+                    for op_names_list in hopping_terms:
+                        op_list = [self.ops[op] for op in op_names_list]
+                        # Define the Hamiltonian term
+                        h_terms[f"{d}_hop_{site}"] = TwoBodyTerm(
+                            d, op_list, op_names_list, **self.def_params
+                        )
+                        self.H.Ham += h_terms[f"{d}_hop_{site}"].get_Hamiltonian(
+                            strength=coeffs[f"t{d}_{site}"],
+                            add_dagger=True,
+                            mask=staggered_mask(self.lvals, site),
+                        )
+        # -------------------------------------------------------------------------------
+        # PLAQUETTE TERM: MAGNETIC INTERACTION
+        plaq_list = []
+        plaquette_directions = ["xy", "xz", "yz"]
+        plaquette_set = [
+            ["AB", "AB", "AB", "AB"],
+            ["AA", "AB", "BB", "AB"],
+            ["AB", "AB", "AA", "BB"],
+            ["AB", "AB", "AA", "BB"],
+            ["AB", "BB", "AB", "AA"],
+            ["AA", "BB", "BB", "AA"],
+            ["AB", "BB", "AA", "BA"],
+            ["AA", "BB", "BA", "BA"],
+            ["BB", "AA", "AB", "AB"],
+            ["BA", "AA", "BB", "AB"],
+            ["BB", "AA", "AA", "BB"],
+            ["BA", "AA", "BA", "BB"],
+            ["BB", "BA", "AB", "AA"],
+            ["BA", "BA", "AB", "AA"],
+            ["BB", "BA", "AA", "BA"],
+            ["BA", "BA", "BA", "BA"],
+        ]
+        plaquette_signs = [
+            -1,
+            +1,
+            +1,
+            -1,
+            +1,
+            -1,
+            -1,
+            +1,
+            +1,
+            -1,
+            -1,
+            +1,
+            -1,
+            +1,
+            +1,
+            -1,
+        ]
+        for ii, pdir in enumerate(plaquette_directions):
+            if (self.dim == 2 and ii == 0) or self.dim == 3:
+                for jj, p_set in enumerate(plaquette_set):
+                    # DEFINE THE LIST OF CORNER OPERATORS
+                    op_names_list = [
+                        f"C{p_set[0]}_p{pdir[0]},p{pdir[1]}",
+                        f"C{p_set[1]}_p{pdir[1]},m{pdir[0]}",
+                        f"C{p_set[2]}_m{pdir[1]},p{pdir[0]}",
+                        f"C{p_set[3]}_m{pdir[0]},m{pdir[1]}",
+                    ]
+                    # CORRESPONDING LIST OF OPERATORS
+                    op_list = [self.ops[op] for op in op_names_list]
+                    # DEFINE THE PLAQUETTE CLASS
+                    plaq_name = f"P_{pdir}_" + "".join(p_set)
+                    h_terms[plaq_name] = PlaquetteTerm(
+                        [pdir[0], pdir[1]],
+                        op_list,
+                        op_names_list,
+                        print_plaq=False,
+                        **self.def_params,
+                    )
+                    # ADD THE HAMILTONIAN TERM
+                    self.H.Ham += h_terms[plaq_name].get_Hamiltonian(
+                        strength=plaquette_signs[jj] * coeffs["B"], add_dagger=True
+                    )
+                    # ADD THE PLAQUETTE TO THE LIST OF OBSERVABLES
+                    plaq_list.append(plaq_name)
+
+    def check_symmetries(self):
+        # CHECK LINK SYMMETRIES
+        for ax in self.directions:
+            check_link_symmetry(
+                ax,
+                self.obs_list[f"T2_p{ax}"],
+                self.obs_list[f"T2_m{ax}"],
+                value=0,
+                sign=-1,
+            )
