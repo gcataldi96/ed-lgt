@@ -2,7 +2,7 @@
 from simsio import *
 from math import prod
 from matplotlib import pyplot as plt
-from ed_lgt.tools import save_dictionary
+from ed_lgt.tools import save_dictionary, load_dictionary
 
 
 @plt.FuncFormatter
@@ -20,7 +20,67 @@ To acquire the psi file
     sim.link("psi")
     psi= sim.load("psi", cache=True)
 """
+# %%
+# List of local observables
+local_obs = [f"n_{s}{d}" for d in "xy" for s in "mp"]
+local_obs += [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
+local_obs += ["X_Cross", "S2"]
 
+BC_list = ["PBCxy"]
+lattize_size_list = ["2x2", "3x2"]
+for ii, BC in enumerate(BC_list):
+    res = {}
+    # define the observables arrays
+    res["energy"] = np.zeros((len(lattize_size_list), 25), dtype=float)
+    for obs in local_obs:
+        res[obs] = np.zeros((len(lattize_size_list), 25), dtype=float)
+    for jj, size in enumerate(lattize_size_list):
+        # look at the simulation
+        config_filename = f"Z2FermiHubbard/{BC}/{size}"
+        match = SimsQuery(group_glob=config_filename)
+        ugrid, vals = uids_grid(match.uids, ["U"])
+        lvals = get_sim(ugrid[0]).par["model"]["lvals"]
+        for kk, U in enumerate(vals["U"]):
+            for obs in local_obs:
+                res[obs][jj, kk] = np.mean(get_sim(ugrid[kk]).res[obs])
+                res["energy"][jj, kk] = get_sim(ugrid[kk]).res["energies"][0] / (
+                    prod(lvals)
+                )
+    save_dictionary(res, f"{BC}.pkl")
+# %%
+for obs in ["X_Cross", "N_pair", "N_single", "energy", "S2"]:
+    print(obs)
+    fig = plt.figure()
+    plt.ylabel(rf"{obs}")
+    plt.xlabel(r"U")
+    plt.xscale("log")
+    plt.grid()
+    for ii, label in enumerate(lattize_size_list):
+        plt.plot(vals["U"], res[obs][ii, :], "-o", label=label)
+    plt.legend(loc=(0.05, 0.11))
+    # plt.savefig(f"{obs}.pdf")
+# %%
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots()
+ax.set(xscale="log", yscale="log")
+config_filename = f"Z2FermiHubbard/prova1"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["U"])
+lvals = get_sim(ugrid[0]).par["model"]["lvals"]
+entropies = []
+for kk, U in enumerate(vals["U"]):
+    C = get_sim(ugrid[kk]).res["C"]
+    entropies.append(get_sim(ugrid[kk]).res["entropy"])
+    ax.plot(C[:, 0], C[:, 1], "-o", label=f"U={U}")
+ax.set(xlabel="r=|i-j|", ylabel="<SzSz>")
+plt.legend()
+
+fig1, ax1 = plt.subplots()
+for kk, U in enumerate(vals["U"]):
+    ax1.plot(np.arange(4), entropies[kk][:4], "-o", label=f"U={U}")
+ax1.set(xlabel="A", ylabel="EE")
+plt.legend()
 # %%
 config_filename = "Z2_FermiHubbard/U_potential"
 match = SimsQuery(group_glob=config_filename)
@@ -76,42 +136,6 @@ for ii, has_obc in enumerate(vals["has_obc"]):
     plt.plot(vals["U"], res["energy"][ii, :], "-o", label=BC_label)
 plt.legend(loc="lower right")
 
-
-# %%
-# List of local observables
-local_obs = [f"n_{s}{d}" for d in "xy" for s in "mp"]
-local_obs += [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
-local_obs += ["X_Cross"]
-res = {}
-for obs in local_obs + ["energy"]:
-    res[obs] = []
-
-label_list = ["2x2_PBCxy", "2x2_PBCx", "2x2_OBCxy", "3x2_OBCxy"]
-for ii, label in enumerate(label_list):
-    config_filename = f"Z2_FermiHubbard/{label}"
-    match = SimsQuery(group_glob=config_filename)
-    ugrid, vals = uids_grid(match.uids, ["U"])
-    for obs in local_obs + ["energy"]:
-        res[obs].append(np.zeros(vals["U"].shape[0]))
-
-    for jj, U in enumerate(vals["U"]):
-        lvals = get_sim(ugrid[jj]).par["lvals"]
-        res["energy"][ii][jj] = get_sim(ugrid[jj]).res["energies"][0] / (prod(lvals))
-        for obs in local_obs:
-            res[obs][ii][jj] = np.mean(get_sim(ugrid[jj]).res[obs])
-
-
-for obs in ["X_Cross", "N_pair", "N_single", "energy"]:
-    print(obs)
-    fig = plt.figure()
-    plt.ylabel(rf"{obs}")
-    plt.xlabel(r"U")
-    plt.xscale("log")
-    plt.grid()
-    for ii, label in enumerate(label_list):
-        plt.plot(vals["U"], res[obs][ii], "-o", label=label)
-    plt.legend(loc=(0.05, 0.11))
-    plt.savefig(f"{obs}.pdf")
 # %%
 # ========================================================================
 # ISING MODEL 1D ENERGY GAPS
