@@ -4,7 +4,43 @@ from itertools import product
 from scipy.linalg import eigh
 from .mappings_1D_2D import zig_zag
 
-__all__ = ["structure_factor", "get_charge", "get_density"]
+__all__ = ["structure_factor", "get_charge", "get_density", "analyze_correlator"]
+
+
+def analyze_correlator(corr):
+    # Get the dimensions of the lattice
+    dim1, dim2 = corr.shape[0], corr.shape[1]
+    # Initialize dictionaries to store correlator values for each distance
+    corr_values = {}
+    # Create all possible combinations of lattice points
+    points = list(product(range(dim1), range(dim2)))
+    # Iterate over all pairs of points in the lattice using itertools.product
+    for (x1, y1), (x2, y2) in product(points, repeat=2):
+        if x1 != x2 or y1 != y2:
+            # Calculate the distance between the two points
+            r = np.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2)
+            # Round the distance to handle numerical precision issues
+            r_rounded = round(r, 3)  # Adjust the rounding as necessary
+            # Collect the correlator values for this distance
+            if r_rounded not in corr_values:
+                corr_values[r_rounded] = []
+            corr_values[r_rounded].append(corr[x1, y1, x2, y2])
+    # Prepare the output array
+    num_distances = len(corr_values)
+    # Initialize the 2D results array
+    results = np.zeros((num_distances, 3))
+    # Sort the distances to maintain an ascending order
+    sorted_distances = sorted(corr_values.keys())
+    # Calculate the average correlator and its standard error for each distance
+    for i, r in enumerate(sorted_distances):
+        values = np.abs(corr_values[r])
+        avg = np.mean(values)
+        # Calculate the variance and standard error
+        var = np.var(values, ddof=1)  # ddof=1 for sample variance
+        std_error = np.sqrt(var) / np.sqrt(len(values))
+        # Store the results in the results array
+        results[i, :] = [r, avg, std_error]
+    return results
 
 
 def structure_factor(corr, lvals):
