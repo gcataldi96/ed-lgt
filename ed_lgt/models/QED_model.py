@@ -24,7 +24,7 @@ class QED_Model(QuantumModel):
         # Acquire local dimension and lattice label
         self.get_local_site_dimensions()
 
-    def buil_Hamiltonian(self, coeffs):
+    def build_Hamiltonian(self, coeffs):
         # Hamiltonian Coefficients
         self.coeffs = coeffs
         # CONSTRUCT THE HAMILTONIAN

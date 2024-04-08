@@ -16,7 +16,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 # N eigenvalues
-n_eigs = 2
+n_eigs = 12
 # LATTICE DIMENSIONS
 lvals = [2, 2]
 dim = len(lvals)
@@ -26,17 +26,17 @@ n_sites = prod(lvals)
 # BOUNDARY CONDITIONS
 has_obc = [True, True]
 # DEFINE the truncation of the gauge field and the type of U
-spin = 3
+spin = 1
 U = "ladder"
 # PURE or FULL THEORY
 pure_theory = False
 # GET g COUPLING
-g = 0.1
+g = 1
 if pure_theory:
     m = None
     staggered_basis = False
 else:
-    m = 1
+    m = 7
     staggered_basis = True
 # ACQUIRE OPERATORS AS CSR MATRICES IN A DICTIONARY
 ops = QED_dressed_site_operators(spin, pure_theory, U, lattice_dim=dim)
@@ -211,9 +211,6 @@ for plaq_name in plaquette_obs:
 for ii in range(n_eigs):
     logger.info("====================================================")
     logger.info(f"{ii} ENERGY: {format(res['energy'][ii], '.9f')}")
-    if dim < 3:
-        # ENTROPY of a BIPARTITION
-        res["entropy"].append(H.Npsi[ii].entanglement_entropy(int(prod(lvals) / 2)))
     # GET STATE CONFIGURATIONS
     H.Npsi[ii].get_state_configurations(threshold=1e-3)
     if not has_obc:
@@ -237,4 +234,8 @@ for ii in range(n_eigs):
         h_terms[plaq_name].get_expval(H.Npsi[ii])
         res[plaq_name].append(h_terms[plaq_name].avg)
 
+
+for ii in range(n_eigs):
+    logger.info("====================================================")
+    logger.info(f"{ii} ENERGY: {format(res['energy'][ii], '.9f')}")
 # %%

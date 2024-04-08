@@ -5,7 +5,7 @@ from scipy.sparse import csr_matrix, diags, identity, kron
 from scipy.sparse.linalg import norm
 from ed_lgt.modeling import qmb_operator as qmb_op
 from ed_lgt.modeling import get_lattice_borders_labels, LGT_border_configs
-from ed_lgt.tools import anti_commutator as anti_comm
+from ed_lgt.tools import anti_commutator as anti_comm, validate_parameters
 from .bose_fermi_operators import fermi_operators as QED_matter_operators
 import logging
 
@@ -35,10 +35,7 @@ def QED_rishon_operators(spin, pure_theory, U):
     Returns:
         dict: dictionary with the rishon operators and the parity
     """
-    if not np.isscalar(spin) or not isinstance(spin, int):
-        raise TypeError(f"spin must be SCALAR & INTEGER, not {type(spin)}")
-    if not isinstance(pure_theory, bool):
-        raise TypeError(f"pure_theory should be a BOOL, not a {type(pure_theory)}")
+    validate_parameters(spin_list=[spin], pure_theory=pure_theory)
     if not isinstance(U, str):
         raise TypeError(f"U must be str, not {type(U)}")
     # Size of rishon operator matrices
@@ -91,30 +88,28 @@ def QED_rishon_operators(spin, pure_theory, U):
 
 def QED_dressed_site_operators(spin, pure_theory, U, lattice_dim):
     """
-    This function generates the dressed-site operators of the QED Hamiltonian in d spatial dimensions for d=1,2,3 (pure or with matter fields)
+    This function generates the dressed-site operators of the QED Hamiltonian
+    in d spatial dimensions for d=1,2,3 (pure or with matter fields)
     for any possible trunctation of the spin representation of the gauge fields.
 
     Args:
-        spin (scalar, int): spin representation of the U(1) Gauge field, corresponding to a gauge Hilbert space of dimension (2 spin +1)
+        spin (scalar, int): spin representation of the U(1) Gauge field, corresponding
+            to a gauge Hilbert space of dimension (2 spin +1)
 
         pure_theory (bool): If true, the dressed site includes matter fields
 
         U (str): which version of U you want to use to obtain rishons: 'ladder', 'spin', 'cyclic'
 
         lattice_dim (int): number of lattice spatial dimensions
+
     Returns:
         dict: dictionary with all the operators of the QED (pure or full) Hamiltonian
     """
-    if not np.isscalar(spin) or not isinstance(spin, int):
-        raise TypeError(f"spin must be SCALAR & INTEGER, not {type(spin)}")
-    if not isinstance(pure_theory, bool):
-        raise TypeError(f"pure_theory should be a BOOL, not a {type(pure_theory)}")
+    validate_parameters(
+        spin_list=[spin], pure_theory=pure_theory, lattice_dim=lattice_dim
+    )
     if not isinstance(U, str):
         raise TypeError(f"U must be str, not {type(U)}")
-    if not np.isscalar(lattice_dim) and not isinstance(lattice_dim, int):
-        raise TypeError(
-            f"lattice_dim must be SCALAR & INTEGER, not {type(lattice_dim)}"
-        )
     # Lattice Dimensions
     dimensions = "xyz"[:lattice_dim]
     # Get the Rishon operators according to the chosen n truncation
@@ -261,7 +256,7 @@ def QED_dressed_site_operators(spin, pure_theory, U, lattice_dim):
         for s in "mp":
             ops["E_square"] += 0.5 * ops[f"E_square_{s}{d}"]
     # Define Gauss Law operators of hard-core lattice sites
-    if spin < 4:
+    if spin < 4 and lattice_dim < 3:
         # GAUSS LAW OPERATORS
         gauss_law_ops = {}
         for ii, site in enumerate(core_site_list):
@@ -302,18 +297,14 @@ def QED_check_gauss_law(spin, pure_theory, lattice_dim, gauss_law_ops, threshold
 
         ValueError: if the QED gauss law is not satisfied
     """
-    if not np.isscalar(spin) or not isinstance(spin, int):
-        raise TypeError(f"spin must be SCALAR & INTEGER, not {type(spin)}")
-    if not isinstance(pure_theory, bool):
-        raise TypeError(f"pure_theory should be a BOOL, not a {type(pure_theory)}")
-    if not np.isscalar(lattice_dim) and not isinstance(lattice_dim, int):
-        raise TypeError(
-            f"lattice_dim must be SCALAR & INTEGER, not {type(lattice_dim)}"
-        )
+    validate_parameters(
+        spin_list=[spin],
+        pure_theory=pure_theory,
+        lattice_dim=lattice_dim,
+        threshold=threshold,
+    )
     if not isinstance(gauss_law_ops, dict):
         raise TypeError(f"pure_theory should be a DICT, not a {type(gauss_law_ops)}")
-    if not np.isscalar(threshold):
-        raise TypeError(f"threshold must be SCALAR, not {type(threshold)}")
     # This functions performs some checks on the QED gauge invariant basis
     M, _ = QED_gauge_invariant_states(spin, pure_theory, lattice_dim)
     if pure_theory:
@@ -362,7 +353,8 @@ def QED_gauge_invariant_states(spin, pure_theory, lattice_dim):
     are allowed (the external rishons/gauge fields do not contribute)
 
     Args:
-        spin (scalar, int): spin representation of the U(1) Gauge field, corresponding to a gauge Hilbert space of dimension (2 spin +1)
+        spin (scalar, int): spin representation of the U(1) Gauge field,
+            corresponding to a gauge Hilbert space of dimension (2 spin +1)
 
         pure_theory (bool,optional): if True, the theory does not involve matter fields
 
@@ -442,7 +434,7 @@ def QED_gauge_invariant_states(spin, pure_theory, lattice_dim):
     return gauge_basis, gauge_states
 
 
-def QED_Hamiltonian_couplings(pure_theory, g, m=None):
+def QED_Hamiltonian_couplings(lattice_dim, pure_theory, g, m=None):
     """
     This function provides the QED Hamiltonian coefficients
     starting from the gauge coupling g and the bare mass parameter m
@@ -457,34 +449,34 @@ def QED_Hamiltonian_couplings(pure_theory, g, m=None):
     Returns:
         dict: dictionary of Hamiltonian coefficients
     """
-    if not isinstance(pure_theory, bool):
-        raise TypeError(f"pure_theory should be a BOOL, not a {type(pure_theory)}")
-    if not np.isscalar(g):
-        raise TypeError(f"g must be SCALAR, not {type(g)}")
-    E = (g**2) / 2  # ELECTRIC FIELD
-    B = -1 / (2 * (g**2))  # MAGNETIC FIELD
+    validate_parameters(lattice_dim=lattice_dim, pure_theory=pure_theory)
+    if lattice_dim == 1:
+        E = (g**2) / 2
+        B = -1 / (2 * (g**2))
+    elif lattice_dim == 2:
+        E = (g**2) / 2
+        B = -1 / (2 * (g**2))
+    else:
+        E = (g**2) / 2
+        B = -1 / (2 * (g**2))
+    if pure_theory:
+        eta = 10 * max(E, np.abs(B))
+    else:
+        eta = 10 * max(E, np.abs(B), np.abs(m))
     # DICTIONARY WITH MODEL COEFFICIENTS
     coeffs = {
+        "eta": eta,
         "g": g,
         "E": E,  # ELECTRIC FIELD coupling
         "B": B,  # MAGNETIC FIELD coupling
+        "m": m,
+        "tx_even": 0.5,  # HORIZONTAL HOPPING
+        "tx_odd": 0.5,
+        "ty_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
+        "ty_odd": -0.5,  # VERTICAL HOPPING (ODD SITES)
+        "tz_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
+        "tz_odd": 0.5,  # VERTICAL HOPPING (ODD SITES)
+        "m_even": m,
+        "m_odd": -m,
     }
-    if pure_theory:
-        coeffs["eta"] = 10 * max(E, np.abs(B))
-    else:
-        if not np.isscalar(m):
-            raise TypeError(f"m must be SCALAR, not {type(m)}")
-        coeffs["eta"] = 10 * max(E, np.abs(B), np.abs(m))
-        coeffs |= {
-            "m": m,
-            "tx_even": 0.5,  # HORIZONTAL HOPPING
-            "tx_odd": 0.5,
-            "ty_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
-            "ty_odd": -0.5,  # VERTICAL HOPPING (ODD SITES)
-            "tz_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
-            "tz_odd": 0.5,  # VERTICAL HOPPING (ODD SITES)
-            "m_even": m,
-            "m_odd": -m,
-        }
-    logger.info(f"LINK SYMMETRY PENALTY {coeffs['eta']}")
     return coeffs

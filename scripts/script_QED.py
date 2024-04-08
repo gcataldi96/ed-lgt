@@ -3,15 +3,20 @@ from ed_lgt.operators import QED_Hamiltonian_couplings
 from simsio import run_sim
 
 with run_sim() as sim:
-    model = QED_Model(**sim.par["model"])
-    # SYMMETRIES
-    global_ops = [model.ops[op] for op in sim.par["symmetries"]["sym_ops"]]
-    global_sectors = sim.par["symmetries"]["sym_sectors"]
-    link_ops = [
-        [model.ops["P_px"], model.ops["P_mx"]],
-        [model.ops["P_py"], model.ops["P_my"]],
-    ]
-    link_sectors = [1, 1]
+    par = sim.par["model"]
+    par["spin"] = sim.par["spin"]
+    model = QED_Model(**par)
+    # GLOBAL SYMMETRIES
+    if model.pure_theory:
+        global_ops = None
+        global_sectors = None
+    else:
+        global_ops = [model.ops[op] for op in sim.par["symmetries"]["sym_ops"]]
+        global_sectors = sim.par["symmetries"]["sym_sectors"]
+    # LINK SYMMETRIES
+    link_ops = [[model.ops[f"E_p{d}"], model.ops[f"E_m{d}"]] for d in model.directions]
+    link_sectors = [0 for _ in model.directions]
+    # GET SYMMETRY SECTOR
     model.get_abelian_symmetry_sector(
         global_ops=global_ops,
         global_sectors=global_sectors,
@@ -19,31 +24,39 @@ with run_sim() as sim:
         link_ops=link_ops,
         link_sectors=link_sectors,
     )
-    # DEFAUL PARAMS
+    # DEFAULT PARAMS
     model.default_params()
     # BUILD AND DIAGONALIZE HAMILTONIAN
     coeffs = QED_Hamiltonian_couplings(
-        sim.par["model"]["pure_theory"], sim.par["g"], sim.par["m"]
+        model.dim, model.pure_theory, sim.par["g"], sim.par["m"]
     )
-    model.buil_Hamiltonian(coeffs)
+    model.build_Hamiltonian(coeffs)
     model.diagonalize_Hamiltonian(n_eigs=sim.par["hamiltonian"]["n_eigs"])
+    # ---------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
-    local_obs = [f"E_{s}{d}" for d in model.directions for s in "mp"]
-    local_obs += ["N"]
+    local_obs = [f"E_{s}{d}" for d in model.directions for s in "mp"] + ["E_square"]
+    if not model.pure_theory:
+        local_obs += ["N"]
     # LIST OF TWOBODY CORRELATORS
-    twobody_obs = [["P_px", "P_mx"], ["P_py", "P_my"]]
-    twobody_axes = ["x", "y"]
+    twobody_obs = [[f"P_p{d}", f"P_m{d}"] for d in model.directions]
+    twobody_axes = [d for d in model.directions]
     # LIST OF PLAQUETTE OPERATORS
     plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
     # DEFINE OBSERVABLES
     model.get_observables(
         local_obs, twobody_obs, plaquette_obs, twobody_axes=twobody_axes
     )
-    # MEASUREMENTS
-    sim.res["obs"] = {}
     for ii in range(model.n_eigs):
         # PRINT ENERGY
         model.H.print_energy(ii)
+        # ENTROPY
+        sim.res["entropy"] = float(
+            model.H.Npsi[ii].entanglement_entropy(
+                [0, 1], sector_configs=model.sector_configs
+            )
+        )
+        # STATE CONFIGURATIONS
+        model.H.Npsi[ii].get_state_configurations(sector_configs=model.sector_configs)
         # MEASURE OBSERVABLES
         model.measure_observables(ii)
         # CHECK LINK SYMMETRIES
@@ -52,3 +65,5 @@ with run_sim() as sim:
             # SAVE RESULTS
             for measure in model.res.keys():
                 sim.res[measure] = model.res[measure]
+    for ii in range(model.n_eigs):
+        model.H.print_energy(ii)
