@@ -43,6 +43,7 @@ def get_time(func):
 def validate_parameters(
     lvals=None,
     loc_dims=None,
+    lattice_dim=None,
     has_obc=None,
     axes=None,
     site_label=None,
@@ -67,6 +68,13 @@ def validate_parameters(
     index=None,
     threshold=None,
     print_plaq=None,
+    spin_list=None,
+    int_list=None,
+    sz_list=None,
+    pure_theory=None,
+    matter=None,
+    psi_vacuum=None,
+    get_singlet=None,
 ):
     """
     This is a function for type validation of parameters widely used in the library
@@ -76,6 +84,8 @@ def validate_parameters(
         not isinstance(lvals, list) or not all(isinstance(x, int) for x in lvals)
     ):
         raise TypeError(f"lvals should be a LIST of INTs, not {type(lvals)}")
+    if lattice_dim is not None and not isinstance(lattice_dim, int):
+        raise TypeError(f"lattice_dim should be INT, not {type(lattice_dim)}")
     if loc_dims is not None:
         if isinstance(loc_dims, int):
             loc_dims = np.full(prod(lvals), loc_dims)
@@ -171,6 +181,40 @@ def validate_parameters(
     # -----------------------------------------------------------------------------
     if print_plaq is not None and not isinstance(print_plaq, bool):
         raise TypeError(f"print_plaq must be a BOOL, not a {type(print_plaq)}")
+    # -----------------------------------------------------------------------------
+    # List of spin irreps
+    if spin_list is not None:
+        if not isinstance(spin_list, list):
+            raise TypeError(f"spin_list must be a list, not {type(spin_list)}")
+        else:
+            for ii, spin in enumerate(spin_list):
+                if not float(2 * spin).is_integer() or spin < 0:
+                    raise TypeError(
+                        f"The {ii} spin must be positive (half-)integer, not {spin}"
+                    )
+    # n values for the Zn group
+    if int_list is not None and (
+        not isinstance(int_list, list) or not all(isinstance(n, int) for n in int_list)
+    ):
+        raise TypeError(f"int_list must be a list of integers, not {int_list}")
+    # 3rd components of spins
+    if sz_list is not None:
+        if not isinstance(sz_list, list):
+            raise TypeError(f"sz_list must be a list, not {type(sz_list)}")
+        else:
+            for ii, sz in enumerate(sz_list):
+                if not float(2 * sz).is_integer():
+                    raise TypeError(
+                        f"The {ii} z-component must be (half-)integer, not {spin}"
+                    )
+    if pure_theory is not None and not isinstance(pure_theory, bool):
+        raise TypeError(f"pure_theory must be BOOL, not {type(pure_theory)}")
+    if matter is not None and not isinstance(matter, bool):
+        raise TypeError(f"matter must be BOOL, not {type(matter)}")
+    if psi_vacuum is not None and not isinstance(psi_vacuum, bool):
+        raise TypeError(f"psi_vacuum must be bool, not {type(psi_vacuum)}")
+    if get_singlet is not None and not isinstance(get_singlet, bool):
+        raise TypeError(f"get_singlet must be bool, not {type(get_singlet)}")
 
 
 def pause(phrase, debug):
