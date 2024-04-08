@@ -45,12 +45,12 @@ def check_link_sym(config, sym_op_diags, sym_sectors, pair_list):
         for pair_idx in range(pair_list[idx].shape[0]):
             # Get the pair of site indices for this pair
             site_indices = pair_list[idx][pair_idx]
-            product = 1.0
+            sum = 0.0
             for op_idx in range(2):
                 op_diag = sym_op_diags[idx, op_idx]
                 site_index = site_indices[op_idx]
-                product *= op_diag[config[site_index]]
-            if not np.isclose(product, sym_sectors[idx], atol=1e-10):
+                sum += op_diag[config[site_index]]
+            if not np.isclose(sum, sym_sectors[idx], atol=1e-10):
                 check = False
                 # Early exit on first failure
                 return check
@@ -88,13 +88,13 @@ def check_link_sym_sitebased(config, sym_op_diags, sym_sectors, pair_list):
         num_pairs = pairs_for_direction.shape[0]
         for pair_idx in range(num_pairs):
             site_indices = pairs_for_direction[pair_idx]
-            product = 1.0
+            sum = 0.0
             # Assuming two operators per direction
             for op_idx in range(2):
                 site_index = site_indices[op_idx]
                 op_diag = sym_op_diags[idx, op_idx, site_index, :]
-                product *= op_diag[config[site_index]]
-            if not np.isclose(product, sym_sectors[idx], atol=1e-10):
+                sum += op_diag[config[site_index]]
+            if not np.isclose(sum, sym_sectors[idx], atol=1e-10):
                 check = False
                 return check
     return check
