@@ -1,10 +1,14 @@
 import numpy as np
 from math import prod
-from scipy.linalg import eigh as array_eigh
-from scipy.sparse.linalg import eigsh as sparse_eigh
+from scipy.linalg import eigh as array_eigh, svd
+from scipy.sparse.linalg import eigsh as sparse_eigh, expm_multiply
 from scipy.sparse import csr_matrix, isspmatrix, csr_array
 from ed_lgt.tools import validate_parameters, check_hermitian
-from .lattice_mappings import zig_zag
+from ed_lgt.symmetries import (
+    separate_configs,
+    config_to_index_binarysearch,
+    index_to_config,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -14,8 +18,6 @@ __all__ = [
     "QMB_state",
     "truncation",
     "get_norm",
-    "get_loc_states_from_qmb_state",
-    "get_qmb_state_from_loc_states",
     "diagonalize_density_matrix",
     "get_projector_for_efficient_density_matrix",
 ]
@@ -36,10 +38,8 @@ class QMB_state:
         """
         validate_parameters(psi=psi, lvals=lvals, loc_dims=loc_dims)
         self.psi = psi
-        if lvals is not None:
-            self.lvals = lvals
-        if loc_dims is not None:
-            self.loc_dims = loc_dims
+        self.lvals = lvals
+        self.loc_dims = loc_dims
 
     def normalize(self, threshold=1e-14):
         norm = get_norm(self.psi)
@@ -54,108 +54,135 @@ class QMB_state:
         validate_parameters(op_list=[operator])
         return np.real(np.dot(np.conjugate(self.psi), (operator.dot(self.psi))))
 
-    def reduced_density_matrix(self, qmb_index):
+    def bipartite_psi(self, keep_indices):
+        """
+        Reshape and reorder psi for partitioning based on keep_indices.
+        Args:
+            keep_indices (list of ints): Indices of the lattice sites to keep.
+        Returns:
+            tuple: The reshaped and reordered psi tensor, subsystem dimension, and environment dimension.
+        """
+        # Ensure psi is reshaped into a tensor with one leg per lattice site
+        psi_tensor = self.psi.reshape(self.loc_dims)
+        # Determine the environmental indices
+        all_indices = list(range(prod(self.lvals)))
+        env_indices = [i for i in all_indices if i not in keep_indices]
+        new_order = keep_indices + env_indices
+        # Rearrange the tensor to group subsystem and environment indices
+        psi_tensor = np.transpose(psi_tensor, axes=new_order)
+        logger.info(f"Reordered psi_tensor shape: {psi_tensor.shape}")
+        # Determine the dimensions of the subsystem and environment for the bipartition
+        subsystem_dim = np.prod([self.loc_dims[i] for i in keep_indices])
+        env_dim = np.prod([self.loc_dims[i] for i in env_indices])
+        # Reshape the reordered tensor to separate subsystem from environment
+        psi_partitioned = psi_tensor.reshape((subsystem_dim, env_dim))
+        return psi_partitioned, subsystem_dim, env_dim
+
+    def reduced_density_matrix(self, keep_indices, sector_configs=None):
         """
         This function computes the reduced density matrix (in sparse format)
-        of a state psi with respect to sigle site in position "qmb_index".
+        of a state psi with respect to sigle sites in positions "keep_indices".
 
         Args:
-            psi (np.ndarray): QMB states
+            psi (np.ndarray): QMB state
 
-            loc_dims (list of ints, np.ndarray of ints, or int): list of lattice site dimensions
-
-            lvals (list): list of the lattice spatial dimensions
-
-            qmb_index (int): position of the lattice site we want to look at
+            keep_indices (list of ints): positions of the lattice sites we want to look at
         Returns:
             sparse: reduced density matrix of the single site
         """
-        validate_parameters(index=qmb_index)
-        # Get d-dimensional coordinates of
-        coords = zig_zag(self.lvals, qmb_index)
         logger.info("----------------------------------------------------")
-        logger.info(f"DENSITY MATRIX OF SITE {coords}")
-        # RESHAPE psi
-        psi_copy = self.psi.reshape(*[loc_dim for loc_dim in self.loc_dims.tolist()])
-        # DEFINE A LIST OF SITES WE WANT TO TRACE OUT
-        indices = list(np.arange(0, prod(self.lvals)))
-        # The index we remove is the one wrt which we get the reduced DM
-        indices.remove(qmb_index)
-        # Get the reduced density matrix
-        rho = np.tensordot(psi_copy, np.conjugate(psi_copy), axes=(indices, indices))
-        # Return a truncated sparse version of rho
-        return csr_matrix(truncation(rho, 1e-10))
+        logger.info(f"RED. DENSITY MATRIX OF SITES {keep_indices}")
+        # CASE OF SYMMETRY SECTOR
+        if sector_configs is not None:
+            subsystem_configs, environment_configs = separate_configs(
+                sector_configs, keep_indices
+            )
+            # Find unique environment configurations
+            unique_env_configs = np.unique(environment_configs, axis=0)
+            # Initialize the RDM whose dimension= # Unique subsystem configurations
+            unique_subsys_configs = np.unique(subsystem_configs, axis=0)
+            subsystem_dim = unique_subsys_configs.shape[0]
+            RDM = np.zeros((subsystem_dim, subsystem_dim), dtype=np.complex128)
+            # Iterate over unique environment configurations
+            for env_config in unique_env_configs:
+                # Find indices where the environment matches env_config
+                matching_indices = (environment_configs == env_config).all(axis=1)
+                # Create the subsystem wavefunction slice
+                subsystem_psi = np.zeros(subsystem_dim, dtype=np.complex128)
+                for idx, match in enumerate(matching_indices):
+                    if match:
+                        subsys_config = tuple(subsystem_configs[idx])
+                        subsys_index = config_to_index_binarysearch(
+                            subsys_config, unique_subsys_configs
+                        )
+                        subsystem_psi[subsys_index] = self.psi[idx]
+                # Compute the RDM for this slice and add to the final RDM
+                RDM += np.tensordot(subsystem_psi, subsystem_psi.conj(), axes=0)
+            return RDM
+        else:
+            # NO SYMMETRIES
+            # Prepare psi tensor sorting subsystem indices close each other to bipartite the system
+            psi_tensor, subsystem_dim, _ = self.bipartite_psi(keep_indices)
+            # Compute the reduced density matrix by tracing out the env-indices
+            RDM = np.tensordot(psi_tensor, np.conjugate(psi_tensor), axes=([1], [1]))
+            # Reshape rho to ensure it is a square matrix corresponding to the subsystem
+            RDM = RDM.reshape((subsystem_dim, subsystem_dim))
+            return RDM
 
-    def entanglement_entropy(self, partition_size):
+    def entanglement_entropy(self, keep_indices, sector_configs=None):
         """
         This function computes the bipartite entanglement entropy of a portion of a QMB state psi
-        related to a lattice model with dimension lvals where single sites have local hilbert spaces of dimensions loc_dims
+        related to a lattice model with dimension lvals where single sites
+        have local hilbert spaces of dimensions loc_dims
 
         Args:
-            psi (np.ndarray): QMB states
+            keep_indices (list of ints): list of lattice indices to be involved in the partition
 
-            loc_dims (list, np.ndarray, or int): dimensions of the single site Hilbert space
-
-            lvals (list): list of the lattice spatial dimensions
-
-            partition_size (int): number of lattice sites to be involved in the partition
         Returns:
-            sparse: reduced density matrix of the single site
+            float: bipartite entanglement entropy of the lattice subsystem
         """
-        if not np.isscalar(partition_size) and not isinstance(partition_size, int):
-            raise TypeError(
-                f"partition_size must be an SCALAR & INTEGER, not a {type(partition_size)}"
-            )
-        # COMPUTE THE ENTANGLEMENT ENTROPY OF A SPECIFIC SUBSYSTEM
-        partition = 1
-        for site in range(partition_size):
-            partition *= self.loc_dims[site]
-        _, V, _ = np.linalg.svd(
-            self.psi.reshape((partition, int(prod(self.loc_dims) / partition)))
-        )
-        tmp = np.array([-(llambda**2) * np.log2(llambda**2) for llambda in V])
-        logger.info(f"ENTROPY: {format(np.sum(tmp), '.9f')}")
-        return np.sum(tmp)
+        if sector_configs is not None:
+            # Compute the RDM for the partition within a symmetry sector
+            RDM = self.reduced_density_matrix(keep_indices, sector_configs)
+            # Compute its eigenvalues
+            llambdas = array_eigh(RDM, eigvals_only=True)
+        else:
+            # Prepare psi tensor sorting subsystem indices close each other to bipartite the system
+            psi_tensor, _, _ = self.bipartite_psi(keep_indices)
+            # Compute SVD
+            _, V, _ = svd(psi_tensor, full_matrices=False)
+            llambdas = V**2
+        llambdas = llambdas[llambdas > 1e-10]
+        entropy = -np.sum(llambdas * np.log2(llambdas))
+        logger.info(f"ENTROPY of {keep_indices}: {format(entropy, '.9f')}")
+        return entropy
 
-    def get_state_configurations(self, threshold=1e-10, sector_indices=None):
+    def get_state_configurations(self, threshold=1e-2, sector_configs=None):
         """
-        This function express the main QMB state configurations associated to the
+        This function expresses the main QMB state configurations associated with the
         most relevant coefficients of the QMB state psi. Every state configuration
         is expressed in terms of the single site local Hilber basis
         """
         logger.info("----------------------------------------------------")
         logger.info("STATE CONFIGURATIONS")
         psi = csr_array(self.truncate(threshold))
-        psi_indices = (
-            [sector_indices[i] for i in psi.indices]
-            if sector_indices is not None
-            else psi.indices
-        )
-        sing_vals = sorted(psi.data, key=lambda x: (abs(x), -x), reverse=True)
-        indices = [
-            x
-            for _, x in sorted(
-                zip(psi.data, psi_indices),
-                key=lambda pair: (abs(pair[0]), -pair[0]),
-                reverse=True,
+        if sector_configs is not None:
+            psi_configs = sector_configs[psi.indices, :]
+        else:
+            psi_configs = np.array(
+                [index_to_config(i, self.loc_dims) for i in psi.indices], dtype=np.uint8
             )
-        ]
-        state_configurations = {"state_config": [], "coeff": []}
-        for ind, alpha in zip(indices, sing_vals):
-            loc_states = get_loc_states_from_qmb_state(
-                qmb_index=int(ind), loc_dims=self.loc_dims, lvals=self.lvals
+        # Get the descending order of absolute values of psi_data
+        sorted_indices = get_sorted_indices(psi.data)
+        # Use sorted indices to reorder data and configurations
+        psi_data = psi.data[sorted_indices]
+        psi_configs = psi_configs[sorted_indices]
+        # Print sorted cofigs with its amplitude
+        for config, val in zip(psi_configs, psi_data):
+            logger.info(
+                f"[{' '.join(f'{s:2d}' for s in config)}]  {format(np.abs(val),'.4f')}  {format(val,'.4f')}"
             )
-            ploc_states = print_loc_states(loc_states)
-            logger.info(f"[{ploc_states}]  {format(alpha,'.9f')}  {ind}")
-            state_configurations["state_config"].append(loc_states)
-            state_configurations["coeff"].append(alpha)
         logger.info("----------------------------------------------------")
-        self.state_configs = state_configurations
-
-
-def print_loc_states(loc_states):
-    ploc_states = [str(s).zfill(2) for s in loc_states]
-    return " ".join(ploc_states)
 
 
 class QMB_hamiltonian:
@@ -166,14 +193,27 @@ class QMB_hamiltonian:
         self.loc_dims = loc_dims
 
     def diagonalize(self, n_eigs):
-        validate_parameters(op_list=[self.Ham])
-        if not np.isscalar(n_eigs) and not isinstance(n_eigs, int):
-            raise TypeError(f"n_eigs should be a SCALAR INT, not a {type(n_eigs)}")
+        validate_parameters(op_list=[self.Ham], int_list=[n_eigs])
+        # Save the number or eigenvalues
         self.n_eigs = n_eigs
         # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
         check_hermitian(self.Ham)
-        logger.info("DIAGONALIZE HAMILTONIAN")
-        self.Nenergies, Npsi = sparse_eigh(self.Ham, k=n_eigs, which="SA")
+        # CHECK HAMILTONIAN SPARSITY
+        get_sparsity(self.Ham)
+        # Diagonalize it
+        if n_eigs < self.Ham.shape[0]:
+            logger.info("DIAGONALIZE (sparse) HAMILTONIAN")
+            Nenergies, Npsi = sparse_eigh(self.Ham, k=n_eigs, which="SA")
+        else:
+            logger.info("DIAGONALIZE (standard) HAMILTONIAN")
+            Nenergies, Npsi = array_eigh(self.Ham.toarray(), eigvals=(0, n_eigs - 1))
+        # Check and sort energies and corresponding eigenstates if necessary
+        if not is_sorted(Nenergies):
+            order = np.argsort(Nenergies)
+            Nenergies = Nenergies[order]
+            Npsi = Npsi[:, order]
+        # Save the eigenstates as QMB_states
+        self.Nenergies = Nenergies
         self.Npsi = [
             QMB_state(Npsi[:, ii], self.lvals, self.loc_dims) for ii in range(n_eigs)
         ]
@@ -183,7 +223,40 @@ class QMB_hamiltonian:
 
     def print_energy(self, en_state):
         logger.info("====================================================")
-        logger.info(f"{en_state} ENERGY: {format(self.Nenergies[en_state], '.9f')}")
+        logger.info(f"{en_state} ENERGY: {round(self.Nenergies[en_state],9)}")
+
+    def time_evolution(self, initial_state, start, stop, n_steps):
+        delta_n = (stop - start) / n_steps
+        logger.info("---------------- TIME EVOLUTION --------------------")
+        logger.info(f"TIME STEP {round(delta_n,2)}")
+        # Compute the evolved psi at each time step
+        psi_time = expm_multiply(
+            A=complex(0, -1) * self.Ham,
+            B=initial_state,
+            start=start,
+            stop=stop,
+            num=n_steps,
+            endpoint=True,
+        )
+        # Save them as QMB_states
+        self.psi_time = [
+            QMB_state(psi_time[ii, :], self.lvals, self.loc_dims)
+            for ii in range(n_steps)
+        ]
+
+
+def get_sparsity(array):
+    # MEASURE SPARSITY
+    num_nonzero = array.nnz
+    # Total number of elements
+    total_elements = array.shape[0] * array.shape[1]
+    # Calculate sparsity
+    sparsity = 1 - (num_nonzero / total_elements)
+    logger.info(f"SPARSITY: {round(sparsity*100,1)}%")
+
+
+def is_sorted(array1D):
+    return np.all(array1D[:-1] <= array1D[1:])
 
 
 def truncation(array, threshold=1e-14):
@@ -200,61 +273,12 @@ def get_norm(psi):
     return norm
 
 
-def get_loc_states_from_qmb_state(qmb_index, loc_dims, lvals):
-    """
-    Compute the state of each single lattice site given the index of the qmb state
-
-    Args:
-        qmb_index (int): qmb state index corresponding to a specific list of local sites configurations
-
-        loc_dims (list of ints, np.ndarray of ints, or int): list of lattice site dimensions
-
-        lvals (list): list of the lattice spatial dimensions
-
-    Returns:
-        ndarray(int): list of the states of the local Hilbert space associated to the given QMB state index
-    """
-    validate_parameters(index=qmb_index, lvals=lvals, loc_dims=loc_dims)
-    if qmb_index < 0 or qmb_index > (prod(loc_dims) - 1):
-        raise ValueError(
-            f"index {qmb_index} should be in between 0 and {prod(loc_dims)-1}"
-        )
-    tot_dim = np.prod(loc_dims)
-    loc_states = np.zeros(prod(lvals), dtype=int)
-    for ii in range(prod(lvals)):
-        tot_dim /= loc_dims[ii]
-        loc_states[ii] = qmb_index // tot_dim
-        qmb_index -= loc_states[ii] * tot_dim
-    return loc_states
-
-
-def get_qmb_state_from_loc_states(loc_states, loc_dims):
-    """
-    This function generate the QMB index out the the indices of the single lattices sites.
-    The latter ones can display local Hilbert space with different dimension.
-    The order of the sites must match the order of the dimensionality of the local basis
-
-    Args:
-        loc_states (list of ints): list of numbered state of the lattice sites
-
-        loc_dims (list of ints, np.ndarray of ints, or int): list of lattice site dimensions
-            (in the same order as they are stored in the loc_states!)
-
-    Returns:
-        int: QMB index
-    """
-    validate_parameters(loc_dims=loc_dims)
-    if len(loc_dims) != len(loc_states):
-        raise ValueError(
-            f"dim loc_states = {len(loc_states)} != dim loc_dims = {len(loc_dims)}"
-        )
-    n_sites = len(loc_states)
-    qmb_index = 0
-    dim_factor = 1
-    for ii in reversed(range(n_sites)):
-        qmb_index += loc_states[ii] * dim_factor
-        dim_factor *= loc_dims[ii]
-    return qmb_index
+def get_sorted_indices(data):
+    abs_data = np.abs(data)
+    real_data = np.real(data)
+    # Lexsort by real part first (secondary key), then by absolute value (primary key)
+    sorted_indices = np.lexsort((real_data, abs_data))
+    return sorted_indices[::-1]  # Descending order
 
 
 def diagonalize_density_matrix(rho):
@@ -294,13 +318,3 @@ def get_projector_for_efficient_density_matrix(rho, loc_dim, threshold):
             proj[:, column_indx] = rho_eigvecs[:, ii]
     # Truncate to 0 the entries below a certain threshold and promote to sparse matrix
     return csr_matrix(truncation(proj, 1e-14))
-
-
-"""
-loc_states = [0, 1, 1]
-qmb_state = get_qmb_state_from_loc_state(loc_states, [3, 4, 2])
-qmb_index = 5
-loc_dim = [3, 4, 2]
-n_sites = 3
-locs = get_loc_states_from_qmb_state(qmb_index, loc_dim, n_sites)
-"""
