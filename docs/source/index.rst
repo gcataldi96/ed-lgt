@@ -6,8 +6,12 @@
 Exact Diagonalization for Lattice Gauge Theories!
 ============================================================================
 
-The Exact Diagonalization Library for Lattice Gauge Theories provides a powerful set of tools for performing exact diagonalization calculations on 2-dimensional lattices, specifically targeting both Abelian and non-Abelian Lattice Gauge Theories. 
-This library empowers researchers and practitioners in the field of quantum many-body systems to analyze and explore the behavior of complex lattice gauge theories through the precise computation of Hamiltonian eigenvalues and eigenvectors.
+The Exact Diagonalization Library for Lattice Gauge Theories provides a powerful set of tools 
+for performing exact diagonalization calculations on 2-dimensional lattices, 
+specifically targeting both Abelian and non-Abelian Lattice Gauge Theories. 
+This library empowers researchers and practitioners in the field of quantum many-body 
+systems to analyze and explore the behavior of complex lattice gauge theories through 
+the precise computation of Hamiltonian eigenvalues and eigenvectors.
 
 .. toctree::
    :maxdepth: 2
@@ -15,7 +19,9 @@ This library empowers researchers and practitioners in the field of quantum many
 
    installation
    modeling/index
+   models/index
    operators/index
+   symmetries/index
    tools/index
    license
 
