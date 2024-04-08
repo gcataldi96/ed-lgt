@@ -39,7 +39,6 @@ def exclude_columns(sector_configs, op_sites_list):
     num_configs = sector_configs.shape[0]
     num_sites = sector_configs.shape[1] - len(op_sites_list)
     excluded_configs = np.zeros((num_configs, num_sites), dtype=np.uint8)
-
     for ii in range(num_configs):
         new_col_idx = 0
         for jj in range(sector_configs.shape[1]):
@@ -55,7 +54,7 @@ def nbody_operator_data_sitebased(op_list, op_sites_list, sector_configs):
     sector_dim = np.int32(sector_configs.shape[0])
     # Exclude specified sites from sector_configs
     m_states = exclude_columns(sector_configs, op_sites_list)
-    nbody_op = np.zeros((sector_dim, sector_dim), dtype=float)
+    nbody_op = np.zeros((sector_dim, sector_dim), dtype=op_list[0].dtype)
     for row in prange(sector_dim):
         mstate1 = m_states[row]
         for col in range(sector_dim):
@@ -86,7 +85,7 @@ def get_operators_nbody_term(op_list, loc_dims, gauge_basis=None, lattice_labels
 
     n_sites = len(loc_dims)
     new_op_list = np.zeros(
-        (len(op_list), n_sites, max(loc_dims), max(loc_dims)), dtype=float
+        (len(op_list), n_sites, max(loc_dims), max(loc_dims)), dtype=op_list[0].dtype
     )
     for ii, op in enumerate(op_list):
         for jj, loc_dim in enumerate(loc_dims):
@@ -102,7 +101,6 @@ def get_operators_nbody_term(op_list, loc_dims, gauge_basis=None, lattice_labels
     return new_op_list
 
 
-# ==========================================================================================
 @njit
 def nbody_operator_data(op_list, op_sites_list, sector_configs):
     sector_dim = sector_configs.shape[0]
@@ -126,7 +124,7 @@ def nbody_operator_data(op_list, op_sites_list, sector_configs):
                 if not np.isclose(element, 0, atol=1e-10):
                     row_list.append(np.int32(row))
                     col_list.append(np.int32(col))
-                    value_list.append(float(element))
+                    value_list.append(element)
 
     # Trim arrays to actual size
     row_list = np.array(row_list)
