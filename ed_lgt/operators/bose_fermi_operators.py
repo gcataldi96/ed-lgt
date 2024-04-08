@@ -40,6 +40,7 @@ def fermi_operators(has_spin, colors=False):
         ops["P_psi"] = qmb_op(ops, ["P_psi", "P_psi"])
         for s in ["up", "down"]:
             ops[f"psi_{s}_dag"] = ops[f"psi_{s}"].transpose()
+            ops[f"psi_{s}_dag_P"] = ops[f"psi_{s}_dag"] @ ops["P_psi"]
         if colors:
             ops["psi_r"] = ops["psi_up"]
             ops["psi_g"] = ops["psi_down"]
@@ -47,8 +48,7 @@ def fermi_operators(has_spin, colors=False):
             ops["N_g"] = ops["N_down"]
             for s in ["r", "g"]:
                 ops[f"psi_{s}_dag"] = ops[f"psi_{s}"].transpose()
-            ops["psi_r_dag_P"] = ops["psi_r_dag"] @ ops["P_psi"]
-            ops["psi_g_dag_P"] = ops["psi_g_dag"] @ ops["P_psi"]
+                ops[f"psi_{s}_dag_P"] = ops[f"psi_{s}_dag"] @ ops["P_psi"]
     return ops
 
 
