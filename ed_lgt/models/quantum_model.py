@@ -109,9 +109,14 @@ class QuantumModel:
         if isinstance(self.H, QMB_hamiltonian):
             # DIAGONALIZE THE HAMILTONIAN
             self.H.diagonalize(self.n_eigs)
-            self.res["energies"] = self.H.Nenergies
+            self.res["energy"] = self.H.Nenergies
             if self.n_eigs > 1:
                 self.res["true_gap"] = self.H.Nenergies[1] - self.H.Nenergies[0]
+
+    def time_evolution_Hamiltonian(self, initial_state, start, stop, n_steps):
+        if isinstance(self.H, QMB_hamiltonian):
+            # DIAGONALIZE THE HAMILTONIAN
+            self.H.time_evolution(initial_state, start, stop, n_steps)
 
     def get_observables(
         self,
