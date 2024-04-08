@@ -35,7 +35,7 @@ with run_sim() as sim:
         model.dim, model.pure_theory, sim.par["g"], sim.par["m"]
     )
     model.build_Hamiltonian(coeffs)
-    model.diagonalize_Hamiltonian(n_eigs=sim.par["hamiltonian"]["n_eigs"])
+    # model.diagonalize_Hamiltonian(n_eigs=sim.par["hamiltonian"]["n_eigs"])
     # LIST OF LOCAL OBSERVABLES
     local_obs = [f"T2_{s}{d}" for d in model.directions for s in "mp"]
     local_obs += ["E_square"]
@@ -50,39 +50,34 @@ with run_sim() as sim:
     model.get_observables(
         local_obs, twobody_obs, plaquette_obs, twobody_axes=twobody_axes
     )
-    # MEASUREMENTS
-    sim.res["entropy"] = np.zeros(model.n_eigs, dtype=float)
-    sim.res["energy"] = model.H.Nenergies
-    sim.res["overlap_V"] = np.zeros(model.n_eigs, dtype=float)
-    sim.res["overlap_PV"] = np.zeros(model.n_eigs, dtype=float)
+    # INITIAL STATE
     vacuum = np.array([0, 4, 0, 4, 0, 4, 0, 4, 0, 2])
     p_vacuum = np.array([1, 5, 1, 5, 1, 5, 1, 5, 1, 1])
-    row_ind1 = np.where((model.sector_configs == vacuum).all(axis=1))[0]
-    row_ind2 = np.where((model.sector_configs == p_vacuum).all(axis=1))[0]
-    for ii in range(model.n_eigs):
-        # PRINT ENERGY
-        model.H.print_energy(ii)
+    indx1 = np.where((model.sector_configs == vacuum).all(axis=1))[0]
+    indx2 = np.where((model.sector_configs == p_vacuum).all(axis=1))[0]
+    initial_state = np.zeros(model.sector_configs.shape[0])
+    initial_state[indx1] = 1
+    # MEASUREMENTS
+    start = 0
+    stop = 3
+    delta_n = 0.01
+    n_steps = int((stop - start) / delta_n)
+    sim.res["entropy"] = np.zeros(n_steps, dtype=float)
+    sim.res["fidelity"] = np.zeros(n_steps, dtype=float)
+    # TIME EVOLUTION
+    model.time_evolution_Hamiltonian(initial_state, start, stop, n_steps)
+    for ii in range(n_steps):
         # ENTROPY
-        sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
+        sim.res["entropy"][ii] = model.H.psi_time[ii].entanglement_entropy(
             list(np.arange(0, int(model.lvals[0] / 2), 1)),
             sector_configs=model.sector_configs,
         )
-        sim.res["overlap_V"][ii] = np.abs(model.H.Npsi[ii].psi[row_ind1]) ** 2
-        sim.res["overlap_PV"][ii] = np.abs(model.H.Npsi[ii].psi[row_ind2]) ** 2
-        if sim.res["entropy"][ii] < 1e-1:
-            # STATE CONFIGURATIONS
-            model.H.Npsi[ii].get_state_configurations(
+        # FIDELITY WITH THE INITIAL STATE
+        sim.res["fidelity"][ii] = np.abs(model.H.psi_time[ii].psi[indx1]) ** 2
+        if sim.res["entropy"][ii] > 0.98:
+            logger.info(sim.res["fidelity"][ii])
+            model.H.psi_time[ii].get_state_configurations(
                 threshold=1e-2, sector_configs=model.sector_configs
             )
-        # MEASURE OBSERVABLES
-        # model.measure_observables(ii)
-        # CHECK LINK SYMMETRIES
-        # model.check_symmetries()
-        """
-        if ii == 0:
-            # SAVE RESULTS
-            for measure in model.res.keys():
-                sim.res[measure] = model.res[measure]
-        """
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")
