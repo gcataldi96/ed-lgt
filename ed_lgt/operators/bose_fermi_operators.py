@@ -27,19 +27,17 @@ def fermi_operators(has_spin, colors=False):
     ops["ID"] = identity(2, dtype=float)
     if has_spin:
         # up & down MATTER OPERATORS
-        ops["psi_up"] = qmb_op(ops, ["psi", "ID"])
-        ops["psi_down"] = qmb_op(ops, ["P_psi", "psi"])
-        ops["N_up"] = qmb_op(ops, ["N", "ID"])
-        ops["N_down"] = qmb_op(ops, ["ID", "N"])
+        ops["psi_down"] = qmb_op(ops, ["psi", "ID"])
+        ops["psi_up"] = qmb_op(ops, ["P_psi", "psi"])
+        ops["N_down"] = qmb_op(ops, ["N", "ID"])
+        ops["N_up"] = qmb_op(ops, ["ID", "N"])
         # other number operators
         ops["N_pair"] = ops["N_up"] * ops["N_down"]
         ops["N_tot"] = ops["N_up"] + ops["N_down"]
         ops["N_single"] = ops["N_tot"] - 2 * ops["N_pair"]
-        # Spin matter operators
-        ops["Sz"] = 0.5 * (ops["N_up"] - ops["N_down"])
-        ops["S2"] = 0.75 * (ops["N_up"] - ops["N_down"]) ** 2
         # identity on the whole matter site
         ops["ID_psi"] = identity(4, dtype=float)
+        ops["P_psi"] = qmb_op(ops, ["P_psi", "P_psi"])
         for s in ["up", "down"]:
             ops[f"psi_{s}_dag"] = ops[f"psi_{s}"].transpose()
         if colors:
@@ -49,6 +47,8 @@ def fermi_operators(has_spin, colors=False):
             ops["N_g"] = ops["N_down"]
             for s in ["r", "g"]:
                 ops[f"psi_{s}_dag"] = ops[f"psi_{s}"].transpose()
+            ops["psi_r_dag_P"] = ops["psi_r_dag"] @ ops["P_psi"]
+            ops["psi_g_dag_P"] = ops["psi_g_dag"] @ ops["P_psi"]
     return ops
 
 
