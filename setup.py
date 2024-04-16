@@ -29,6 +29,7 @@ setuptools.setup(
         "ed_lgt.modeling": "ed_lgt/modeling",
         "ed_lgt.models": "ed_lgt/models",
         "ed_lgt.operators": "ed_lgt/operators",
+        "ed_lgt.symmetries": "ed_lgt/symmetries",
         "ed_lgt.tools": "ed_lgt/tools",
     },
     packages=[
@@ -36,6 +37,7 @@ setuptools.setup(
         "ed_lgt.modeling",
         "ed_lgt.models",
         "ed_lgt.operators",
+        "ed_lgt.symmetries",
         "ed_lgt.tools",
     ],
     python_requires=">=3.6",

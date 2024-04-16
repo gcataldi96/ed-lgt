@@ -8,6 +8,7 @@ from ed_lgt.modeling import (
 )
 from .bose_fermi_operators import fermi_operators
 from .Zn_operators import Zn_rishon_operators
+from .SU2_operators import SU2_generators
 
 __all__ = [
     "Z2_FermiHubbard_gauge_invariant_states",
@@ -91,7 +92,8 @@ def Z2_FermiHubbard_dressed_site_operators(lattice_dim=2):
         )
     # Get the Rishon operators according to the chosen n representation s
     in_ops = Zn_rishon_operators(2, False)
-    in_ops |= fermi_operators(has_spin=True)
+    in_ops.update(fermi_operators(has_spin=True))
+    in_ops.update(SU2_generators(spin=1 / 2, matter=True))
     in_ops["N_up_half"] = in_ops["N_up"] - 0.5 * ID(4)
     in_ops["N_down_half"] = in_ops["N_down"] - 0.5 * ID(4)
     in_ops["N_pair_half"] = in_ops["N_up_half"] * in_ops["N_down_half"]
@@ -121,44 +123,46 @@ def Z2_FermiHubbard_dressed_site_operators(lattice_dim=2):
     # Hopping operators
     for s in ["up", "down"]:
         if lattice_dim == 1:
-            ops[f"Q{s}_mx_dag"] = qmb_op(in_ops, [f"psi_{s}_dag", "Zm", "IDz"])
-            ops[f"Q{s}_px_dag"] = qmb_op(in_ops, [f"psi_{s}_dag", "P", "Zp"])
+            ops[f"Q{s}_mx_dag"] = qmb_op(in_ops, [f"psi_{s}_dag_P", "Zm", "IDz"])
+            ops[f"Q{s}_px_dag"] = qmb_op(in_ops, [f"psi_{s}_dag_P", "P", "Zp"])
         elif lattice_dim == 2:
             ops[f"Q{s}_mx_dag"] = qmb_op(
-                in_ops, [f"psi_{s}_dag", "Zm", "IDz", "IDz", "IDz"]
+                in_ops, [f"psi_{s}_dag_P", "Zm", "IDz", "IDz", "IDz"]
             )
             ops[f"Q{s}_my_dag"] = qmb_op(
-                in_ops, [f"psi_{s}_dag", "P", "Zm", "IDz", "IDz"]
+                in_ops, [f"psi_{s}_dag_P", "P", "Zm", "IDz", "IDz"]
             )
             ops[f"Q{s}_px_dag"] = qmb_op(
-                in_ops, [f"psi_{s}_dag", "P", "P", "Zp", "IDz"]
-            )
-            ops[f"Q{s}_py_dag"] = qmb_op(in_ops, [f"psi_{s}_dag", "P", "P", "P", "Zp"])
-        elif lattice_dim == 3:
-            ops[f"Q{s}_mx_dag"] = qmb_op(
-                in_ops, [f"psi_{s}_dag", "Zm", "IDz", "IDz", "IDz", "IDz", "IDz"]
-            )
-            ops[f"Q{s}_my_dag"] = qmb_op(
-                in_ops, [f"psi_{s}_dag", "P", "Zm", "IDz", "IDz", "IDz", "IDz"]
-            )
-            ops[f"Q{s}_mz_dag"] = qmb_op(
-                in_ops, [f"psi_{s}_dag", "P", "P", "Zm", "IDz", "IDz", "IDz", "IDz"]
-            )
-            ops[f"Q{s}_px_dag"] = qmb_op(
-                in_ops, [f"psi_{s}_dag", "P", "P", "P", "Zp", "IDz", "IDz"]
+                in_ops, [f"psi_{s}_dag_P", "P", "P", "Zp", "IDz"]
             )
             ops[f"Q{s}_py_dag"] = qmb_op(
-                in_ops, [f"psi_{s}_dag", "P", "P", "P", "P", "Zp", "IDz"]
+                in_ops, [f"psi_{s}_dag_P", "P", "P", "P", "Zp"]
+            )
+        elif lattice_dim == 3:
+            ops[f"Q{s}_mx_dag"] = qmb_op(
+                in_ops, [f"psi_{s}_dag_P", "Zm", "IDz", "IDz", "IDz", "IDz", "IDz"]
+            )
+            ops[f"Q{s}_my_dag"] = qmb_op(
+                in_ops, [f"psi_{s}_dag_P", "P", "Zm", "IDz", "IDz", "IDz", "IDz"]
+            )
+            ops[f"Q{s}_mz_dag"] = qmb_op(
+                in_ops, [f"psi_{s}_dag_P", "P", "P", "Zm", "IDz", "IDz", "IDz", "IDz"]
+            )
+            ops[f"Q{s}_px_dag"] = qmb_op(
+                in_ops, [f"psi_{s}_dag_P", "P", "P", "P", "Zp", "IDz", "IDz"]
+            )
+            ops[f"Q{s}_py_dag"] = qmb_op(
+                in_ops, [f"psi_{s}_dag_P", "P", "P", "P", "P", "Zp", "IDz"]
             )
             ops[f"Q{s}_pz_dag"] = qmb_op(
-                in_ops, [f"psi_{s}_dag", "P", "P", "P", "P", "P", "Zp"]
+                in_ops, [f"psi_{s}_dag_P", "P", "P", "P", "P", "P", "Zp"]
             )
     # Add dagger operators
     Qs = {}
     for op in ops:
         dag_op = op.replace("_dag", "")
         Qs[dag_op] = csr_matrix(ops[op].conj().transpose())
-    ops |= Qs
+    ops.update(Qs)
     # --------------------------------------------------------------------------------
     # Psi NUMBER OPERATORS
     for label in [
@@ -168,8 +172,8 @@ def Z2_FermiHubbard_dressed_site_operators(lattice_dim=2):
         "N_single",
         "N_pair",
         "N_pair_half",
-        "Sz",
-        "S2",
+        "Sz_psi",
+        "S2_psi",
     ]:
         ops[label] = qmb_op(in_ops, [label] + ["IDz" for i in range(2 * lattice_dim)])
     # --------------------------------------------------------------------------------
