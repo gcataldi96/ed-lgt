@@ -1,18 +1,11 @@
 Installation and Setup
 =====================================
 
-Documentation Structure
------------------------
+1. Setup: instructions for downloading the repository and installing the dependencies.
 
-The documentation is organized into the following sections:
+2. Configure Simsio Simulations: explanation of how to create and configure configuration files for simulations using the `simsio` library.
 
-1. Introduction: a brief introduction to the project and its functionality.
-
-2. Setup: instructions for downloading the repository and installing the dependencies.
-
-3. Configure Simsio Simulations: explanation of how to create and configure configuration files for simulations using the `simsio` library.
-
-4. Run Simulations: instructions on how to run the simulations.
+3. Run Simulations: instructions on how to run the simulations.
 
 
 Setup
@@ -22,19 +15,26 @@ Setup
 
     .. code-block:: bash
 
-        git clone --recursive git@github.com:gcataldi96/ed-su2.git
+        git clone --recursive git@github.com:gcataldi96/ed-lgt.git
 
-3. Create the environment with all the required Python packages:
+2. Create the environment with all the required Python packages:
 
     .. code-block:: bash
 
-        conda env create -f ed-su2/environment.yml
+        conda env create -f ed-lgt/environment.yml
         conda activate su2
+
+3. Install the library
+   
+    .. code-block:: bash
+
+        cd ed-lgt/
+        pip install -e .
 
 Exploiting SIMSIO library to manage I/O of simulations 
 ------------------------------------------------------
 
-2. Add the `simsio` library as a submodule (it should already be there):
+1. Add the `simsio` library as a submodule (it should already be there):
 
     .. code-block:: bash
 
@@ -42,7 +42,7 @@ Exploiting SIMSIO library to manage I/O of simulations
         git add .
         git commit -m "Add simsio submodule to the TTN code"
 
-Here is an example of a configuration file that should be created inside the `configs` folder (if this folder does not exist, create it):
+This is an example of a configuration file that should be created inside the `configs` folder (if this folder does not exist, create it):
 
 .. code-block:: yaml
 

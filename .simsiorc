@@ -8,7 +8,7 @@ res = results/$uid/res, w, simsio.serializers.NPZSerializer
 directory = configs
 header_tag = ===
 header_ref = <<<
-lock_attempts = 100
+lock_attempts = 5000
 
 [versioning]
 git_revision = git rev-parse HEAD

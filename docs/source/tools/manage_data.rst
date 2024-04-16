@@ -6,7 +6,7 @@ Managing IN/OUT data
 
 This module provides utility functions for saving and loading data obtained from simulations.
 
-.. automodule:: tools.manage_data
+.. automodule:: ed_lgt.tools.manage_data
    :noindex:
    :members:
    :show-inheritance:
