@@ -11,6 +11,8 @@ __all__ = [
     "config_to_index_linearsearch",
     "config_to_index_binarysearch",
     "separate_configs",
+    "get_translated_state_indices",
+    "get_reference_indices",
 ]
 
 
@@ -109,7 +111,6 @@ def config_to_index_linearsearch(config, unique_configs):
             return idx
 
 
-@get_time
 @njit
 def config_to_index_binarysearch(config, unique_configs):
     low = 0
@@ -125,6 +126,7 @@ def config_to_index_binarysearch(config, unique_configs):
             low = idx + 1
         else:
             high = idx - 1
+    return -1  # Configuration not found
 
 
 @njit
@@ -136,3 +138,46 @@ def compare_configs(config1, config2):
         elif config1[i] > config2[i]:
             return 1
     return 0
+
+
+@njit
+def get_translated_state_indices(config, sector_configs):
+    """Generate all translations of a given configuration of a 1d QMB system."""
+    # Get the size of the QMB system
+    N = len(config)
+    if N != sector_configs.shape[1]:
+        raise ValueError(
+            f"config.shape[0]={N} must be equal to sector_configs.shape[1]={sector_configs.shape[1]}"
+        )
+    trans_indices = np.zeros(N, dtype=np.int32)
+    for ii in range(N):
+        rolled_config = np.roll(config, -ii)  # Perform roll operation
+        trans_indices[ii] = config_to_index_binarysearch(rolled_config, sector_configs)
+    return trans_indices
+
+
+@get_time
+@njit
+def get_reference_indices(sector_configs):
+    sector_dim = sector_configs.shape[0]
+    normalization = np.zeros(sector_dim, dtype=np.int32)
+    independent_indices = np.zeros(sector_dim, dtype=np.bool_)
+
+    for ii in range(sector_dim):
+        config = sector_configs[ii]
+        # Compute all the set of translated configurations in terms of indices
+        trans_indices = get_translated_state_indices(config, sector_configs)
+        is_independent = True
+        # Check this configuration against all previously marked independent configurations
+        for jj in range(ii):
+            if independent_indices[jj] and jj in trans_indices:
+                is_independent = False
+                break
+        if is_independent:
+            independent_indices[ii] = True
+            # The norm for the state is the number of unique translations
+            normalization[ii] = len(np.unique(trans_indices))
+    # Obtain the reference configurations (their indices and norms) to build the momentum basis
+    ref_indices = np.flatnonzero(independent_indices)
+    norm = normalization[ref_indices]
+    return ref_indices, norm

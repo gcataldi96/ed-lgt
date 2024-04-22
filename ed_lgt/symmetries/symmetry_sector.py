@@ -3,8 +3,8 @@ import numpy as np
 import logging
 from numba import njit, prange
 from .generate_configs import index_to_config
-from .global_sym_checks import check_global_sym_sitebased
-from .link_sym_checks import check_link_sym_sitebased
+from .global_abelian_sym import check_global_sym_sitebased
+from .link_abelian_sym import check_link_sym_sitebased
 
 logger = logging.getLogger(__name__)
 
