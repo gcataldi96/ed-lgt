@@ -1,8 +1,8 @@
 import numpy as np
 from math import prod
 from scipy.linalg import eigh as array_eigh, svd
-from scipy.sparse.linalg import eigsh as sparse_eigh, expm_multiply
-from scipy.sparse import csr_matrix, isspmatrix, csr_array
+from scipy.sparse.linalg import eigsh as sparse_eigh, expm_multiply, expm
+from scipy.sparse import csr_matrix, isspmatrix, csr_array, csc_matrix
 from ed_lgt.tools import validate_parameters, check_hermitian
 from ed_lgt.symmetries import (
     separate_configs,
@@ -243,6 +243,54 @@ class QMB_hamiltonian:
             QMB_state(psi_time[ii, :], self.lvals, self.loc_dims)
             for ii in range(n_steps)
         ]
+
+    def partition_function(self, beta):
+        return np.real(csc_matrix(expm(-beta * csc_matrix(self.Ham))).trace())
+
+    def free_energy(self, beta):
+        Z = self.partition_function(beta)
+        F = -1 / beta * np.log(Z)
+        return F
+
+    def thermal_average(self, beta):
+        Z = self.partition_function(beta)
+        avg_E = (
+            np.real(
+                csc_matrix(self.Ham).dot(expm(-beta * csc_matrix(self.Ham))).trace()
+            )
+            / Z
+        )
+        return avg_E
+
+    def F_prime(self, beta):
+        Z = self.partition_function(beta)
+        second_moment = (
+            np.real(
+                csc_matrix(self.Ham**2).dot(expm(-beta * csc_matrix(self.Ham))).trace()
+            )
+            / Z
+        )
+        Fp = -second_moment - self.thermal_average(beta) ** 2
+        return Fp
+
+    def get_beta(self):
+        logger.info(f"=======GET BETA ===============")
+        threshold = 1e-10
+        accuracy = 1
+        beta = 1e-7
+        while accuracy > threshold:
+
+            F = self.thermal_average(beta) - self.GSenergy
+            Fp = self.F_prime(beta)
+            prevVal = beta
+            beta = beta - F / Fp
+            accuracy = abs(beta - prevVal)
+            logger.info(f"======================")
+            logger.info(f"F={F}")
+            logger.info(f"Fp={Fp}")
+            logger.info(f"beta={beta}")
+            logger.info(f"accuracy={accuracy}")
+        # rho_th = M*diag(exp(-beta*E))*M'/sum(exp(-beta*E));
 
 
 def get_sparsity(array):

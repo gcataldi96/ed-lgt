@@ -205,7 +205,7 @@ def validate_parameters(
             for ii, sz in enumerate(sz_list):
                 if not float(2 * sz).is_integer():
                     raise TypeError(
-                        f"The {ii} z-component must be (half-)integer, not {spin}"
+                        f"The {ii} z-component must be (half-)integer, not {sz}"
                     )
     if pure_theory is not None and not isinstance(pure_theory, bool):
         raise TypeError(f"pure_theory must be BOOL, not {type(pure_theory)}")

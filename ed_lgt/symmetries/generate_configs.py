@@ -141,17 +141,25 @@ def compare_configs(config1, config2):
 
 
 @njit
-def get_translated_state_indices(config, sector_configs):
-    """Generate all translations of a given configuration of a 1d QMB system."""
+def get_translated_state_indices(config, sector_configs, logical_unit_size):
+    """Generate all translations of a given configuration of a 1d QMB system,
+    considering logical units in translation."""
     # Get the size of the QMB system
     N = len(config)
+    if N % logical_unit_size != 0:
+        raise ValueError("Number of sites is not a multiple of the logical unit size.")
     if N != sector_configs.shape[1]:
         raise ValueError(
             f"config.shape[0]={N} must be equal to sector_configs.shape[1]={sector_configs.shape[1]}"
         )
-    trans_indices = np.zeros(N, dtype=np.int32)
-    for ii in range(N):
-        rolled_config = np.roll(config, -ii)  # Perform roll operation
+    # Get the number of translations of the logical_unit_size
+    num_translations = N // logical_unit_size
+    trans_indices = np.zeros(num_translations, dtype=np.int32)
+    # Run over the number of possible translations
+    for ii in range(num_translations):
+        # Perform roll operation by logical_unit_size steps
+        roll_steps = ii * logical_unit_size
+        rolled_config = np.roll(config, -roll_steps)
         trans_indices[ii] = config_to_index_binarysearch(rolled_config, sector_configs)
     return trans_indices
 

@@ -120,7 +120,7 @@ def link_abelian_sector(loc_dims, sym_op_diags, sym_sectors, pair_list, configs=
         configs = get_state_configs(loc_dims)
     # Acquire Sector dimension
     sector_dim = len(configs)
-    logger.info(f"TOT DIM: {sector_dim}, 2^{round(np.log2(sector_dim),1)}")
+    logger.info(f"TOT DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
     sym_sectors = np.array(sym_sectors, dtype=float)
     checks = check_link_sym_configs_sitebased(
         configs, sym_op_diags, sym_sectors, pair_list
@@ -130,5 +130,5 @@ def link_abelian_sector(loc_dims, sym_op_diags, sym_sectors, pair_list, configs=
     sector_indices = np.ravel_multi_index(sector_configs.T, loc_dims)
     # Acquire dimension of the new sector
     sector_dim = len(sector_configs)
-    logger.info(f"SEC DIM: {sector_dim}, 2^{round(np.log2(sector_dim),1)}")
+    logger.info(f"SEC DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
     return (sector_indices, sector_configs)

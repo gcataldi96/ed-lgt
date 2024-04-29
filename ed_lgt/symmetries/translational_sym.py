@@ -28,7 +28,7 @@ def check_orthogonality(basis):
 
 @get_time
 @njit
-def momentum_basis_k0(sector_configs):
+def momentum_basis_k0(sector_configs, logical_unit_size):
     sector_dim = sector_configs.shape[0]
     normalization = np.zeros(sector_dim, dtype=np.int32)
     independent_indices = np.zeros(sector_dim, dtype=np.bool_)
@@ -36,7 +36,7 @@ def momentum_basis_k0(sector_configs):
     for ii in range(sector_dim):
         config = sector_configs[ii]
         # Compute all the set of translated configurations in terms of indices
-        trans_indices = get_translated_state_indices(config, sector_configs)
+        trans_indices = get_translated_state_indices(config, sector_configs,logical_unit_size)
         is_independent = True
         # Check this configuration against all previously marked independent configurations
         for jj in range(ii):
@@ -51,18 +51,15 @@ def momentum_basis_k0(sector_configs):
     ref_indices = np.flatnonzero(independent_indices)
     norm = normalization[ref_indices]
     # Define the basis
-    basis_dtype = np.float64
-    basis = np.zeros((sector_dim, len(ref_indices)), dtype=basis_dtype)
+    basis = np.zeros((sector_dim, len(ref_indices)), dtype= np.float64)
 
     for ii in range(len(ref_indices)):
         ind_index = ref_indices[ii]
-        trans_indices = get_translated_state_indices(sector_configs[ind_index], sector_configs)
+        trans_indices = get_translated_state_indices(sector_configs[ind_index], sector_configs,logical_unit_size)
         for jj in range(norm[ii]):
             basis[trans_indices[jj], ii] = 1 / np.sqrt(norm[ii])
-    
     #if not check_normalization(basis) or not check_orthogonality(basis):
     #    raise ValueError("Basis normalization or orthogonality failed.")
-
     return basis
 
 

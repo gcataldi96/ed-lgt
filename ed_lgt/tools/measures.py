@@ -4,7 +4,29 @@ from itertools import product
 from scipy.linalg import eigh
 from .mappings_1D_2D import zig_zag
 
-__all__ = ["structure_factor", "get_charge", "get_density", "analyze_correlator"]
+__all__ = [
+    "structure_factor",
+    "get_charge",
+    "get_density",
+    "analyze_correlator",
+    "r_values",
+]
+
+
+def r_values(energy):
+    energy = np.sort(energy)
+    delta_E = np.zeros(energy.shape[0] - 1)
+    r_array = np.zeros(energy.shape[0] - 1)
+    for ii in range(energy.shape[0] - 1):
+        delta_E[ii] = energy[ii + 1] - energy[ii]
+    for ii in range(delta_E.shape[0]):
+        if ii == 0:
+            r_array[ii] = 1
+        else:
+            r_array[ii] = min(delta_E[ii], delta_E[ii - 1]) / max(
+                delta_E[ii], delta_E[ii - 1]
+            )
+    return r_array, delta_E
 
 
 def analyze_correlator(corr):

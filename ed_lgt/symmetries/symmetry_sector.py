@@ -2,13 +2,12 @@ from ed_lgt.tools import get_time
 import numpy as np
 import logging
 from numba import njit, prange
-from .generate_configs import index_to_config
 from .global_abelian_sym import check_global_sym_sitebased
 from .link_abelian_sym import check_link_sym_sitebased
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["sitebased_sym_sector_configs", "get_symmetry_sector_generators"]
+__all__ = ["symmetry_sector_configs", "get_symmetry_sector_generators"]
 
 
 @get_time
@@ -22,23 +21,65 @@ def sitebased_sym_sector_configs(
     link_sectors,
     pair_list,
 ):
-    total_configs = np.prod(loc_dims)
-    print("TOTAL DIM 2**", np.log2(total_configs))
-    # Pre-allocate an array large enough to hold all configurations
-    all_configs = np.zeros((total_configs, len(loc_dims)), dtype=np.uint8)
+    # =============================================================================
+    # Get all the possible QMB state configurations
+    # Total number of configs
+    sector_dim = 1
+    for dim in loc_dims:
+        sector_dim *= dim
+    # Len of each config
+    num_dims = len(loc_dims)
+    configs = np.zeros((sector_dim, num_dims), dtype=np.uint8)
     # Use an auxiliary array to mark valid configurations
-    valid_marks = np.zeros(total_configs, dtype=np.bool_)
-    for ii in prange(total_configs):
-        config = index_to_config(ii, loc_dims)
+    checks = np.zeros(sector_dim, dtype=np.bool_)
+    # Iterate over all the possible configs
+    for ii in prange(sector_dim):
+        tmp = ii
+        for dim_index in range(num_dims):
+            divisor = (
+                np.prod(loc_dims[dim_index + 1 :]) if dim_index + 1 < num_dims else 1
+            )
+            configs[ii, dim_index] = (tmp // divisor) % loc_dims[dim_index]
+        # Check if the config satisfied the symmetries
         if check_global_sym_sitebased(
-            config, glob_op_diags, glob_sectors, sym_type_flag
-        ) and check_link_sym_sitebased(config, link_op_diags, link_sectors, pair_list):
-            all_configs[ii] = config
-            valid_marks[ii] = True
-    # Filter to keep only valid configurations
-    sector_configs = all_configs[valid_marks]
-    print("TOTAL DIM 2**", np.log2(len(sector_configs)))
-    return sector_configs
+            configs[ii], glob_op_diags, glob_sectors, sym_type_flag
+        ) and check_link_sym_sitebased(
+            configs[ii], link_op_diags, link_sectors, pair_list
+        ):
+            checks[ii] = True
+    # =============================================================================
+    # Filter configs based on checks
+    return configs[checks]
+
+
+@get_time
+def symmetry_sector_configs(
+    loc_dims,
+    glob_op_diags,
+    glob_sectors,
+    sym_type_flag,
+    link_op_diags,
+    link_sectors,
+    pair_list,
+):
+
+    # Acquire Sector dimension
+    sector_dim = np.prod(loc_dims)
+    logger.info(f"TOT DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
+    sector_configs = sitebased_sym_sector_configs(
+        loc_dims,
+        glob_op_diags,
+        glob_sectors,
+        0 if sym_type_flag == "U" else 1,
+        link_op_diags,
+        link_sectors,
+        pair_list,
+    )
+    sector_indices = np.ravel_multi_index(sector_configs.T, loc_dims)
+    # Acquire dimension of the new sector
+    sector_dim = len(sector_configs)
+    logger.info(f"SEC DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
+    return sector_indices, sector_configs
 
 
 def get_symmetry_sector_generators(

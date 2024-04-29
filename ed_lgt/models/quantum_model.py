@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.sparse import csr_matrix
 from math import prod
 from ed_lgt.modeling import (
     LocalTerm,
@@ -11,6 +12,7 @@ from ed_lgt.symmetries import (
     get_symmetry_sector_generators,
     link_abelian_sector,
     global_abelian_sector,
+    momentum_basis_k0,
 )
 from ed_lgt.modeling import get_lattice_link_site_pairs, lattice_base_configs
 import logging
@@ -22,7 +24,7 @@ __all__ = ["QuantumModel"]
 
 
 class QuantumModel:
-    def __init__(self, lvals, has_obc):
+    def __init__(self, lvals, has_obc, momentum_basis=False):
         # Lattice parameters
         self.lvals = lvals
         self.dim = len(self.lvals)
@@ -32,10 +34,12 @@ class QuantumModel:
         # Symmetry sector indices
         self.sector_configs = None
         self.sector_indices = None
-        # Site Basis
+        # Gauge Basis
         self.gauge_basis = None
         # Staggered Basis
         self.staggered_basis = False
+        # Momentum Basis
+        self.momentum_basis = momentum_basis
         # Dictionary for results
         self.res = {}
 
@@ -113,10 +117,20 @@ class QuantumModel:
             if self.n_eigs > 1:
                 self.res["true_gap"] = self.H.Nenergies[1] - self.H.Nenergies[0]
 
+    def momentum_basis_projection(self, logical_unit_size):
+        # Project the Hamiltonian onto the momentum sector with k=0
+        B = momentum_basis_k0(self.sector_configs, logical_unit_size)
+        self.H.Ham = csr_matrix(B).transpose() * self.H.Ham * csr_matrix(B)
+
     def time_evolution_Hamiltonian(self, initial_state, start, stop, n_steps):
         if isinstance(self.H, QMB_hamiltonian):
             # DIAGONALIZE THE HAMILTONIAN
             self.H.time_evolution(initial_state, start, stop, n_steps)
+
+    def get_thermal_beta(self):
+        if isinstance(self.H, QMB_hamiltonian):
+            # DIAGONALIZE THE HAMILTONIAN
+            self.H.get_beta()
 
     def get_observables(
         self,
