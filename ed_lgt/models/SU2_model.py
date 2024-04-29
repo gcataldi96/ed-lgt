@@ -37,6 +37,36 @@ class SU2_Model(QuantumModel):
         op_name = "E_square"
         h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
         self.H.Ham += h_terms[op_name].get_Hamiltonian(strength=coeffs["E"])
+        # -------------------------------------------------------------------------------
+        # PLAQUETTE TERM: MAGNETIC INTERACTION
+        if self.dim > 1:
+            op_names_list = ["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]
+            op_list = [self.ops[op] for op in op_names_list]
+            h_terms["plaq_xy"] = PlaquetteTerm(
+                ["x", "y"], op_list, op_names_list, **self.def_params
+            )
+            self.H.Ham += h_terms["plaq_xy"].get_Hamiltonian(
+                strength=-self.coeffs["B"], add_dagger=True
+            )
+        if self.dim == 3:
+            # XZ Plane
+            op_names_list = ["C_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"]
+            op_list = [self.ops[op] for op in op_names_list]
+            h_terms["plaq_xz"] = PlaquetteTerm(
+                ["x", "z"], op_list, op_names_list, **self.def_params
+            )
+            self.H.Ham += h_terms["plaq_xz"].get_Hamiltonian(
+                strength=-self.coeffs["B"], add_dagger=True
+            )
+            # YZ Plane
+            op_names_list = ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"]
+            op_list = [self.ops[op] for op in op_names_list]
+            h_terms["plaq_yz"] = PlaquetteTerm(
+                ["y", "z"], op_list, op_names_list, **self.def_params
+            )
+            self.H.Ham += h_terms["plaq_yz"].get_Hamiltonian(
+                strength=-self.coeffs["B"], add_dagger=True
+            )
         # ---------------------------------------------------------------------------
         if not self.pure_theory:
             # -----------------------------------------------------------------------
@@ -64,95 +94,6 @@ class SU2_Model(QuantumModel):
                         add_dagger=True,
                         mask=mask,
                     )
-        """
-        # ------------------------------------------------------------------------
-        # HOPPING
-        for d in self.directions:
-            for site in ["even", "odd"]:
-                hopping_terms = [
-                    [f"Q1_p{d}_dag", f"Q2_m{d}"],
-                    [f"Q2_p{d}_dag", f"Q1_m{d}"],
-                ]
-                for op_names_list in hopping_terms:
-                    op_list = [self.ops[op] for op in op_names_list]
-                    # Define the Hamiltonian term
-                    h_terms[f"{d}_hop_{site}"] = TwoBodyTerm(
-                        d, op_list, op_names_list, **self.def_params
-                    )
-                    self.H.Ham += h_terms[f"{d}_hop_{site}"].get_Hamiltonian(
-                        strength=coeffs[f"t{d}_{site}"],
-                        add_dagger=True,
-                        mask=staggered_mask(self.lvals, site),
-                    )
-
-        # -------------------------------------------------------------------------------
-        # PLAQUETTE TERM: MAGNETIC INTERACTION
-        plaq_list = []
-        plaquette_directions = ["xy", "xz", "yz"]
-        plaquette_set = [
-            ["AB", "AB", "AB", "AB"],
-            ["AA", "AB", "BB", "AB"],
-            ["AB", "AB", "AA", "BB"],
-            ["AB", "AB", "AA", "BB"],
-            ["AB", "BB", "AB", "AA"],
-            ["AA", "BB", "BB", "AA"],
-            ["AB", "BB", "AA", "BA"],
-            ["AA", "BB", "BA", "BA"],
-            ["BB", "AA", "AB", "AB"],
-            ["BA", "AA", "BB", "AB"],
-            ["BB", "AA", "AA", "BB"],
-            ["BA", "AA", "BA", "BB"],
-            ["BB", "BA", "AB", "AA"],
-            ["BA", "BA", "AB", "AA"],
-            ["BB", "BA", "AA", "BA"],
-            ["BA", "BA", "BA", "BA"],
-        ]
-        plaquette_signs = [
-            -1,
-            +1,
-            +1,
-            -1,
-            +1,
-            -1,
-            -1,
-            +1,
-            +1,
-            -1,
-            -1,
-            +1,
-            -1,
-            +1,
-            +1,
-            -1,
-        ]
-        for ii, pdir in enumerate(plaquette_directions):
-            if (self.dim == 2 and ii == 0) or self.dim == 3:
-                for jj, p_set in enumerate(plaquette_set):
-                    # DEFINE THE LIST OF CORNER OPERATORS
-                    op_names_list = [
-                        f"C{p_set[0]}_p{pdir[0]},p{pdir[1]}",
-                        f"C{p_set[1]}_p{pdir[1]},m{pdir[0]}",
-                        f"C{p_set[2]}_m{pdir[1]},p{pdir[0]}",
-                        f"C{p_set[3]}_m{pdir[0]},m{pdir[1]}",
-                    ]
-                    # CORRESPONDING LIST OF OPERATORS
-                    op_list = [self.ops[op] for op in op_names_list]
-                    # DEFINE THE PLAQUETTE CLASS
-                    plaq_name = f"P_{pdir}_" + "".join(p_set)
-                    h_terms[plaq_name] = PlaquetteTerm(
-                        [pdir[0], pdir[1]],
-                        op_list,
-                        op_names_list,
-                        print_plaq=False,
-                        **self.def_params,
-                    )
-                    # ADD THE HAMILTONIAN TERM
-                    self.H.Ham += h_terms[plaq_name].get_Hamiltonian(
-                        strength=plaquette_signs[jj] * coeffs["B"], add_dagger=True
-                    )
-                    # ADD THE PLAQUETTE TO THE LIST OF OBSERVABLES
-                    plaq_list.append(plaq_name)
-        """
 
     def check_symmetries(self):
         # CHECK LINK SYMMETRIES

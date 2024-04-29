@@ -1,25 +1,32 @@
 import numpy as np
 from scipy.sparse import diags, identity
 from scipy.sparse.linalg import norm
-from ed_lgt.tools import commutator as comm
-from ed_lgt.tools import anti_commutator as anti_comm
-from ed_lgt.tools import check_matrix as check_m
+from ed_lgt.tools import (
+    commutator as comm,
+    anti_commutator as anti_comm,
+    check_matrix as check_m,
+    validate_parameters,
+)
 from .spin_operators import m_values, spin_space, SU2_generators
 import logging
 
 logger = logging.getLogger(__name__)
 
+__all__ = ["SU2_Rishon_gen"]
 
-class SU2_Rishon:
+
+class SU2_Rishon_gen:
     def __init__(self, spin):
-        if not np.isscalar(spin):
-            raise TypeError(f"s must be SCALAR & (semi)INTEGER, not {type(spin)}")
+        # Check spin
+        validate_parameters(spin_list=[spin])
         # Maximal spin rep and color
         self.s = spin
         # Compute the dimension of the rishon mode
         self.largest_s_size = spin_space(spin)
         self.size = np.sum([s_size for s_size in range(1, self.largest_s_size + 1)])
         self.shape = (self.size, self.size)
+        self.construct_rishons()
+        self.SU2_check_rishon_algebra()
 
     def construct_rishons(self):
         # Define dictionary for operators
@@ -84,17 +91,13 @@ class SU2_Rishon:
         self.ops |= SU2_generators(self.s)
 
     def SU2_check_rishon_algebra(self):
-        print("CHECK SU2 RISHON ALGEBRA")
-        check_m(2 * comm(self.ops[f"Zr"], self.ops["Tx"]), self.ops[f"Zg"])
-        check_m(2 * comm(self.ops[f"Zg"], self.ops["Tx"]), self.ops[f"Zr"])
-        check_m(
-            comm(self.ops[f"Zr"], self.ops["Ty"]), -complex(0, 0.5) * self.ops[f"Zg"]
-        )
-        check_m(
-            comm(self.ops[f"Zg"], self.ops["Ty"]), complex(0, 0.5) * self.ops[f"Zr"]
-        )
-        check_m(2 * comm(self.ops[f"Zr"], self.ops["Tz"]), self.ops[f"Zr"])
-        check_m(2 * comm(self.ops[f"Zg"], self.ops["Tz"]), -self.ops[f"Zg"])
+        logger.info("CHECK SU2 RISHON ALGEBRA")
+        check_m(2 * comm(self.ops["Zr"], self.ops["Tx"]), self.ops["Zg"])
+        check_m(2 * comm(self.ops["Zg"], self.ops["Tx"]), self.ops["Zr"])
+        check_m(comm(self.ops["Zr"], self.ops["Ty"]), -complex(0, 0.5) * self.ops["Zg"])
+        check_m(comm(self.ops["Zg"], self.ops["Ty"]), complex(0, 0.5) * self.ops["Zr"])
+        check_m(2 * comm(self.ops["Zr"], self.ops["Tz"]), self.ops["Zr"])
+        check_m(2 * comm(self.ops["Zg"], self.ops["Tz"]), -self.ops["Zg"])
         for color in ["r", "g"]:
             # CHECK RISHON MODES TO BEHAVE LIKE FERMIONS (anticommute with parity)
             if norm(anti_comm(self.ops[f"Z{color}"], self.ops["P"])) > 1e-15:
@@ -109,15 +112,12 @@ class SU2_Rishon:
                     f"Z{color} has a wrong action onto the Casimir operator"
                 )
             """
-        print("SU2 RISHON ALGEBRA SATISFIED")
+        logger.info("SU2 RISHON ALGEBRA SATISFIED")
 
     @staticmethod
     def chi_function(s, color, m):
         """This function computes the factor for SU2 rishon entries"""
-        if not np.isscalar(s):
-            raise TypeError(f"s must be scalar (int or real), not {type(s)}")
-        if not np.isscalar(m):
-            raise TypeError(f"m must be scalar (int or real), not {type(m)}")
+        validate_parameters(spin_list=[s], sz_list=[m])
         if color == "r":
             return np.sqrt((s + m + 1) / np.sqrt((2 * s + 1) * (2 * s + 2)))
         elif color == "g":
