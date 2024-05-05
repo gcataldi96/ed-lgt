@@ -1,41 +1,32 @@
 import numpy as np
 from ed_lgt.models import SU2_Model_Gen
 from ed_lgt.operators import SU2_gen_Hamiltonian_couplings
+from ed_lgt.symmetries import momentum_basis_k0
 from simsio import run_sim
 from time import perf_counter
 import logging
 
 logger = logging.getLogger(__name__)
+
 with run_sim() as sim:
     start_time = perf_counter()
     model = SU2_Model_Gen(**sim.par["model"])
-    # GLOBAL SYMMETRIES
-    if model.pure_theory:
-        global_ops = None
-        global_sectors = None
-    else:
-        global_ops = [model.ops[op] for op in sim.par["symmetries"]["sym_ops"]]
-        global_sectors = sim.par["symmetries"]["sym_sectors"]
-    # LINK SYMMETRIES
-    link_ops = [
-        [model.ops[f"T2_p{d}"], -model.ops[f"T2_m{d}"]] for d in model.directions
-    ]
-    link_sectors = [0 for _ in model.directions]
-    # GET SYMMETRY SECTOR
-    model.get_abelian_symmetry_sector(
-        global_ops=global_ops,
-        global_sectors=global_sectors,
-        link_ops=link_ops,
-        link_sectors=link_sectors,
-    )
-    # DEFAUL PARAMS
-    model.default_params()
     # BUILD AND DIAGONALIZE HAMILTONIAN
     coeffs = SU2_gen_Hamiltonian_couplings(
         model.dim, model.pure_theory, sim.par["g"], sim.par["m"]
     )
     model.build_Hamiltonian(coeffs)
+    # -------------------------------------------------------------------------------
+    # Project onto the momentum sector k=0
+    if model.momentum_basis:
+        model.momentum_basis_projection(logical_unit_size=2)
+        # Get the momentum basis
+        B = momentum_basis_k0(model.sector_configs, 2)
+    # -------------------------------------------------------------------------------
+    # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     model.diagonalize_Hamiltonian(n_eigs=sim.par["hamiltonian"]["n_eigs"])
+    sim.res["energy"] = model.H.Nenergies
+    # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
     local_obs = [f"T2_{s}{d}" for d in model.directions for s in "mp"]
     local_obs += ["E_square"]
@@ -50,42 +41,68 @@ with run_sim() as sim:
     model.get_observables(
         local_obs, twobody_obs, plaquette_obs, twobody_axes=twobody_axes
     )
-    # MEASUREMENTS
+    # -------------------------------------------------------------------------------
+    # THERMAL AVERAGE with CANONICAL ENSEMBLE
+    beta = model.get_thermal_beta()
+    val = model.thermal_average("N_single", beta)
+    # -------------------------------------------------------------------------------
+    # ENTROPY
     sim.res["entropy"] = np.zeros(model.n_eigs, dtype=float)
-    sim.res["energy"] = model.H.Nenergies
-    sim.res["overlap_V"] = np.zeros(model.n_eigs, dtype=float)
-    sim.res["overlap_PV"] = np.zeros(model.n_eigs, dtype=float)
-    if sim.par["model"]["spin"] < 1:
-        vacuum = np.array([0, 4, 0, 4, 0, 4, 0, 2])
-        p_vacuum = np.array([1, 5, 1, 5, 1, 5, 1, 1])
-    else:
-        vacuum = np.array([0, 7, 0, 7, 0, 7, 0, 2])
-        p_vacuum = np.array([1, 8, 1, 8, 1, 8, 1, 1])
-    # row_ind1 = np.where((model.sector_configs == vacuum).all(axis=1))[0]
-    # row_ind2 = np.where((model.sector_configs == p_vacuum).all(axis=1))[0]
+    # -------------------------------------------------------------------------------
+    # OVERLAPS
+    ov_info = {"config": {}, "ind": {}, "state": {}}
+    for name in ["V", "PV"]:
+        # Initialize a null state
+        sim.res[f"overlap_{name}"] = np.zeros(model.n_eigs, dtype=float)
+        # Define the config_state associated to a specific axis
+        config = model.overlap_QMB_state(name)
+        ov_info["config"][name] = config
+        # Get the corresponding QMB index
+        ov_info["ind"][name] = np.where((model.sector_configs == config).all(axis=1))[0]
+        # Initialize the state
+        if model.momentum_basis:
+            ov_info["state"][name] = np.zeros(len(model.sector_configs), dtype=float)
+            ov_info["state"][name][ov_info["ind"][name]] = 1
+            # Project the vacuum in the momentum sector
+            ov_info["state"][name] = B.transpose().dot(ov_info["state"][name])
+    # -------------------------------------------------------------------------------
     for ii in range(model.n_eigs):
         # PRINT ENERGY
         model.H.print_energy(ii)
-        # ENTROPY
-        sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
-            list(np.arange(0, int(model.lvals[0] / 2), 1)),
-            sector_configs=model.sector_configs,
-        )
-        # sim.res["overlap_V"][ii] = np.abs(model.H.Npsi[ii].psi[row_ind1]) ** 2
-        # sim.res["overlap_PV"][ii] = np.abs(model.H.Npsi[ii].psi[row_ind2]) ** 2
-
-        # STATE CONFIGURATIONS
-        model.H.Npsi[ii].get_state_configurations(
-            threshold=1.5e-2, sector_configs=model.sector_configs
-        )
-        # MEASURE OBSERVABLES
-        model.measure_observables(ii)
-        # CHECK LINK SYMMETRIES
-        model.check_symmetries()
-        if ii == 0:
-            # SAVE RESULTS
-            for measure in model.res.keys():
-                sim.res[measure] = model.res[measure]
-
+        if not model.momentum_basis:
+            # -----------------------------------------------------------------------
+            # ENTROPY
+            sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
+                list(np.arange(0, int(model.lvals[0] / 2), 1)),
+                sector_configs=model.sector_configs,
+            )
+            # -----------------------------------------------------------------------
+            # STATE CONFIGURATIONS
+            model.H.Npsi[ii].get_state_configurations(
+                threshold=1e-1, sector_configs=model.sector_configs
+            )
+            # -----------------------------------------------------------------------
+            # MEASURE OBSERVABLES
+            model.measure_observables(ii)
+            # CHECK LINK SYMMETRIES
+            model.check_symmetries()
+            """
+            if ii == 0:
+                # SAVE RESULTS
+                for measure in model.res.keys():
+                    sim.res[measure] = model.res[measure]
+            """
+        # ---------------------------------------------------------------------------
+        # OVERLAPS
+        for name in ["V", "PV"]:
+            if model.momentum_basis:
+                sim.res[f"overlap_{name}"][ii] = (
+                    np.abs(ov_info["state"][name].conj().dot(model.H.Npsi[ii].psi)) ** 2
+                )
+            else:
+                sim.res[f"overlap_{name}"][ii] = (
+                    np.abs(model.H.Npsi[ii].psi[ov_info["ind"][name]]) ** 2
+                )
+        # ---------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

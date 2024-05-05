@@ -274,23 +274,26 @@ class QMB_hamiltonian:
         return Fp
 
     def get_beta(self):
-        logger.info(f"=======GET BETA ===============")
-        threshold = 1e-10
+        logger.info(f"=========== GET BETA ===============")
+        threshold = 1e-6
         accuracy = 1
         beta = 1e-7
         while accuracy > threshold:
-
-            F = self.thermal_average(beta) - self.GSenergy
-            Fp = self.F_prime(beta)
+            expH = csc_matrix(expm(-beta * csc_matrix(self.Ham)))
+            Z = np.real(expH.trace())
+            E = np.real(csc_matrix(self.Ham).dot(expH).trace()) / Z
+            F = E - self.GSenergy
+            Fp = -np.real(csc_matrix(self.Ham**2).dot(expH).trace()) / Z - E**2
             prevVal = beta
             beta = beta - F / Fp
             accuracy = abs(beta - prevVal)
-            logger.info(f"======================")
+            logger.info(f"------------------------------------")
             logger.info(f"F={F}")
             logger.info(f"Fp={Fp}")
             logger.info(f"beta={beta}")
             logger.info(f"accuracy={accuracy}")
-        # rho_th = M*diag(exp(-beta*E))*M'/sum(exp(-beta*E));
+        logger.info(f"BETA {beta}")
+        return beta
 
 
 def get_sparsity(array):

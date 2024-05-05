@@ -1,7 +1,7 @@
 # %%
 from simsio import *
 from matplotlib import pyplot as plt
-from ed_lgt.tools import r_values
+from ed_lgt.tools import save_dictionary
 
 textwidth_pt = 510.0
 textwidth_in = textwidth_pt / 72.27
@@ -13,116 +13,191 @@ def fake_log(x, pos):
     return r"$10^{%d}$" % (x)
 
 
+def custom_average(arr, staggered=None):
+    # Determine indices to consider based on the consider_even parameter
+    indices = np.arange(arr.shape[1])
+    if staggered == "even":
+        indices_to_consider = indices[indices % 2 == 0]  # Select even indices
+    elif staggered == "odd":
+        indices_to_consider = indices[indices % 2 != 0]  # Select odd indices
+    else:
+        indices_to_consider = indices
+    # Calculate the mean across the selected indices
+    mean_values = np.mean(arr[:, indices_to_consider], axis=1)
+    return mean_values
+
+
 # %%
 # SPECTRUM
 # ==========================================================================
-config_filename = f"SU2"
+config_filename = f"SU2/no_scars"
 match = SimsQuery(group_glob=config_filename)
-ugrid, vals = uids_grid(match.uids, ["g", "m"])
+ugrid, vals = uids_grid(match.uids, ["g"])
 # N=10 8951 1790:7160
 # N=8 1105 276:828
 # N=6 139  35:104
 N = 10
 if N == 10:
-    size = 3584
+    size = 8951
 elif N == 8:
     size = 564
 res = {
-    # "entropy": np.zeros((vals["g"].shape[0], vals["m"].shape[0], size)),
-    "energy": np.zeros((vals["g"].shape[0], vals["m"].shape[0], size)),
-    "overlap_V": np.zeros((vals["g"].shape[0], vals["m"].shape[0], size)),
-    # "overlap_PV": np.zeros((vals["g"].shape[0], vals["m"].shape[0], size)),
-    # "r_values": np.zeros((vals["g"].shape[0], vals["m"].shape[0], size - 1)),
+    "entropy": np.zeros((len(vals["g"]), size)),
+    "energy": np.zeros((len(vals["g"]), size)),
+    "overlap_V": np.zeros((len(vals["g"]), size)),
+    "overlap_PV": np.zeros((len(vals["g"]), size)),
+    "g": vals["g"],
 }
 
 for kk, g in enumerate(vals["g"]):
-    for ii, m in enumerate(vals["m"]):
-        # res["entropy"][kk, ii, :] = get_sim(ugrid[kk][ii]).res["entropy"]
-        res["energy"][kk, ii, :] = get_sim(ugrid[kk][ii]).res["energy"]
-        res["overlap_V"][kk, ii, :] = get_sim(ugrid[kk][ii]).res["overlap_V"]
-        # res["overlap_PV"][kk, ii, :] = get_sim(ugrid[kk][ii]).res["overlap_PV"]
-        # res["r_values"][kk, ii, :], _ = r_values(res["energy"][kk, ii, :])
-        print("===================================================")
-        # print(g, m, np.mean(res["r_values"][kk, ii, 425:1275]))
-# %%
+    res["entropy"][kk, :] = get_sim(ugrid[kk]).res["entropy"]
+    res["energy"][kk, :] = get_sim(ugrid[kk]).res["energy"]
+    res["overlap_V"][kk, :] = get_sim(ugrid[kk]).res["overlap_V"]
+    res["overlap_PV"][kk, :] = get_sim(ugrid[kk]).res["overlap_PV"]
+save_dictionary(res, f"SU2_no_scars.pkl")
 # ==========================================================================
 fig, ax = plt.subplots(
-    1,
-    1,
-    sharex=True,
-    sharey=False,
-    figsize=(textwidth_in, 0.5 * textwidth_in),
+    3,
+    3,
+    sharex="col",
+    sharey="row",
+    figsize=(textwidth_in, 1.0 * textwidth_in),
     constrained_layout=True,
 )
+for kk, g in enumerate(res["g"]):
+    ax[0, kk].plot(
+        res["energy"][kk, :],
+        res["overlap_V"][kk, :],
+        "o",
+        markersize=2,
+        markeredgecolor="darkblue",
+        markerfacecolor="white",
+        markeredgewidth=0.5,
+    )
 
-ax.plot(
-    res["energy"][kk, ii, :],
-    res["overlap_V"][kk, ii, :],
-    "o",
-    markersize=4,
-    markeredgecolor="darkblue",
-    markerfacecolor="white",
-    markeredgewidth=0.8,
-)
-"""
-ax[1].plot(
-    res["energy"][kk, ii, :],
-    res["overlap_PV"][kk, ii, :],
-    "o",
-    markersize=4,
-    markeredgecolor="darkblue",
-    markerfacecolor="white",
-    markeredgewidth=0.8,
-)
+    ax[1, kk].plot(
+        res["energy"][kk, :],
+        res["overlap_PV"][kk, :],
+        "o",
+        markersize=2,
+        markeredgecolor="darkblue",
+        markerfacecolor="white",
+        markeredgewidth=0.5,
+    )
 
-ax[2].plot(
-    res["energy"][kk, ii, :],
-    res["entropy"][kk, ii, :],
-    "o",
-    markersize=4,
-    markeredgecolor="darkblue",
-    markerfacecolor="white",
-    markeredgewidth=0.8,
-)
-"""
-ax.set(ylabel="Ov Vacuum", yscale="log", ylim=[1e-9, 2])
-# ax[1].set(ylabel="Ov Pol Vacuum", yscale="log", ylim=[1e-9, 2])
-# ax[2].set(xlabel="Energy", ylabel="Ent. Entropy")
-plt.savefig("momentum_m5g1_N10_PBC.pdf")
-# ==========================================================================
+    ax[2, kk].plot(
+        res["energy"][kk, :],
+        res["entropy"][kk, :],
+        "o",
+        markersize=2,
+        markeredgecolor="darkblue",
+        markerfacecolor="white",
+        markeredgewidth=0.5,
+    )
+    ax[2, kk].set(xlabel="Energy")
+    ax[0, kk].annotate(rf"$m=g={g}$", xy=(0.5, 0.2))
+
+ax[0, 0].set(ylabel="Ov Vacuum", yscale="log", ylim=[1e-9, 2])
+ax[1, 0].set(ylabel="Ov Pol Vacuum", yscale="log", ylim=[1e-9, 2])
+ax[2, 0].set(ylabel="Ent Entropy")
+plt.savefig("phase_diagram.pdf")
 # %%
 # DYNAMICS
 # ==========================================================================
-config_filename = f"SU2_dynamics"
-match = SimsQuery(group_glob=config_filename)
-ugrid, vals = uids_grid(match.uids, ["g", "m"])
-res = {
-    "entropy": get_sim(ugrid[0][0]).res["entropy"],
-    "fidelity": get_sim(ugrid[0][0]).res["fidelity"],
-}
-
-fig, ax = plt.subplots(
-    2,
-    1,
-    sharex=True,
-    sharey=False,
-    figsize=(textwidth_in, textwidth_in),
-    constrained_layout=True,
-)
 start = 0
-stop = 3
+stop = 4
 delta_n = 0.01
 n_steps = int((stop - start) / delta_n)
+time_steps = np.arange(n_steps) * delta_n
+markersizes = [1, 1]
+colors = ["darkblue", "darkred"]
+col_densities = [
+    ["green", "orchid", "orange"],
+    ["darkgreen", "darkorchid", "darkorange"],
+]
+linestyles = ["-o", "--"]
+linewidths = [1.5, 1.5]
+# Acquire simulations
+res = {}
+for state_name in ["V", "PV"]:
+    res[state_name] = {}
+    for jirrep in ["12", "1"]:
+        res[state_name][jirrep] = {}
+        config_filename = f"SU2/dynamics/{state_name}/j{jirrep}"
+        match = SimsQuery(group_glob=config_filename)
+        ugrid, vals = uids_grid(match.uids, ["g"])
+        for ii, g in enumerate(vals["g"]):
+            res[state_name][jirrep][f"{ii}"] = {}
+            for obs in ["entropy", f"overlap_{state_name}"]:
+                res[state_name][jirrep][f"{ii}"][obs] = get_sim(ugrid[ii]).res[obs]
 
+            res[state_name][jirrep][f"{ii}"]["N2"] = (
+                custom_average(get_sim(ugrid[ii]).res["N_pair"], "even")
+                + (1 - custom_average(get_sim(ugrid[ii]).res["N_pair"], "odd")) / 2
+            )
+            res[state_name][jirrep][f"{ii}"]["N1"] = custom_average(
+                get_sim(ugrid[ii]).res["N_single"]
+            )
+            res[state_name][jirrep][f"{ii}"]["N0"] = (
+                1
+                - res[state_name][jirrep][f"{ii}"]["N1"]
+                - res[state_name][jirrep][f"{ii}"]["N2"]
+            )
+    # -------------------------------------------------------------------------
+    # Make a figure for each reference state
+    fig, ax = plt.subplots(
+        3,
+        2,
+        sharex=True,
+        sharey="row",
+        figsize=(textwidth_in, textwidth_in),
+        constrained_layout=True,
+    )
 
-ax[0].plot(np.arange(n_steps) * delta_n, res["fidelity"])
-ax[0].grid()
-ax[0].set(ylabel=r"Fidelity (vacuum)")
+    for ii, g in enumerate(vals["g"]):
+        for jj, jirrep in enumerate(["12", "1"]):
+            ax[0, ii].plot(
+                time_steps,
+                res[state_name][jirrep][f"{ii}"][f"overlap_{state_name}"],
+                linestyles[jj],
+                linewidth=linewidths[jj],
+                markersize=markersizes[jj],
+                color=colors[jj],
+                markeredgecolor=colors[jj],
+                markerfacecolor=colors[jj],
+                markeredgewidth=1,
+            )
+            for kk, obs in enumerate(["N1", "N2"]):
+                ax[1, ii].plot(
+                    time_steps,
+                    res[state_name][jirrep][f"{ii}"][obs],
+                    linestyles[jj],
+                    linewidth=linewidths[jj],
+                    markersize=markersizes[jj],
+                    color=col_densities[jj][kk],
+                    markeredgecolor=col_densities[jj][kk],
+                    markerfacecolor=col_densities[jj][kk],
+                    markeredgewidth=1,
+                    label=rf"{obs} (j{jirrep})",
+                )
+            ax[2, ii].plot(
+                time_steps,
+                res[state_name][jirrep][f"{ii}"]["entropy"],
+                linestyles[jj],
+                linewidth=linewidths[jj],
+                markersize=markersizes[jj],
+                color=colors[jj],
+                markeredgecolor=colors[jj],
+                markerfacecolor=colors[jj],
+                markeredgewidth=1,
+            )
+            ax[2, ii].set(xlabel="Time")
 
-ax[1].plot(np.arange(n_steps) * delta_n, res["entropy"])
-ax[1].set(xlabel="Time", ylabel="Entanglement entropy")
-ax[1].grid()
-plt.savefig("dynamics_spin12_m01_g01.pdf")
+    ax[0, 0].set(ylabel=r"overlap_V")
+    ax[1, 0].set(ylabel=r"density")
+    ax[2, 0].set(ylabel=r"entropy")
+    ax[1, 1].legend(loc="best", ncol=2)
+    plt.savefig(f"dynamics_{state_name}.pdf")
 # ==========================================================================
 # %%
 import csv

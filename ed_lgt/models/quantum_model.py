@@ -1,5 +1,6 @@
 import numpy as np
-from scipy.sparse import csr_matrix
+from scipy.sparse import csr_matrix, csc_matrix
+from scipy.sparse.linalg import expm
 from math import prod
 from ed_lgt.modeling import (
     LocalTerm,
@@ -121,6 +122,7 @@ class QuantumModel:
         # Project the Hamiltonian onto the momentum sector with k=0
         B = momentum_basis_k0(self.sector_configs, logical_unit_size)
         self.H.Ham = csr_matrix(B).transpose() * self.H.Ham * csr_matrix(B)
+        logger.info(f"Momentum basis shape {B.shape}")
 
     def time_evolution_Hamiltonian(self, initial_state, start, stop, n_steps):
         if isinstance(self.H, QMB_hamiltonian):
@@ -130,7 +132,18 @@ class QuantumModel:
     def get_thermal_beta(self):
         if isinstance(self.H, QMB_hamiltonian):
             # DIAGONALIZE THE HAMILTONIAN
-            self.H.get_beta()
+            return self.H.get_beta()
+
+    def thermal_average(self, local_obs, beta):
+        Op = LocalTerm(
+            operator=self.ops[local_obs], op_name=local_obs, **self.def_params
+        )
+        Op_matrix = Op.get_Hamiltonian(1)
+        if isinstance(self.H, QMB_hamiltonian):
+            Z = self.H.partition_function(beta)
+        return np.real(
+            csc_matrix(Op_matrix).dot(expm(-beta * csc_matrix(self.H.Ham))).trace()
+        ) / (Z * self.n_sites)
 
     def get_observables(
         self,
@@ -183,21 +196,40 @@ class QuantumModel:
                 op_list=op_list, op_names_list=op_names_list, **self.def_params
             )
 
-    def measure_observables(self, state_number):
-        for obs in self.local_obs:
-            self.obs_list[obs].get_expval(self.H.Npsi[state_number])
-            self.res[obs] = self.obs_list[obs].obs
-        for op_names_list in self.twobody_obs:
-            obs = "_".join(op_names_list)
-            self.obs_list[obs].get_expval(self.H.Npsi[state_number])
-            self.res[obs] = self.obs_list[obs].corr
-            if self.twobody_axes is not None:
-                self.obs_list[obs].print_nearest_neighbors()
-        for op_names_list in self.plaquette_obs:
-            obs = "_".join(op_names_list)
-            self.obs_list[obs].get_expval(self.H.Npsi[state_number])
-            self.res[obs] = self.obs_list[obs].avg
-        for op_names_list in self.nbody_obs:
-            obs = "_".join(op_names_list)
-            self.obs_list[obs].get_expval(self.H.Npsi[state_number])
-            self.res[obs] = self.obs_list[obs].corr
+    def measure_observables(self, state_number, dynamics=False):
+        if not dynamics:
+            for obs in self.local_obs:
+                self.obs_list[obs].get_expval(self.H.Npsi[state_number])
+                self.res[obs] = self.obs_list[obs].obs
+            for op_names_list in self.twobody_obs:
+                obs = "_".join(op_names_list)
+                self.obs_list[obs].get_expval(self.H.Npsi[state_number])
+                self.res[obs] = self.obs_list[obs].corr
+                if self.twobody_axes is not None:
+                    self.obs_list[obs].print_nearest_neighbors()
+            for op_names_list in self.plaquette_obs:
+                obs = "_".join(op_names_list)
+                self.obs_list[obs].get_expval(self.H.Npsi[state_number])
+                self.res[obs] = self.obs_list[obs].avg
+            for op_names_list in self.nbody_obs:
+                obs = "_".join(op_names_list)
+                self.obs_list[obs].get_expval(self.H.Npsi[state_number])
+                self.res[obs] = self.obs_list[obs].corr
+        else:
+            for obs in self.local_obs:
+                self.obs_list[obs].get_expval(self.H.psi_time[state_number])
+                self.res[obs] = self.obs_list[obs].obs
+            for op_names_list in self.twobody_obs:
+                obs = "_".join(op_names_list)
+                self.obs_list[obs].get_expval(self.H.psi_time[state_number])
+                self.res[obs] = self.obs_list[obs].corr
+                if self.twobody_axes is not None:
+                    self.obs_list[obs].print_nearest_neighbors()
+            for op_names_list in self.plaquette_obs:
+                obs = "_".join(op_names_list)
+                self.obs_list[obs].get_expval(self.H.psi_time[state_number])
+                self.res[obs] = self.obs_list[obs].avg
+            for op_names_list in self.nbody_obs:
+                obs = "_".join(op_names_list)
+                self.obs_list[obs].get_expval(self.H.psi_time[state_number])
+                self.res[obs] = self.obs_list[obs].corr

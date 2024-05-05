@@ -1,3 +1,4 @@
+import numpy as np
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm, QMB_hamiltonian
 from ed_lgt.modeling import check_link_symmetry, staggered_mask
 from .quantum_model import QuantumModel
@@ -28,6 +29,26 @@ class SU2_Model_Gen(QuantumModel):
         )
         # Acquire local dimension and lattice label
         self.get_local_site_dimensions()
+        # GLOBAL SYMMETRIES
+        if self.pure_theory:
+            global_ops = None
+            global_sectors = None
+        else:
+            global_ops = [self.ops["N_tot"]]
+            global_sectors = [self.n_sites]
+        # LINK SYMMETRIES
+        link_ops = [
+            [self.ops[f"T2_p{d}"], -self.ops[f"T2_m{d}"]] for d in self.directions
+        ]
+        link_sectors = [0 for _ in self.directions]
+        # GET SYMMETRY SECTOR
+        self.get_abelian_symmetry_sector(
+            global_ops=global_ops,
+            global_sectors=global_sectors,
+            link_ops=link_ops,
+            link_sectors=link_sectors,
+        )
+        self.default_params()
 
     def build_Hamiltonian(self, coeffs):
         # Hamiltonian Coefficients
@@ -132,3 +153,21 @@ class SU2_Model_Gen(QuantumModel):
                 value=0,
                 sign=-1,
             )
+
+    def overlap_QMB_state(self, name):
+        if name == "V":
+            if self.spin == 1:
+                s1, s2, L, R = 0, 7, 0, 2
+            elif self.spin < 1:
+                s1, s2, L, R = 0, 4, 0, 2
+        elif name == "PV":
+            if self.spin == 1:
+                s1, s2, L, R = 1, 8, 1, 1
+            elif self.spin < 1:
+                s1, s2, L, R = 1, 5, 1, 1
+        config_state = [s1 if ii % 2 == 0 else s2 for ii in range(self.n_sites)]
+        if self.has_obc[0]:
+            config_state[0] = L
+            config_state[-1] = R
+        config_state = config_state
+        return np.array(config_state)

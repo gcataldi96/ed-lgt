@@ -8,48 +8,9 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-
-def overlap_QMB_state(N, has_obc, name, config_state=None):
-    if config_state == None:
-        if name == "V":
-            s1, s2, L, R = 0, 4, 0, 2
-        elif name == "PV":
-            s1, s2, L, R = 1, 5, 1, 1
-        elif name == "M":
-            s1, s2, L, R = 3, 2, 1, 1
-        config_state = [s1 if ii % 2 == 0 else s2 for ii in range(N)]
-        if has_obc:
-            print(has_obc)
-            config_state[0] = L
-            config_state[-1] = R
-        config_state = config_state
-    return np.array(config_state)
-
-
 with run_sim() as sim:
     start_time = perf_counter()
     model = SU2_Model(**sim.par["model"])
-    # GLOBAL SYMMETRIES
-    if model.pure_theory:
-        global_ops = None
-        global_sectors = None
-    else:
-        global_ops = [model.ops[op] for op in sim.par["symmetries"]["sym_ops"]]
-        global_sectors = sim.par["symmetries"]["sym_sectors"]
-    # LINK SYMMETRIES
-    link_ops = [
-        [model.ops[f"T2_p{d}"], -model.ops[f"T2_m{d}"]] for d in model.directions
-    ]
-    link_sectors = [0 for _ in model.directions]
-    # GET SYMMETRY SECTOR
-    model.get_abelian_symmetry_sector(
-        global_ops=global_ops,
-        global_sectors=global_sectors,
-        link_ops=link_ops,
-        link_sectors=link_sectors,
-    )
-    # DEFAUL PARAMS
-    model.default_params()
     # BUILD AND DIAGONALIZE HAMILTONIAN
     coeffs = SU2_Hamiltonian_couplings(
         model.dim, model.pure_theory, sim.par["g"], sim.par["m"]
@@ -65,8 +26,6 @@ with run_sim() as sim:
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     model.diagonalize_Hamiltonian(n_eigs=sim.par["hamiltonian"]["n_eigs"])
     sim.res["energy"] = model.H.Nenergies
-    # DETERMINE BETA of THERMALIZATION
-    # model.get_thermal_beta()
     # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
     local_obs = [f"T2_{s}{d}" for d in model.directions for s in "mp"]
@@ -83,16 +42,20 @@ with run_sim() as sim:
         local_obs, twobody_obs, plaquette_obs, twobody_axes=twobody_axes
     )
     # -------------------------------------------------------------------------------
+    # THERMAL AVERAGE with CANONICAL ENSEMBLE
+    beta = model.get_thermal_beta()
+    val = model.thermal_average("N_single", beta)
+    # -------------------------------------------------------------------------------
     # ENTROPY
     sim.res["entropy"] = np.zeros(model.n_eigs, dtype=float)
     # -------------------------------------------------------------------------------
     # OVERLAPS
     ov_info = {"config": {}, "ind": {}, "state": {}}
-    for name in ["V", "PV", "M"]:
+    for name in ["V", "PV"]:
         # Initialize a null state
         sim.res[f"overlap_{name}"] = np.zeros(model.n_eigs, dtype=float)
         # Define the config_state associated to a specific axis
-        config = overlap_QMB_state(model.n_sites, model.has_obc[0], name)
+        config = model.overlap_QMB_state(name)
         ov_info["config"][name] = config
         # Get the corresponding QMB index
         ov_info["ind"][name] = np.where((model.sector_configs == config).all(axis=1))[0]
@@ -116,7 +79,7 @@ with run_sim() as sim:
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS
             model.H.Npsi[ii].get_state_configurations(
-                threshold=1.5e-2, sector_configs=model.sector_configs
+                threshold=1e-1, sector_configs=model.sector_configs
             )
             # -----------------------------------------------------------------------
             # MEASURE OBSERVABLES
@@ -131,7 +94,7 @@ with run_sim() as sim:
             """
         # ---------------------------------------------------------------------------
         # OVERLAPS
-        for name in ["V", "PV", "M"]:
+        for name in ["V", "PV"]:
             if model.momentum_basis:
                 sim.res[f"overlap_{name}"][ii] = (
                     np.abs(ov_info["state"][name].conj().dot(model.H.Npsi[ii].psi)) ** 2
