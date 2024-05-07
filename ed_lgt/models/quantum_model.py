@@ -129,10 +129,10 @@ class QuantumModel:
             # DIAGONALIZE THE HAMILTONIAN
             self.H.time_evolution(initial_state, start, stop, n_steps)
 
-    def get_thermal_beta(self):
+    def get_thermal_beta(self, state, threshold):
         if isinstance(self.H, QMB_hamiltonian):
             # DIAGONALIZE THE HAMILTONIAN
-            return self.H.get_beta()
+            return self.H.get_beta(state, threshold)
 
     def thermal_average(self, local_obs, beta):
         Op = LocalTerm(

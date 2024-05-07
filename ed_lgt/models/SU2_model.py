@@ -132,6 +132,8 @@ class SU2_Model(QuantumModel):
             s1, s2, L, R = 0, 4, 0, 2
         elif name == "PV":
             s1, s2, L, R = 1, 5, 1, 1
+        elif name == "M":
+            s1, s2, L, R = 3, 2, 1, 1
         config_state = [s1 if ii % 2 == 0 else s2 for ii in range(self.n_sites)]
         if self.has_obc[0]:
             config_state[0] = L

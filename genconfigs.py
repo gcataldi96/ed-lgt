@@ -71,6 +71,13 @@ gen_configs("template", params, f"QED/DM_scaling_PBC")
 # QED ENTANGLEMENT vs spin REP
 params = {"spin": np.arange(1, 6, 1), "g": np.logspace(-2, 0, 15)}
 gen_configs("template", params, f"QED/entanglement")
+
+# %%
+params = {
+    "spin": np.arange(1, 31, 1),
+    "g": np.logspace(-2, 1, num=15),
+}
+gen_configs("template", params, f"QED/scaling_conv")
 # %%
 # Z2 FERMI HUBBARD MODEL
 params = {"U": np.logspace(-1, 1, 15)}
@@ -80,4 +87,8 @@ gen_configs("template", params, f"Z2_FermiHubbard/4x2_OBCxy")
 # ISING MODEL
 params = {"lvals": [[6], [8], [10], [12]], "h": np.logspace(-2, 2, 20)}
 gen_configs("template", params, f"Ising/Ising1D")
+# %%
+# SU2 scars
+params = {"g": [0.1, 1, 5]}
+gen_configs("template", params, f"SU2/no_scars")
 # %%

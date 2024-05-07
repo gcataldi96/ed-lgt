@@ -126,6 +126,7 @@ for state_name in ["V", "PV"]:
         config_filename = f"SU2/dynamics/{state_name}/j{jirrep}"
         match = SimsQuery(group_glob=config_filename)
         ugrid, vals = uids_grid(match.uids, ["g"])
+        res["g"] = vals["g"]
         for ii, g in enumerate(vals["g"]):
             res[state_name][jirrep][f"{ii}"] = {}
             for obs in ["entropy", f"overlap_{state_name}"]:
@@ -198,7 +199,127 @@ for state_name in ["V", "PV"]:
     ax[2, 0].set(ylabel=r"entropy")
     ax[1, 1].legend(loc="best", ncol=2)
     plt.savefig(f"dynamics_{state_name}.pdf")
+save_dictionary(res, "dynamics_ED.pkl")
 # ==========================================================================
+# 0339cdf00b9011efbf39fa163ee812fb
+# 756be8680b9f11ef9bd1fa163ee812fb
+# %%
+markersizes = [2, 1]
+colors = ["darkblue", "darkred"]
+col_densities = [
+    ["green", "orchid", "orange"],
+    ["darkgreen", "darkorchid", "darkorange"],
+]
+linestyles = ["-o", "--"]
+linewidths = [1.5, 1.5]
+start = 0
+stop = 10
+delta_n = 0.05
+n_steps = int((stop - start) / delta_n)
+time_steps = np.arange(n_steps) * delta_n
+thermal_avg = 0.3550135501355025  # 0.2947560720396572
+
+
+# 2024-05-07 08:16 INFO     | Thermal average M 0.36170212765957444
+# 2024-05-07 08:16 INFO     | Thermal average M 0.37499999843206966
+
+# 2024-05-07 08:16 INFO     | Thermal average M 0.3617021276595175
+# 2024-05-07 08:16 INFO     | Thermal average M 0.3749998280672175
+
+thermal_avg = {"N1": 0.3550135501353987, "E_square": 0.37499976671822877}
+
+# Acquire simulations
+res = {}
+
+config_filename = f"SU2/dynamics/thermalization/M_N6_scars1"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+res["g"] = vals["g"]
+for obs in ["entropy", f"overlap_M"]:
+    res[obs] = get_sim(ugrid[0]).res[obs]
+
+res["N2"] = (
+    custom_average(get_sim(ugrid[0]).res["N_pair"], "even")
+    + (1 - custom_average(get_sim(ugrid[0]).res["N_pair"], "odd")) / 2
+)
+res["N1"] = custom_average(get_sim(ugrid[0]).res["N_single"])
+res["N0"] = 1 - res["N1"] - res["N2"]
+
+res["E_square"] = custom_average(get_sim(ugrid[0]).res["E_square"])
+
+
+fig, ax = plt.subplots(
+    4,
+    1,
+    sharex=True,
+    sharey="row",
+    figsize=(textwidth_in, 1.3 * textwidth_in),
+    constrained_layout=True,
+)
+
+jj = 0
+kk = 0
+ax[0].plot(
+    time_steps,
+    res[f"overlap_M"],
+    linestyles[jj],
+    linewidth=linewidths[jj],
+    markersize=markersizes[jj],
+    color=colors[jj],
+    markeredgecolor=colors[jj],
+    markerfacecolor=colors[jj],
+    markeredgewidth=1,
+)
+
+ax[1].plot(
+    time_steps,
+    res["N1"],
+    linestyles[jj],
+    linewidth=linewidths[jj],
+    markersize=markersizes[jj],
+    color=col_densities[jj][kk],
+    markeredgecolor=col_densities[jj][kk],
+    markerfacecolor=col_densities[jj][kk],
+    markeredgewidth=1,
+    label=rf"N1(t)",
+)
+ax[1].axhline(y=thermal_avg["N1"], color="r", linestyle="-", label=r"N1(thermal)")
+
+ax[2].plot(
+    time_steps,
+    res["E_square"],
+    linestyles[jj],
+    linewidth=linewidths[jj],
+    markersize=markersizes[jj],
+    color=col_densities[jj][kk],
+    markeredgecolor=col_densities[jj][kk],
+    markerfacecolor=col_densities[jj][kk],
+    markeredgewidth=1,
+    label=rf"E^2(t)",
+)
+ax[2].axhline(
+    y=thermal_avg["E_square"], color="r", linestyle="-", label=r"E^2(thermal)"
+)
+
+ax[3].plot(
+    time_steps,
+    res["entropy"],
+    linestyles[jj],
+    linewidth=linewidths[jj],
+    markersize=markersizes[jj],
+    color=colors[jj],
+    markeredgecolor=colors[jj],
+    markerfacecolor=colors[jj],
+    markeredgewidth=1,
+)
+ax[3].set(xlabel="Time")
+
+ax[0].set(ylabel=r"overlap_M")
+ax[1].set(ylabel=r"density N1")
+ax[2].set(ylabel=r"electric link energy")
+ax[3].set(ylabel=r"entropy")
+ax[1].legend(loc="best", ncol=1)
+plt.savefig(f"dynamics_thermal_M.pdf")
 # %%
 import csv
 

@@ -32,6 +32,7 @@ with run_sim() as sim:
     local_obs += ["E_square"]
     if not model.pure_theory:
         local_obs += [f"N_{label}" for label in ["r", "g", "tot", "single", "pair"]]
+        local_obs += ["E_square"]
     # LIST OF TWOBODY CORRELATORS
     twobody_obs = [[f"P_p{d}", f"P_m{d}"] for d in model.directions]
     twobody_axes = [d for d in model.directions]
@@ -42,16 +43,12 @@ with run_sim() as sim:
         local_obs, twobody_obs, plaquette_obs, twobody_axes=twobody_axes
     )
     # -------------------------------------------------------------------------------
-    # THERMAL AVERAGE with CANONICAL ENSEMBLE
-    beta = model.get_thermal_beta()
-    val = model.thermal_average("N_single", beta)
-    # -------------------------------------------------------------------------------
     # ENTROPY
     sim.res["entropy"] = np.zeros(model.n_eigs, dtype=float)
     # -------------------------------------------------------------------------------
     # OVERLAPS
     ov_info = {"config": {}, "ind": {}, "state": {}}
-    for name in ["V", "PV"]:
+    for name in ["V", "PV", "M"]:
         # Initialize a null state
         sim.res[f"overlap_{name}"] = np.zeros(model.n_eigs, dtype=float)
         # Define the config_state associated to a specific axis
@@ -60,11 +57,20 @@ with run_sim() as sim:
         # Get the corresponding QMB index
         ov_info["ind"][name] = np.where((model.sector_configs == config).all(axis=1))[0]
         # Initialize the state
+        ov_info["state"][name] = np.zeros(len(model.sector_configs), dtype=float)
+        ov_info["state"][name][ov_info["ind"][name]] = 1
         if model.momentum_basis:
-            ov_info["state"][name] = np.zeros(len(model.sector_configs), dtype=float)
-            ov_info["state"][name][ov_info["ind"][name]] = 1
             # Project the vacuum in the momentum sector
             ov_info["state"][name] = B.transpose().dot(ov_info["state"][name])
+    # -------------------------------------------------------------------------------
+    # THERMAL AVERAGE with CANONICAL ENSEMBLE
+    name = "M"
+    logger.info(name)
+    beta = model.get_thermal_beta(state=ov_info["state"][name], threshold=1e-8)
+    val = model.thermal_average("N_single", beta)
+    logger.info(f"Thermal average {name} {val}")
+    val = model.thermal_average("E_square", beta)
+    logger.info(f"Thermal average {name} {val}")
     # -------------------------------------------------------------------------------
     for ii in range(model.n_eigs):
         # PRINT ENERGY

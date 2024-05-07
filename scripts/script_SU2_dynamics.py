@@ -27,6 +27,7 @@ with run_sim() as sim:
     local_obs += ["E_square"]
     if not model.pure_theory:
         local_obs = [f"N_{label}" for label in ["tot", "single", "pair"]]
+        local_obs += ["E_square"]
     # LIST OF TWOBODY CORRELATORS
     twobody_obs = [[f"P_p{d}", f"P_m{d}"] for d in model.directions]
     twobody_axes = [d for d in model.directions]
@@ -37,12 +38,12 @@ with run_sim() as sim:
     # -------------------------------------------------------------------------------
     # TIME EVOLUTION
     start = 0
-    stop = 4
-    delta_n = 0.01
+    stop = 10
+    delta_n = 0.05
     n_steps = int((stop - start) / delta_n)
     # -------------------------------------------------------------------------------
     # OVERLAPS
-    name = "PV"
+    name = "M"
     ov_info = {"config": {}, "ind": {}, "in_state": {}}
     # Initialize a null state
     sim.res[f"overlap_{name}"] = np.zeros(n_steps, dtype=float)

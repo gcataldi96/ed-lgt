@@ -273,16 +273,17 @@ class QMB_hamiltonian:
         Fp = -second_moment - self.thermal_average(beta) ** 2
         return Fp
 
-    def get_beta(self):
+    def get_beta(self, state, threshold=1e-10):
         logger.info(f"=========== GET BETA ===============")
-        threshold = 1e-6
         accuracy = 1
         beta = 1e-7
+        # Get the reference energy value for the chosen state
+        state_energy = QMB_state(state).expectation_value(self.Ham)
         while accuracy > threshold:
             expH = csc_matrix(expm(-beta * csc_matrix(self.Ham)))
             Z = np.real(expH.trace())
             E = np.real(csc_matrix(self.Ham).dot(expH).trace()) / Z
-            F = E - self.GSenergy
+            F = E - state_energy
             Fp = -np.real(csc_matrix(self.Ham**2).dot(expH).trace()) / Z - E**2
             prevVal = beta
             beta = beta - F / Fp
