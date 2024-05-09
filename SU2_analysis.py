@@ -201,41 +201,34 @@ for state_name in ["V", "PV"]:
     plt.savefig(f"dynamics_{state_name}.pdf")
 save_dictionary(res, "dynamics_ED.pkl")
 # ==========================================================================
-# 0339cdf00b9011efbf39fa163ee812fb
-# 756be8680b9f11ef9bd1fa163ee812fb
 # %%
-markersizes = [2, 1]
-colors = ["darkblue", "darkred"]
+markersizes = [1.5, 1.5]
+colors = ["darkblue", "darkgreen"]
 col_densities = [
     ["green", "orchid", "orange"],
     ["darkgreen", "darkorchid", "darkorange"],
 ]
-linestyles = ["-o", "--"]
-linewidths = [1.5, 1.5]
+linestyles = ["-o", "-o"]
+linewidths = [1, 1]
 start = 0
 stop = 10
-delta_n = 0.05
+delta_n = 0.1
 n_steps = int((stop - start) / delta_n)
 time_steps = np.arange(n_steps) * delta_n
-thermal_avg = 0.3550135501355025  # 0.2947560720396572
 
-
-# 2024-05-07 08:16 INFO     | Thermal average M 0.36170212765957444
-# 2024-05-07 08:16 INFO     | Thermal average M 0.37499999843206966
-
-# 2024-05-07 08:16 INFO     | Thermal average M 0.3617021276595175
-# 2024-05-07 08:16 INFO     | Thermal average M 0.3749998280672175
-
-thermal_avg = {"N1": 0.3550135501353987, "E_square": 0.37499976671822877}
-
-# Acquire simulations
 res = {}
-
-config_filename = f"SU2/dynamics/thermalization/M_N6_scars1"
+config_filename = f"SU2_scars"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
 res["g"] = vals["g"]
-for obs in ["entropy", f"overlap_M"]:
+name = get_sim(ugrid[0]).par["dynamics"]["state"]
+for obs in [
+    "entropy",
+    f"overlap_{name}",
+    "canonical_avg",
+    "microcan_avg",
+    "diagonal_avg",
+]:
     res[obs] = get_sim(ugrid[0]).res[obs]
 
 res["N2"] = (
@@ -245,15 +238,13 @@ res["N2"] = (
 res["N1"] = custom_average(get_sim(ugrid[0]).res["N_single"])
 res["N0"] = 1 - res["N1"] - res["N2"]
 
-res["E_square"] = custom_average(get_sim(ugrid[0]).res["E_square"])
-
 
 fig, ax = plt.subplots(
-    4,
+    3,
     1,
     sharex=True,
     sharey="row",
-    figsize=(textwidth_in, 1.3 * textwidth_in),
+    figsize=(textwidth_in, textwidth_in),
     constrained_layout=True,
 )
 
@@ -261,7 +252,7 @@ jj = 0
 kk = 0
 ax[0].plot(
     time_steps,
-    res[f"overlap_M"],
+    res[f"overlap_{name}"],
     linestyles[jj],
     linewidth=linewidths[jj],
     markersize=markersizes[jj],
@@ -271,37 +262,37 @@ ax[0].plot(
     markeredgewidth=1,
 )
 
+
 ax[1].plot(
     time_steps,
     res["N1"],
     linestyles[jj],
     linewidth=linewidths[jj],
     markersize=markersizes[jj],
-    color=col_densities[jj][kk],
-    markeredgecolor=col_densities[jj][kk],
-    markerfacecolor=col_densities[jj][kk],
+    color=colors[jj],
+    markeredgecolor=colors[jj],
+    markerfacecolor=colors[jj],
     markeredgewidth=1,
-    label=rf"N1(t)",
 )
-ax[1].axhline(y=thermal_avg["N1"], color="r", linestyle="-", label=r"N1(thermal)")
+ax[1].axhline(
+    y=res["canonical_avg"], color="red", linestyle="-", linewidth=2, label=r"canonical"
+)
+ax[1].axhline(
+    y=res["microcan_avg"],
+    color="black",
+    linestyle="--",
+    linewidth=2,
+    label=r"microcanonical",
+)
+ax[1].axhline(
+    y=res["diagonal_avg"],
+    color="mediumseagreen",
+    linestyle=":",
+    linewidth=2.5,
+    label=r"diagonal",
+)
 
 ax[2].plot(
-    time_steps,
-    res["E_square"],
-    linestyles[jj],
-    linewidth=linewidths[jj],
-    markersize=markersizes[jj],
-    color=col_densities[jj][kk],
-    markeredgecolor=col_densities[jj][kk],
-    markerfacecolor=col_densities[jj][kk],
-    markeredgewidth=1,
-    label=rf"E^2(t)",
-)
-ax[2].axhline(
-    y=thermal_avg["E_square"], color="r", linestyle="-", label=r"E^2(thermal)"
-)
-
-ax[3].plot(
     time_steps,
     res["entropy"],
     linestyles[jj],
@@ -312,14 +303,15 @@ ax[3].plot(
     markerfacecolor=colors[jj],
     markeredgewidth=1,
 )
-ax[3].set(xlabel="Time")
 
-ax[0].set(ylabel=r"overlap_M")
-ax[1].set(ylabel=r"density N1")
-ax[2].set(ylabel=r"electric link energy")
-ax[3].set(ylabel=r"entropy")
-ax[1].legend(loc="best", ncol=1)
-plt.savefig(f"dynamics_thermal_M.pdf")
+ax[2].set(xlabel="Time")
+
+ax[0].set(ylabel=r"overlap $|\langle\psi(t)|\psi(0)\rangle|^{2}$", ylim=[0, 1.1])
+ax[1].set(ylabel=r"density $\rho_{1}$", ylim=[-0.05, 0.5])
+ax[2].set(ylabel=r"entropy $S$", ylim=[0, 5])
+
+ax[1].legend(loc="best", ncol=1, fontsize=10)
+plt.savefig(f"dynamics_{name}.pdf")
 # %%
 import csv
 

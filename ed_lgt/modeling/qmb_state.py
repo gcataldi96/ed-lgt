@@ -186,14 +186,15 @@ class QMB_state:
 
 
 class QMB_hamiltonian:
-    def __init__(self, Ham, lvals, loc_dims):
-        validate_parameters(lvals=lvals, loc_dims=loc_dims)
+    def __init__(self, Ham, lvals):
+        validate_parameters(lvals=lvals)
         self.Ham = Ham
         self.lvals = lvals
-        self.loc_dims = loc_dims
 
-    def diagonalize(self, n_eigs):
-        validate_parameters(op_list=[self.Ham], int_list=[n_eigs])
+    def diagonalize(self, n_eigs, loc_dims):
+        validate_parameters(op_list=[self.Ham], int_list=[n_eigs], loc_dims=loc_dims)
+        # Save local dimensions
+        self.loc_dims = loc_dims
         # Save the number or eigenvalues
         self.n_eigs = n_eigs
         # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
@@ -225,10 +226,12 @@ class QMB_hamiltonian:
         logger.info("====================================================")
         logger.info(f"{en_state} ENERGY: {round(self.Nenergies[en_state],9)}")
 
-    def time_evolution(self, initial_state, start, stop, n_steps):
+    def time_evolution(self, initial_state, start, stop, n_steps, loc_dims):
+        # Save local dimensions
+        self.loc_dims = loc_dims
+        # Compute the time spacing
         delta_n = (stop - start) / n_steps
-        logger.info("---------------- TIME EVOLUTION --------------------")
-        logger.info(f"TIME STEP {round(delta_n,2)}")
+        logger.info(f"------- TIME EVOLUTION: DELTA {round(delta_n,2)} -----------")
         # Compute the evolved psi at each time step
         psi_time = expm_multiply(
             A=complex(0, -1) * self.Ham,

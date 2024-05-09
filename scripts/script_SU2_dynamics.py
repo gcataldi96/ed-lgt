@@ -1,7 +1,6 @@
 import numpy as np
 from ed_lgt.models import SU2_Model
 from ed_lgt.operators import SU2_Hamiltonian_couplings
-from ed_lgt.symmetries import momentum_basis_k0
 from simsio import run_sim
 from time import perf_counter
 import logging
@@ -19,15 +18,17 @@ with run_sim() as sim:
     # PROJECT ON THE MOMENUMT SECTOR k=0
     if model.momentum_basis:
         model.momentum_basis_projection(logical_unit_size=2)
-        # Get the momentum basis
-        B = momentum_basis_k0(model.sector_configs, 2)
+    # -------------------------------------------------------------------------------
+    # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
+    if sim.par["hamiltonian"]["diagonalize"]:
+        model.diagonalize_Hamiltonian(n_eigs=sim.par["hamiltonian"]["n_eigs"])
+        sim.res["energy"] = model.H.Nenergies
     # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
     local_obs = [f"T2_{s}{d}" for d in model.directions for s in "mp"]
     local_obs += ["E_square"]
     if not model.pure_theory:
         local_obs = [f"N_{label}" for label in ["tot", "single", "pair"]]
-        local_obs += ["E_square"]
     # LIST OF TWOBODY CORRELATORS
     twobody_obs = [[f"P_p{d}", f"P_m{d}"] for d in model.directions]
     twobody_axes = [d for d in model.directions]
@@ -36,37 +37,65 @@ with run_sim() as sim:
     # DEFINE OBSERVABLES
     model.get_observables(local_obs)
     # -------------------------------------------------------------------------------
-    # TIME EVOLUTION
-    start = 0
-    stop = 10
-    delta_n = 0.05
-    n_steps = int((stop - start) / delta_n)
+    # ENSEMBLE BEHAVIORS
+    obs = sim.par["ensemble"]["local_obs"]
     # -------------------------------------------------------------------------------
-    # OVERLAPS
-    name = "M"
-    ov_info = {"config": {}, "ind": {}, "in_state": {}}
-    # Initialize a null state
-    sim.res[f"overlap_{name}"] = np.zeros(n_steps, dtype=float)
-    # Define the config_state associated to a specific axis
-    config = model.overlap_QMB_state(name)
-    ov_info["config"][name] = config
-    # Get the corresponding QMB index
-    ov_info["ind"][name] = np.where((model.sector_configs == config).all(axis=1))[0]
-    # INITIAL STATE
-    ov_info["in_state"][name] = np.zeros(len(model.sector_configs), dtype=float)
-    ov_info["in_state"][name][ov_info["ind"][name]] = 1
-    if model.momentum_basis:
-        # Project the state in the momentum sector
-        ov_info["in_state"][name] = B.transpose().dot(ov_info["in_state"][name])
+    # MICROCANONICAL ENSEMBLE
+    if sim.par["ensemble"]["microcanonical"]["average"]:
+        config = model.overlap_QMB_state(sim.par["ensemble"]["microcanonical"]["state"])
+        ref_state = model.get_qmb_state_from_config(config)
+        micro_state, sim.res["microcan_avg"] = model.microcanonical_average(
+            obs, ref_state
+        )
     # -------------------------------------------------------------------------------
-    model.time_evolution_Hamiltonian(ov_info["in_state"][name], start, stop, n_steps)
+    # CANONICAL ENSEMBLE
+    if sim.par["ensemble"]["canonical"]["average"]:
+        threshold = sim.par["ensemble"]["canonical"]["threshold"]
+        if sim.par["ensemble"]["canonical"]["state"] != "micro":
+            config = model.overlap_QMB_state(sim.par["ensemble"]["canonical"]["state"])
+            ref_state = model.get_qmb_state_from_config(config)
+        else:
+            ref_state = micro_state
+        beta = model.get_thermal_beta(ref_state, threshold)
+        sim.res["canonical_avg"] = model.canonical_average(obs, beta)
+    # -------------------------------------------------------------------------------
+    # DIAGONAL ENSEMBLE
+    if sim.par["ensemble"]["diagonal"]["average"]:
+        if sim.par["ensemble"]["diagonal"]["state"] != "micro":
+            config = model.overlap_QMB_state(sim.par["ensemble"]["diagonal"]["state"])
+            ref_state = model.get_qmb_state_from_config(config)
+        else:
+            ref_state = micro_state
+        sim.res["diagonal_avg"] = model.diagonal_average(obs, ref_state)
+    # -------------------------------------------------------------------------------
+    # DYNAMICS
+    if sim.par["dynamics"]["time_evolution"]:
+        start = sim.par["dynamics"]["start"]
+        stop = sim.par["dynamics"]["stop"]
+        delta_n = sim.par["dynamics"]["delta_n"]
+        n_steps = int((stop - start) / delta_n)
+        # INITIAL STATE PREPARATION
+        name = sim.par["dynamics"]["state"]
+        if name != "micro":
+            config = model.overlap_QMB_state(name)
+            in_state = model.get_qmb_state_from_config(config)
+        else:
+            in_state = micro_state
+        # TIME EVOLUTION
+        model.time_evolution_Hamiltonian(in_state, start, stop, n_steps)
     # -------------------------------------------------------------------------------
     sim.res["entropy"] = np.zeros(n_steps, dtype=float)
-    sim.res["fidelity"] = np.zeros(n_steps, dtype=float)
+    sim.res[f"overlap_{name}"] = np.zeros(n_steps, dtype=float)
     for obs in local_obs:
         sim.res[obs] = np.zeros((n_steps, model.n_sites), dtype=float)
-    for ii in range(n_steps):
-        logger.info(f"================== STEP {ii} ===================")
+    # -------------------------------------------------------------------------------
+    if sim.par["dynamics"]["time_evolution"]:
+        N = n_steps
+    else:
+        N = sim.par["hamiltonian"]["n_eigs"]
+    # -------------------------------------------------------------------------------
+    for ii in range(N):
+        logger.info(f"================== {ii} ===================")
         if not model.momentum_basis:
             # -----------------------------------------------------------------------
             # ENTROPY
@@ -81,19 +110,12 @@ with run_sim() as sim:
             )
             # -----------------------------------------------------------------------
             # MEASURE OBSERVABLES
-            model.measure_observables(ii, dynamics=True)
+            model.measure_observables(ii, sim.par["dynamics"]["time_evolution"])
             for obs in local_obs:
                 sim.res[obs][ii, :] = model.res[obs]
         # ---------------------------------------------------------------------------
         # OVERLAPS with the INITIAL STATE
-        if model.momentum_basis:
-            sim.res[f"overlap_{name}"][ii] = (
-                np.abs(ov_info["state"][name].conj().dot(model.H.psi_time[ii].psi)) ** 2
-            )
-        else:
-            sim.res[f"overlap_{name}"][ii] = (
-                np.abs(model.H.psi_time[ii].psi[ov_info["ind"][name]]) ** 2
-            )
+        sim.res[f"overlap_{name}"][ii] = model.measure_overlap(in_state, ii, True)
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

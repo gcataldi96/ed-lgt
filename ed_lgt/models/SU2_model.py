@@ -50,8 +50,6 @@ class SU2_Model(QuantumModel):
     def build_Hamiltonian(self, coeffs):
         # Hamiltonian Coefficients
         self.coeffs = coeffs
-        # CONSTRUCT THE HAMILTONIAN
-        self.H = QMB_hamiltonian(0, self.lvals, self.loc_dims)
         h_terms = {}
         # ---------------------------------------------------------------------------
         # ELECTRIC ENERGY

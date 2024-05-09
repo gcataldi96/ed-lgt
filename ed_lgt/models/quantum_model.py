@@ -8,6 +8,9 @@ from ed_lgt.modeling import (
     PlaquetteTerm,
     NBodyTerm,
     QMB_hamiltonian,
+    QMB_state,
+    get_lattice_link_site_pairs,
+    lattice_base_configs,
 )
 from ed_lgt.symmetries import (
     get_symmetry_sector_generators,
@@ -15,7 +18,6 @@ from ed_lgt.symmetries import (
     global_abelian_sector,
     momentum_basis_k0,
 )
-from ed_lgt.modeling import get_lattice_link_site_pairs, lattice_base_configs
 import logging
 
 logger = logging.getLogger(__name__)
@@ -43,6 +45,8 @@ class QuantumModel:
         self.momentum_basis = momentum_basis
         # Dictionary for results
         self.res = {}
+        # Initialize the Hamiltonian
+        self.H = QMB_hamiltonian(0, self.lvals)
 
     def default_params(self):
         self.def_params = {
@@ -111,39 +115,95 @@ class QuantumModel:
 
     def diagonalize_Hamiltonian(self, n_eigs):
         self.n_eigs = n_eigs
-        if isinstance(self.H, QMB_hamiltonian):
-            # DIAGONALIZE THE HAMILTONIAN
-            self.H.diagonalize(self.n_eigs)
-            self.res["energy"] = self.H.Nenergies
-            if self.n_eigs > 1:
-                self.res["true_gap"] = self.H.Nenergies[1] - self.H.Nenergies[0]
+        # DIAGONALIZE THE HAMILTONIAN
+        self.H.diagonalize(self.n_eigs, self.loc_dims)
+        self.res["energy"] = self.H.Nenergies
 
     def momentum_basis_projection(self, logical_unit_size):
         # Project the Hamiltonian onto the momentum sector with k=0
-        B = momentum_basis_k0(self.sector_configs, logical_unit_size)
-        self.H.Ham = csr_matrix(B).transpose() * self.H.Ham * csr_matrix(B)
-        logger.info(f"Momentum basis shape {B.shape}")
+        self.B = momentum_basis_k0(self.sector_configs, logical_unit_size)
+        self.H.Ham = csr_matrix(self.B).transpose() * self.H.Ham * csr_matrix(self.B)
+        logger.info(f"Momentum basis shape {self.B.shape}")
 
     def time_evolution_Hamiltonian(self, initial_state, start, stop, n_steps):
-        if isinstance(self.H, QMB_hamiltonian):
-            # DIAGONALIZE THE HAMILTONIAN
-            self.H.time_evolution(initial_state, start, stop, n_steps)
+        self.H.time_evolution(initial_state, start, stop, n_steps, self.loc_dims)
+
+    def get_qmb_state_from_config(self, config):
+        # Get the corresponding QMB index
+        index = np.where((self.sector_configs == config).all(axis=1))[0]
+        # INITIALIZE the STATE
+        state = np.zeros(len(self.sector_configs), dtype=float)
+        state[index] = 1
+        if self.momentum_basis:
+            # Project the state in the momentum sector
+            state = self.B.transpose().dot(state)
+        return state
+
+    def measure_overlap(self, state, index, dynamics=False):
+        if dynamics:
+            return np.abs(state.conj().dot(self.H.psi_time[index].psi)) ** 2
+        else:
+            return np.abs(state.conj().dot(self.H.Npsi[index].psi)) ** 2
 
     def get_thermal_beta(self, state, threshold):
-        if isinstance(self.H, QMB_hamiltonian):
-            # DIAGONALIZE THE HAMILTONIAN
-            return self.H.get_beta(state, threshold)
+        return self.H.get_beta(state, threshold)
 
-    def thermal_average(self, local_obs, beta):
-        Op = LocalTerm(
+    def canonical_average(self, local_obs, beta):
+        op_matrix = LocalTerm(
             operator=self.ops[local_obs], op_name=local_obs, **self.def_params
-        )
-        Op_matrix = Op.get_Hamiltonian(1)
-        if isinstance(self.H, QMB_hamiltonian):
-            Z = self.H.partition_function(beta)
-        return np.real(
-            csc_matrix(Op_matrix).dot(expm(-beta * csc_matrix(self.H.Ham))).trace()
+        ).get_Hamiltonian(1)
+        # Compute the partition function
+        Z = self.H.partition_function(beta)
+        # Compute the canonical average
+        canonical_average = np.real(
+            csc_matrix(op_matrix).dot(expm(-beta * csc_matrix(self.H.Ham))).trace()
         ) / (Z * self.n_sites)
+        logger.info(f"Canonical avg: {canonical_average}")
+        return canonical_average
+
+    def microcanonical_average(self, local_obs, state):
+        op_matrix = LocalTerm(
+            operator=self.ops[local_obs], op_name=local_obs, **self.def_params
+        ).get_Hamiltonian(1)
+        # Get the expectation value of the energy of the reference state
+        Eq = QMB_state(state).expectation_value(self.H.Ham)
+        logger.info(f"E ref {Eq}")
+        E2q = QMB_state(state).expectation_value(self.H.Ham**2)
+        # Get the corresponding variance
+        DeltaE = np.sqrt(E2q - (Eq**2))
+        logger.info(f"delta E {DeltaE}")
+        # Initialize a state as the superposition of all the eigenstates within an energy shell
+        # of amplitude Delta E around Eq
+        psi_thermal = np.zeros(len(self.sector_configs), dtype=np.complex128)
+        list_states = []
+        for ii in range(self.n_eigs):
+            if np.abs(self.H.Nenergies[ii] - Eq) < DeltaE:
+                logger.info(f"{ii} {self.H.Nenergies[ii]}")
+                list_states.append(ii)
+                psi_thermal += self.H.Npsi[ii].psi
+        norm = len(list_states)
+        psi_thermal /= np.sqrt(norm)
+        # Compute the microcanonical average of the local observable
+        microcanonical_average = 0
+        for ii, state_indx in enumerate(list_states):
+            microcanonical_average += self.H.Npsi[state_indx].expectation_value(
+                op_matrix
+            ) / (norm * self.n_sites)
+        logger.info(f"Microcanonical avg: {microcanonical_average}")
+        return psi_thermal, microcanonical_average
+
+    def diagonal_average(self, local_obs, state):
+        op_matrix = LocalTerm(
+            operator=self.ops[local_obs], op_name=local_obs, **self.def_params
+        ).get_Hamiltonian(1)
+        # Step 1: Project initial state onto each eigenstate to find coefficients
+        diagonal_average = 0
+        for ii in range(self.n_eigs):
+            prob = self.measure_overlap(state, ii, False)
+            exp_val = self.H.Npsi[ii].expectation_value(op_matrix) / self.n_sites
+            diagonal_average += prob * exp_val
+        logger.info(f"Diagonal avg: {diagonal_average}")
+        return diagonal_average
 
     def get_observables(
         self,
