@@ -5,13 +5,39 @@
       g: $g
       m: $m
   common:
-    dim: 2
-    lvals: [2, 2]
-    pure: false
-    has_obc: false
-    n_eigs: 1
-    DeltaN: 0
+    model:
+      lvals: [10]
+      has_obc: [false]
+      spin: 0.5
+      pure_theory: false
+      momentum_basis: false
+      logical_unit_size: 2
+    hamiltonian:
+      diagonalize: true
+      n_eigs: 1
+      format: sparse
+    dynamics:
+      time_evolution: true
+      start: 0
+      stop: 1
+      delta_n: 0.5
+      state: PV
+    ensemble:
+      local_obs: N_single
+      microcanonical:
+        average: false
+        state: PV
+        delta: 0.1
+      canonical:
+        average: false
+        state: PV
+        threshold: 1.E-8
+      diagonal:
+        average: false
+        state: PV
+    overlap_list: [PV]
+
 n0:
   <<<: common
-  g: 0.1
-  m: 0.001
+  g: 5
+  m: 1
