@@ -134,12 +134,116 @@ def nbody_operator_data(op_list, op_sites_list, sector_configs):
     return row_list, col_list, value_list
 
 
-@get_time
-def nbody_term(op_list, op_sites_list, sector_configs):
+@njit
+def nbody_operator_data_v2(op_list, op_sites_list, sector_configs):
     sector_dim = sector_configs.shape[0]
-    row_list, col_list, value_list = nbody_operator_data(
-        op_list, op_sites_list, sector_configs
-    )
+    m_states = exclude_columns(sector_configs, op_sites_list)
+    # Assuming 90% of sparsity we define allow for 10% of nonzero entries
+    max_elements = int(0.05 * sector_dim**2)
+    row_list = np.zeros(max_elements, dtype=np.int32)
+    col_list = np.zeros(max_elements, dtype=np.int32)
+    value_list = np.zeros(max_elements, dtype=np.float64)
+    count = 0
+
+    for row in range(sector_dim):
+        for col in range(sector_dim):
+            if arrays_equal(m_states[row], m_states[col]):
+                element = 1.0
+                for ii, site in enumerate(op_sites_list):
+                    op = op_list[ii, site]
+                    element *= op[sector_configs[row, site], sector_configs[col, site]]
+
+                if not np.isclose(element, 0, atol=1e-10):
+                    row_list[count] = row
+                    col_list[count] = col
+                    value_list[count] = element
+                    count += 1
+
+    # Trim arrays to actual size
+    row_list = row_list[:count]
+    col_list = col_list[:count]
+    value_list = value_list[:count]
+
+    return row_list, col_list, value_list
+
+
+@njit
+def get_nonzero_indices(arr):
+    return np.nonzero(arr)[0]
+
+
+@njit
+def precompute_nonzero_indices(momentum_basis):
+    basis_dim = momentum_basis.shape[1]
+    nonzero_indices = [
+        get_nonzero_indices(momentum_basis[:, i]) for i in range(basis_dim)
+    ]
+    return nonzero_indices
+
+
+@njit
+def nbody_operator_data_momentum_basis(
+    op_list, op_sites_list, sector_configs, momentum_basis
+):
+    m_states = exclude_columns(sector_configs, op_sites_list)
+    basis_dim = momentum_basis.shape[1]
+    max_elements = int(
+        0.1 * basis_dim**2
+    )  # Estimated maximum possible non-zero elements based on 90% sparsity
+    row_list = np.zeros(max_elements, dtype=np.int32)
+    col_list = np.zeros(max_elements, dtype=np.int32)
+    value_list = np.zeros(max_elements, dtype=np.float64)
+    count = 0
+
+    # Precompute non-zero indices for each column of the momentum_basis
+    nonzero_indices = precompute_nonzero_indices(momentum_basis)
+
+    for row in range(basis_dim):
+        nonzero_indices_row = nonzero_indices[row]
+        for col in range(basis_dim):
+            nonzero_indices_col = nonzero_indices[col]
+            element = 0
+            for config_ind1 in nonzero_indices_row:
+                for config_ind2 in nonzero_indices_col:
+                    if arrays_equal(m_states[config_ind1], m_states[config_ind2]):
+                        transition_amplitude = 1.0
+                        for ii, site in enumerate(op_sites_list):
+                            op = op_list[ii, site]
+                            transition_amplitude *= op[
+                                sector_configs[config_ind1, site],
+                                sector_configs[config_ind2, site],
+                            ]
+                        element += (
+                            momentum_basis[config_ind1, row]
+                            * transition_amplitude
+                            * momentum_basis[config_ind2, col]
+                        )
+            if not np.isclose(element, 0, atol=1e-10):
+                row_list[count] = row
+                col_list[count] = col
+                value_list[count] = element
+                count += 1
+
+    # Trim arrays to actual size
+    row_list = row_list[:count]
+    col_list = col_list[:count]
+    value_list = value_list[:count]
+
+    return row_list, col_list, value_list
+
+
+@get_time
+def nbody_term(op_list, op_sites_list, sector_configs, momentum_basis=None, k=0):
+    if momentum_basis is not None:
+        row_list, col_list, value_list = nbody_operator_data_momentum_basis(
+            op_list, op_sites_list, sector_configs, momentum_basis
+        )
+        sector_dim = momentum_basis.shape[1]
+    else:
+        sector_dim = sector_configs.shape[0]
+        row_list, col_list, value_list = nbody_operator_data_v2(
+            op_list, op_sites_list, sector_configs
+        )
     return csr_matrix(
         (value_list, (row_list, col_list)),
         shape=(sector_dim, sector_dim),

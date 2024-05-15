@@ -22,6 +22,8 @@ class QMBTerm:
         staggered_basis=False,
         gauge_basis=None,
         sector_configs=None,
+        momentum_basis=None,
+        momentum_k=None,
     ):
         # Validate type of parameters
         validate_parameters(
@@ -53,6 +55,9 @@ class QMBTerm:
         }
         # Get Symmetry operator
         self.get_symmetry_operator()
+        # Momentum basis
+        self.momentum_basis = momentum_basis
+        self.momentum_k = momentum_k
 
     def get_symmetry_operator(self):
         if self.sector_configs is not None:

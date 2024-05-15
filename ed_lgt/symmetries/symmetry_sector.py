@@ -62,7 +62,10 @@ def symmetry_sector_configs(
     link_sectors,
     pair_list,
 ):
-
+    if not isinstance(link_sectors, np.ndarray):
+        link_sectors = np.array(link_sectors, dtype=float)
+    if not isinstance(glob_sectors, np.ndarray):
+        glob_sectors = np.array(glob_sectors, dtype=float)
     # Acquire Sector dimension
     sector_dim = np.prod(loc_dims)
     logger.info(f"TOT DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")

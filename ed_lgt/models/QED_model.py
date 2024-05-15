@@ -23,12 +23,29 @@ class QED_Model(QuantumModel):
         )
         # Acquire local dimension and lattice label
         self.get_local_site_dimensions()
+        # GLOBAL SYMMETRIES
+        if self.pure_theory:
+            global_ops = None
+            global_sectors = None
+        else:
+            global_ops = [self.ops["N"]]
+            global_sectors = [int(self.n_sites / 2)]
+        # LINK SYMMETRIES
+        link_ops = [[self.ops[f"E_p{d}"], self.ops[f"E_m{d}"]] for d in self.directions]
+        link_sectors = [0 for _ in self.directions]
+        # GET SYMMETRY SECTOR
+        self.get_abelian_symmetry_sector(
+            global_ops=global_ops,
+            global_sectors=global_sectors,
+            link_ops=link_ops,
+            link_sectors=link_sectors,
+        )
+        # DEFAULT PARAMS
+        self.default_params()
 
     def build_Hamiltonian(self, coeffs):
         # Hamiltonian Coefficients
         self.coeffs = coeffs
-        # CONSTRUCT THE HAMILTONIAN
-        self.H = QMB_hamiltonian(0, self.lvals, self.loc_dims)
         h_terms = {}
         # -------------------------------------------------------------------------------
         # ELECTRIC ENERGY

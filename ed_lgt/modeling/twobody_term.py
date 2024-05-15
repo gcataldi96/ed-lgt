@@ -94,6 +94,8 @@ class TwoBodyTerm(QMBTerm):
                         op_list=self.sym_ops,
                         op_sites_list=np.array(sites_list),
                         sector_configs=self.sector_configs,
+                        momentum_basis=self.momentum_basis,
+                        k=self.momentum_k,
                     )
         if not isspmatrix(H_twobody):
             H_twobody = csr_matrix(H_twobody)
@@ -138,6 +140,8 @@ class TwoBodyTerm(QMBTerm):
                             op_list=self.sym_ops,
                             op_sites_list=np.array([ii, jj]),
                             sector_configs=self.sector_configs,
+                            momentum_basis=self.momentum_basis,
+                            k=self.momentum_k,
                         )
                     )
 

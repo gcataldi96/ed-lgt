@@ -75,6 +75,7 @@ def validate_parameters(
     matter=None,
     psi_vacuum=None,
     get_singlet=None,
+    array=None,
 ):
     """
     This is a function for type validation of parameters widely used in the library
@@ -171,6 +172,8 @@ def validate_parameters(
     # -----------------------------------------------------------------------------
     if psi is not None and not isinstance(psi, np.ndarray):
         raise TypeError(f"psi should be an ndarray, not a {type(psi)}")
+    if array is not None and not isinstance(array, np.ndarray):
+        raise TypeError(f"array must be np.array, not {type(array)}")
     # -----------------------------------------------------------------------------
     if spmatrix is not None and not isspmatrix(spmatrix):
         raise TypeError(f"spmatrix should be a BOOL, not {type(spmatrix)}")
@@ -207,6 +210,7 @@ def validate_parameters(
                     raise TypeError(
                         f"The {ii} z-component must be (half-)integer, not {sz}"
                     )
+    # -----------------------------------------------------------------------------
     if pure_theory is not None and not isinstance(pure_theory, bool):
         raise TypeError(f"pure_theory must be BOOL, not {type(pure_theory)}")
     if matter is not None and not isinstance(matter, bool):
@@ -215,6 +219,7 @@ def validate_parameters(
         raise TypeError(f"psi_vacuum must be bool, not {type(psi_vacuum)}")
     if get_singlet is not None and not isinstance(get_singlet, bool):
         raise TypeError(f"get_singlet must be bool, not {type(get_singlet)}")
+    # -----------------------------------------------------------------------------
 
 
 def pause(phrase, debug):

@@ -5,7 +5,7 @@ from .lattice_geometry import get_neighbor_sites
 from .qmb_operations import local_op
 from .qmb_state import QMB_state
 from .qmb_term import QMBTerm
-from ed_lgt.tools import validate_parameters
+from ed_lgt.tools import validate_parameters, get_time
 from ed_lgt.symmetries import nbody_term
 import logging
 
@@ -32,6 +32,7 @@ class LocalTerm(QMBTerm):
         # Preprocess arguments
         super().__init__(operator=operator, op_name=op_name, **kwargs)
 
+    @get_time
     def get_Hamiltonian(self, strength, mask=None):
         """
         The function calculates the Local Hamiltonian by summing up local terms
@@ -65,7 +66,11 @@ class LocalTerm(QMBTerm):
                 else:
                     # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
                     H_Local += nbody_term(
-                        self.sym_ops, np.array([ii]), self.sector_configs
+                        self.sym_ops,
+                        np.array([ii]),
+                        self.sector_configs,
+                        self.momentum_basis,
+                        self.momentum_k,
                     )
         return strength * H_Local
 
@@ -118,12 +123,24 @@ class LocalTerm(QMBTerm):
             else:
                 # GET THE EXPVAL ON THE SYMMETRY SECTOR
                 exp_obs = psi.expectation_value(
-                    nbody_term(self.sym_ops, np.array([ii]), self.sector_configs)
+                    nbody_term(
+                        self.sym_ops,
+                        np.array([ii]),
+                        self.sector_configs,
+                        self.momentum_basis,
+                        self.momentum_k,
+                    )
                 )
                 # Compute the corresponding quantum fluctuation
                 exp_var = (
                     psi.expectation_value(
-                        nbody_term(self.sym_ops, np.array([ii]), self.sector_configs)
+                        nbody_term(
+                            self.sym_ops,
+                            np.array([ii]),
+                            self.sector_configs,
+                            self.momentum_basis,
+                            self.momentum_k,
+                        )
                         ** 2
                     )
                     - exp_obs**2
