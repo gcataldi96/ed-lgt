@@ -434,7 +434,9 @@ def QED_gauge_invariant_states(spin, pure_theory, lattice_dim):
     return gauge_basis, gauge_states
 
 
-def QED_Hamiltonian_couplings(lattice_dim, pure_theory, g, m=None):
+def QED_Hamiltonian_couplings(
+    lattice_dim, pure_theory, g, m=None, magnetic_basis=False
+):
     """
     This function provides the QED Hamiltonian coefficients
     starting from the gauge coupling g and the bare mass parameter m
@@ -450,33 +452,41 @@ def QED_Hamiltonian_couplings(lattice_dim, pure_theory, g, m=None):
         dict: dictionary of Hamiltonian coefficients
     """
     validate_parameters(lattice_dim=lattice_dim, pure_theory=pure_theory)
-    if lattice_dim == 1:
-        E = (g**2) / 2
-        B = -1 / (2 * (g**2))
-    elif lattice_dim == 2:
-        E = (g**2) / 2
-        B = -1 / (2 * (g**2))
+    if not magnetic_basis:
+        if lattice_dim == 1:
+            E = (g**2) / 2
+            B = -1 / (2 * (g**2))
+        elif lattice_dim == 2:
+            E = (g**2) / 2
+            B = -1 / (2 * (g**2))
+        else:
+            E = (g**2) / 2
+            B = -1 / (2 * (g**2))
+        if pure_theory:
+            eta = 10 * max(E, np.abs(B))
+        else:
+            eta = 10 * max(E, np.abs(B), np.abs(m))
+        # DICTIONARY WITH MODEL COEFFICIENTS
+        coeffs = {
+            "eta": eta,
+            "g": g,
+            "E": E,  # ELECTRIC FIELD coupling
+            "B": B,  # MAGNETIC FIELD coupling
+            "m": m,
+            "tx_even": 0.5,  # HORIZONTAL HOPPING
+            "tx_odd": 0.5,
+            "ty_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
+            "ty_odd": -0.5,  # VERTICAL HOPPING (ODD SITES)
+            "tz_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
+            "tz_odd": 0.5,  # VERTICAL HOPPING (ODD SITES)
+            "m_even": m,
+            "m_odd": -m,
+        }
     else:
-        E = (g**2) / 2
-        B = -1 / (2 * (g**2))
-    if pure_theory:
-        eta = 10 * max(E, np.abs(B))
-    else:
-        eta = 10 * max(E, np.abs(B), np.abs(m))
-    # DICTIONARY WITH MODEL COEFFICIENTS
-    coeffs = {
-        "eta": eta,
-        "g": g,
-        "E": E,  # ELECTRIC FIELD coupling
-        "B": B,  # MAGNETIC FIELD coupling
-        "m": m,
-        "tx_even": 0.5,  # HORIZONTAL HOPPING
-        "tx_odd": 0.5,
-        "ty_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
-        "ty_odd": -0.5,  # VERTICAL HOPPING (ODD SITES)
-        "tz_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
-        "tz_odd": 0.5,  # VERTICAL HOPPING (ODD SITES)
-        "m_even": m,
-        "m_odd": -m,
-    }
+        # DICTIONARY WITH MODEL COEFFICIENTS
+        coeffs = {
+            "g": g,
+            "E": -(g**2),
+            "B": -0.5 / (g**2),
+        }
     return coeffs

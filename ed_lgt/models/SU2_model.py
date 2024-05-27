@@ -1,5 +1,5 @@
 import numpy as np
-from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm, QMB_hamiltonian
+from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm
 from ed_lgt.modeling import check_link_symmetry, staggered_mask
 from .quantum_model import QuantumModel
 from ed_lgt.operators import SU2_dressed_site_operators, SU2_gauge_invariant_states

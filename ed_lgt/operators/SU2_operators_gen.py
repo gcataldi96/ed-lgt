@@ -9,7 +9,7 @@ from ed_lgt.modeling import (
     get_lattice_borders_labels,
     LGT_border_configs,
 )
-from ed_lgt.tools import validate_parameters
+from ed_lgt.tools import validate_parameters, get_time
 from .SU2_singlets import get_SU2_singlets, SU2_singlet_canonical_vector
 from .spin_operators import spin_space, SU2_generators
 from .SU2_rishons_gen import SU2_Rishon_gen
@@ -45,6 +45,7 @@ def SU2_gen_rishon_operators(spin):
     return ops
 
 
+@get_time
 def SU2_gen_dressed_site_operators(s, pure_theory, lattice_dim=2):
     validate_parameters(spin_list=[s], pure_theory=pure_theory, lattice_dim=lattice_dim)
     # Lattice directions
@@ -312,11 +313,11 @@ def SU2_gen_dressed_site_operators(s, pure_theory, lattice_dim=2):
     return ops
 
 
-def SU2_gen_gauge_invariant_states(s_max, pure_theory=True, lattice_dim=2):
-    if not np.isscalar(s_max):
-        raise TypeError(f"s_max must be SCALAR & (semi)INTEGER, not {type(s_max)}")
-    if not isinstance(pure_theory, bool):
-        raise TypeError(f"pure_theory should be a BOOL, not a {type(pure_theory)}")
+@get_time
+def SU2_gen_gauge_invariant_states(s_max, pure_theory, lattice_dim):
+    validate_parameters(
+        spin_list=[s_max], pure_theory=pure_theory, lattice_dim=lattice_dim
+    )
     spin_list = [S(s_max) for i in range(2 * lattice_dim)]
     spins = []
     # For each single spin particle in the list,
@@ -326,6 +327,10 @@ def SU2_gen_gauge_invariant_states(s_max, pure_theory=True, lattice_dim=2):
         spins.append(tmp / 2)
     if not pure_theory:
         spins.insert(0, np.asarray([S(0), S(1) / 2, S(0)]))
+        # Check the matter spin (0 (vacuum),1/2,0 (up & down))
+        v_sector = np.prod([len(l) for l in [[spins[0][0]]] + spins[1:]])
+    else:
+        psi_vacuum = None
     # Set rows and col counters list for the basis
     gauge_states = {"site": []}
     gauge_basis = {"site": []}
@@ -336,29 +341,25 @@ def SU2_gen_gauge_invariant_states(s_max, pure_theory=True, lattice_dim=2):
         gauge_basis[f"site_{label}"] = []
     for ii, spins_config in enumerate(product(*spins)):
         spins_config = list(spins_config)
+        logger.info(spins_config)
         if not pure_theory:
-            # Check the matter spin (0 (vacuum),1/2,0 (up & down))
-            v_sector = np.prod([len(l) for l in [[spins[0][0]]] + spins[1:]])
             if ii < v_sector:
                 psi_vacuum = True
             elif 2 * v_sector - 1 < ii < 3 * v_sector:
                 psi_vacuum = False
             else:
                 psi_vacuum = None
-        else:
-            psi_vacuum = None
         # Check the existence of a SU2 singlet state
         singlets = get_SU2_singlets(spins_config, pure_theory, psi_vacuum)
         if singlets is not None:
             for s in singlets:
-                # s.show()
                 # Save the singlet state
                 gauge_states["site"].append(s)
                 # Save the singlet state written in the canonical basis
                 singlet_state = SU2_singlet_canonical_vector(spin_list, s)
                 gauge_basis["site"].append(singlet_state)
                 # GET THE CONFIG LABEL
-                spin_sizes = [spin_space(s) for s in spins_config]
+                spin_sizes = [spin_space(s1) for s1 in spins_config]
                 label = LGT_border_configs(
                     config=spin_sizes, offset=1, pure_theory=pure_theory
                 )
@@ -379,7 +380,7 @@ def SU2_gen_check_gauss_law(basis, gauss_law_op, threshold=1e-14):
     if not isspmatrix(gauss_law_op):
         raise TypeError(f"gauss_law_op shoul be csr_matrix, not {type(gauss_law_op)}")
     # This functions performs some checks on the SU2 gauge invariant basis
-    print("CHECK GAUSS LAW")
+    logger.info("CHECK GAUSS LAW")
     # True and the Effective dimensions of the gauge invariant dressed site
     site_dim = basis.shape[0]
     eff_site_dim = basis.shape[1]
@@ -398,11 +399,11 @@ def SU2_gen_check_gauss_law(basis, gauss_law_op, threshold=1e-14):
         raise ValueError(f"Gauss Law Kernel with norm {norma_kernel}; expected 0")
     GL_rank = matrix_rank(gauss_law_op.todense())
     if site_dim - GL_rank != eff_site_dim:
-        print(f"Large dimension {site_dim}")
-        print(f"Effective dimension {eff_site_dim}")
-        print(GL_rank)
-        print(f"Some gauge basis states are missing")
-    print("GAUSS LAW SATISFIED")
+        logger.info(f"Large dimension {site_dim}")
+        logger.info(f"Effective dimension {eff_site_dim}")
+        logger.info(GL_rank)
+        logger.info(f"Some gauge basis states are missing")
+    logger.info("GAUSS LAW SATISFIED")
 
 
 def SU2_gen_Hamiltonian_couplings(lattice_dim, pure_theory, g, m=None):

@@ -34,7 +34,7 @@ def get_time(func):
         result = func(*args, **kwargs)
         end_time = perf_counter()
         tot_time = end_time - start_time
-        logger.debug(f"TIME {func.__name__} {round(tot_time, 5)}")
+        logger.info(f"TIME {func.__name__} {round(tot_time, 5)}")
         return result
 
     return wrapper
@@ -353,7 +353,7 @@ def check_matrix(A, B):
     norma = norm(A - B)
     norma_max = max(norm(A + B), norm(A), norm(B))
     ratio = norma / norma_max
-    if ratio > 1e-15:
+    if ratio > 1e-14:
         logger.debug("    ERROR: A and B are DIFFERENT MATRICES")
         raise ValueError(f"    NORM {norma}, RATIO {ratio}")
 

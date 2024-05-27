@@ -1,7 +1,7 @@
 # %%
 import numpy as np
-from ed_lgt.models import SU2_Model
-from ed_lgt.operators import SU2_Hamiltonian_couplings
+from ed_lgt.models import SU2_Model_Gen
+from ed_lgt.operators import SU2_gen_Hamiltonian_couplings
 from time import perf_counter
 import logging
 
@@ -9,9 +9,9 @@ logger = logging.getLogger(__name__)
 
 par = {
     "model": {
-        "lvals": [6],
-        "has_obc": [True],
-        "spin": 0.5,
+        "lvals": [4],
+        "has_obc": [False],
+        "spin": 2,
         "pure_theory": False,
         "momentum_basis": False,
         "logical_unit_size": 2,
@@ -41,16 +41,20 @@ par = {
             "state": "PV",
         },
     },
-    "overlap_list": ["PV"],
+    "overlap_list": [],
     "g": 1,
     "m": 5,
 }
 res = {}
 start_time = perf_counter()
-model = SU2_Model(**par["model"])
+model = SU2_Model_Gen(**par["model"])
+# -------------------------------------------------------------------------------
+end_time = perf_counter()
+logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")
+# %%
 # -------------------------------------------------------------------------------
 # BUILD THE HAMILTONIAN
-coeffs = SU2_Hamiltonian_couplings(model.dim, model.pure_theory, par["g"], par["m"])
+coeffs = SU2_gen_Hamiltonian_couplings(model.dim, model.pure_theory, par["g"], par["m"])
 model.build_Hamiltonian(coeffs)
 # -------------------------------------------------------------------------------
 # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
@@ -186,4 +190,5 @@ elif par["hamiltonian"]["diagonalize"]:
 # -------------------------------------------------------------------------------
 end_time = perf_counter()
 logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")
+
 # %%
