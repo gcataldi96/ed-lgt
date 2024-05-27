@@ -1,10 +1,11 @@
 import numpy as np
+from numba import njit
 from itertools import product
 from sympy import S
 from sympy.physics.wigner import clebsch_gordan as CG_coeff
 from copy import deepcopy
 from .spin_operators import spin_space, m_values
-from ed_lgt.tools import validate_parameters
+from ed_lgt.tools import validate_parameters, get_time
 import logging
 
 logger = logging.getLogger(__name__)
@@ -17,6 +18,7 @@ __all__ = [
     "add_new_spin",
     "group_sorted_spin_configs",
     "SU2_singlet_canonical_vector",
+    "can_form_singlet",
 ]
 
 
@@ -28,12 +30,9 @@ def couple_two_spins(j1, j2, get_singlet=False, M=None):
 
     Args:
         j1 (integer/half-integer): spin of the 1st particle
-
         j2 (integer/half-integer): spin of the 2nd particle
-
         get_singlet (bool, optional): if true, look only at the (j1, j2)-combinations providing an SU(2) singlet.
             Defaults to False.
-
         M (integer/half-integer, optional): spin-z component of the 1st particle. Defaults to None.
 
     Returns:
@@ -165,10 +164,11 @@ class SU2_singlet:
         logger.info("====================================================")
         logger.info(f"J: {self.J_config}")
         for m, CG in zip(self.M_configs, self.CG_values):
-            logger.info(f"M:{m} CG:{CG}")
+            logger.info(f"M:{m} CG:{float(CG)}")
         logger.info("----------------------------------------------------")
 
 
+@get_time
 def get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None):
     """
     This function aims to identify all possible SU(2) singlet states that can be
@@ -185,7 +185,7 @@ def get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None):
             If False, the first element of spin_list is the pair (up & down) of matter. Default to None.
 
     Returns:
-        list: Iinstances of SU2_singlet; if there is no singlet, just None
+        list: instances of SU2_singlet; if there is no singlet, just None
     """
     # CHECK ON TYPES
     validate_parameters(
@@ -214,6 +214,7 @@ def get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None):
         return None
 
 
+@get_time
 def add_new_spin(previous_configs, new_spin, get_singlet):
     """
     Couples a list of spin configurations with a new spin and determines the resulting configurations.
@@ -247,6 +248,7 @@ def add_new_spin(previous_configs, new_spin, get_singlet):
     return updated_configs
 
 
+@get_time
 def group_sorted_spin_configs(spin_configs, spin_list, pure_theory, psi_vacuum):
     """
     Groups and sorts spin-configurations based on their total spin and individual spin z-components.
@@ -320,6 +322,7 @@ def group_sorted_spin_configs(spin_configs, spin_list, pure_theory, psi_vacuum):
     return SU2_singlet_list
 
 
+@get_time
 def get_spin_Hilbert_spaces(max_spin_irrep_list, pure_theory=True):
     """
     This function generates the Hilbert spaces for quantum systems characterized
@@ -391,6 +394,7 @@ def get_spin_Hilbert_spaces(max_spin_irrep_list, pure_theory=True):
     return j_list, m_list
 
 
+@get_time
 def SU2_singlet_canonical_vector(spin_list, singlet):
     """
     Constructs the canonical state vector representing a specific SU2 singlet configuration
@@ -436,3 +440,46 @@ def SU2_singlet_canonical_vector(spin_list, singlet):
     if np.abs(state_norm - 1) > 1e-10:
         raise ValueError(f"The state is not normalized: norm {state_norm}")
     return state
+
+
+@njit
+def check_singlet_recursive(spins):
+    """
+    Recursively checks if a zero total spin (singlet) can be formed.
+    """
+    if len(spins) == 1:
+        # Base case: one spin cannot form a singlet alone
+        return spins[0] == 0
+    elif len(spins) == 2:
+        # Base case: two spins form a singlet if they are equal
+        return spins[0] == spins[1]
+    else:
+        # General case: try to form a singlet by combining first two spins and checking the rest
+        # Start with the minimum possible resultant spin
+        new_j = abs(spins[0] - spins[1])
+        # Maximum possible resultant spin
+        max_j = spins[0] + spins[1]
+        while new_j <= max_j:
+            if check_singlet_recursive(np.append(spins[2:], new_j)):
+                return True
+            new_j += 1  # Increment to the next possible resultant spin
+        return False
+
+
+@njit
+def can_form_singlet(spins):
+    """
+    Checks if a given configuration of spins can potentially form an SU(2) singlet.
+
+    Parameters:
+    - spins (np.ndarray): An array of spins.
+
+    Returns:
+    - bool: True if the spins can form a singlet, False otherwise.
+    """
+    if len(spins) < 2:
+        return False  # Need at least two spins to form a singlet
+    # Sort spins to facilitate singlet checking
+    sorted_spins = np.sort(spins)
+    # Attempt to form singlets by recursive subtraction
+    return check_singlet_recursive(sorted_spins)
