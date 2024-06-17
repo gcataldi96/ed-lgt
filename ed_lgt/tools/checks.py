@@ -34,7 +34,7 @@ def get_time(func):
         result = func(*args, **kwargs)
         end_time = perf_counter()
         tot_time = end_time - start_time
-        logger.info(f"TIME {func.__name__} {round(tot_time, 5)}")
+        logger.debug(f"TIME {func.__name__} {round(tot_time, 5)}")
         return result
 
     return wrapper

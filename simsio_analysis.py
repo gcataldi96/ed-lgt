@@ -11,15 +11,6 @@ def fake_log(x, pos):
     return r"$10^{%d}$" % (x)
 
 
-"""
-To extract simulations use
-    op1) energy[ii][jj] = extract_dict(ugrid[ii][jj], key="res", glob="energy")
-    op2) energy[ii][jj] = get_sim(ugrid[ii][jj]).res["energy"])
-To acquire the psi file
-    sim= get_sim(ugrid[ii][jj])
-    sim.link("psi")
-    psi= sim.load("psi", cache=True)
-"""
 # %%
 # List of local observables
 local_obs = [f"n_{s}{d}" for d in "xy" for s in "mp"]
@@ -60,6 +51,89 @@ for obs in ["X_Cross", "N_pair", "N_single", "energy", "S2"]:
     plt.legend(loc=(0.05, 0.11))
     # plt.savefig(f"{obs}.pdf")
 # %%
+
+
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots()
+ax.set(xscale="log", yscale="log")
+config_filename = f"Z2FermiHubbard/entropy"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["U"])
+lvals = get_sim(ugrid[0]).par["model"]["lvals"]
+entropies = np.zeros((len(vals["U"]), 3))
+for kk, U in enumerate(vals["U"]):
+    C = get_sim(ugrid[kk]).res["Sz_Sz"][:]
+    entropies[kk, :] = get_sim(ugrid[kk]).res["entropy"]
+    ax.plot(C[:, 0], C[:, 1], "-o", label=f"U={U}")
+ax.set(xlabel="r=|i-j|", ylabel="<SzSz>")
+plt.legend()
+# %%
+import matplotlib.cm as cm
+from matplotlib.colors import LogNorm
+
+sm = cm.ScalarMappable(cmap="plasma", norm=LogNorm())
+palette = sm.to_rgba(vals["U"])
+fig1, ax1 = plt.subplots()
+for kk, U in enumerate(vals["U"]):
+    ax1.plot(np.arange(3), entropies[kk, :], "-o", color=palette[kk])
+ax1.set(xlabel="A", ylabel="EE")
+plt.legend()
+# %%
+config_filename = "Z2_FermiHubbard/entropy"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["has_obc", "U"])
+
+res = {}
+# List of local observables
+lvals = get_sim(ugrid[0][0]).par["lvals"]
+local_obs = [f"n_{s}{d}" for d in "xyz"[: len(lvals)] for s in "mp"]
+local_obs += [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
+local_obs += ["X_Cross"]
+for obs in local_obs:
+    res[obs] = np.zeros((vals["has_obc"].shape[0], vals["U"].shape[0]))
+
+res["energy"] = np.zeros((vals["has_obc"].shape[0], vals["U"].shape[0]))
+
+for ii, has_obc in enumerate(vals["has_obc"]):
+    for jj, U in enumerate(vals["U"]):
+        res["energy"][ii, jj] = get_sim(ugrid[ii][jj]).res["energies"][0] / (
+            prod(lvals)
+        )
+        for obs in local_obs:
+            res[obs][ii, jj] = np.mean(get_sim(ugrid[ii][jj]).res[obs])
+
+fig = plt.figure()
+plt.ylabel(r"X_cross")
+plt.xlabel(r"U")
+plt.xscale("log")
+plt.grid()
+for ii, has_obc in enumerate(vals["has_obc"]):
+    BC_label = "OBC" if has_obc else "PBC"
+    plt.plot(vals["U"], res["X_Cross"][ii, :], "-o", label=BC_label)
+plt.legend()
+
+fig = plt.figure()
+plt.ylabel(r"N")
+plt.xlabel(r"U")
+plt.xscale("log")
+plt.grid()
+for ii, has_obc in enumerate(vals["has_obc"]):
+    BC_label = "OBC" if has_obc else "PBC"
+    plt.plot(vals["U"], res["N_pair"][ii, :], "-o", label=f"pair ({BC_label})")
+    plt.plot(vals["U"], res["N_single"][ii, :], "-o", label=f"single ({BC_label})")
+plt.legend()
+
+fig = plt.figure()
+plt.ylabel(r"Energy Density")
+plt.xlabel(r"U")
+plt.xscale("log")
+plt.grid()
+for ii, has_obc in enumerate(vals["has_obc"]):
+    BC_label = "OBC" if has_obc else "PBC"
+    plt.plot(vals["U"], res["energy"][ii, :], "-o", label=BC_label)
+plt.legend(loc="lower right")
+
 import matplotlib.pyplot as plt
 
 fig, ax = plt.subplots()

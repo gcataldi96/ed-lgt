@@ -21,7 +21,6 @@ class IsingModel(QuantumModel):
         # Hamiltonian Coefficients
         self.coeffs = coeffs
         # CONSTRUCT THE HAMILTONIAN
-        self.H = QMB_hamiltonian(0, self.lvals, self.loc_dims)
         h_terms = {}
         # ---------------------------------------------------------------------------
         # NEAREST NEIGHBOR INTERACTION

@@ -256,7 +256,7 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim):
     return ops
 
 
-def SU2_gauge_invariant_states(s_max, pure_theory, lattice_dim):
+def SU2_gauge_invariant_states(s_max, pure_theory, lattice_dim, background=False):
     validate_parameters(
         spin_list=[s_max], pure_theory=pure_theory, lattice_dim=lattice_dim
     )
@@ -269,6 +269,8 @@ def SU2_gauge_invariant_states(s_max, pure_theory, lattice_dim):
         spins.append(tmp / 2)
     if not pure_theory:
         spins.insert(0, np.asarray([S(0), S(1) / 2, S(0)]))
+    if background:
+        spins.insert(0, np.asarray([S(0), S(1) / 2]))
     # Set rows and col counters list for the basis
     gauge_states = {"site": []}
     gauge_basis = {"site": []}
@@ -281,27 +283,27 @@ def SU2_gauge_invariant_states(s_max, pure_theory, lattice_dim):
         spins_config = list(spins_config)
         if not pure_theory:
             # Check the matter spin (0 (vacuum), 1/2, 0 (up & down))
-            v_sector = np.prod([len(l) for l in [[spins[0][0]]] + spins[1:]])
-            if ii < v_sector:
+            vind = 0 if not background else 1
+            matter_sector = (ii // np.prod([len(l) for l in spins[vind + 1 :]])) % 3
+            if matter_sector == 0:
                 psi_vacuum = True
-            elif 2 * v_sector - 1 < ii < 3 * v_sector:
+            elif matter_sector == 2:
                 psi_vacuum = False
             else:
                 psi_vacuum = None
         else:
             psi_vacuum = None
         # Check the existence of a SU2 singlet state
-        singlets = get_SU2_singlets(spins_config, pure_theory, psi_vacuum)
+        singlets = get_SU2_singlets(spins_config, pure_theory, psi_vacuum, background)
         if singlets is not None:
             for s in singlets:
-                # s.show()
                 # Save the singlet state
                 gauge_states["site"].append(s)
                 # Save the singlet state written in the canonical basis
-                singlet_state = SU2_singlet_canonical_vector(spin_list, s)
+                singlet_state = SU2_singlet_canonical_vector(spin_list, s, background)
                 gauge_basis["site"].append(singlet_state)
                 # GET THE CONFIG LABEL
-                spin_sizes = [spin_space(s) for s in spins_config]
+                spin_sizes = [spin_space(ss) for ss in spins_config[vind:]]
                 label = LGT_border_configs(
                     config=spin_sizes, offset=1, pure_theory=pure_theory
                 )

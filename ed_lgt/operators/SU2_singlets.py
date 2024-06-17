@@ -69,7 +69,13 @@ def couple_two_spins(j1, j2, get_singlet=False, M=None):
 
 class SU2_singlet:
     def __init__(
-        self, J_config, M_configs, CG_values, pure_theory=True, psi_vacuum=None
+        self,
+        J_config,
+        M_configs,
+        CG_values,
+        pure_theory=True,
+        psi_vacuum=None,
+        background=False,
     ):
         """
         This class collects a configuration of a set of angular momenta Js
@@ -101,6 +107,8 @@ class SU2_singlet:
 
             psi_vacuum (bool, optional): If it used, it specifies which type of 0 singlet the matter state
                 is corresponding to. Defaults to None.
+
+            background (bool, optional): If True, it adds an extra charge (j=0,1/2) to the combination of the sites.
 
         Raises:
             TypeError: If the input arguments are of incorrect types or formats.
@@ -136,11 +144,12 @@ class SU2_singlet:
         self.pure_theory = pure_theory
         self.psi_vacuum = psi_vacuum
         # If not pure_theory, make a difference between vacuum=0 and pair=up&down singlets
+        matter_ind = 0 if not background else 1
         if not self.pure_theory:
             if self.psi_vacuum is True:
-                self.J_config[0] = "V"
+                self.J_config[matter_ind] = "V"
             if self.psi_vacuum is False:
-                self.J_config[0] = "P"
+                self.J_config[matter_ind] = "P"
         # Acquire M configs with corresponding
         self.M_configs = deepcopy(M_configs)
         self.CG_values = []
@@ -169,7 +178,7 @@ class SU2_singlet:
 
 
 @get_time
-def get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None):
+def get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None, background=False):
     """
     This function aims to identify all possible SU(2) singlet states that can be
     formed from a given set (list) of spin representations.
@@ -183,6 +192,8 @@ def get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None):
 
         psi_vacuum (bool, optional): If True, the first element of spin_list is the vacuum of matter.
             If False, the first element of spin_list is the pair (up & down) of matter. Default to None.
+
+        background (bool, optional): If True, it adds an extra charge (j=0,1/2) to the combination of the sites.
 
     Returns:
         list: instances of SU2_singlet; if there is no singlet, just None
@@ -208,7 +219,7 @@ def get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None):
     # If there are valid configurations, sort and group them into singlets; otherwise, return None
     if spin_configs:
         return group_sorted_spin_configs(
-            spin_configs, spin_list, pure_theory, psi_vacuum
+            spin_configs, spin_list, pure_theory, psi_vacuum, background
         )
     else:
         return None
@@ -249,7 +260,9 @@ def add_new_spin(previous_configs, new_spin, get_singlet):
 
 
 @get_time
-def group_sorted_spin_configs(spin_configs, spin_list, pure_theory, psi_vacuum):
+def group_sorted_spin_configs(
+    spin_configs, spin_list, pure_theory, psi_vacuum, background=False
+):
     """
     Groups and sorts spin-configurations based on their total spin and individual spin z-components.
 
@@ -263,6 +276,8 @@ def group_sorted_spin_configs(spin_configs, spin_list, pure_theory, psi_vacuum):
         psi_vacuum (bool, optional): If True, the first element of spin_list is the vacuum of matter.
             If False, the first element of spin_list is the pair (up & down) of matter. Default to None.
 
+        background (bool, optional): If True, it adds an extra charge (j=0,1/2) to the combination of the sites.
+
     Returns:
         list: List of grouped and sorted spin configurations.
     """
@@ -270,15 +285,13 @@ def group_sorted_spin_configs(spin_configs, spin_list, pure_theory, psi_vacuum):
         spin_list=spin_list, pure_theory=pure_theory, psi_vacuum=psi_vacuum
     )
     # Save the positions of the Sz/M component of each spin in the chain
-    M_indices = [1] + list(np.arange(3, len(spin_configs[0]), 5))
+    M_inds = [1] + list(np.arange(3, len(spin_configs[0]), 5))
     # Save the positions of the CG value of each pair of spin irreps
-    CG_indices = list(np.arange(4, len(spin_configs[0]), 5))
+    CG_inds = list(np.arange(4, len(spin_configs[0]), 5))
     # Save the positions of each resulting spin out of a combined pair
-    Jtot_indices = list(np.arange(5, len(spin_configs[0]), 5))
+    Jtot_inds = list(np.arange(5, len(spin_configs[0]), 5))
     # Sort the spin-configurations in terms of different SINGLETS
-    spin_configs = sorted(
-        spin_configs, key=lambda x: tuple(x[kk] for kk in Jtot_indices)
-    )
+    spin_configs = sorted(spin_configs, key=lambda x: tuple(x[kk] for kk in Jtot_inds))
     # ----------------------------------------------------------------------------------
     SU2_singlet_list = []  # List of sorted SU2 singlets
     M_configs = []  # List of lists of Sz components (one list per spin configuration)
@@ -286,15 +299,15 @@ def group_sorted_spin_configs(spin_configs, spin_list, pure_theory, psi_vacuum):
     # Run over all the spin configuarions
     for ii, conf in enumerate(spin_configs):
         # If it's the first config or if the total spins of intermediate spin combinations are the same
-        if ii == 0 or [conf[kk] for kk in Jtot_indices] == Jtot_values:
+        if ii == 0 or [conf[kk] for kk in Jtot_inds] == Jtot_values:
             # Acquire intermediate spin combinations
-            Jtot_values = [conf[kk] for kk in Jtot_indices]
+            Jtot_values = [conf[kk] for kk in Jtot_inds]
             # Acquire corresponding Sz components of the spin configuratin
-            M_configs.append([conf[m] for m in M_indices])
+            M_configs.append([conf[m] for m in M_inds])
             # Acquire the corresponding CG value
-            CG_configs.append([conf[cg] for cg in CG_indices])
+            CG_configs.append([conf[cg] for cg in CG_inds])
         else:
-            Jtot_values = [conf[kk] for kk in Jtot_indices]
+            Jtot_values = [conf[kk] for kk in Jtot_inds]
             # The spin-config has a new set of intermediate spin combinations.
             # The previous one was a singlet
             SU2_singlet_list.append(
@@ -304,11 +317,12 @@ def group_sorted_spin_configs(spin_configs, spin_list, pure_theory, psi_vacuum):
                     CG_values=CG_configs,
                     pure_theory=pure_theory,
                     psi_vacuum=psi_vacuum,
+                    background=background,
                 )
             )
             # Re-define a list with sets of Sz and CG configurations associated to this new spin config
-            M_configs = [[conf[m] for m in M_indices]]
-            CG_configs = [[conf[cg] for cg in CG_indices]]
+            M_configs = [[conf[m] for m in M_inds]]
+            CG_configs = [[conf[cg] for cg in CG_inds]]
     # Save the last singlet configuration
     SU2_singlet_list.append(
         SU2_singlet(
@@ -317,13 +331,14 @@ def group_sorted_spin_configs(spin_configs, spin_list, pure_theory, psi_vacuum):
             CG_values=CG_configs,
             pure_theory=pure_theory,
             psi_vacuum=psi_vacuum,
+            background=background,
         )
     )
     return SU2_singlet_list
 
 
 @get_time
-def get_spin_Hilbert_spaces(max_spin_irrep_list, pure_theory=True):
+def get_spin_Hilbert_spaces(max_spin_irrep_list, pure_theory, background=False):
     """
     This function generates the Hilbert spaces for quantum systems characterized
     by their spin degrees of freedom.
@@ -348,6 +363,8 @@ def get_spin_Hilbert_spaces(max_spin_irrep_list, pure_theory=True):
 
             Where the first J=0 is referred to the absence of spin particles V=vacuum,
             while the second J=0 is referred to the case of a pair of particles with opposite spin P=pair
+
+        background (bool, optional): If True, it adds an extra charge (j=0,1/2) to the combination of the sites.
 
     Returns:
         - j_list: A list of lists, where each sublist represents the possible J values (total spin values) for a dof.
@@ -391,11 +408,15 @@ def get_spin_Hilbert_spaces(max_spin_irrep_list, pure_theory=True):
         # add the Hilbert space of 2 fermionic spin 1/2 particles (see docs)
         j_list.insert(0, ["V", S(1) / 2, S(1) / 2, "P"])
         m_list.insert(0, [S(0), S(1) / 2, -S(1) / 2, S(0)])
+    if background:
+        # add the Hilbert space of the background charge
+        j_list.insert(0, [S(0), S(1) / 2, S(1) / 2])
+        m_list.insert(0, [S(0), S(1) / 2, -S(1) / 2])
     return j_list, m_list
 
 
 @get_time
-def SU2_singlet_canonical_vector(spin_list, singlet):
+def SU2_singlet_canonical_vector(spin_list, singlet, background=False):
     """
     Constructs the canonical state vector representing a specific SU2 singlet configuration
     within the total Hilbert space formed by the tensor product of individual spin Hilbert spaces.
@@ -421,7 +442,7 @@ def SU2_singlet_canonical_vector(spin_list, singlet):
     if not isinstance(singlet, SU2_singlet):
         raise TypeError(f"singlet is not {SU2_singlet}, not {type(singlet)}")
     # Acquire the combined Hilbert spaces for the spin configuration.
-    j_list, m_list = get_spin_Hilbert_spaces(spin_list, singlet.pure_theory)
+    j_list, m_list = get_spin_Hilbert_spaces(spin_list, singlet.pure_theory, background)
     # Compute the length of the basis in the total Hilbert space.
     len_basis = len(list(product(*m_list)))
     # Initialize the state vector as a zero vector.
