@@ -155,12 +155,19 @@ class QuantumModel:
         else:
             return self.B.transpose() * operator * self.B
 
-    def get_qmb_state_from_config(self, config):
-        # Get the corresponding QMB index
-        index = np.where((self.sector_configs == config).all(axis=1))[0]
+    def get_qmb_state_from_configs(self, configs):
         # INITIALIZE the STATE
         state = np.zeros(len(self.sector_configs), dtype=float)
-        state[index] = 1
+        # Get the corresponding QMB index of each config
+        for config in configs:
+            if not np.any(np.all(self.sector_configs == config, axis=1)):
+                logger.info(config)
+                raise ValueError(f"config not compatible with the symmetry sector")
+            else:
+                index = np.where((self.sector_configs == config).all(axis=1))[0]
+                state[index] = 1
+        # Normalize the state
+        state /= np.sqrt(len(configs))
         if self.momentum_basis:
             # Project the state in the momentum sector
             state = self.B.transpose().dot(state)

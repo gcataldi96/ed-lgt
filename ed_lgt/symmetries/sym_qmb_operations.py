@@ -13,6 +13,7 @@ __all__ = [
     "nbody_term",
     "nbody_term_par",
     "get_operators_nbody_term",
+    "arrays_equal",
 ]
 
 
@@ -21,7 +22,7 @@ def arrays_equal(arr1, arr2):
     if arr1.shape != arr2.shape:
         return False
     for ii in range(arr1.shape[0]):
-        if arr1[ii] != arr2[ii]:
+        if not np.isclose(arr1[ii], arr2[ii], atol=1e-14):
             return False
     return True
 
@@ -232,7 +233,6 @@ def nbody_operator_data_momentum_basis(
     return row_list, col_list, value_list
 
 
-@get_time
 def nbody_term(op_list, op_sites_list, sector_configs, momentum_basis=None, k=0):
     if momentum_basis is not None:
         row_list, col_list, value_list = nbody_operator_data_momentum_basis(
