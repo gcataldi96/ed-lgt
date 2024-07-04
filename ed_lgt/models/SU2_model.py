@@ -3,6 +3,7 @@ from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm
 from ed_lgt.modeling import check_link_symmetry, staggered_mask
 from .quantum_model import QuantumModel
 from ed_lgt.operators import SU2_dressed_site_operators, SU2_gauge_invariant_states
+from ed_lgt.symmetries import get_state_configs
 import logging
 
 logger = logging.getLogger(__name__)
@@ -10,19 +11,26 @@ __all__ = ["SU2_Model"]
 
 
 class SU2_Model(QuantumModel):
-    def __init__(self, spin, pure_theory, **kwargs):
+    def __init__(self, spin, pure_theory, background, **kwargs):
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
         self.pure_theory = pure_theory
+        self.background = background
         self.staggered_basis = False
         # Acquire operators
         self.ops = SU2_dressed_site_operators(
-            self.spin, self.pure_theory, lattice_dim=self.dim
+            self.spin,
+            self.pure_theory,
+            lattice_dim=self.dim,
+            background=self.background,
         )
         # Acquire gauge invariant basis and states
         self.gauge_basis, self.gauge_states = SU2_gauge_invariant_states(
-            self.spin, self.pure_theory, lattice_dim=self.dim
+            self.spin,
+            self.pure_theory,
+            lattice_dim=self.dim,
+            background=self.background,
         )
         # Acquire local dimension and lattice label
         self.get_local_site_dimensions()

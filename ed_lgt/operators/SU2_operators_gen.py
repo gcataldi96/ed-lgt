@@ -45,13 +45,14 @@ def SU2_gen_rishon_operators(spin):
     return ops
 
 
-@get_time
-def SU2_gen_dressed_site_operators(s, pure_theory, lattice_dim=2):
-    validate_parameters(spin_list=[s], pure_theory=pure_theory, lattice_dim=lattice_dim)
+def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=False):
+    validate_parameters(
+        spin_list=[spin], pure_theory=pure_theory, lattice_dim=lattice_dim
+    )
     # Lattice directions
     dimensions = "xyz"[:lattice_dim]
     # Get SU2 rishon operator
-    in_ops = SU2_gen_rishon_operators(s)
+    in_ops = SU2_gen_rishon_operators(spin)
     if not pure_theory:
         in_ops |= SU2_matter_operators(has_spin=True, colors=True)
         in_ops |= SU2_generators(1 / 2, matter=True)
@@ -292,9 +293,12 @@ def SU2_gen_dressed_site_operators(s, pure_theory, lattice_dim=2):
                 in_ops, [f"N_{label}"] + ["IDz" for i in range(2 * lattice_dim)]
             )
         # Psi CASIMIR OPERATORS
+        ops["S2_matter"] = 0
         for Td in ["x", "y", "z"]:
-            ops[f"S{Td}_psi"] = qmb_op(
-                in_ops, [f"S{Td}_psi"] + ["IDz" for i in range(2 * lattice_dim)]
+            ops["S2_matter"] += csr_matrix(
+                qmb_op(in_ops, [f"S{Td}_psi"] + ["IDz" for i in range(2 * lattice_dim)])
+                ** 2,
+                dtype=float,
             )
     # CASIMIR/ELECTRIC OPERATOR
     ops[f"E_square"] = 0
@@ -306,15 +310,22 @@ def SU2_gen_dressed_site_operators(s, pure_theory, lattice_dim=2):
     for Td in ["x", "y", "z"]:
         for s in "pm":
             for d in dimensions:
-                ops["S2_tot"] += ops[f"T{Td}_{s}{d}"] ** 2
-        if not pure_theory:
-            ops["S2_tot"] += ops[f"S{Td}_psi"] ** 2
-
+                ops["S2_tot"] += csr_matrix(ops[f"T{Td}_{s}{d}"] ** 2, dtype=float)
+    if not pure_theory:
+        ops["S2_tot"] += ops["S2_matter"]
+    if background:
+        for op in ops.keys():
+            ops[op] = kron(identity(3), ops[op])
+        if pure_theory:
+            id_list = ["IDz" for _ in range(2 * lattice_dim)]
+        else:
+            id_list = ["ID_psi"] + ["IDz" for _ in range(2 * lattice_dim)]
+        ops["bg"] = qmb_op(in_ops, ["T2"] + id_list) / 0.75
     return ops
 
 
 @get_time
-def SU2_gen_gauge_invariant_states(s_max, pure_theory, lattice_dim):
+def SU2_gen_gauge_invariant_states(s_max, pure_theory, lattice_dim, background=False):
     validate_parameters(
         spin_list=[s_max], pure_theory=pure_theory, lattice_dim=lattice_dim
     )
@@ -327,10 +338,8 @@ def SU2_gen_gauge_invariant_states(s_max, pure_theory, lattice_dim):
         spins.append(tmp / 2)
     if not pure_theory:
         spins.insert(0, np.asarray([S(0), S(1) / 2, S(0)]))
-        # Check the matter spin (0 (vacuum),1/2,0 (up & down))
-        v_sector = np.prod([len(l) for l in [[spins[0][0]]] + spins[1:]])
-    else:
-        psi_vacuum = None
+    if background:
+        spins.insert(0, np.asarray([S(0), S(1) / 2]))
     # Set rows and col counters list for the basis
     gauge_states = {"site": []}
     gauge_basis = {"site": []}
@@ -341,25 +350,29 @@ def SU2_gen_gauge_invariant_states(s_max, pure_theory, lattice_dim):
         gauge_basis[f"site_{label}"] = []
     for ii, spins_config in enumerate(product(*spins)):
         spins_config = list(spins_config)
-        logger.info(spins_config)
         if not pure_theory:
-            if ii < v_sector:
+            # Check the matter spin (0 (vacuum), 1/2, 0 (up & down))
+            vind = 0 if not background else 1
+            matter_sector = (ii // np.prod([len(l) for l in spins[vind + 1 :]])) % 3
+            if matter_sector == 0:
                 psi_vacuum = True
-            elif 2 * v_sector - 1 < ii < 3 * v_sector:
+            elif matter_sector == 2:
                 psi_vacuum = False
             else:
                 psi_vacuum = None
+        else:
+            psi_vacuum = None
         # Check the existence of a SU2 singlet state
-        singlets = get_SU2_singlets(spins_config, pure_theory, psi_vacuum)
+        singlets = get_SU2_singlets(spins_config, pure_theory, psi_vacuum, background)
         if singlets is not None:
             for s in singlets:
                 # Save the singlet state
                 gauge_states["site"].append(s)
                 # Save the singlet state written in the canonical basis
-                singlet_state = SU2_singlet_canonical_vector(spin_list, s)
+                singlet_state = SU2_singlet_canonical_vector(spin_list, s, background)
                 gauge_basis["site"].append(singlet_state)
                 # GET THE CONFIG LABEL
-                spin_sizes = [spin_space(s1) for s1 in spins_config]
+                spin_sizes = [spin_space(ss) for ss in spins_config[vind:]]
                 label = LGT_border_configs(
                     config=spin_sizes, offset=1, pure_theory=pure_theory
                 )
@@ -423,7 +436,7 @@ def SU2_gen_Hamiltonian_couplings(lattice_dim, pure_theory, g, m=None):
     """
     validate_parameters(lattice_dim=lattice_dim, pure_theory=pure_theory)
     if lattice_dim == 1:
-        E = 8 * g / 3  # The correct one is g**2 / 4
+        E = 8 * g**2 / 3  # The correct one is g**2 / 4
         B = 0
     elif lattice_dim == 2:
         E = 3 * (g**2) / 16

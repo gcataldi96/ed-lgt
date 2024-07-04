@@ -13,19 +13,26 @@ __all__ = ["SU2_Model_Gen"]
 
 
 class SU2_Model_Gen(QuantumModel):
-    def __init__(self, spin, pure_theory, **kwargs):
+    def __init__(self, spin, pure_theory, background, **kwargs):
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
         self.pure_theory = pure_theory
+        self.background = background
         self.staggered_basis = False
         # Acquire operators
         self.ops = SU2_gen_dressed_site_operators(
-            self.spin, self.pure_theory, lattice_dim=self.dim
+            self.spin,
+            self.pure_theory,
+            lattice_dim=self.dim,
+            background=self.background,
         )
         # Acquire gauge invariant basis and states
         self.gauge_basis, self.gauge_states = SU2_gen_gauge_invariant_states(
-            self.spin, self.pure_theory, lattice_dim=self.dim
+            self.spin,
+            self.pure_theory,
+            lattice_dim=self.dim,
+            background=self.background,
         )
         # Acquire local dimension and lattice label
         self.get_local_site_dimensions()
