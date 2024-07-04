@@ -41,7 +41,7 @@ def SU2_rishon_operators(spin):
     return ops
 
 
-def SU2_dressed_site_operators(spin, pure_theory, lattice_dim):
+def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False):
     validate_parameters(
         spin_list=[spin], pure_theory=pure_theory, lattice_dim=lattice_dim
     )
@@ -236,9 +236,12 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim):
                 in_ops, [f"N_{label}"] + ["IDz" for _ in range(2 * lattice_dim)]
             )
         # Psi CASIMIR OPERATORS
+        ops["S2_matter"] = 0
         for Td in ["x", "y", "z"]:
-            ops[f"S{Td}_psi"] = qmb_op(
-                in_ops, [f"S{Td}_psi"] + ["IDz" for _ in range(2 * lattice_dim)]
+            ops["S2_matter"] += csr_matrix(
+                qmb_op(in_ops, [f"S{Td}_psi"] + ["IDz" for i in range(2 * lattice_dim)])
+                ** 2,
+                dtype=float,
             )
     # CASIMIR/ELECTRIC OPERATOR
     ops[f"E_square"] = 0
@@ -250,9 +253,17 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim):
     for ax in ["x", "y", "z"]:
         for side in "pm":
             for d in dimensions:
-                ops["S2_tot"] += ops[f"T{ax}_{side}{d}"] ** 2
-        if not pure_theory:
-            ops["S2_tot"] += ops[f"S{ax}_psi"] ** 2
+                ops["S2_tot"] += csr_matrix(ops[f"T{Td}_{s}{d}"] ** 2, dtype=float)
+    if not pure_theory:
+        ops["S2_tot"] += ops["S2_matter"]
+    if background:
+        for op in ops.keys():
+            ops[op] = kron(identity(3), ops[op])
+        if pure_theory:
+            id_list = ["IDz" for _ in range(2 * lattice_dim)]
+        else:
+            id_list = ["ID_psi"] + ["IDz" for _ in range(2 * lattice_dim)]
+        ops["bg"] = qmb_op(in_ops, ["T2"] + id_list) / 0.75
     return ops
 
 
