@@ -80,8 +80,10 @@ params = {
 gen_configs("template", params, f"QED/scaling_conv")
 # %%
 # Z2 FERMI HUBBARD MODEL
-params = {"U": np.logspace(-1, 1, 15)}
-gen_configs("template", params, f"Z2_FermiHubbard/4x2_OBCxy")
+params = {"U": np.logspace(1, 2, 20), "h": np.arange(0.01, 0.51, 0.01)}
+gen_configs("template", params, f"Z2FermiHubbard/PBCxy/new_test")
+params = {"U": np.logspace(-1, 2, 20)}
+# gen_configs("template", params, f"Z2FermiHubbard/PBCxy/test")
 
 # %%
 # ISING MODEL

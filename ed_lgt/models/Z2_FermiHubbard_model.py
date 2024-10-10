@@ -22,12 +22,27 @@ class Z2_FermiHubbard_Model(QuantumModel):
         )
         # Acquire local dimension and lattice label
         self.get_local_site_dimensions()
+        # GLOBAL SYMMETRIES
+        global_ops = [self.ops["N_tot"], self.ops["N_up"]]
+        global_sectors = [self.n_sites, int(self.n_sites / 2)]
+        # LINK SYMMETRIES
+        link_ops = [
+            [self.ops[f"n_p{d}"], -self.ops[f"n_m{d}"]] for d in self.directions
+        ]
+        link_sectors = [0 for _ in self.directions]
+        # GET SYMMETRY SECTOR
+        self.get_abelian_symmetry_sector(
+            global_ops=global_ops,
+            global_sectors=global_sectors,
+            link_ops=link_ops,
+            link_sectors=link_sectors,
+        )
+        self.default_params()
 
     def build_Hamiltonian(self, coeffs):
         # Hamiltonian Coefficients
         self.coeffs = coeffs
         # CONSTRUCT THE HAMILTONIAN
-        self.H = QMB_hamiltonian(0, self.lvals, self.loc_dims)
         h_terms = {}
         # -------------------------------------------------------------------------------
         # COULOMB POTENTIAL
@@ -48,6 +63,12 @@ class Z2_FermiHubbard_Model(QuantumModel):
                 self.H.Ham += h_terms[f"{d}_hop_{s}"].get_Hamiltonian(
                     strength=self.coeffs["t"], add_dagger=True
                 )
+        # -------------------------------------------------------------------------------
+        # EXTERNAL ELECTRIC FIELD
+        op_name = "E"
+        h_terms["E"] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
+        self.H.Ham += h_terms["E"].get_Hamiltonian(strength=self.coeffs["h"])
+        # -------------------------------------------------------------------------------
 
     def check_symmetries(self):
         # CHECK LINK SYMMETRIES

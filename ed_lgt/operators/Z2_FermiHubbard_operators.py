@@ -120,6 +120,12 @@ def Z2_FermiHubbard_dressed_site_operators(lattice_dim=2):
     for op in ops.keys():
         ops[op] = kron(in_ops["ID_psi"], ops[op])
     # --------------------------------------------------------------------------------
+    # Electric field operator
+    ops["E"] = 0
+    for s in "mp":
+        for d in "xyz"[:lattice_dim]:
+            ops["E"] += 0.5 * ops[f"P_{s}{d}"]
+    # --------------------------------------------------------------------------------
     # Hopping operators
     for s in ["up", "down"]:
         if lattice_dim == 1:
