@@ -127,17 +127,17 @@ class PlaquetteTerm(QMBTerm):
         self.avg = 0.0
         self.std = 0.0
         counter = 0
-        for ii in range(prod(self.lvals)):
-            # Compute the corresponding coords of the BL site of the Plaquette
-            coords = zig_zag(self.lvals, ii)
-            coords_list, sites_list = get_plaquette_neighbors(
-                coords, self.lvals, self.axes, self.has_obc
-            )
-            if sites_list is None:
-                continue
-
-            if self.get_staggered_conditions(coords, stag_label):
-                if self.sector_configs is None:
+        # IN CASE OF NO SYMMETRY SECTOR
+        if self.sector_configs is None:
+            for ii in range(prod(self.lvals)):
+                # Compute the corresponding coords of the BL site of the Plaquette
+                coords = zig_zag(self.lvals, ii)
+                coords_list, sites_list = get_plaquette_neighbors(
+                    coords, self.lvals, self.axes, self.has_obc
+                )
+                if sites_list is None:
+                    continue
+                else:
                     plaq = psi.expectation_value(
                         four_body_op(
                             op_list=self.op_list,
@@ -156,6 +156,16 @@ class PlaquetteTerm(QMBTerm):
                         )
                         - plaq**2
                     )
+        # GET THE EXPVAL ON THE SYMMETRY SECTOR
+        else:
+            for ii in range(prod(self.lvals)):
+                # Compute the corresponding coords of the BL site of the Plaquette
+                coords = zig_zag(self.lvals, ii)
+                coords_list, sites_list = get_plaquette_neighbors(
+                    coords, self.lvals, self.axes, self.has_obc
+                )
+                if sites_list is None:
+                    continue
                 else:
                     plaq = psi.expectation_value(
                         nbody_term(
@@ -173,14 +183,15 @@ class PlaquetteTerm(QMBTerm):
                         )
                         - plaq**2
                     )
-                # PRINT THE PLAQUETTE
-                plaq_string = [f"{c}" for c in coords_list]
-                if self.print_plaq:
-                    self.print_Plaquette(plaq_string, plaq)
-                # Update the average and the variance
-                counter += 1
-                self.avg += plaq
-                self.std += delta_plaq
+        if self.get_staggered_conditions(coords, stag_label):
+            # PRINT THE PLAQUETTE
+            plaq_string = [f"{c}" for c in coords_list]
+            if self.print_plaq:
+                self.print_Plaquette(plaq_string, plaq)
+            # Update the average and the variance
+            counter += 1
+            self.avg += plaq
+            self.std += delta_plaq
         self.avg = self.avg / counter
         self.std = np.sqrt(np.abs(self.std) / counter)
         if self.print_plaq:

@@ -1,12 +1,13 @@
 import numpy as np
 from math import prod
+from numba import njit, prange
 from .lattice_mappings import zig_zag
 from .lattice_geometry import get_neighbor_sites
 from .qmb_operations import local_op
 from .qmb_state import QMB_state
 from .qmb_term import QMBTerm
 from ed_lgt.tools import validate_parameters, get_time
-from ed_lgt.symmetries import nbody_term
+from ed_lgt.symmetries import nbody_term, nbody_data_par, exp_val_numba
 import logging
 
 logger = logging.getLogger(__name__)
@@ -99,58 +100,38 @@ class LocalTerm(QMBTerm):
             if stag_label is None
             else logger.info(f"{self.op_name} {stag_label}")
         )
-        # AVERAGE EXP VAL <O> & STD DEVIATION (<O^{2}>-<O>^{2})^{1/2}
-        self.obs = np.zeros(self.lvals)
-        self.avg = 0.0
-        self.std = 0.0
-        counter = 0
-        # RUN OVER THE LATTICE SITES
-        for ii in range(prod(self.lvals)):
-            # Given the 1D point on the d-dimensional lattice, get the corresponding coords
-            coords = zig_zag(self.lvals, ii)
-            # Compute the average value in the site x,y
-            if self.sector_configs is None:
-                exp_obs = psi.expectation_value(
+        n_sites = prod(self.lvals)
+        if self.sector_configs is None:
+            # Stores the expectation values <O>
+            self.obs = np.zeros(n_sites, dtype=float)
+            # Stores the variances <O^2> - <O>^2
+            self.var = np.zeros(n_sites, dtype=float)
+            for ii in range(prod(self.lvals)):
+                self.obs[ii] = psi.expectation_value(
                     local_op(operator=self.op, op_site=ii, **self.def_params)
                 )
-                # Compute the corresponding quantum fluctuation
-                exp_var = (
+                self.var[ii] = (
                     psi.expectation_value(
                         local_op(operator=self.op**2, op_site=ii, **self.def_params)
                     )
-                    - exp_obs**2
+                    - self.obs[ii] ** 2
                 )
-            else:
-                # GET THE EXPVAL ON THE SYMMETRY SECTOR
-                exp_obs = psi.expectation_value(
-                    nbody_term(
-                        self.sym_ops,
-                        np.array([ii]),
-                        self.sector_configs,
-                        self.momentum_basis,
-                        self.momentum_k,
-                    )
-                )
-                # Compute the corresponding quantum fluctuation
-                exp_var = (
-                    psi.expectation_value(
-                        nbody_term(
-                            self.sym_ops,
-                            np.array([ii]),
-                            self.sector_configs,
-                            self.momentum_basis,
-                            self.momentum_k,
-                        )
-                        ** 2
-                    )
-                    - exp_obs**2
-                )
+        else:
+            self.obs, self.var = lattice_local_exp_val(
+                psi.psi, n_sites, self.sector_configs, self.sym_ops
+            )
+        # CHECK STAGGERED CONDITION AND PRINT VALUES
+        self.avg = 0.0
+        self.std = 0.0
+        counter = 0
+        for ii in range(n_sites):
+            # Given the 1D point on the d-dimensional lattice, get the corresponding coords
+            coords = zig_zag(self.lvals, ii)
             if self.get_staggered_conditions(coords, stag_label):
-                logger.info(f"{coords} {format(exp_obs, '.12f')}")
+                logger.info(f"{coords} {format(self.obs[ii], '.12f')}")
                 counter += 1
-                self.obs[coords] = exp_obs
-                self.avg += exp_obs
-                self.std += exp_var
+                self.avg += self.obs[ii]
+                self.std += self.var[ii]
         self.avg = self.avg / counter
         self.std = np.sqrt(np.abs(self.std) / counter)
         logger.info(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
@@ -179,3 +160,42 @@ def check_link_symmetry(axis, loc_op1, loc_op2, value=0, sign=1):
             raise ValueError(f"{axis}-Link Symmetry is violated at index {ii}")
     logger.info("----------------------------------------------------")
     logger.info(f"{axis}-LINK SYMMETRY IS SATISFIED")
+
+
+@njit(parallel=True)
+def lattice_local_exp_val(psi, n_sites, sector_configs, sym_ops):
+    """
+    Computes the expectation value <O> and the variance <O^2> - <O>^2
+    for a local operator O on all lattice sites in parallel.
+
+    Args:
+        psi (np.ndarray): The quantum state (wavefunction) in the form of a vector.
+        n_sites (int): The total number of lattice sites on which the local operator acts.
+        sector_configs (np.ndarray): Array representing the symmetry sectors or configurations for the system.
+        sym_ops (np.ndarray): Symmetry operators for the local operator O, represented as a set of nonzero matrix elements.
+
+    Returns:
+        obs (np.ndarray): The expectation values <O> for the local operator O on each lattice site.
+        var (np.ndarray): The variances <O^2> - <O>^2 for the local operator O on each lattice site.
+
+    Notes:
+        - The expectation value <O> is computed for each site using matrix-vector multiplication.
+        - The variance <O^2> - <O>^2 is also computed for each site. For local operators,
+          squaring the non-zero entries in `value_list` (the matrix elements of O) is
+          sufficient to compute O^2.
+        - The function runs in parallel over all lattice sites using `prange` for performance optimization.
+    """
+    # Initialize arrays for storing expectation values and variances for all sites
+    obs = np.zeros(n_sites, dtype=float)  # Stores the expectation values <O>
+    var = np.zeros(n_sites, dtype=float)  # Stores the variances <O^2> - <O>^2
+    # Loop over each lattice site in parallel using prange
+    for ii in prange(n_sites):
+        # Compute the n-body operator's non-zero elements for site 'ii'
+        row_list, col_list, value_list = nbody_data_par(
+            sym_ops, np.array([ii]), sector_configs
+        )
+        # Compute the expectation value <O> for site 'ii'
+        obs[ii] = exp_val_numba(psi, row_list, col_list, value_list)
+        # For local operators, the variance <O^2> - <O>^2 can be computed by squaring value_list
+        var[ii] = exp_val_numba(psi, row_list, col_list, value_list**2) - obs[ii] ** 2
+    return obs, var

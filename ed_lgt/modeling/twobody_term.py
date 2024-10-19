@@ -1,14 +1,15 @@
 import numpy as np
 from math import prod
+from numba import njit, prange
 from itertools import product
 from scipy.sparse import isspmatrix, csr_matrix
 from .lattice_geometry import get_neighbor_sites
-from .lattice_mappings import zig_zag
+from .lattice_mappings import zig_zag, inverse_zig_zag
 from .qmb_operations import two_body_op
 from .qmb_state import QMB_state
 from .qmb_term import QMBTerm
 from ed_lgt.tools import validate_parameters
-from ed_lgt.symmetries import nbody_term
+from ed_lgt.symmetries import nbody_term, nbody_data_par, exp_val_numba
 import logging
 
 logger = logging.getLogger(__name__)
@@ -105,8 +106,8 @@ class TwoBodyTerm(QMBTerm):
 
     def get_expval(self, psi):
         """
-        The function calculates the expectation value (and it variance) of the TwoBody Hamiltonian
-        and its average over all the lattice sites.
+        The function calculates the expectation value (and it variance) of the
+        TwoBody Hamiltonian and its average over all the lattice sites.
 
         Args:
             psi (numpy.ndarray): QMB state where the expectation value has to be computed
@@ -117,33 +118,26 @@ class TwoBodyTerm(QMBTerm):
         # PRINT OBSERVABLE NAME
         logger.info(f"----------------------------------------------------")
         logger.info(f"{'-'.join(self.op_names_list)}")
-        # Create an array to store the correlator
-        self.corr = np.zeros(self.lvals + self.lvals)
-        # RUN OVER THE LATTICE SITES
-        for ii, jj in product(range(prod(self.lvals)), repeat=2):
-            coords1 = zig_zag(self.lvals, ii)
-            coords2 = zig_zag(self.lvals, jj)
-            # AVOID SELF CORRELATIONS
-            if ii != jj:
-                if self.sector_configs is None:
-                    self.corr[coords1 + coords2] = psi.expectation_value(
+        n_sites = prod(self.lvals)
+        # IN CASE OF NO SYMMETRY SECTOR
+        if self.sector_configs is None:
+            # Create an array to store the correlator
+            self.corr = np.zeros((n_sites, n_sites), dtype=float)
+            for ii in prange(n_sites):
+                for jj in range(ii + 1, n_sites):
+                    self.corr[ii, jj] = psi.expectation_value(
                         two_body_op(
                             op_list=self.op_list,
                             op_sites_list=[ii, jj],
                             **self.def_params,
                         )
                     )
-                else:
-                    # GET THE EXPVAL ON THE SYMMETRY SECTOR
-                    self.corr[coords1 + coords2] = psi.expectation_value(
-                        nbody_term(
-                            op_list=self.sym_ops,
-                            op_sites_list=np.array([ii, jj]),
-                            sector_configs=self.sector_configs,
-                            momentum_basis=self.momentum_basis,
-                            k=self.momentum_k,
-                        )
-                    )
+                    self.corr[jj, ii] = self.corr[ii, jj]
+        else:
+            # GET THE EXPVAL ON THE SYMMETRY SECTOR
+            self.corr = lattice_twobody_exp_val(
+                psi.psi, n_sites, self.sector_configs, self.sym_ops
+            )
 
     def print_nearest_neighbors(self):
         for ii in range(prod(self.lvals)):
@@ -158,4 +152,46 @@ class TwoBodyTerm(QMBTerm):
             else:
                 c1 = coords_list[0]
                 c2 = coords_list[1]
-                logger.info(f"{c1}-{c2} {self.corr[c1 + c2]}")
+                i1 = inverse_zig_zag(self.lvals, c1)
+                i2 = inverse_zig_zag(self.lvals, c2)
+                logger.info(f"{c1}-{c2} {self.corr[i1,i2]}")
+
+
+@njit(parallel=True)
+def lattice_twobody_exp_val(psi, n_sites, sector_configs, sym_ops):
+    """
+    Computes the expectation value <O> for a two-body operator O over all pairs of lattice sites in parallel.
+
+    Args:
+        psi (np.ndarray): The quantum state (wavefunction) in the form of a vector.
+        n_sites (int): The total number of lattice sites in the system.
+        sector_configs (np.ndarray): Array representing the symmetry sectors or configurations for the system.
+        sym_ops (np.ndarray): Symmetry operators for the two-body operator O, represented as
+                              a set of nonzero matrix elements.
+
+    Returns:
+        corr (np.ndarray): A 2D array where corr[ii, jj] stores the expectation values <O> for the two-body operator between site ii and site jj.
+        The result is symmetric, i.e., corr[jj, ii] = corr[ii, jj].
+
+    Notes:
+        - The expectation value <O> is computed for each pair of sites using matrix-vector multiplication.
+        - The function runs in parallel over all pairs of lattice sites using `prange` for performance optimization.
+    """
+    # Initialize a 2D array to store expectation values for all pairs (ii, jj)
+    corr = np.zeros((n_sites, n_sites), dtype=float)
+    # Loop over all unique pairs of lattice sites in parallel using prange
+    for ii in prange(n_sites):
+        for jj in range(ii + 1, n_sites):
+            # Compute the n-body operator's non-zero elements for the pair (ii, jj)
+            row_list, col_list, value_list = nbody_data_par(
+                sym_ops,
+                np.array([ii, jj]),
+                sector_configs,
+            )
+            # Compute the expectation value <O> for the pair (ii, jj)
+            exp_value = exp_val_numba(psi, row_list, col_list, value_list)
+            # Assign the result symmetrically
+            corr[ii, jj] = exp_value
+            # Mirror the value for (jj, ii)
+            corr[jj, ii] = exp_value
+    return corr

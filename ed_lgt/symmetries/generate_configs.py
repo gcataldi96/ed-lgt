@@ -1,4 +1,3 @@
-from ed_lgt.tools import get_time
 import numpy as np
 from numba import njit, prange
 
@@ -53,7 +52,6 @@ def config_to_index(config, loc_dims):
     return qmb_index
 
 
-@get_time
 @njit(parallel=True)
 def get_state_configs(loc_dims):
     """
@@ -96,7 +94,6 @@ def separate_configs(sector_configs, keep_indices):
     return subsystem_configs, environment_configs
 
 
-@get_time
 @njit
 def config_to_index_linearsearch(config, unique_configs):
     # Linear search (not the most efficient case)
@@ -164,7 +161,6 @@ def get_translated_state_indices(config, sector_configs, logical_unit_size):
     return trans_indices
 
 
-@get_time
 @njit
 def get_reference_indices(sector_configs):
     sector_dim = sector_configs.shape[0]

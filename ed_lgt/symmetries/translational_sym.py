@@ -1,6 +1,5 @@
 import numpy as np
 from numba import njit
-from ed_lgt.tools import get_time
 from .generate_configs import get_translated_state_indices
 
 __all__ = [
@@ -10,12 +9,14 @@ __all__ = [
     "momentum_basis",
 ]
 
+
 @njit
 def check_normalization(basis):
     for ii in range(basis.shape[1]):
         if not np.isclose(np.linalg.norm(basis[:, ii]), 1):
             return False
     return True
+
 
 @njit
 def check_orthogonality(basis):
@@ -26,7 +27,6 @@ def check_orthogonality(basis):
     return True
 
 
-@get_time
 @njit
 def momentum_basis_k0(sector_configs, logical_unit_size):
     sector_dim = sector_configs.shape[0]
@@ -36,7 +36,9 @@ def momentum_basis_k0(sector_configs, logical_unit_size):
     for ii in range(sector_dim):
         config = sector_configs[ii]
         # Compute all the set of translated configurations in terms of indices
-        trans_indices = get_translated_state_indices(config, sector_configs,logical_unit_size)
+        trans_indices = get_translated_state_indices(
+            config, sector_configs, logical_unit_size
+        )
         is_independent = True
         # Check this configuration against all previously marked independent configurations
         for jj in range(ii):
@@ -51,19 +53,20 @@ def momentum_basis_k0(sector_configs, logical_unit_size):
     ref_indices = np.flatnonzero(independent_indices)
     norm = normalization[ref_indices]
     # Define the basis
-    basis = np.zeros((sector_dim, len(ref_indices)), dtype= np.float64)
+    basis = np.zeros((sector_dim, len(ref_indices)), dtype=np.float64)
 
     for ii in range(len(ref_indices)):
         ind_index = ref_indices[ii]
-        trans_indices = get_translated_state_indices(sector_configs[ind_index], sector_configs,logical_unit_size)
+        trans_indices = get_translated_state_indices(
+            sector_configs[ind_index], sector_configs, logical_unit_size
+        )
         for jj in range(norm[ii]):
             basis[trans_indices[jj], ii] = 1 / np.sqrt(norm[ii])
-    #if not check_normalization(basis) or not check_orthogonality(basis):
+    # if not check_normalization(basis) or not check_orthogonality(basis):
     #    raise ValueError("Basis normalization or orthogonality failed.")
     return basis
 
 
-@get_time
 def momentum_basis(sector_configs, k=0):
     sector_dim = len(sector_configs)
     sector_indices = np.arange(sector_dim, dtype=int)
@@ -76,17 +79,17 @@ def momentum_basis(sector_configs, k=0):
         is_independent = True
         if ii > 0:
             """
-            Run over all the already found independent configurations and look at their corresponding indices. 
-            If any of them is included in the new candidate's translated configurations, 
-            then the candidate cannot be independent, and I want to go on and check the next candidate. 
-            On the contrary, if this if statement is never satisfied (that is for all the already independent configurations), 
-            after the for loop, I will save the candidate as a new independent configuration. 
+            Run over all the already found independent configurations and look at their corresponding indices.
+            If any of them is included in the new candidate's translated configurations,
+            then the candidate cannot be independent, and I want to go on and check the next candidate.
+            On the contrary, if this if statement is never satisfied (that is for all the already independent configurations),
+            after the for loop, I will save the candidate as a new independent configuration.
             """
             # pause(f"----------{ii}-------------------", True)
-            #print("Sector indices", sector_indices[independent_indices])
+            # print("Sector indices", sector_indices[independent_indices])
             for ind_index in sector_indices[independent_indices]:
-                #print("Check independence")
-                #print(ind_index, trans_indices)
+                # print("Check independence")
+                # print(ind_index, trans_indices)
                 if ind_index in trans_indices:
                     is_independent = False
                     break
@@ -111,8 +114,8 @@ def momentum_basis(sector_configs, k=0):
         # Create the momentum state associated with this reference state
         if k != 0:
             for jj in range(norm[ii]):
-                phase_factor=np.exp(-1j * 2 * np.pi * k * jj / norm[ii])
-                basis[trans_indices[jj], ii] = phase_factor/np.sqrt(norm[ii])
+                phase_factor = np.exp(-1j * 2 * np.pi * k * jj / norm[ii])
+                basis[trans_indices[jj], ii] = phase_factor / np.sqrt(norm[ii])
         else:
             for jj in range(norm[ii]):
                 basis[trans_indices[jj], ii] = 1 / np.sqrt(norm[ii])
@@ -120,7 +123,6 @@ def momentum_basis(sector_configs, k=0):
     check_normalization(basis)
     check_orthogonality(basis)
     return basis
-
 
 
 @njit
@@ -139,14 +141,23 @@ def nbody_operator_data(op_list, op_sites_list, sector_configs, momentum_basis, 
                 op = op_list[ii, site]
                 # Calculate phase difference due to position 'site' in the momentum basis
                 phase_diff = np.exp(-1j * 2 * np.pi * k * site / sector_dim)
-                
+
                 # Applying operator with phase consideration
                 for config_index in range(sector_dim):
-                    if sector_configs[config_index, site] == site:  # condition to apply operator
-                        transition_amplitude = op[sector_configs[row, site], sector_configs[col, site]]
+                    if (
+                        sector_configs[config_index, site] == site
+                    ):  # condition to apply operator
+                        transition_amplitude = op[
+                            sector_configs[row, site], sector_configs[col, site]
+                        ]
                         # Include phase factor in transition amplitude
-                        element += momentum_basis[config_index, row].conj() * transition_amplitude * phase_diff * momentum_basis[config_index, col]
-            
+                        element += (
+                            momentum_basis[config_index, row].conj()
+                            * transition_amplitude
+                            * phase_diff
+                            * momentum_basis[config_index, col]
+                        )
+
             if not np.isclose(element, 0, atol=1e-10):
                 row_list.append(np.int32(row))
                 col_list.append(np.int32(col))

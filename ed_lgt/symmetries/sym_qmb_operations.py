@@ -1,6 +1,5 @@
 import numpy as np
 from numba import njit, prange
-from ed_lgt.tools import get_time
 from scipy.sparse import csr_matrix
 import logging
 
@@ -8,13 +7,48 @@ logger = logging.getLogger(__name__)
 
 
 __all__ = [
-    "nbody_operator_data_sitebased",
-    "nbody_operator_data",
     "nbody_term",
-    "nbody_term_par",
+    "nbody_data_par",
     "get_operators_nbody_term",
+    "exp_val_numba",
     "arrays_equal",
 ]
+
+
+@njit
+def rowcol_to_index(row, col, loc_dims):
+    """
+    Compute the global index from row and column indices, considering
+    the number of nonzero columns for each row (loc_dims).
+
+    Args:
+        row (int): Index of the current row in the valid rows list.
+        col (int): Index of the current column within the valid columns for the current row.
+        loc_dims (np.ndarray of ints): The number of nonzero columns for each valid row.
+
+    Returns:
+        int: The flattened global index corresponding to the (row, col) pair.
+    """
+    index = 0
+    # Compute the cumulative sum of nonzero columns up to the current row
+    for ii in range(row):
+        index += loc_dims[ii]
+    # Add the column index within the current row
+    return index + col
+
+
+@njit
+def get_nonzero_indices(arr):
+    return np.nonzero(arr)[0]
+
+
+@njit
+def precompute_nonzero_indices(momentum_basis):
+    basis_dim = momentum_basis.shape[1]
+    nonzero_indices = [
+        get_nonzero_indices(momentum_basis[:, i]) for i in range(basis_dim)
+    ]
+    return nonzero_indices
 
 
 @njit
@@ -25,14 +59,6 @@ def arrays_equal(arr1, arr2):
         if not np.isclose(arr1[ii], arr2[ii], atol=1e-14):
             return False
     return True
-
-
-@njit
-def prod(elements):
-    result = 1.0
-    for el in elements:
-        result *= el
-    return result
 
 
 @njit
@@ -50,40 +76,11 @@ def exclude_columns(sector_configs, op_sites_list):
     return excluded_configs
 
 
-@njit(parallel=True)
-def nbody_operator_data_sitebased(op_list, op_sites_list, sector_configs):
-    sector_dim = np.int32(sector_configs.shape[0])
-    # Exclude specified sites from sector_configs
-    m_states = exclude_columns(sector_configs, op_sites_list)
-    nbody_op = np.zeros((sector_dim, sector_dim), dtype=op_list[0].dtype)
-    for row in prange(sector_dim):
-        mstate1 = m_states[row]
-        for col in range(sector_dim):
-            if arrays_equal(mstate1, m_states[col]):
-                element = 1.0
-                for ii, site in enumerate(op_sites_list):
-                    # Fetch the operator for the current site
-                    op = op_list[ii, site]
-                    # Apply the operator
-                    element *= op[sector_configs[row, site], sector_configs[col, site]]
-                nbody_op[row, col] = element
-
-    return nbody_op
-
-
-@get_time
-def nbody_term_par(op_list, op_sites_list, sector_configs):
-    return csr_matrix(
-        nbody_operator_data_sitebased(op_list, op_sites_list, sector_configs)
-    )
+def apply_basis_projection(op, basis_label, gauge_basis):
+    return (gauge_basis[basis_label].T @ op @ gauge_basis[basis_label]).toarray()
 
 
 def get_operators_nbody_term(op_list, loc_dims, gauge_basis=None, lattice_labels=None):
-    def apply_basis_projection(op, basis_label, gauge_basis):
-        return (
-            gauge_basis[basis_label].transpose() @ op @ gauge_basis[basis_label]
-        ).toarray()
-
     n_sites = len(loc_dims)
     new_op_list = np.zeros(
         (len(op_list), n_sites, max(loc_dims), max(loc_dims)), dtype=op_list[0].dtype
@@ -103,41 +100,24 @@ def get_operators_nbody_term(op_list, loc_dims, gauge_basis=None, lattice_labels
 
 
 @njit
-def nbody_operator_data(op_list, op_sites_list, sector_configs):
+def nbody_data(op_list, op_sites_list, sector_configs):
+    """
+    Compute the nonzero elements of an nbody-operator.
+
+    Args:
+        sector_configs (np.ndarray): Array of sector configurations for lattice sites.
+        op_list (np.ndarray): List of operator matrices acting on the lattice sites.
+        op_sites_list (list of ints): List of site indices where the operator acts.
+
+    Returns:
+        (row_list, col_list, value_list):
+            - row_list (np.ndarray of ints): The row indices of nonzero elements.
+            - col_list (np.ndarray of ints): The column indices of nonzero elements.
+            - value_list (np.ndarray of floats): The nonzero values of the operator elements.
+    """
+    # Step 1: Initialize the problem dimensions and arrays
     sector_dim = sector_configs.shape[0]
-    # Exclude specified sites from sector_configs
-    m_states = exclude_columns(sector_configs, op_sites_list)
-    row_list = []
-    col_list = []
-    value_list = []
-
-    for row in range(sector_dim):
-        mstate1 = m_states[row]
-        for col in range(sector_dim):
-            if arrays_equal(mstate1, m_states[col]):
-                element = 1.0
-                for ii, site in enumerate(op_sites_list):
-                    # Fetch the operator for the current site
-                    op = op_list[ii, site]
-                    # Apply the operator
-                    element *= op[sector_configs[row, site], sector_configs[col, site]]
-
-                if not np.isclose(element, 0, atol=1e-10):
-                    row_list.append(np.int32(row))
-                    col_list.append(np.int32(col))
-                    value_list.append(element)
-
-    # Trim arrays to actual size
-    row_list = np.array(row_list)
-    col_list = np.array(col_list)
-    value_list = np.array(value_list)
-
-    return row_list, col_list, value_list
-
-
-@njit
-def nbody_operator_data_v2(op_list, op_sites_list, sector_configs):
-    sector_dim = sector_configs.shape[0]
+    # Exclude specified sites where the operators act from the list of configs
     m_states = exclude_columns(sector_configs, op_sites_list)
     # Assuming 90% of sparsity we define allow for 10% of nonzero entries
     max_elements = int(0.05 * sector_dim**2)
@@ -168,36 +148,104 @@ def nbody_operator_data_v2(op_list, op_sites_list, sector_configs):
     return row_list, col_list, value_list
 
 
-@njit
-def get_nonzero_indices(arr):
-    return np.nonzero(arr)[0]
+@njit(parallel=True)
+def nbody_data_par(op_list, op_sites_list, sector_configs):
+    """
+    Compute the nonzero elements of an nbody-operator in a parallelized manner.
+    First, it checks the nonzero rows and cols of the operator, and then construct
+    the corresponding nonzero operator entries.
 
+    Args:
+        sector_configs (np.ndarray): Array of sector configurations for lattice sites.
+        op_list (np.ndarray): List of operator matrices acting on the lattice sites.
+        op_sites_list (list of ints): List of site indices where the operator acts.
 
-@njit
-def precompute_nonzero_indices(momentum_basis):
-    basis_dim = momentum_basis.shape[1]
-    nonzero_indices = [
-        get_nonzero_indices(momentum_basis[:, i]) for i in range(basis_dim)
-    ]
-    return nonzero_indices
-
-
-@njit
-def nbody_operator_data_momentum_basis(
-    op_list, op_sites_list, sector_configs, momentum_basis
-):
+    Returns:
+        (row_list, col_list, value_list):
+            - row_list (np.ndarray of ints): The row indices of nonzero elements.
+            - col_list (np.ndarray of ints): The column indices of nonzero elements.
+            - value_list (np.ndarray of floats): The nonzero values of the operator elements.
+    """
+    # Step 1: Initialize the problem dimensions and arrays
+    sector_dim = sector_configs.shape[0]
+    # Exclude specified sites where the operators act from the list of configs
     m_states = exclude_columns(sector_configs, op_sites_list)
+
+    # Initialize boolean arrays: check_array tracks valid (row, col) pairs, check_rows tracks valid rows
+    check_array = np.zeros((sector_dim, sector_dim), dtype=np.bool_)
+    check_rows = np.zeros(sector_dim, dtype=np.bool_)
+    # Array with all row/col indices (it will be used to shrink it to the nonzero rows/cols
+    sector_dim_array = np.arange(sector_dim, dtype=np.int32)
+
+    # Step 2: Parallelize the row-column equality check to fill check_array and check_rows
+    for row in prange(sector_dim):
+        m_states_row = m_states[row]
+        for col in range(sector_dim):
+            # Check if the input (row) and arrival (col) configurations are equal and mark them
+            # (it means that the action of the nbody operator which only modify the excluded site configs)
+            if arrays_equal(m_states_row, m_states[col]):
+                check_array[row, col] = True
+                # Mark the row as having at least one nonzero element
+                check_rows[row] = True
+
+    # Step 3: Extract valid rows and compute loc_dims (the number of nonzero columns per row)
+    # Filter rows with at least one nonzero column
+    valid_rows = sector_dim_array[check_rows]
+    # Initialize array for storing nonzero columns per row
+    loc_dims = np.zeros(len(valid_rows), dtype=np.int32)
+    # Loop over valid rows and count the number of nonzero columns for each row (loc_dims)
+    for row_idx in prange(len(valid_rows)):
+        row = valid_rows[row_idx]
+        # Count the nonzero columns in the current row
+        loc_dims[row_idx] = np.sum(check_array[row, :])
+
+    # Step 4: Initialize arrays to store the results (row, column indices, and operator values)
+    max_elements = np.sum(loc_dims)  # Total number of nonzero (row, col) pairs
+    row_list = np.zeros(max_elements, dtype=np.int32)  # To store row indices
+    col_list = np.zeros(max_elements, dtype=np.int32)  # To store column indices
+    value_list = np.ones(max_elements, dtype=np.float64)  # To store matrix values
+
+    # Step 5: Loop over valid rows and columns, and compute the global index for each (row, col) pair
+    for row_idx in prange(len(valid_rows)):
+        row = valid_rows[row_idx]
+        # Extract valid columns for the current row
+        valid_cols = sector_dim_array[check_array[row, :]]
+
+        # Loop over valid columns for this row
+        for col_idx in range(loc_dims[row_idx]):
+            col = valid_cols[col_idx]
+            # Compute the global index using rowcol_to_index
+            index = rowcol_to_index(row_idx, col_idx, loc_dims)
+
+            # Step 6: Assign values to row_list, col_list, and value_list at the computed index
+            row_list[index] = row
+            col_list[index] = col
+            for ii, site in enumerate(op_sites_list):
+                # Multiply the corresponding operator elements for the (row, col) pair
+                op = op_list[ii, site]
+                value_list[index] *= op[
+                    sector_configs[row, site], sector_configs[col, site]
+                ]
+
+    # Return the final lists of nonzero elements: row indices, column indices, and values
+    return row_list, col_list, value_list
+
+
+@njit
+def nbody_data_momentum_basis(op_list, op_sites_list, sector_configs, momentum_basis):
+
+    # Step 1: Initialize the problem dimensions and arrays
     basis_dim = momentum_basis.shape[1]
-    max_elements = int(
-        0.1 * basis_dim**2
-    )  # Estimated maximum possible non-zero elements based on 90% sparsity
+    # Estimated maximum possible non-zero elements based on 90% sparsity
+    max_elements = int(0.1 * basis_dim**2)
     row_list = np.zeros(max_elements, dtype=np.int32)
     col_list = np.zeros(max_elements, dtype=np.int32)
     value_list = np.zeros(max_elements, dtype=np.float64)
     count = 0
-
     # Precompute non-zero indices for each column of the momentum_basis
     nonzero_indices = precompute_nonzero_indices(momentum_basis)
+    # Exclude specified sites where the operators act from the list of configs
+    m_states = exclude_columns(sector_configs, op_sites_list)
 
     for row in range(basis_dim):
         nonzero_indices_row = nonzero_indices[row]
@@ -235,16 +283,41 @@ def nbody_operator_data_momentum_basis(
 
 def nbody_term(op_list, op_sites_list, sector_configs, momentum_basis=None, k=0):
     if momentum_basis is not None:
-        row_list, col_list, value_list = nbody_operator_data_momentum_basis(
+        row_list, col_list, value_list = nbody_data_momentum_basis(
             op_list, op_sites_list, sector_configs, momentum_basis
         )
         sector_dim = momentum_basis.shape[1]
     else:
         sector_dim = sector_configs.shape[0]
-        row_list, col_list, value_list = nbody_operator_data_v2(
+        row_list, col_list, value_list = nbody_data_par(
             op_list, op_sites_list, sector_configs
         )
     return csr_matrix(
         (value_list, (row_list, col_list)),
         shape=(sector_dim, sector_dim),
     )
+
+
+@njit
+def exp_val_numba(psi, row_list, col_list, value_list):
+    """
+    Compute the expectation value directly from the nonzero elements of the operator
+    without constructing the full sparse matrix.
+
+    Args:
+        psi (np.ndarray): The quantum state.
+        row_list (np.ndarray): Row indices of nonzero elements in the operator.
+        col_list (np.ndarray): Column indices of nonzero elements in the operator.
+        value_list (np.ndarray): Nonzero values of the operator.
+
+    Returns:
+        float: The computed expectation value.
+    """
+    exp_val = 0.0
+    psi_dag = np.conjugate(psi)
+    for idx in range(len(row_list)):
+        row = row_list[idx]
+        col = col_list[idx]
+        value = value_list[idx]
+        exp_val += psi_dag[row] * value * psi[col]
+    return np.real(exp_val)
