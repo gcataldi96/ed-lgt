@@ -128,7 +128,6 @@ class QuantumModel:
                 sym_op_diags=global_ops,
                 sym_sectors=np.array(global_sectors, dtype=float),
                 sym_type=global_sym_type,
-                configs=self.sector_configs,
             )
         elif link_ops is not None:
             self.sector_indices, self.sector_configs = link_abelian_sector(
@@ -136,7 +135,6 @@ class QuantumModel:
                 sym_op_diags=link_ops,
                 sym_sectors=link_sectors,
                 pair_list=pair_list,
-                configs=self.sector_configs,
             )
 
     def diagonalize_Hamiltonian(self, n_eigs, format):
