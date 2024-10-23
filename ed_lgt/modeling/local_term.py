@@ -1,13 +1,13 @@
 import numpy as np
 from math import prod
 from numba import njit, prange
-from .lattice_mappings import zig_zag
+from .lattice_mappings import zig_zag, inverse_zig_zag
 from .lattice_geometry import get_neighbor_sites
 from .qmb_operations import local_op
-from .qmb_state import QMB_state
+from .qmb_state import QMB_state, exp_val_data
 from .qmb_term import QMBTerm
 from ed_lgt.tools import validate_parameters, get_time
-from ed_lgt.symmetries import nbody_term, nbody_data_par, exp_val_numba
+from ed_lgt.symmetries import nbody_term, nbody_data_par
 import logging
 
 logger = logging.getLogger(__name__)
@@ -150,13 +150,11 @@ def check_link_symmetry(axis, loc_op1, loc_op2, value=0, sign=1):
         if sites_list is None:
             continue
         else:
-            c1 = coords_list[0]
-            c2 = coords_list[1]
-            tmp = loc_op1.obs[c1]
-            tmp += sign * loc_op2.obs[c2]
+            jj = inverse_zig_zag(loc_op1.lvals, coords_list[1])
+            tmp = loc_op1.obs[ii] + sign * loc_op2.obs[jj]
         if np.abs(tmp - value) > 1e-10:
-            logger.info(f"{loc_op1.obs[c1]}")
-            logger.info(f"{loc_op2.obs[c2]}")
+            logger.info(f"{loc_op1.obs[ii]}")
+            logger.info(f"{loc_op2.obs[jj]}")
             raise ValueError(f"{axis}-Link Symmetry is violated at index {ii}")
     logger.info("----------------------------------------------------")
     logger.info(f"{axis}-LINK SYMMETRY IS SATISFIED")
@@ -195,7 +193,7 @@ def lattice_local_exp_val(psi, n_sites, sector_configs, sym_ops):
             sym_ops, np.array([ii]), sector_configs
         )
         # Compute the expectation value <O> for site 'ii'
-        obs[ii] = exp_val_numba(psi, row_list, col_list, value_list)
+        obs[ii] = exp_val_data(psi, row_list, col_list, value_list)
         # For local operators, the variance <O^2> - <O>^2 can be computed by squaring value_list
-        var[ii] = exp_val_numba(psi, row_list, col_list, value_list**2) - obs[ii] ** 2
+        var[ii] = exp_val_data(psi, row_list, col_list, value_list**2) - obs[ii] ** 2
     return obs, var

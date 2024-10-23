@@ -6,10 +6,9 @@ __all__ = [
     "index_to_config",
     "config_to_index",
     "get_state_configs",
-    "compare_configs",
     "config_to_index_linearsearch",
     "config_to_index_binarysearch",
-    "separate_configs",
+    "compare_configs",
     "get_translated_state_indices",
     "get_reference_indices",
 ]
@@ -83,15 +82,6 @@ def get_state_configs(loc_dims):
             )
             configs[ii, dim_index] = (tmp // divisor) % loc_dims[dim_index]
     return configs
-
-
-def separate_configs(sector_configs, keep_indices):
-    # Indices for the environment
-    env_indices = [i for i in range(sector_configs.shape[1]) if i not in keep_indices]
-    # Separate the subsystem and environment configurations
-    subsystem_configs = sector_configs[:, keep_indices]
-    environment_configs = sector_configs[:, env_indices]
-    return subsystem_configs, environment_configs
 
 
 @njit

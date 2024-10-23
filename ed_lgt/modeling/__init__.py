@@ -6,6 +6,7 @@ from . import (
     qmb_term,
     qmb_operations,
     qmb_state,
+    qmb_hamiltonian,
     lattice_geometry,
     lattice_mappings,
     masks,
@@ -18,6 +19,7 @@ from .nbody_term import *
 from .qmb_term import *
 from .qmb_operations import *
 from .qmb_state import *
+from .qmb_hamiltonian import *
 from .lattice_geometry import *
 from .lattice_mappings import *
 from .masks import *
@@ -27,6 +29,7 @@ __all__ = local_term.__all__.copy()
 
 __all__ = qmb_operations.__all__.copy()
 __all__ += qmb_state.__all__.copy()
+__all__ += qmb_hamiltonian.__all__.copy()
 __all__ += lattice_geometry.__all__.copy()
 __all__ += lattice_mappings.__all__.copy()
 __all__ += masks.__all__.copy()

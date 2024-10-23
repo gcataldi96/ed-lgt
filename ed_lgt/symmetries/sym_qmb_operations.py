@@ -1,102 +1,35 @@
 import numpy as np
-from numba import njit, prange
 from scipy.sparse import csr_matrix
+from numba import njit, prange
+from ed_lgt.tools import (
+    exclude_columns,
+    arrays_equal,
+    rowcol_to_index,
+    precompute_nonzero_indices,
+)
 import logging
 
 logger = logging.getLogger(__name__)
 
 
-__all__ = [
-    "nbody_term",
-    "nbody_data_par",
-    "get_operators_nbody_term",
-    "exp_val_numba",
-    "arrays_equal",
-]
+__all__ = ["nbody_term", "nbody_data", "nbody_data_par", "get_operators_nbody_term"]
 
 
-@njit
-def rowcol_to_index(row, col, loc_dims):
-    """
-    Compute the global index from row and column indices, considering
-    the number of nonzero columns for each row (loc_dims).
-
-    Args:
-        row (int): Index of the current row in the valid rows list.
-        col (int): Index of the current column within the valid columns for the current row.
-        loc_dims (np.ndarray of ints): The number of nonzero columns for each valid row.
-
-    Returns:
-        int: The flattened global index corresponding to the (row, col) pair.
-    """
-    index = 0
-    # Compute the cumulative sum of nonzero columns up to the current row
-    for ii in range(row):
-        index += loc_dims[ii]
-    # Add the column index within the current row
-    return index + col
-
-
-@njit
-def get_nonzero_indices(arr):
-    return np.nonzero(arr)[0]
-
-
-@njit
-def precompute_nonzero_indices(momentum_basis):
-    basis_dim = momentum_basis.shape[1]
-    nonzero_indices = [
-        get_nonzero_indices(momentum_basis[:, i]) for i in range(basis_dim)
-    ]
-    return nonzero_indices
-
-
-@njit
-def arrays_equal(arr1, arr2):
-    if arr1.shape != arr2.shape:
-        return False
-    for ii in range(arr1.shape[0]):
-        if not np.isclose(arr1[ii], arr2[ii], atol=1e-14):
-            return False
-    return True
-
-
-@njit
-def exclude_columns(sector_configs, op_sites_list):
-    num_configs = sector_configs.shape[0]
-    num_sites = sector_configs.shape[1] - len(op_sites_list)
-    excluded_configs = np.zeros((num_configs, num_sites), dtype=np.uint8)
-    for ii in range(num_configs):
-        new_col_idx = 0
-        for jj in range(sector_configs.shape[1]):
-            if jj not in op_sites_list:
-                excluded_configs[ii, new_col_idx] = sector_configs[ii, jj]
-                new_col_idx += 1
-
-    return excluded_configs
-
-
-def apply_basis_projection(op, basis_label, gauge_basis):
-    return (gauge_basis[basis_label].T @ op @ gauge_basis[basis_label]).toarray()
-
-
-def get_operators_nbody_term(op_list, loc_dims, gauge_basis=None, lattice_labels=None):
-    n_sites = len(loc_dims)
-    new_op_list = np.zeros(
-        (len(op_list), n_sites, max(loc_dims), max(loc_dims)), dtype=op_list[0].dtype
+def nbody_term(op_list, op_sites_list, sector_configs, momentum_basis=None, k=0):
+    if momentum_basis is not None:
+        row_list, col_list, value_list = nbody_data_momentum_basis(
+            op_list, op_sites_list, sector_configs, momentum_basis
+        )
+        sector_dim = momentum_basis.shape[1]
+    else:
+        sector_dim = sector_configs.shape[0]
+        row_list, col_list, value_list = nbody_data_par(
+            op_list, op_sites_list, sector_configs
+        )
+    return csr_matrix(
+        (value_list, (row_list, col_list)),
+        shape=(sector_dim, sector_dim),
     )
-    for ii, op in enumerate(op_list):
-        for jj, loc_dim in enumerate(loc_dims):
-            # For Lattice Gauge Theories where sites have different Hilbert Bases
-            if gauge_basis is not None:
-                # Get the projected operator
-                proj_op = apply_basis_projection(op, lattice_labels[jj], gauge_basis)
-            # For Theories where all the sites have the same Hilber basis
-            else:
-                proj_op = op.toarray()
-            # Save it inside the new list of operators
-            new_op_list[ii, jj, :loc_dim, :loc_dim] = proj_op
-    return new_op_list
 
 
 @njit
@@ -233,7 +166,6 @@ def nbody_data_par(op_list, op_sites_list, sector_configs):
 
 @njit
 def nbody_data_momentum_basis(op_list, op_sites_list, sector_configs, momentum_basis):
-
     # Step 1: Initialize the problem dimensions and arrays
     basis_dim = momentum_basis.shape[1]
     # Estimated maximum possible non-zero elements based on 90% sparsity
@@ -281,43 +213,23 @@ def nbody_data_momentum_basis(op_list, op_sites_list, sector_configs, momentum_b
     return row_list, col_list, value_list
 
 
-def nbody_term(op_list, op_sites_list, sector_configs, momentum_basis=None, k=0):
-    if momentum_basis is not None:
-        row_list, col_list, value_list = nbody_data_momentum_basis(
-            op_list, op_sites_list, sector_configs, momentum_basis
-        )
-        sector_dim = momentum_basis.shape[1]
-    else:
-        sector_dim = sector_configs.shape[0]
-        row_list, col_list, value_list = nbody_data_par(
-            op_list, op_sites_list, sector_configs
-        )
-    return csr_matrix(
-        (value_list, (row_list, col_list)),
-        shape=(sector_dim, sector_dim),
+def get_operators_nbody_term(op_list, loc_dims, gauge_basis=None, lattice_labels=None):
+    def apply_basis_projection(op, basis_label, gauge_basis):
+        return (gauge_basis[basis_label].T @ op @ gauge_basis[basis_label]).toarray()
+
+    n_sites = len(loc_dims)
+    new_op_list = np.zeros(
+        (len(op_list), n_sites, max(loc_dims), max(loc_dims)), dtype=op_list[0].dtype
     )
-
-
-@njit
-def exp_val_numba(psi, row_list, col_list, value_list):
-    """
-    Compute the expectation value directly from the nonzero elements of the operator
-    without constructing the full sparse matrix.
-
-    Args:
-        psi (np.ndarray): The quantum state.
-        row_list (np.ndarray): Row indices of nonzero elements in the operator.
-        col_list (np.ndarray): Column indices of nonzero elements in the operator.
-        value_list (np.ndarray): Nonzero values of the operator.
-
-    Returns:
-        float: The computed expectation value.
-    """
-    exp_val = 0.0
-    psi_dag = np.conjugate(psi)
-    for idx in range(len(row_list)):
-        row = row_list[idx]
-        col = col_list[idx]
-        value = value_list[idx]
-        exp_val += psi_dag[row] * value * psi[col]
-    return np.real(exp_val)
+    for ii, op in enumerate(op_list):
+        for jj, loc_dim in enumerate(loc_dims):
+            # For Lattice Gauge Theories where sites have different Hilbert Bases
+            if gauge_basis is not None:
+                # Get the projected operator
+                proj_op = apply_basis_projection(op, lattice_labels[jj], gauge_basis)
+            # For Theories where all the sites have the same Hilber basis
+            else:
+                proj_op = op.toarray()
+            # Save it inside the new list of operators
+            new_op_list[ii, jj, :loc_dim, :loc_dim] = proj_op
+    return new_op_list

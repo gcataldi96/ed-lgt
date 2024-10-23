@@ -1,15 +1,14 @@
 import numpy as np
 from math import prod
 from numba import njit, prange
-from itertools import product
 from scipy.sparse import isspmatrix, csr_matrix
 from .lattice_geometry import get_neighbor_sites
 from .lattice_mappings import zig_zag, inverse_zig_zag
 from .qmb_operations import two_body_op
-from .qmb_state import QMB_state
+from .qmb_state import QMB_state, exp_val_data
 from .qmb_term import QMBTerm
 from ed_lgt.tools import validate_parameters
-from ed_lgt.symmetries import nbody_term, nbody_data_par, exp_val_numba
+from ed_lgt.symmetries import nbody_term, nbody_data_par
 import logging
 
 logger = logging.getLogger(__name__)
@@ -189,7 +188,7 @@ def lattice_twobody_exp_val(psi, n_sites, sector_configs, sym_ops):
                 sector_configs,
             )
             # Compute the expectation value <O> for the pair (ii, jj)
-            exp_value = exp_val_numba(psi, row_list, col_list, value_list)
+            exp_value = exp_val_data(psi, row_list, col_list, value_list)
             # Assign the result symmetrically
             corr[ii, jj] = exp_value
             # Mirror the value for (jj, ii)
