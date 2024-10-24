@@ -6,6 +6,7 @@ import matplotlib.cm as cm
 from matplotlib.colors import LogNorm
 from matplotlib.ticker import MultipleLocator, FuncFormatter
 from ed_lgt.tools import save_dictionary, first_derivative
+from scipy import stats
 
 
 @plt.FuncFormatter
@@ -21,90 +22,95 @@ local_obs += [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
 local_obs += ["X_Cross", "S2_psi", "E"]
 plaq_name = "plaq"
 # %%
-res = {"finiteE": {}, "zeroE": {}}
+res = {}
 # Acquire simulations of finite E field
-config_filename = f"Z2FermiHubbard/PBCxy/new_test"
+config_filename = f"Z2FermiHubbard/energy_gap"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["U", "h"])
-for obs in local_obs + ["energy", plaq_name]:
-    res["finiteE"][obs] = np.zeros((len(vals["U"]), len(vals["h"])), dtype=float)
+res["gap"] = np.zeros((len(vals["U"]), len(vals["h"])), dtype=float)
 for ii, U in enumerate(vals["U"]):
     for jj, h in enumerate(vals["h"]):
         print(ii, jj, U, h)
-        res["finiteE"]["energy"][ii, jj] = get_sim(ugrid[ii, jj]).res["energy"] / 4
-        for obs in local_obs + [plaq_name]:
-            res["finiteE"][obs][ii, jj] = get_sim(ugrid[ii, jj]).res[obs]
+        res["gap"][ii, jj] = (
+            get_sim(ugrid[ii, jj]).res["energy"][1]
+            - get_sim(ugrid[ii, jj]).res["energy"][0]
+        )
 # %%
-# Acquire simulations at zero E field
-config_filename = f"Z2FermiHubbard/PBCxy/test"
-match = SimsQuery(group_glob=config_filename)
-ugrid1, vals1 = uids_grid(match.uids, ["U"])
-for obs in local_obs + ["energy", plaq_name]:
-    res["zeroE"][obs] = np.zeros(len(vals1["U"]), dtype=float)
-for ii, U in enumerate(vals["U"]):
-    res["zeroE"]["energy"][ii] = get_sim(ugrid1[ii]).res["energy"] / 4
-    for obs in local_obs + [plaq_name]:
-        res["zeroE"][obs][ii] = get_sim(ugrid1[ii]).res[obs]
-save_dictionary(res, f"res_Z2Hubbard.pkl")
-# ============================================================================
-# Imshow
-obs_name = "X_Cross"
-fig, axs = plt.subplots(
-    1,
-    1,
-    sharex=True,
-    constrained_layout=True,
-)
-img = axs.imshow(
-    np.transpose(res["finiteE"][obs_name]),
-    origin="lower",
-    cmap="magma",
-    extent=[-1, 2, -1, 1],
-)
-axs.set(xticks=[-1, 0, 1, 2], yticks=[-1, 0, 1], xlabel="U", ylabel="h")
-axs.xaxis.set_major_formatter(fake_log)
-axs.yaxis.set_major_formatter(fake_log)
-
-cb = fig.colorbar(
-    img,
-    ax=axs,
-    aspect=20,
-    location="right",
-    orientation="vertical",
-    pad=0.01,
-    label=obs_name,
-)
-# Single Curves
-sm = cm.ScalarMappable(cmap="plasma", norm=LogNorm())
+obs_name = "S2_psi"
+sm = cm.ScalarMappable(cmap="plasma")
 palette = sm.to_rgba(vals["h"])
 fig, axs = plt.subplots(1, 1, constrained_layout=True)
-axs.set(ylabel=obs_name, xscale="log", xlabel="$U$")
-for jj, h in enumerate(vals["h"]):
+axs.set(xscale="log", xlabel="$U$", yscale="log")
+for jj, h in enumerate(vals["h"][:1]):
     axs.plot(
         vals["U"],
-        res["finiteE"][obs_name][:, jj],
+        res[obs_name][:, jj],
         "o-",
         linewidth=1,
         markersize=3,
         c=palette[jj],
         markerfacecolor="black",
     )
-# Zero E field
-axs.plot(
-    vals["U"],
-    res["zeroE"][obs_name],
-    "x-",
-    linewidth=1.5,
-    markersize=7,
-    c="black",
-    markerfacecolor="black",
-    label=r"$E=0$",
-)
-axs.legend(loc=(0.15, 0.11))
+# %%
+obs_name = "gap"
+sm = cm.ScalarMappable(cmap="plasma")
+palette = sm.to_rgba(vals["h"])
+fig, axs = plt.subplots(1, 1, constrained_layout=True)
+axs.set(ylabel=rf"$\Delta=E_{1}-E_{0}$", xscale="log", xlabel="$U$", yscale="log")
+for jj, h in enumerate(vals["h"]):
+    axs.plot(
+        vals["U"],
+        res[obs_name][:, jj],
+        "o-",
+        linewidth=1,
+        markersize=3,
+        c=palette[jj],
+        markerfacecolor="black",
+    )
 cb = fig.colorbar(
     sm, ax=axs, aspect=80, location="top", orientation="horizontal", pad=0.02
 )
 cb.set_label(label=r"$h$", labelpad=-22, x=-0.02, y=0)
+
+
+# Perform linear regression
+slope, intercept, _, _, _ = stats.linregress(
+    np.log(vals["U"][-8:]), np.log(res[obs_name][-8:, -1])
+)
+# Convert slope and intercept back to the original scale
+b = slope
+a = np.exp(intercept)
+print(f"a0={a}, b0={b}")
+axs.plot(vals["U"], a * vals["U"] ** b, label=r"$\Delta = a\cdot U^b$", color="black")
+# Perform linear regression
+slope, intercept, _, _, _ = stats.linregress(
+    np.log(vals["U"][-8:]), np.log(res[obs_name][-8:, 0])
+)
+# Convert slope and intercept back to the original scale
+b = slope
+a = np.exp(intercept)
+print(f"a1={a}, b1={b}")
+axs.plot(
+    vals["U"], a * vals["U"] ** b, "--", label=r"$\Delta = a\cdot U^b$", color="black"
+)
+axs.axvline(x=vals["U"][-8], ymin=10 ** (-6), ymax=10, linestyle="--", color="black")
+plt.savefig(f"energy_gap.pdf")
+# %%
+# =======================================================================================
+res = {}
+# Acquire simulations of finite E field
+config_filename = f"Z2FermiHubbard/PBCxy/largeh"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["U", "h"])
+for obs in local_obs + ["energy", plaq_name]:
+    res[obs] = np.zeros((len(vals["U"]), len(vals["h"])), dtype=float)
+for ii, U in enumerate(vals["U"]):
+    for jj, h in enumerate(vals["h"]):
+        print(ii, jj, U, h)
+        res["energy"][ii, jj] = get_sim(ugrid[ii, jj]).res["energy"] / 4
+        for obs in local_obs + [plaq_name]:
+            res[obs][ii, jj] = get_sim(ugrid[ii, jj]).res[obs]
+# save_dictionary(res, f"phase_diagram.pkl")
 # %%
 # Susceptibility
 obs_name = "plaq"
@@ -112,9 +118,11 @@ sm = cm.ScalarMappable(cmap="plasma", norm=LogNorm())
 palette = sm.to_rgba(vals["U"])
 fig, axs = plt.subplots(1, 1, constrained_layout=True)
 axs.grid()
-axs.set(ylabel=obs_name + " suscept", xlabel="$h$")
+axs.set(ylabel=obs_name + " suscept", xlabel="$h$", xscale="log")
+hmax = np.zeros(len(vals["U"]), dtype=float)
 for ii, U in enumerate(vals["U"]):
-    df = np.gradient(res["finiteE"][obs_name][ii, :], 0.01)
+    df = np.gradient(res[obs_name][ii, :], 10)
+    hmax[ii] = vals["h"][np.argmax(df)]
     axs.plot(
         vals["h"],
         df,
@@ -128,15 +136,8 @@ cb = fig.colorbar(
     sm, ax=axs, aspect=80, location="top", orientation="horizontal", pad=0.02
 )
 cb.set_label(label=r"$U$", labelpad=-22, x=-0.02, y=0)
-plt.savefig(f"suscept.pdf")
-# %%
-from scipy import stats
-
-hmax = np.zeros(len(vals["U"]), dtype=float)
-for ii, U in enumerate(vals["U"]):
-    df = np.gradient(res["finiteE"][obs_name][ii, :], 0.01)
-    hmax[ii] = vals["h"][np.argmax(df)]
-fig, axs = plt.subplots(1, 1, constrained_layout=True)
+plt.savefig(f"plaq_suscept_large_h.pdf")
+fig1, axs = plt.subplots(1, 1, constrained_layout=True)
 axs.plot(
     vals["U"],
     hmax,
@@ -148,6 +149,92 @@ axs.plot(
     label="Data",
 )
 axs.set(xscale="log", xlabel="U", yscale="log", ylabel=r"$h_{\max}$")
+
+# Perform linear regression
+slope, intercept, r_value, p_value, std_err = stats.linregress(
+    np.log(vals["U"][4:]), np.log(hmax)[4:]
+)
+
+# Convert slope and intercept back to the original scale
+b = slope
+a = np.exp(intercept)
+
+axs.plot(
+    vals["U"],
+    a * vals["U"] ** b,
+    label=r"$h_{\max} = a\cdot U^b$",
+    linestyle="--",
+    color="red",
+)
+# Adjust annotation to fit the data range
+# Use values from the plot to pick suitable positions within the visible range
+x_annot = np.mean(vals["U"])
+# Use the mean of 'vals["U"]' for a better annotation position
+y_annot_a = (
+    np.mean(hmax) - 50
+)  # Use the mean of 'hmax' for a reasonable y position for 'a'
+y_annot_b = y_annot_a / 2  # Adjust y position for 'b' annotation a bit lower
+
+# Annotate with the values of 'a' and 'b'
+axs.annotate(
+    f"a = {a:.3f}",
+    xy=(x_annot, y_annot_a),
+    xytext=(x_annot, y_annot_a * 1.5),
+    fontsize=12,
+    color="black",
+)
+axs.annotate(
+    f"b = {b:.3f}",
+    xy=(x_annot, y_annot_b),
+    xytext=(x_annot, y_annot_b * 1.5),
+    fontsize=12,
+    color="black",
+)
+
+# Show legend
+axs.legend()
+plt.savefig(f"hmax_fit_large_h.pdf")
+# %%
+# Susceptibility Npair
+obs_name = "N_pair"
+sm = cm.ScalarMappable(cmap="plasma", norm=LogNorm())
+palette = sm.to_rgba(vals["h"])
+fig, axs = plt.subplots(1, 1, constrained_layout=True)
+axs.grid()
+axs.set(ylabel=obs_name + " suscept", xlabel="$U$", xscale="log")
+hmin = np.zeros(len(vals["h"]), dtype=float)
+for jj, h in enumerate(vals["h"]):
+    df = np.gradient(res[obs_name][:, jj], 0.09303374113107266)
+    hmin[jj] = vals["U"][np.argmin(df)]
+    axs.plot(
+        vals["U"],
+        df,
+        "o-",
+        linewidth=1,
+        markersize=3,
+        c=palette[jj],
+        markerfacecolor="black",
+    )
+cb = fig.colorbar(
+    sm, ax=axs, aspect=80, location="top", orientation="horizontal", pad=0.02
+)
+cb.set_label(label=r"$h$", labelpad=-22, x=-0.02, y=0)
+plt.savefig(f"Umin_Npair.pdf")
+# %%
+fig1, axs = plt.subplots(1, 1, constrained_layout=True)
+axs.plot(
+    vals["h"][:-2],
+    hmin[:-2],
+    "o-",
+    linewidth=1,
+    markersize=3,
+    c=palette[0],
+    markerfacecolor="black",
+    label="Data",
+)
+axs.set(xscale="log", xlabel="h", yscale="log", ylabel=r"$U_{\min}$")
+plt.savefig(f"Umin_constant.pdf")
+# %%
 # Perform linear regression
 slope, intercept, r_value, p_value, std_err = stats.linregress(
     np.log(vals["U"]), np.log(hmax)
@@ -184,68 +271,68 @@ axs.annotate(
 
 # Show legend
 axs.legend()
-plt.savefig(f"hmax_fit.pdf")
+# plt.savefig(f"hmax_fit.pdf")
 # %%
-x = np.arange(0, 10, 0.1)
-sin = np.sin(x)
-cos = np.gradient(sin, 0.1)
-fig, axs = plt.subplots(1, 1, constrained_layout=True)
-axs.grid()
-axs.plot(
-    x,
-    sin,
-    "o-",
-    linewidth=1,
-    markersize=3,
-    c=palette[0],
-    markerfacecolor="black",
+res = {}
+# Acquire simulations of finite E field
+config_filename = f"Z2FermiHubbard/PBCxy/phase_diagram_new"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["U", "h"])
+for obs in local_obs + ["energy", plaq_name]:
+    res[obs] = np.zeros((len(vals["U"]), len(vals["h"])), dtype=float)
+for ii, U in enumerate(vals["U"]):
+    for jj, h in enumerate(vals["h"]):
+        res["energy"][ii, jj] = get_sim(ugrid[ii, jj]).res["energy"] / 4
+        for obs in local_obs + [plaq_name]:
+            res[obs][ii, jj] = get_sim(ugrid[ii, jj]).res[obs]
+save_dictionary(res, "phase_diagram.pkl")
+# %%
+obs_name = "plaq"
+# Define the power law for hmax
+b = -1.054
+a = 2.283
+hmax = a * vals["U"][21:] ** b  # Only using the slice [21:] for hmax
+
+# Set up the plot
+fig, axs = plt.subplots(
+    1,
+    1,
+    sharex=True,
+    constrained_layout=True,
 )
+
+# Plot hmax as a dashed line
 axs.plot(
-    x,
-    cos,
-    "o-",
-    linewidth=1,
-    markersize=3,
-    c=palette[0],
-    markerfacecolor="red",
+    np.log10(vals["U"][21:]), np.log10(hmax), color="white", linestyle="--", linewidth=2
 )
 
+# Logarithmic scale formatting (assuming fake_log is a log formatter)
+axs.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"$10^{{{int(x)}}}$"))
+axs.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"$10^{{{int(y)}}}$"))
 
-# Set x-axis to pi/2 fractions
-def format_func(value, tick_number):
-    N = int(np.round(2 * value / np.pi))
-    if N == 0:
-        return "0"
-    elif N == 1:
-        return r"$\frac{\pi}{2}$"
-    elif N == 2:
-        return r"$\pi$"
-    elif N == 3:
-        return r"$\frac{3\pi}{2}$"
-    elif N == 4:
-        return r"$2\pi$"
-    elif N == -1:
-        return r"-$\frac{\pi}{2}$"
-    elif N == -2:
-        return r"-$\pi$"
-    elif N == -3:
-        return r"-$\frac{3\pi}{2}$"
-    else:
-        return r"${0}\pi$".format(N / 2)
-
-
-axs.xaxis.set_major_locator(
-    MultipleLocator(base=np.pi / 2)
-)  # Set major ticks at multiples of pi
-axs.xaxis.set_major_formatter(
-    FuncFormatter(format_func)
-)  # Format the ticks as multiples of pi
-
-# Add labels and legend
-axs.set_xlabel("x")
-axs.set_ylabel("y")
-axs.legend()
-
+# Plot imshow with extent reflecting the log10 scale
+extent = [-1, 3, -3, 3]
+img = axs.imshow(
+    np.transpose(res[obs_name]), origin="lower", cmap="magma", extent=extent
+)
+# Add colorbar
+cb = fig.colorbar(
+    img,
+    ax=axs,
+    aspect=20,
+    location="right",
+    orientation="vertical",
+    pad=0.01,
+    label=obs_name,
+)
+# Set xticks and yticks using log scale values
+axs.set(
+    xticks=np.log10([0.1, 1, 10, 100, 1000]),
+    yticks=np.log10([0.001, 0.01, 0.1, 1, 10, 100, 1000]),
+    xlabel="U",
+    ylabel="h",
+)
+# plt.savefig("phase_diagram.pdf")
 # %%
 # List of local observables
 local_obs = [f"n_{s}{d}" for d in "xy" for s in "mp"]
@@ -444,3 +531,51 @@ for ii, has_obc in enumerate(vals["has_obc"]):
     BC_label = "OBC" if has_obc else "PBC"
     plt.plot(vals["U"], res["energy"][ii, :], "-o", label=BC_label)
 plt.legend(loc="lower right")
+
+# %%
+# # %%
+# Acquire simulations at zero E field
+config_filename = f"Z2FermiHubbard/PBCxy/test"
+match = SimsQuery(group_glob=config_filename)
+ugrid1, vals1 = uids_grid(match.uids, ["U"])
+for obs in local_obs + ["energy", plaq_name]:
+    res["zeroE"][obs] = np.zeros(len(vals1["U"]), dtype=float)
+for ii, U in enumerate(vals["U"]):
+    res["zeroE"]["energy"][ii] = get_sim(ugrid1[ii]).res["energy"] / 4
+    for obs in local_obs + [plaq_name]:
+        res["zeroE"][obs][ii] = get_sim(ugrid1[ii]).res[obs]
+save_dictionary(res, f"res_Z2Hubbard.pkl")
+# ============================================================================
+# Imshow
+obs_name = "N_pair"
+# Single Curves
+sm = cm.ScalarMappable(cmap="plasma", norm=LogNorm())
+palette = sm.to_rgba(vals["h"])
+fig, axs = plt.subplots(1, 1, constrained_layout=True)
+axs.set(ylabel=obs_name, xscale="log", xlabel="$U$")
+for jj, h in enumerate(vals["h"]):
+    axs.plot(
+        vals["U"],
+        res["finiteE"][obs_name][:, jj],
+        "o-",
+        linewidth=1,
+        markersize=3,
+        c=palette[jj],
+        markerfacecolor="black",
+    )
+# Zero E field
+axs.plot(
+    vals["U"],
+    res["zeroE"][obs_name],
+    "x-",
+    linewidth=1.5,
+    markersize=7,
+    c="black",
+    markerfacecolor="black",
+    label=r"$E=0$",
+)
+axs.legend(loc=(0.15, 0.11))
+cb = fig.colorbar(
+    sm, ax=axs, aspect=80, location="top", orientation="horizontal", pad=0.02
+)
+cb.set_label(label=r"$h$", labelpad=-22, x=-0.02, y=0)

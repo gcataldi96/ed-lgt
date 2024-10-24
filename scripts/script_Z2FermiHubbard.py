@@ -36,6 +36,7 @@ with run_sim() as sim:
     model.get_observables(local_obs, twobody_obs, plaquette_obs)
     # ENTROPY
     sim.res["entropy"] = np.zeros(model.n_eigs, dtype=float)
+    partition_indices = list(np.arange(0, int(np.prod(model.lvals) / 2), 1))
     # MEASUREMENTS
     sim.res["plaq"] = np.zeros(model.n_eigs, dtype=float)
     for obs in local_obs:
@@ -48,14 +49,11 @@ with run_sim() as sim:
         # -----------------------------------------------------------------------
         # ENTROPY
         sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
-            list(np.arange(0, int(model.lvals[0] / 2), 1)),
-            sector_configs=model.sector_configs,
+            partition_indices, model.sector_configs
         )
         # -----------------------------------------------------------------------
         # STATE CONFIGURATIONS
-        model.H.Npsi[ii].get_state_configurations(
-            threshold=1e-1, sector_configs=model.sector_configs
-        )
+        model.H.Npsi[ii].get_state_configurations(1e-1, model.sector_configs)
         # ---------------------------------------------------------------------------
         # MEASURE OBSERVABLES
         model.measure_observables(ii)

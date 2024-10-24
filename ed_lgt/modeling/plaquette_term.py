@@ -124,76 +124,67 @@ class PlaquetteTerm(QMBTerm):
             else:
                 logger.info(f"PLAQUETTE: {'_'.join(self.op_names_list)}")
             logger.info(f"----------------------------------------------------")
-        self.avg = 0.0
-        self.std = 0.0
-        counter = 0
+        # MEASURE NUMBER OF PLAQUETTES:
+        list_of_plaq_sites = []
+        list_of_plaq_strings = []
+        for ii in range(prod(self.lvals)):
+            # Compute the corresponding coords of the BL site of the Plaquette
+            coords = zig_zag(self.lvals, ii)
+            coords_list, sites_list = get_plaquette_neighbors(
+                coords, self.lvals, self.axes, self.has_obc
+            )
+            if sites_list is None:
+                continue
+            else:
+                list_of_plaq_sites.append(sites_list)
+                list_of_plaq_strings.append([f"{c}" for c in coords_list])
+        self.obs = np.zeros(len(list_of_plaq_sites), dtype=float)
+        self.var = np.zeros(len(list_of_plaq_sites), dtype=float)
         # IN CASE OF NO SYMMETRY SECTOR
         if self.sector_configs is None:
-            for ii in range(prod(self.lvals)):
-                # Compute the corresponding coords of the BL site of the Plaquette
-                coords = zig_zag(self.lvals, ii)
-                coords_list, sites_list = get_plaquette_neighbors(
-                    coords, self.lvals, self.axes, self.has_obc
+            for ii, sites_list in enumerate(list_of_plaq_sites):
+                self.obs[ii] = psi.expectation_value(
+                    four_body_op(
+                        op_list=self.op_list,
+                        op_sites_list=sites_list,
+                        **self.def_params,
+                    )
                 )
-                if sites_list is None:
-                    continue
-                else:
-                    plaq = psi.expectation_value(
+                self.var[ii] = (
+                    psi.expectation_value(
                         four_body_op(
                             op_list=self.op_list,
                             op_sites_list=sites_list,
                             **self.def_params,
                         )
+                        ** 2,
                     )
-                    delta_plaq = (
-                        psi.expectation_value(
-                            four_body_op(
-                                op_list=self.op_list,
-                                op_sites_list=sites_list,
-                                **self.def_params,
-                            )
-                            ** 2,
-                        )
-                        - plaq**2
-                    )
+                    - self.obs[ii] ** 2
+                )
+                if self.print_plaq:
+                    self.print_Plaquette(list_of_plaq_strings[ii], self.obs[ii])
         # GET THE EXPVAL ON THE SYMMETRY SECTOR
         else:
-            for ii in range(prod(self.lvals)):
-                # Compute the corresponding coords of the BL site of the Plaquette
-                coords = zig_zag(self.lvals, ii)
-                coords_list, sites_list = get_plaquette_neighbors(
-                    coords, self.lvals, self.axes, self.has_obc
+            for ii, sites_list in enumerate(list_of_plaq_sites):
+                self.obs[ii] = psi.expectation_value(
+                    nbody_term(self.sym_ops, np.array(sites_list), self.sector_configs)
                 )
-                if sites_list is None:
-                    continue
-                else:
-                    plaq = psi.expectation_value(
+                self.var[ii] = (
+                    psi.expectation_value(
                         nbody_term(
-                            self.sym_ops, np.array(sites_list), self.sector_configs
+                            self.sym_ops,
+                            np.array(sites_list),
+                            self.sector_configs,
                         )
+                        ** 2
                     )
-                    delta_plaq = (
-                        psi.expectation_value(
-                            nbody_term(
-                                self.sym_ops,
-                                np.array(sites_list),
-                                self.sector_configs,
-                            )
-                            ** 2
-                        )
-                        - plaq**2
-                    )
-        if self.get_staggered_conditions(coords, stag_label):
-            # PRINT THE PLAQUETTE
-            plaq_string = [f"{c}" for c in coords_list]
-            if self.print_plaq:
-                self.print_Plaquette(plaq_string, plaq)
-            # Update the average and the variance
-            counter += 1
-            self.avg += plaq
-            self.std += delta_plaq
-        self.avg = self.avg / counter
-        self.std = np.sqrt(np.abs(self.std) / counter)
+                    - self.obs[ii] ** 2
+                )
+                if self.print_plaq:
+                    self.print_Plaquette(list_of_plaq_strings[ii], self.obs[ii])
+        # GET STATISTICS
+        self.avg = np.mean(self.obs)
+        self.std = np.sqrt(np.mean(np.abs(self.var)))
         if self.print_plaq:
             logger.info(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 

@@ -2,15 +2,14 @@ from ed_lgt.tools import get_time
 import numpy as np
 import logging
 from numba import njit, prange
-from .generate_configs import get_state_configs
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
     "check_link_sym",
     "check_link_sym_sitebased",
-    "check_link_sym_configs_sitebased",
     "link_abelian_sector",
+    "link_sector_configs",
 ]
 
 
@@ -35,8 +34,8 @@ def check_link_sym(config, sym_op_diags, sym_sectors, pair_list):
             shape (number_of_site_pairs_per_direction, 2),
             specifying the pair of site indices.
 
-        Returns:
-            bool: True if the config belongs to the chosen sector, False otherwise
+    Returns:
+        bool: True if the config belongs to the chosen sector, False otherwise
     """
     check = True
     num_lattice_directions = sym_op_diags.shape[0]
@@ -100,36 +99,66 @@ def check_link_sym_sitebased(config, sym_op_diags, sym_sectors, pair_list):
     return check
 
 
-@njit(parallel=True)
-def check_link_sym_configs_sitebased(
-    config_batch, sym_op_diags, sym_sectors, pair_list
-):
-    num_configs = config_batch.shape[0]
-    checks = np.zeros(num_configs, dtype=np.bool_)
-    for ii in prange(num_configs):
-        checks[ii] = check_link_sym_sitebased(
-            config_batch[ii], sym_op_diags, sym_sectors, pair_list
-        )
-    return checks
-
-
 @get_time
-def link_abelian_sector(loc_dims, sym_op_diags, sym_sectors, pair_list, configs=None):
-    if configs is None:
-        # Get QMB state configurations
-        configs = get_state_configs(loc_dims)
+def link_abelian_sector(loc_dims, sym_op_diags, sym_sectors, pair_list):
+    """
+    This function returns the QMB state configurations (and the corresponding 1D indices)
+    that belongs to the intersection of multiple link symmetry sectors
+
+    Args:
+        loc_dims (np.array): 1D array of single-site local dimensions.
+            For Exact Diagonlization (ED) purposes, each local dimension is always smaller that 2^{8}-1
+            For this reason, loc_dims.dtype = np.uint8
+
+        sym_op_diags (np.array of floats): Array with (diagonals of) operators generating the link
+            symmetries of the model.
+            If len(shape)=3, then it handles the case of different local Hilbert spaces,
+            and, for each operator, its diagonal is evaluated on each site Hilbert basis
+
+        sym_sectors (np.array of floats): 1D array with sector values for each operator.
+            NOTE: sym_sectors.shape[0] = sym_op_diags.shape[0]
+
+
+    Returns:
+        (np.array of ints, np.array of ints): 1D array of indices and 2D array of QMB state configurations
+    """
     if not isinstance(sym_sectors, np.ndarray):
         sym_sectors = np.array(sym_sectors, dtype=float)
     # Acquire Sector dimension
-    sector_dim = len(configs)
+    sector_dim = np.prod(loc_dims)
     logger.info(f"TOT DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
-    checks = check_link_sym_configs_sitebased(
-        configs, sym_op_diags, sym_sectors, pair_list
-    )
-    # Filter configs based on checks
-    sector_configs = configs[checks]
+    # Compute the sector configs satisfying the symmetry sectors
+    sector_configs = link_sector_configs(loc_dims, sym_op_diags, sym_sectors, pair_list)
     sector_indices = np.ravel_multi_index(sector_configs.T, loc_dims)
     # Acquire dimension of the new sector
     sector_dim = len(sector_configs)
     logger.info(f"SEC DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
-    return (sector_indices, sector_configs)
+    return sector_indices, sector_configs
+
+
+@njit(parallel=True)
+def link_sector_configs(loc_dims, link_op_diags, link_sectors, pair_list):
+    # Total number of configs
+    sector_dim = 1
+    for dim in loc_dims:
+        sector_dim *= dim
+    # Len of each config
+    num_dims = len(loc_dims)
+    configs = np.zeros((sector_dim, num_dims), dtype=np.uint8)
+    # Use an auxiliary array to mark valid configurations
+    checks = np.zeros(sector_dim, dtype=np.bool_)
+    # Iterate over all the possible configs
+    for ii in prange(sector_dim):
+        tmp = ii
+        for dim_index in range(num_dims):
+            divisor = (
+                np.prod(loc_dims[dim_index + 1 :]) if dim_index + 1 < num_dims else 1
+            )
+            configs[ii, dim_index] = (tmp // divisor) % loc_dims[dim_index]
+        # Check if the config satisfied the symmetries
+        if check_link_sym_sitebased(
+            configs[ii], link_op_diags, link_sectors, pair_list
+        ):
+            checks[ii] = True
+    # Filter configs based on checks
+    return configs[checks]

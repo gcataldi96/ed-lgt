@@ -80,10 +80,21 @@ params = {
 gen_configs("template", params, f"QED/scaling_conv")
 # %%
 # Z2 FERMI HUBBARD MODEL
-params = {"U": np.logspace(1, 2, 20), "h": np.arange(0.01, 0.51, 0.01)}
-gen_configs("template", params, f"Z2FermiHubbard/PBCxy/new_test")
-params = {"U": np.logspace(-1, 2, 20)}
-# gen_configs("template", params, f"Z2FermiHubbard/PBCxy/test")
+params = {"U": np.logspace(-1, 3, 33), "h": np.logspace(-3, 1, 33)}
+gen_configs("template", params, f"Z2FermiHubbard/PBCxy/phase_diagram")
+# %%
+params = {"U": np.logspace(0, 3, 20), "h": np.arange(0, 0.21, 0.01)}
+gen_configs("template", params, f"Z2FermiHubbard/energy_gap")
+# %%
+params = {"U": np.logspace(-1, 3, 100), "h": np.logspace(-3, 0, 10)}
+gen_configs("template", params, f"Z2FermiHubbard/PBCxy/n_pair_scanU")
+# %%
+params = {"U": np.logspace(0, 3, 10), "h": np.logspace(1, 3, 100)}
+gen_configs("template", params, f"Z2FermiHubbard/PBCxy/largeh")
+# %%
+# Z2 FERMI HUBBARD MODEL
+params = {"U": np.logspace(-1, 3, 50), "h": np.logspace(-3, 3, 50)}
+gen_configs("template", params, f"Z2FermiHubbard/PBCxy/phase_diagram_new")
 
 # %%
 # ISING MODEL
