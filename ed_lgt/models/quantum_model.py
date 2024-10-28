@@ -253,6 +253,7 @@ class QuantumModel:
         twobody_obs=[],
         plaquette_obs=[],
         nbody_obs=[],
+        nbody_dist=[],
         twobody_axes=None,
     ):
         self.local_obs = local_obs
@@ -291,11 +292,15 @@ class QuantumModel:
             )
         # ---------------------------------------------------------------------------
         # LIST OF NBODY CORRELATORS
-        for op_names_list in nbody_obs:
+        for ii, op_names_list in enumerate(nbody_obs):
             obs = "_".join(op_names_list)
             op_list = [self.ops[op] for op in op_names_list]
+            distances = nbody_dist[ii]
             self.obs_list[obs] = NBodyTerm(
-                op_list=op_list, op_names_list=op_names_list, **self.def_params
+                op_list=op_list,
+                op_names_list=op_names_list,
+                distances=distances,
+                **self.def_params,
             )
 
     def measure_observables(self, index, dynamics=False):
@@ -316,7 +321,7 @@ class QuantumModel:
         for op_names_list in self.nbody_obs:
             obs = "_".join(op_names_list)
             self.obs_list[obs].get_expval(state)
-            self.res[obs] = self.obs_list[obs].corr
+            self.res[obs] = self.obs_list[obs].obs
 
     def get_energy_gap(self, ex_counts, ops_names, H_info):
         logger.info(f"momentum_basis {self.momentum_basis}")

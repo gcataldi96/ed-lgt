@@ -1,11 +1,14 @@
+import numpy as np
 from ed_lgt.operators import (
     Z2_FermiHubbard_dressed_site_operators,
     Z2_FermiHubbard_gauge_invariant_states,
 )
-from ed_lgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
+from ed_lgt.modeling import LocalTerm, TwoBodyTerm, NBodyTerm
 from ed_lgt.modeling import check_link_symmetry
 from .quantum_model import QuantumModel
+import logging
 
+logger = logging.getLogger(__name__)
 
 __all__ = ["Z2_FermiHubbard_Model"]
 
@@ -68,6 +71,21 @@ class Z2_FermiHubbard_Model(QuantumModel):
         op_name = "E"
         h_terms["E"] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
         self.H.Ham += h_terms["E"].get_Hamiltonian(strength=self.coeffs["h"])
+        # -------------------------------------------------------------------------------
+        # STRING Z OPERATOR (only in case of PBCx)
+        if not self.has_obc[0]:
+            op_names_list = ["Sz_mx,px" for _ in range(self.lvals[0])]
+            op_list = [self.ops[op] for op in op_names_list]
+            distances = [[ii, 0] for ii in range(1, self.lvals[0], 1)]
+            mask = np.zeros(tuple(self.lvals), dtype=bool)
+            for ii in range(self.lvals[1]):
+                mask[0, ii] = True
+            h_terms["Zflux"] = NBodyTerm(
+                op_list, op_names_list, distances, **self.def_params
+            )
+            self.H.Ham += h_terms["Zflux"].get_Hamiltonian(
+                strength=-self.coeffs["J"], mask=mask
+            )
         # -------------------------------------------------------------------------------
 
     def check_symmetries(self):

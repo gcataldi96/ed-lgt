@@ -1,16 +1,14 @@
 # %%
 import numpy as np
-from numpy.linalg import eig
+from numpy.linalg import eig, eigh
 from itertools import product, combinations
 from scipy.sparse import csr_matrix, diags, identity, kron
 from scipy.sparse.linalg import norm
 from copy import deepcopy
-from sympy import S
 from .bose_fermi_operators import fermi_operators as Zn_matter_operators
 from ed_lgt.tools import anti_commutator as anti_comm
 from ed_lgt.tools import check_commutator as check_comm
 from ed_lgt.modeling import qmb_operator as qmb_op
-from ed_lgt.modeling import truncation
 from ed_lgt.modeling import get_lattice_borders_labels
 
 
@@ -157,6 +155,8 @@ def Zn_rishon_operators(n, pure_theory):
     ops["Zp_P"] = ops["Zp"] * ops["P"]
     ops["P_Zm_dag"] = ops["P"] * ops["Zm_dag"]
     ops["P_Zp_dag"] = ops["P"] * ops["Zp_dag"]
+    ops["Zm_dag_P"] = ops["Zm_dag"] * ops["P"]
+    ops["Zp_dag_P"] = ops["Zp_dag"] * ops["P"]
     if not pure_theory:
         # PERFORM CHECKS
         for s1, s2 in zip("pm", "mp"):

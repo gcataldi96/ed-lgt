@@ -200,8 +200,8 @@ def Z2_FermiHubbard_dressed_site_operators(lattice_dim=2):
         ops["C_my,px"] = qmb_op(in_ops, ["ID_psi", "IDz", "Zm_P", "Zp_dag", "IDz"])
         # ----------------------------------------------------------------------------
         # Topological Operator along axis
-        ops["Sz_py,my"] = qmb_op(in_ops, ["ID_psi", "IDz", "P_Zm_dag", "P", "Zp"])
-        ops["Sz_px,mx"] = qmb_op(in_ops, ["ID_psi", "P_Zm_dag", "P", "Zp", "IDz"])
+        ops["Sz_my,py"] = qmb_op(in_ops, ["ID_psi", "IDz", "Zm_dag_P", "P", "Zp"])
+        ops["Sz_mx,px"] = qmb_op(in_ops, ["ID_psi", "Zm_dag_P", "P", "Zp", "IDz"])
         ops["Sx_py,my"] = qmb_op(in_ops, ["ID_psi", "IDz", "P", "IDz", "P"])
         ops["Sx_px,mx"] = qmb_op(in_ops, ["ID_psi", "P", "IDz", "P", "IDz"])
     return ops
