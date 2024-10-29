@@ -13,7 +13,7 @@ __all__ = [
 ]
 
 
-@njit
+@njit(cache=True)
 def check_global_sym(config, sym_op_diags, sym_sectors, sym_type_flag):
     """
     This function checks if a given QMB state configuration concurrently belongs to
@@ -56,7 +56,7 @@ def check_global_sym(config, sym_op_diags, sym_sectors, sym_type_flag):
     return check
 
 
-@njit
+@njit(cache=True)
 def check_global_sym_sitebased(config, sym_op_diags, sym_sectors, sym_type_flag):
     """
     This function checks if a QMB state configuration belongs to a global abelian symmetry sector,
@@ -146,7 +146,7 @@ def global_abelian_sector(loc_dims, sym_op_diags, sym_sectors, sym_type):
     return sector_indices, sector_configs
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def global_sector_configs(loc_dims, glob_op_diags, glob_sectors, sym_type_flag):
     # =============================================================================
     # Get all the possible QMB state configurations

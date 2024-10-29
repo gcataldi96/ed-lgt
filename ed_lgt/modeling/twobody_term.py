@@ -156,7 +156,7 @@ class TwoBodyTerm(QMBTerm):
                 logger.info(f"{c1}-{c2} {self.corr[i1,i2]}")
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def lattice_twobody_exp_val(psi, n_sites, sector_configs, sym_ops):
     """
     Computes the expectation value <O> for a two-body operator O over all pairs of lattice sites in parallel.

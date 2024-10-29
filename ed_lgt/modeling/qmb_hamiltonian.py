@@ -22,32 +22,46 @@ class QMB_hamiltonian:
         self.Ham = csc_matrix(self.Ham)
 
     def diagonalize(self, n_eigs, format, loc_dims):
-        validate_parameters(op_list=[self.Ham], int_list=[n_eigs], loc_dims=loc_dims)
+        validate_parameters(op_list=[self.Ham], loc_dims=loc_dims)
+        # Determine number of eigenvalues to compute
+        if isinstance(n_eigs, str) and n_eigs == "full":
+            self.n_eigs = self.Ham.shape[0]
+            full_diagonalization = True
+        elif isinstance(n_eigs, int):
+            if n_eigs > self.Ham.shape[0]:
+                raise ValueError(
+                    f"n_eigs must be smaller than H.shape[0]={self.Ham.shape[0]}, got {n_eigs}"
+                )
+            self.n_eigs = n_eigs
+            full_diagonalization = False
+        else:
+            raise ValueError(f"n_eigs must be an integer or 'full', not {n_eigs}.")
         self.convert_to_csc()
         # Save local dimensions
         self.loc_dims = loc_dims
-        # Save the number or eigenvalues
-        self.n_eigs = n_eigs
-        # COMPUTE THE LOWEST n_eigs ENERGY VALUES AND THE 1ST EIGENSTATE
+        # Ensure Hamiltonian is Hermitian and check sparsity
         check_hermitian(self.Ham)
-        # CHECK HAMILTONIAN SPARSITY
         self.get_sparsity(self.Ham)
-        # Diagonalize it
-        if format == "sparse":
-            logger.info("DIAGONALIZE (sparse) HAMILTONIAN")
-            Nenergies, Npsi = sparse_eigh(self.Ham, k=n_eigs, which="SA")
+        # Choose diagonalization method
+        if (
+            full_diagonalization
+            or format == "dense"
+            or self.n_eigs >= self.Ham.shape[0] - 2
+        ):
+            logger.info("DIAGONALIZE (dense) HAMILTONIAN")
+            Nenergies, Npsi = array_eigh(self.Ham.toarray())
         else:
-            logger.info("DIAGONALIZE (standard) HAMILTONIAN")
-            Nenergies, Npsi = array_eigh(self.Ham.toarray(), eigvals=(0, n_eigs - 1))
+            logger.info("DIAGONALIZE (sparse) HAMILTONIAN")
+            Nenergies, Npsi = sparse_eigh(self.Ham, k=self.n_eigs, which="SA")
         # Check and sort energies and corresponding eigenstates if necessary
         if not is_sorted(Nenergies):
             order = np.argsort(Nenergies)
-            Nenergies = Nenergies[order]
-            Npsi = Npsi[:, order]
+            Nenergies, Npsi = Nenergies[order], Npsi[:, order]
         # Save the eigenstates as QMB_states
         self.Nenergies = Nenergies
         self.Npsi = [
-            QMB_state(Npsi[:, ii], self.lvals, self.loc_dims) for ii in range(n_eigs)
+            QMB_state(Npsi[:, ii], self.lvals, self.loc_dims)
+            for ii in range(self.n_eigs)
         ]
         # Save GROUND STATE PROPERTIES
         self.GSenergy = self.Nenergies[0]

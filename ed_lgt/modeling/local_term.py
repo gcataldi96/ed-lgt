@@ -160,7 +160,7 @@ def check_link_symmetry(axis, loc_op1, loc_op2, value=0, sign=1):
     logger.info(f"{axis}-LINK SYMMETRY IS SATISFIED")
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def lattice_local_exp_val(psi, n_sites, sector_configs, sym_ops):
     """
     Computes the expectation value <O> and the variance <O^2> - <O>^2

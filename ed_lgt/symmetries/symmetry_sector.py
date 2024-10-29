@@ -10,8 +10,7 @@ logger = logging.getLogger(__name__)
 __all__ = ["symmetry_sector_configs", "get_symmetry_sector_generators"]
 
 
-@get_time
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def sitebased_sym_sector_configs(
     loc_dims,
     glob_op_diags,

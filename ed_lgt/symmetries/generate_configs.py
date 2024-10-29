@@ -51,7 +51,7 @@ def config_to_index(config, loc_dims):
     return qmb_index
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def get_state_configs(loc_dims):
     """
     This function creates all the possible QMB state configurations of a system made

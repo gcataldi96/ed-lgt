@@ -27,7 +27,7 @@ def check_orthogonality(basis):
     return True
 
 
-@njit
+@njit(cache=True)
 def momentum_basis_k0(sector_configs, logical_unit_size):
     sector_dim = sector_configs.shape[0]
     normalization = np.zeros(sector_dim, dtype=np.int32)

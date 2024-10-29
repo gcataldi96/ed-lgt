@@ -14,7 +14,7 @@ __all__ = [
 ]
 
 
-@njit
+@njit(cache=True)
 def rowcol_to_index(row, col, loc_dims):
     """
     Compute the global index from row and column indices, considering
@@ -50,7 +50,7 @@ def precompute_nonzero_indices(momentum_basis):
     return nonzero_indices
 
 
-@njit
+@njit(cache=True)
 def arrays_equal(arr1, arr2):
     if arr1.shape != arr2.shape:
         return False
@@ -60,7 +60,7 @@ def arrays_equal(arr1, arr2):
     return True
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def exclude_columns(data_matrix, exclude_indices):
     """
     Exclude columns from a integer matrix based on a list of indices, parallelized with prange.
