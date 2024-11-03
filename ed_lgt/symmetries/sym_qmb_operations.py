@@ -17,9 +17,14 @@ __all__ = ["nbody_term", "nbody_data", "nbody_data_par", "get_operators_nbody_te
 
 def nbody_term(op_list, op_sites_list, sector_configs, momentum_basis=None, k=0):
     if momentum_basis is not None:
-        row_list, col_list, value_list = nbody_data_momentum_basis(
-            op_list, op_sites_list, sector_configs, momentum_basis
-        )
+        if k > 0:
+            row_list, col_list, value_list = nbody_data_momentum_basis_finitek(
+                op_list, op_sites_list, sector_configs, momentum_basis, k
+            )
+        else:
+            row_list, col_list, value_list = nbody_data_momentum_basis_par(
+                op_list, op_sites_list, sector_configs, momentum_basis
+            )
         sector_dim = momentum_basis.shape[1]
     else:
         sector_dim = sector_configs.shape[0]
@@ -32,7 +37,7 @@ def nbody_term(op_list, op_sites_list, sector_configs, momentum_basis=None, k=0)
     )
 
 
-@njit
+@njit(cache=True)
 def nbody_data(op_list, op_sites_list, sector_configs):
     """
     Compute the nonzero elements of an nbody-operator.
@@ -81,7 +86,7 @@ def nbody_data(op_list, op_sites_list, sector_configs):
     return row_list, col_list, value_list
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def nbody_data_par(op_list, op_sites_list, sector_configs):
     """
     Compute the nonzero elements of an nbody-operator in a parallelized manner.
@@ -107,7 +112,7 @@ def nbody_data_par(op_list, op_sites_list, sector_configs):
     # Initialize boolean arrays: check_array tracks valid (row, col) pairs, check_rows tracks valid rows
     check_array = np.zeros((sector_dim, sector_dim), dtype=np.bool_)
     check_rows = np.zeros(sector_dim, dtype=np.bool_)
-    # Array with all row/col indices (it will be used to shrink it to the nonzero rows/cols
+    # Array with all row/col indices (it will be used to shrink it to the nonzero rows/cols)
     sector_dim_array = np.arange(sector_dim, dtype=np.int32)
 
     # Step 2: Parallelize the row-column equality check to fill check_array and check_rows
@@ -164,7 +169,7 @@ def nbody_data_par(op_list, op_sites_list, sector_configs):
     return row_list, col_list, value_list
 
 
-@njit
+@njit(cache=True)
 def nbody_data_momentum_basis(op_list, op_sites_list, sector_configs, momentum_basis):
     # Step 1: Initialize the problem dimensions and arrays
     basis_dim = momentum_basis.shape[1]
@@ -185,8 +190,9 @@ def nbody_data_momentum_basis(op_list, op_sites_list, sector_configs, momentum_b
             nonzero_indices_col = nonzero_indices[col]
             element = 0
             for config_ind1 in nonzero_indices_row:
+                m_states_row = m_states[config_ind1]
                 for config_ind2 in nonzero_indices_col:
-                    if arrays_equal(m_states[config_ind1], m_states[config_ind2]):
+                    if arrays_equal(m_states_row, m_states[config_ind2]):
                         transition_amplitude = 1.0
                         for ii, site in enumerate(op_sites_list):
                             op = op_list[ii, site]
@@ -199,6 +205,13 @@ def nbody_data_momentum_basis(op_list, op_sites_list, sector_configs, momentum_b
                             * transition_amplitude
                             * momentum_basis[config_ind2, col]
                         )
+                        """
+                        print("----------------------------------------------")
+                        print(f"{nonzero_indices_row}  {nonzero_indices_col}")
+                        print(
+                            f"row {row} col {col} ci1 {config_ind1} ci2 {config_ind2} val {element} MR {momentum_basis[config_ind1, row]} TA {transition_amplitude} MC {momentum_basis[config_ind2, col]}"
+                        )
+                        """
             if not np.isclose(element, 0, atol=1e-10):
                 row_list[count] = row
                 col_list[count] = col
@@ -209,8 +222,119 @@ def nbody_data_momentum_basis(op_list, op_sites_list, sector_configs, momentum_b
     row_list = row_list[:count]
     col_list = col_list[:count]
     value_list = value_list[:count]
-
+    # print(value_list)
+    # print(row_list)
+    # print(col_list)
     return row_list, col_list, value_list
+
+
+@njit(parallel=True, cache=True)
+def nbody_data_momentum_basis_par(
+    op_list, op_sites_list, sector_configs, momentum_basis
+):
+    # Step 1: Initialize the problem dimensions and arrays
+    basis_dim = momentum_basis.shape[1]
+    # Precompute non-zero indices for each column of the momentum_basis
+    nonzero_indices = precompute_nonzero_indices(momentum_basis)
+    # Exclude specified sites where the operators act from the list of configs
+    m_states = exclude_columns(sector_configs, op_sites_list)
+    # Initialize boolean arrays: check_array tracks valid (row, col) pairs, check_rows tracks valid rows
+    check_array = np.zeros((basis_dim, basis_dim), dtype=np.bool_)
+    check_rows = np.zeros(basis_dim, dtype=np.bool_)
+    # Array with all row/col indices (it will be used to shrink it to the nonzero rows/cols)
+    sector_dim_array = np.arange(basis_dim, dtype=np.int32)
+
+    # Step 2: Parallelize the row-column equality check to fill check_array and check_rows
+    for row in prange(basis_dim):
+        nonzero_indices_row = nonzero_indices[row]
+        for col in range(basis_dim):
+            nonzero_indices_col = nonzero_indices[col]
+            found_match = False
+            for config_ind1 in nonzero_indices_row:
+                if found_match:  # Exit early if match is already found
+                    break
+                m_states_row = m_states[config_ind1]
+                for config_ind2 in nonzero_indices_col:
+                    # Check if the input (row) and arrival (col) configurations are equal and mark them
+                    # (it means that the action of the nbody operator which only modify the excluded site configs)
+                    if arrays_equal(m_states_row, m_states[config_ind2]):
+                        # print("----------------------------------------------")
+                        # print(
+                        #    f"{nonzero_indices_row}-{nonzero_indices_col} {config_ind1}-{config_ind2}"
+                        # )
+                        check_array[row, col] = True
+                        # Mark the row as having at least one nonzero element
+                        check_rows[row] = True
+                        # Set flag to exit outer loops
+                        found_match = True
+                        break  # Breaks out of `config_ind2` loop
+
+    # Step 3: Extract valid rows and compute loc_dims (the number of nonzero columns per row)
+    # Filter rows with at least one nonzero column
+    valid_rows = sector_dim_array[check_rows]
+    # Initialize array for storing nonzero columns per row
+    loc_dims = np.zeros(len(valid_rows), dtype=np.int32)
+    # Loop over valid rows and count the number of nonzero columns for each row (loc_dims)
+    for row_idx in prange(len(valid_rows)):
+        row = valid_rows[row_idx]
+        # Count the nonzero columns in the current row
+        loc_dims[row_idx] = np.sum(check_array[row, :])
+
+    # Step 4: Initialize arrays to store the results (row, column indices, and operator values)
+    max_elements = np.sum(loc_dims)  # Total number of nonzero (row, col) pairs
+    row_list = np.zeros(max_elements, dtype=np.int32)  # To store row indices
+    col_list = np.zeros(max_elements, dtype=np.int32)  # To store column indices
+    value_list = np.zeros(max_elements, dtype=np.float64)  # To store matrix values
+
+    # Step 5: Loop over valid rows and columns, and compute the global index for each (row, col) pair
+    for row_idx in prange(len(valid_rows)):
+        row = valid_rows[row_idx]
+        nonzero_indices_row = nonzero_indices[row]
+        # Extract valid columns for the current row
+        valid_cols = sector_dim_array[check_array[row, :]]
+        # Loop over valid columns for this row
+        for col_idx in range(loc_dims[row_idx]):
+            col = valid_cols[col_idx]
+            nonzero_indices_col = nonzero_indices[col]
+            # Compute the global index using rowcol_to_index
+            index = rowcol_to_index(row_idx, col_idx, loc_dims)
+            # Step 6A: Assign values to row_list, col_list at the computed index
+            row_list[index] = row
+            col_list[index] = col
+            # Step 6B: Assign values to value_list at the computed index
+            for config_ind1 in nonzero_indices_row:
+                m_states_row = m_states[config_ind1]
+                for config_ind2 in nonzero_indices_col:
+                    if arrays_equal(m_states_row, m_states[config_ind2]):
+                        transition_amplitude = 1.0
+                        for ii, site in enumerate(op_sites_list):
+                            op = op_list[ii, site]
+                            transition_amplitude *= op[
+                                sector_configs[config_ind1, site],
+                                sector_configs[config_ind2, site],
+                            ]
+                        value_list[index] += (
+                            momentum_basis[config_ind1, row]
+                            * transition_amplitude
+                            * momentum_basis[config_ind2, col]
+                        )
+                        """
+                        print("----------------------------------------------")
+                        print(f"{nonzero_indices_row}  {nonzero_indices_col}")
+                        print(
+                            f"row {row} col {col} ci1 {config_ind1} ci2 {config_ind2} val {value_list[index]} MR {momentum_basis[config_ind1, row]} TA {transition_amplitude} MC {momentum_basis[config_ind2, col]}"
+                        )
+                        """
+
+    # Return the final lists of nonzero elements: row indices, column indices, and values
+    # print(value_list[np.nonzero(value_list)])
+    # print(row_list[np.nonzero(value_list)])
+    # print(col_list[np.nonzero(value_list)])
+    return (
+        row_list[np.nonzero(value_list)],
+        col_list[np.nonzero(value_list)],
+        value_list[np.nonzero(value_list)],
+    )
 
 
 def get_operators_nbody_term(op_list, loc_dims, gauge_basis=None, lattice_labels=None):
@@ -233,3 +357,59 @@ def get_operators_nbody_term(op_list, loc_dims, gauge_basis=None, lattice_labels
             # Save it inside the new list of operators
             new_op_list[ii, jj, :loc_dim, :loc_dim] = proj_op
     return new_op_list
+
+
+@njit(cache=True)
+def nbody_data_momentum_basis_finitek(
+    op_list, op_sites_list, sector_configs, momentum_basis, k
+):
+    # Step 1: Initialize the problem dimensions and arrays
+    basis_dim = momentum_basis.shape[1]
+    system_dim = sector_configs.shape[0]
+    # Estimated maximum possible non-zero elements based on 90% sparsity
+    max_elements = int(0.1 * basis_dim**2)
+    row_list = np.zeros(max_elements, dtype=np.int32)
+    col_list = np.zeros(max_elements, dtype=np.int32)
+    value_list = np.zeros(max_elements, dtype=np.complex128)
+    count = 0
+    # Precompute non-zero indices for each column of the momentum_basis
+    nonzero_indices = precompute_nonzero_indices(momentum_basis)
+    # Exclude specified sites where the operators act from the list of configs
+    m_states = exclude_columns(sector_configs, op_sites_list)
+
+    for row in range(basis_dim):
+        nonzero_indices_row = nonzero_indices[row]
+        for col in range(basis_dim):
+            nonzero_indices_col = nonzero_indices[col]
+            element = 0
+            for config_ind1 in nonzero_indices_row:
+                for config_ind2 in nonzero_indices_col:
+                    if arrays_equal(m_states[config_ind1], m_states[config_ind2]):
+                        transition_amplitude = 1.0
+                        for ii, site in enumerate(op_sites_list):
+                            # Calculate phase difference due to position 'site' in the momentum basis
+                            phase_diff = np.exp(-1j * 2 * np.pi * k * site / system_dim)
+                            # Measure the transition Amplitude
+                            op = op_list[ii, site]
+                            transition_amplitude *= op[
+                                sector_configs[config_ind1, site],
+                                sector_configs[config_ind2, site],
+                            ]
+                            transition_amplitude *= phase_diff
+                        element += (
+                            momentum_basis[config_ind1, row]
+                            * transition_amplitude
+                            * momentum_basis[config_ind2, col]
+                        )
+            if not np.isclose(element, 0, atol=1e-10):
+                row_list[count] = row
+                col_list[count] = col
+                value_list[count] = element
+                count += 1
+
+    # Trim arrays to actual size
+    row_list = row_list[:count]
+    col_list = col_list[:count]
+    value_list = value_list[:count]
+
+    return row_list, col_list, value_list

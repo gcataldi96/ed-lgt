@@ -54,6 +54,8 @@ class QuantumModel:
         self.H = QMB_hamiltonian(0, self.lvals)
 
     def default_params(self):
+        if self.momentum_basis and self.has_obc[0]:
+            raise ValueError(f"Momentum is not conserved in OBC")
         if self.momentum_basis:
             self.B = momentum_basis_k0(self.sector_configs, self.logical_unit_size)
             logger.info(f"Momentum basis shape {self.B.shape}")
@@ -231,7 +233,6 @@ class QuantumModel:
         list_states = []
         for ii in range(self.n_eigs):
             if np.abs(self.H.Nenergies[ii] - Eq) < DeltaE:
-                #logger.info(f"{ii} {self.H.Nenergies[ii]}")
                 list_states.append(ii)
                 psi_thermal += self.H.Npsi[ii].psi
         norm = len(list_states)
