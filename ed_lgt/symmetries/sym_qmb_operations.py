@@ -258,10 +258,6 @@ def nbody_data_momentum_basis_par(
                     # Check if the input (row) and arrival (col) configurations are equal and mark them
                     # (it means that the action of the nbody operator which only modify the excluded site configs)
                     if arrays_equal(m_states_row, m_states[config_ind2]):
-                        # print("----------------------------------------------")
-                        # print(
-                        #    f"{nonzero_indices_row}-{nonzero_indices_col} {config_ind1}-{config_ind2}"
-                        # )
                         check_array[row, col] = True
                         # Mark the row as having at least one nonzero element
                         check_rows[row] = True
@@ -318,18 +314,6 @@ def nbody_data_momentum_basis_par(
                             * transition_amplitude
                             * momentum_basis[config_ind2, col]
                         )
-                        """
-                        print("----------------------------------------------")
-                        print(f"{nonzero_indices_row}  {nonzero_indices_col}")
-                        print(
-                            f"row {row} col {col} ci1 {config_ind1} ci2 {config_ind2} val {value_list[index]} MR {momentum_basis[config_ind1, row]} TA {transition_amplitude} MC {momentum_basis[config_ind2, col]}"
-                        )
-                        """
-
-    # Return the final lists of nonzero elements: row indices, column indices, and values
-    # print(value_list[np.nonzero(value_list)])
-    # print(row_list[np.nonzero(value_list)])
-    # print(col_list[np.nonzero(value_list)])
     return (
         row_list[np.nonzero(value_list)],
         col_list[np.nonzero(value_list)],

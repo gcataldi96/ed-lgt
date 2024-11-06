@@ -77,7 +77,9 @@ class QMB_hamiltonian:
         self.loc_dims = loc_dims
         # Compute the time spacing
         delta_n = (stop - start) / n_steps
-        logger.info(f"------- TIME EVOLUTION: DELTA {round(delta_n,2)} -----------")
+        logger.info(
+            f"------------- TIME EVOLUTION: DELTA {round(delta_n,2)} ------------"
+        )
         # Compute the evolved psi at each time step
         psi_time = expm_multiply(
             A=complex(0, -1) * self.Ham,

@@ -92,10 +92,11 @@ gen_configs("template", params, f"Z2FermiHubbard/PBCxy/n_pair_scanU")
 params = {"U": np.logspace(0, 3, 10), "h": np.logspace(1, 3, 100)}
 gen_configs("template", params, f"Z2FermiHubbard/PBCxy/largeh")
 # %%
-# Z2 FERMI HUBBARD MODEL
 params = {"U": np.logspace(-1, 3, 50), "h": np.logspace(-3, 3, 50)}
 gen_configs("template", params, f"Z2FermiHubbard/PBCxy/phase_diagram_new")
-
+# %%
+params = {"m": np.logspace(-1, 1, 10), "g": np.logspace(-1, 1, 10)}
+gen_configs("template", params, f"DFL/grid")
 # %%
 # ISING MODEL
 params = {"lvals": [[6], [8], [10], [12]], "h": np.logspace(-2, 2, 20)}

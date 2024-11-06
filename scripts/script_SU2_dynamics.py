@@ -29,7 +29,7 @@ with run_sim() as sim:
     local_obs = [f"T2_{s}{d}" for d in model.directions for s in "mp"]
     local_obs = []  # ["E_square"]
     if not model.pure_theory:
-        local_obs = ["N_single"]
+        local_obs = ["N_tot"]
         # [f"N_{label}" for label in ["r", "g", "tot", "single", "pair"]]
     # LIST OF TWOBODY CORRELATORS
     twobody_obs = [[f"P_p{d}", f"P_m{d}"] for d in model.directions]
@@ -102,7 +102,7 @@ with run_sim() as sim:
     # -------------------------------------------------------------------------------
     for ii in range(n_steps):
         logger.info(
-            f"================== TIME {format(delta_n*ii, '.2f')} ==================="
+            f"================== TIME {format(delta_n*ii, '.2f')} ======================="
         )
         if not model.momentum_basis:
             # -----------------------------------------------------------------------

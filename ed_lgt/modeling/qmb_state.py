@@ -205,7 +205,6 @@ class QMB_state:
             logger.info(
                 f"[{' '.join(f'{s:2d}' for s in config)}]  {format(np.abs(val),'.4f')}  {format(val,'.4f')}"
             )
-        logger.info("----------------------------------------------------")
 
 
 def truncation(array, threshold=1e-14):
