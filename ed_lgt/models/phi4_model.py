@@ -31,6 +31,7 @@ class Phi4Model(QuantumModel):
         # Acquire local dimension and lattice label
         self.default_params()
 
+
     def build_Hamiltonian(self, coeffs):
         # Hamiltonian Coefficients
         self.coeffs = coeffs
@@ -53,7 +54,7 @@ class Phi4Model(QuantumModel):
         for d in self.directions:
             # Define the Hamiltonian term
             h_terms[f"phiphi_{d}"] = TwoBodyTerm(axis=d, op_list=op_list, op_names_list=op_names_list ,**self.def_params )
-            self.H.Ham += h_terms[f"phiphi_{d}"].get_Hamiltonian(strength=1)
+            self.H.Ham += h_terms[f"phiphi_{d}"].get_Hamiltonian(strength=-1)
 
         op_names_list = ["phi2", "Id"]
         op_list = [self.ops[op] for op in op_names_list]
@@ -61,7 +62,6 @@ class Phi4Model(QuantumModel):
             # Define the Hamiltonian term
             h_terms[f"phi2Id_{d}"] = TwoBodyTerm(axis=d, op_list=op_list, op_names_list=op_names_list ,**self.def_params )
             self.H.Ham += h_terms[f"phi2Id_{d}"].get_Hamiltonian(strength=0.5)
-
 
         # SINGLE BODY TERM
         op_name = "pi2"
@@ -79,3 +79,42 @@ class Phi4Model(QuantumModel):
         self.H.Ham += h_terms[op_name].get_Hamiltonian(
             strength=self.coeffs["lambda"] / (24)
         )
+
+    def build_Hamiltonian_bulk(self,coeffs):
+        """
+        Build n-side Hamiltonian 
+        of the bulk of the theory
+        """
+        # Hamiltonian Coefficients
+        self.coeffs = coeffs
+        # CONSTRUCT THE HAMILTONIAN
+        h_terms = {}
+
+        # NEAREST NEIGHBOR INTERACTION
+        op_names_list = ["phi", "phi"]
+        op_list = [self.ops[op] for op in op_names_list]
+        for d in self.directions:
+            # Define the Hamiltonian term
+            h_terms[f"phiphi_{d}"] = TwoBodyTerm(axis=d, op_list=op_list, op_names_list=op_names_list ,**self.def_params )
+            self.H.Ham += h_terms[f"phiphi_{d}"].get_Hamiltonian(strength=-1)
+
+        # SINGLE BODY TERM
+        op_name = "pi2"
+        h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
+        self.H.Ham += h_terms[op_name].get_Hamiltonian(strength=-0.5)
+
+        op_name = "phi2"
+        h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
+        self.H.Ham += h_terms[op_name].get_Hamiltonian(
+            strength=0.5 * self.coeffs["mu2"]+1
+        )
+
+        op_name = "phi4"
+        h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
+        self.H.Ham += h_terms[op_name].get_Hamiltonian(
+            strength=self.coeffs["lambda"] / (24)
+        )
+
+
+
+
