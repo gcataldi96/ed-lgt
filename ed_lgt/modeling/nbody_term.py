@@ -73,6 +73,7 @@ class NBodyTerm(QMBTerm):
                 # Skip if neighbor sites are not valid / compatible with masks
                 if neighbor_sites is None:
                     continue
+                logger.info(f"sites {neighbor_sites}")
                 H_nbody += strength * nbody_term(
                     op_list=self.sym_ops,
                     op_sites_list=np.array(neighbor_sites),
@@ -132,7 +133,7 @@ class NBodyTerm(QMBTerm):
                 )
                 # Store the result in the self.obs list
                 self.obs.append(exp_value)
-                logger.info(f"{coords}--{format(exp_value, '.10f')}")
+                logger.info(f"{coords} {format(exp_value, '.10f')}")
         # Finalize by converting the list to a 1D numpy array
         self.obs = np.array(self.obs)
 

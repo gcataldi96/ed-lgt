@@ -21,6 +21,33 @@ local_obs = [f"n_{s}{d}" for d in "xy" for s in "mp"]
 local_obs += [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
 local_obs += ["X_Cross", "S2_psi", "E"]
 plaq_name = "plaq"
+
+# %%
+# string
+res = {}
+# Acquire simulations of finite E field
+config_filename = f"Z2FermiHubbard/PBCx/test"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["J"])
+for obs in ["energy", "plaq", "string"]:
+    res[obs] = np.zeros((10, 6), dtype=float)
+    for ii, J in enumerate(vals["J"]):
+        res[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+# %%
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+for ii in range(6):
+    ax.plot(
+        vals["J"],
+        res["energy"][:, ii],
+        "-o",
+        markersize=4,
+        markeredgecolor="darkblue",
+        markerfacecolor="white",
+        markeredgewidth=0.5,
+        label=f"E_{ii}",
+    )
+ax.set(ylabel="String", xscale="log", xlim=[0.01, 0.1], xlabel="J")
+plt.legend()
 # %%
 res = {}
 # Acquire simulations of finite E field
@@ -275,15 +302,15 @@ axs.legend()
 # %%
 res = {}
 # Acquire simulations of finite E field
-config_filename = f"Z2FermiHubbard/PBCxy/phase_diagram_new"
+config_filename = f"Z2FermiHubbard/OBC/4x2grid"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["U", "h"])
-for obs in local_obs + ["energy", plaq_name]:
+for obs in ["N_pair", "energy", "entropy", plaq_name]:
     res[obs] = np.zeros((len(vals["U"]), len(vals["h"])), dtype=float)
 for ii, U in enumerate(vals["U"]):
     for jj, h in enumerate(vals["h"]):
-        res["energy"][ii, jj] = get_sim(ugrid[ii, jj]).res["energy"] / 4
-        for obs in local_obs + [plaq_name]:
+        res["energy"][ii, jj] = get_sim(ugrid[ii, jj]).res["energy"] / 2
+        for obs in ["N_pair", "entropy", plaq_name]:
             res[obs][ii, jj] = get_sim(ugrid[ii, jj]).res[obs]
 save_dictionary(res, "phase_diagram.pkl")
 # %%
@@ -300,12 +327,12 @@ fig, axs = plt.subplots(
     sharex=True,
     constrained_layout=True,
 )
-
+"""
 # Plot hmax as a dashed line
 axs.plot(
     np.log10(vals["U"][21:]), np.log10(hmax), color="white", linestyle="--", linewidth=2
 )
-
+"""
 # Logarithmic scale formatting (assuming fake_log is a log formatter)
 axs.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"$10^{{{int(x)}}}$"))
 axs.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"$10^{{{int(y)}}}$"))
@@ -332,7 +359,7 @@ axs.set(
     xlabel="U",
     ylabel="h",
 )
-# plt.savefig("phase_diagram.pdf")
+plt.savefig(f"phase_diagram_{obs_name}.pdf")
 # %%
 # List of local observables
 local_obs = [f"n_{s}{d}" for d in "xy" for s in "mp"]
