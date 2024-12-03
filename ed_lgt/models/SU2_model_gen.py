@@ -58,6 +58,7 @@ class SU2_Model_Gen(QuantumModel):
         self.default_params()
 
     def build_Hamiltonian(self, coeffs):
+        logger.info("BUILDING HAMILTONIAN")
         # Hamiltonian Coefficients
         self.coeffs = coeffs
         h_terms = {}
@@ -160,19 +161,31 @@ class SU2_Model_Gen(QuantumModel):
             )
 
     def overlap_QMB_state(self, name):
-        if name == "V":
-            if self.spin == 1:
-                s1, s2, L, R = 0, 7, 0, 2
-            elif self.spin < 1:
-                s1, s2, L, R = 0, 4, 0, 2
-        elif name == "PV":
-            if self.spin == 1:
-                s1, s2, L, R = 1, 8, 1, 1
-            elif self.spin < 1:
-                s1, s2, L, R = 1, 5, 1, 1
-        config_state = [s1 if ii % 2 == 0 else s2 for ii in range(self.n_sites)]
-        if self.has_obc[0]:
-            config_state[0] = L
-            config_state[-1] = R
+        # POLARIZED AND BARE VACUUM in 1D
+        if len(self.lvals) == 1:
+            if name == "V":
+                if self.spin == 1:
+                    s1, s2, L, R = 0, 7, 0, 2
+                elif self.spin < 1:
+                    s1, s2, L, R = 0, 4, 0, 2
+            elif name == "PV":
+                if self.spin == 1:
+                    s1, s2, L, R = 1, 8, 1, 1
+                elif self.spin < 1:
+                    s1, s2, L, R = 1, 5, 1, 1
+            config_state = [s1 if ii % 2 == 0 else s2 for ii in range(self.n_sites)]
+            if self.has_obc[0]:
+                config_state[0] = L
+                config_state[-1] = R
+        # POLARIZED AND BARE VACUUM in 2D
+        else:
+            if not self.pure_theory:
+                if self.has_obc[0]:
+                    config_state = [0, 9, 0, 4, 4, 0, 9, 0]
+                else:
+                    config_state = [0, 9, 0, 9, 9, 0, 9, 0]
+            else:
+                if name == "V":
+                    config_state = [0 for _ in range(self.n_sites)]
         config_state = config_state
         return np.array(config_state)

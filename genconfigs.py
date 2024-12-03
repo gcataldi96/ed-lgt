@@ -92,16 +92,21 @@ gen_configs("template", params, f"Z2FermiHubbard/PBCxy/n_pair_scanU")
 params = {"U": np.logspace(0, 3, 10), "h": np.logspace(1, 3, 100)}
 gen_configs("template", params, f"Z2FermiHubbard/PBCxy/largeh")
 # %%
-# Z2 FERMI HUBBARD MODEL
 params = {"U": np.logspace(-1, 3, 50), "h": np.logspace(-3, 3, 50)}
-gen_configs("template", params, f"Z2FermiHubbard/PBCxy/phase_diagram_new")
+gen_configs("template", params, f"Z2FermiHubbard/OBC/4x2grid")
 
+# %%
+params = {"J": np.logspace(-2, 0, 10)}
+gen_configs("template", params, f"Z2FermiHubbard/PBCx/test")
+# %%
+params = {"m": np.logspace(-1, 1, 20), "g": np.logspace(-1, 1, 20)}
+gen_configs("template", params, f"DFL/grid")
 # %%
 # ISING MODEL
 params = {"lvals": [[6], [8], [10], [12]], "h": np.logspace(-2, 2, 20)}
 gen_configs("template", params, f"Ising/Ising1D")
 # %%
 # SU2 scars
-params = {"g": [0.1, 1, 5]}
-gen_configs("template", params, f"SU2/no_scars")
+params = {"m": np.logspace(-1, 1, 5), "g": np.logspace(-1, 1, 5)}
+gen_configs("template", params, f"scars/dynamics2Dgrid")
 # %%

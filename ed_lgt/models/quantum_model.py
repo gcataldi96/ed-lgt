@@ -54,6 +54,8 @@ class QuantumModel:
         self.H = QMB_hamiltonian(0, self.lvals)
 
     def default_params(self):
+        if self.momentum_basis and self.has_obc[0]:
+            raise ValueError(f"Momentum is not conserved in OBC")
         if self.momentum_basis:
             self.B = momentum_basis_k0(self.sector_configs, self.logical_unit_size)
             logger.info(f"Momentum basis shape {self.B.shape}")
@@ -138,9 +140,9 @@ class QuantumModel:
             )
 
     def diagonalize_Hamiltonian(self, n_eigs, format):
-        self.n_eigs = n_eigs
         # DIAGONALIZE THE HAMILTONIAN
-        self.H.diagonalize(self.n_eigs, format, self.loc_dims)
+        self.H.diagonalize(n_eigs, format, self.loc_dims)
+        self.n_eigs = self.H.n_eigs
         self.res["energy"] = self.H.Nenergies
 
     def time_evolution_Hamiltonian(self, initial_state, start, stop, n_steps):
@@ -192,6 +194,8 @@ class QuantumModel:
         return self.H.get_beta(state, threshold)
 
     def canonical_avg(self, local_obs, beta):
+        logger.info("----------------------------------------------------")
+        logger.info("CANONICAL ENSEMBLE")
         op_matrix = LocalTerm(
             operator=self.ops[local_obs], op_name=local_obs, **self.def_params
         ).get_Hamiltonian(1)
@@ -202,26 +206,33 @@ class QuantumModel:
             Z * self.n_sites
         )
         logger.info(f"Canonical avg: {canonical_avg}")
+        logger.info("----------------------------------------------------")
         return canonical_avg
 
     def microcanonical_avg(self, local_obs, state):
+        logger.info("----------------------------------------------------")
+        logger.info("MICRO-CANONICAL ENSEMBLE")
         op_matrix = LocalTerm(
             operator=self.ops[local_obs], op_name=local_obs, **self.def_params
         ).get_Hamiltonian(1)
         # Get the expectation value of the energy of the reference state
         Eq = QMB_state(state).expectation_value(self.H.Ham)
-        logger.info(f"E ref {Eq}")
+        logger.info(f"Energy ref {Eq}")
         E2q = QMB_state(state).expectation_value(self.H.Ham**2)
         # Get the corresponding variance
         DeltaE = np.sqrt(E2q - (Eq**2))
         logger.info(f"delta E {DeltaE}")
+        # Check that Eq is contained in the set of eigvals:
+        if Eq + DeltaE > max(self.H.Nenergies):
+            raise ValueError(
+                f"The energy shell is above the obtained eigvals: {Eq+DeltaE} > {max(self.H.Nenergies)}"
+            )
         # Initialize a state as the superposition of all the eigenstates within
         # an energy shell of amplitude Delta E around Eq
         psi_thermal = np.zeros(self.H.Ham.shape[0], dtype=np.complex128)
         list_states = []
         for ii in range(self.n_eigs):
             if np.abs(self.H.Nenergies[ii] - Eq) < DeltaE:
-                logger.info(f"{ii} {self.H.Nenergies[ii]}")
                 list_states.append(ii)
                 psi_thermal += self.H.Npsi[ii].psi
         norm = len(list_states)
@@ -233,9 +244,17 @@ class QuantumModel:
                 op_matrix
             ) / (norm * self.n_sites)
         logger.info(f"Microcanonical avg: {microcanonical_avg}")
+        logger.info("----------------------------------------------------")
         return psi_thermal, microcanonical_avg
 
     def diagonal_avg(self, local_obs, state):
+        logger.info("----------------------------------------------------")
+        logger.info("DIAGONAL ENSEMBLE")
+        # check that the hamiltonian has been already fully diagonalized:
+        if self.n_eigs != self.H.Ham.shape[0]:
+            raise ValueError(
+                f"To get the diagonal avg, we need all the H eigvals {self.H.Ham.shape[0]}, not only {self.n_eigs}"
+            )
         op_matrix = LocalTerm(
             operator=self.ops[local_obs], op_name=local_obs, **self.def_params
         ).get_Hamiltonian(1)
@@ -245,6 +264,7 @@ class QuantumModel:
             exp_val = self.H.Npsi[ii].expectation_value(op_matrix) / self.n_sites
             diagonal_avg += prob * exp_val
         logger.info(f"Diagonal avg: {diagonal_avg}")
+        logger.info("----------------------------------------------------")
         return diagonal_avg
 
     def get_observables(
@@ -253,6 +273,7 @@ class QuantumModel:
         twobody_obs=[],
         plaquette_obs=[],
         nbody_obs=[],
+        nbody_dist=[],
         twobody_axes=None,
     ):
         self.local_obs = local_obs
@@ -291,11 +312,15 @@ class QuantumModel:
             )
         # ---------------------------------------------------------------------------
         # LIST OF NBODY CORRELATORS
-        for op_names_list in nbody_obs:
+        for ii, op_names_list in enumerate(nbody_obs):
             obs = "_".join(op_names_list)
             op_list = [self.ops[op] for op in op_names_list]
+            distances = nbody_dist[ii]
             self.obs_list[obs] = NBodyTerm(
-                op_list=op_list, op_names_list=op_names_list, **self.def_params
+                op_list=op_list,
+                op_names_list=op_names_list,
+                distances=distances,
+                **self.def_params,
             )
 
     def measure_observables(self, index, dynamics=False):
@@ -316,7 +341,7 @@ class QuantumModel:
         for op_names_list in self.nbody_obs:
             obs = "_".join(op_names_list)
             self.obs_list[obs].get_expval(state)
-            self.res[obs] = self.obs_list[obs].corr
+            self.res[obs] = self.obs_list[obs].obs
 
     def get_energy_gap(self, ex_counts, ops_names, H_info):
         logger.info(f"momentum_basis {self.momentum_basis}")

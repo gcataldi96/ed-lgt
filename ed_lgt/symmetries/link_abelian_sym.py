@@ -13,7 +13,7 @@ __all__ = [
 ]
 
 
-@njit
+@njit(cache=True)
 def check_link_sym(config, sym_op_diags, sym_sectors, pair_list):
     """
     This function checks if a given QMB state configuration concurrently belongs
@@ -56,7 +56,7 @@ def check_link_sym(config, sym_op_diags, sym_sectors, pair_list):
     return check
 
 
-@njit
+@njit(cache=True)
 def check_link_sym_sitebased(config, sym_op_diags, sym_sectors, pair_list):
     """
     Checks if a given QMB state configuration belongs to a set of two-body symmetry sectors,
@@ -136,7 +136,7 @@ def link_abelian_sector(loc_dims, sym_op_diags, sym_sectors, pair_list):
     return sector_indices, sector_configs
 
 
-@njit(parallel=True)
+@njit(parallel=True, cache=True)
 def link_sector_configs(loc_dims, link_op_diags, link_sectors, pair_list):
     # Total number of configs
     sector_dim = 1

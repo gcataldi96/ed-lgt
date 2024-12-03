@@ -250,7 +250,7 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
             ops[f"E_square"] += 0.5 * ops[f"T2_{s}{d}"]
     # DRESSED SITE CASIMIR OPERATOR S^{2}
     ops[f"S2_tot"] = 0
-    for ax in ["x", "y", "z"]:
+    for Td in ["x", "y", "z"]:
         for side in "pm":
             for d in dimensions:
                 ops["S2_tot"] += csr_matrix(ops[f"T{Td}_{s}{d}"] ** 2, dtype=float)
@@ -282,6 +282,7 @@ def SU2_gauge_invariant_states(s_max, pure_theory, lattice_dim, background=False
         spins.insert(0, np.asarray([S(0), S(1) / 2, S(0)]))
     if background:
         spins.insert(0, np.asarray([S(0), S(1) / 2]))
+    vind = 0 if not background else 1
     # Set rows and col counters list for the basis
     gauge_states = {"site": []}
     gauge_basis = {"site": []}
@@ -294,7 +295,6 @@ def SU2_gauge_invariant_states(s_max, pure_theory, lattice_dim, background=False
         spins_config = list(spins_config)
         if not pure_theory:
             # Check the matter spin (0 (vacuum), 1/2, 0 (up & down))
-            vind = 0 if not background else 1
             matter_sector = (ii // np.prod([len(l) for l in spins[vind + 1 :]])) % 3
             if matter_sector == 0:
                 psi_vacuum = True

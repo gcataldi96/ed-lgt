@@ -1,7 +1,6 @@
 import numpy as np
 from ed_lgt.models import Z2_FermiHubbard_Model
 from simsio import run_sim
-from ed_lgt.tools import analyze_correlator
 from time import perf_counter
 import logging
 
@@ -12,33 +11,54 @@ with run_sim() as sim:
     model = Z2_FermiHubbard_Model(**sim.par["model"])
     # -------------------------------------------------------------------------------
     # BUILD THE HAMILTONIAN
-    coeffs = {"U": sim.par["U"], "t": sim.par["t"], "h": sim.par["h"]}
+    coeffs = {
+        "U": sim.par["U"],
+        "t": sim.par["t"],
+        "h": sim.par["h"],
+        "J": sim.par["J"],
+    }
     model.build_Hamiltonian(coeffs)
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
-    if sim.par["hamiltonian"]["diagonalize"]:
-        model.diagonalize_Hamiltonian(
-            n_eigs=sim.par["hamiltonian"]["n_eigs"],
-            format=sim.par["hamiltonian"]["format"],
-        )
-        sim.res["energy"] = model.H.Nenergies
+    model.diagonalize_Hamiltonian(
+        n_eigs=sim.par["hamiltonian"]["n_eigs"],
+        format=sim.par["hamiltonian"]["format"],
+    )
+    sim.res["energy"] = model.H.Nenergies
     # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
     local_obs = [f"n_{s}{d}" for d in model.directions for s in "mp"]
     local_obs += [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
-    local_obs += ["X_Cross", "S2_psi", "E"]
+    local_obs = ["N_pair"]  # ["X_Cross", "S2_psi", "E"]
     # LIST OF TWOBODY CORRELATORS
     twobody_obs = [["Sz_psi", "Sz_psi"]]
     twobody_axes = None
     # LIST OF PLAQUETTE OPERATORS
     plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
+    # STRING OPERATOR
+    if not model.has_obc[0]:
+        nbody_obs = [["Sz_mx,px" for _ in range(model.lvals[0])]]
+        nbody_dist = [[[ii, 0] for ii in range(1, model.lvals[0], 1)]]
+    else:
+        nbody_obs = []
+        nbody_dist = []
     # DEFINE OBSERVABLES
-    model.get_observables(local_obs, twobody_obs, plaquette_obs)
+    model.get_observables(
+        local_obs=local_obs,
+        twobody_obs=[],
+        plaquette_obs=plaquette_obs,
+        nbody_obs=nbody_obs,
+        nbody_dist=nbody_dist,
+    )
     # ENTROPY
     sim.res["entropy"] = np.zeros(model.n_eigs, dtype=float)
-    partition_indices = list(np.arange(0, int(np.prod(model.lvals) / 2), 1))
+    partition_indices = list(np.arange(0, int(model.lvals[0] / 2), 1)) + list(
+        np.arange(model.lvals[0], model.lvals[0] + int(model.lvals[0] / 2), 1)
+    )
     # MEASUREMENTS
     sim.res["plaq"] = np.zeros(model.n_eigs, dtype=float)
+    if not model.has_obc[0]:
+        sim.res["string"] = np.zeros(model.n_eigs, dtype=float)
     for obs in local_obs:
         sim.res[obs] = np.zeros(model.n_eigs, dtype=float)
     # -------------------------------------------------------------------------------
@@ -60,7 +80,8 @@ with run_sim() as sim:
         sim.res["plaq"][ii] = model.res["_".join(plaquette_obs[0])]
         for obs in local_obs:
             sim.res[obs][ii] = np.mean(model.res[obs])
-        # sim.res["Sz_Sz"] = analyze_correlator(model.res["Sz_psi_Sz_psi"])
+        if not model.has_obc[0]:
+            sim.res["string"][ii] = np.mean(model.res["_".join(nbody_obs[0])])
         # CHECK LINK SYMMETRIES
         model.check_symmetries()
     # -------------------------------------------------------------------------------

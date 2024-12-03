@@ -93,7 +93,6 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
     elif lattice_dim == 2:
         # T generators for electric term
         for op in ["T2", "T4", "Tx", "Ty", "Tz", "P"]:
-            logger.info(op)
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz", "IDz", "IDz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["IDz", op, "IDz", "IDz"])
             ops[f"{op}_px"] = qmb_op(in_ops, ["IDz", "IDz", op, "IDz"])
@@ -103,7 +102,6 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
             for corner in ["px,py", "py,mx", "mx,my", "my,px"]:
                 ops[f"C{l1}{l2}_{corner}"] = 0
             for s in ["r", "g"]:
-                logger.info(f"{corner}_{l1}{l2}_{s}")
                 ops[f"C{l1}{l2}_px,py"] += qmb_op(
                     in_ops, ["IDz", "IDz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag"]
                 )
@@ -340,6 +338,7 @@ def SU2_gen_gauge_invariant_states(s_max, pure_theory, lattice_dim, background=F
         spins.insert(0, np.asarray([S(0), S(1) / 2, S(0)]))
     if background:
         spins.insert(0, np.asarray([S(0), S(1) / 2]))
+    vind = 0 if not background else 1
     # Set rows and col counters list for the basis
     gauge_states = {"site": []}
     gauge_basis = {"site": []}
@@ -352,7 +351,6 @@ def SU2_gen_gauge_invariant_states(s_max, pure_theory, lattice_dim, background=F
         spins_config = list(spins_config)
         if not pure_theory:
             # Check the matter spin (0 (vacuum), 1/2, 0 (up & down))
-            vind = 0 if not background else 1
             matter_sector = (ii // np.prod([len(l) for l in spins[vind + 1 :]])) % 3
             if matter_sector == 0:
                 psi_vacuum = True
@@ -436,11 +434,11 @@ def SU2_gen_Hamiltonian_couplings(lattice_dim, pure_theory, g, m=None):
     """
     validate_parameters(lattice_dim=lattice_dim, pure_theory=pure_theory)
     if lattice_dim == 1:
-        E = 8 * g**2 / 3  # The correct one is g**2 / 4
+        E = 8 * g / 3  # The correct one is g**2 / 4
         B = 0
     elif lattice_dim == 2:
-        E = 3 * (g**2) / 16
-        B = -16 / (g**2)
+        E = 8 * g**2 / 3  # The correct one is 3 * (g**2) / 16
+        B = -512 / (g**2)
     else:
         E = 3 * (g**2) / 16
         B = -16 / (g**2)
@@ -456,8 +454,8 @@ def SU2_gen_Hamiltonian_couplings(lattice_dim, pure_theory, g, m=None):
             "tx_even": -complex(0, 2) * np.sqrt(2),
             # x HOPPING (EVEN SITES) -complex(0, 1/(2*np.sqrt(2)))
             "tx_odd": -complex(0, 2) * np.sqrt(2),  # x HOPPING (ODD SITES)
-            "ty_even": -0.5 * np.sqrt(2),  # y HOPPING (EVEN SITES)
-            "ty_odd": 0.5 * np.sqrt(2),  # y HOPPING (ODD SITES)
+            "ty_even": -2 * np.sqrt(2),  # y HOPPING (EVEN SITES)
+            "ty_odd": 2 * np.sqrt(2),  # y HOPPING (ODD SITES)
             "tz_even": -0.5 * np.sqrt(2),  # z HOPPING (EVEN SITES)
             "tz_odd": 0.5 * np.sqrt(2),  # z HOPPING (ODD SITES)
             "m_odd": -m,  # EFFECTIVE MASS for ODD SITES
