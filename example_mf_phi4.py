@@ -3,7 +3,7 @@ import numpy as np
 from math import prod
 from ed_lgt.models import phi4_model
 
-from mean_field import sim
+from ed_lgt.algorithms.mean_field import mean_field
 from time import time
 import logging
 
@@ -17,7 +17,7 @@ dim = len(lvals)
 # directions = "xyz"[:dim]
 n_sites = prod(lvals)
 has_obc = [False]
-d_loc = 24
+d_loc = 10
 loc_dims = np.array([d_loc for _ in range(n_sites)])
 # parameters
 par = {
@@ -33,7 +33,14 @@ start = time()
 # CONSTRUCT THE HAMILTONIAN
 model = phi4_model.Phi4Model(**par)
 model.build_Hamiltonian_bulk(coeffs=coeffs)
-simulation = sim(model.H.Ham, par, error_mean=1e-10, error_dec=1e-16)
+simulation = mean_field(model.H.Ham, mf_error=1e-10, decomp_error=1e-10)
+
+res = simulation.sim(par)
+
+
+for E in res["E_conv"]:
+    print(E)
+
 
 diag = model.H.diagonalize(n_eigs=n_eigs, format="sparse", loc_dims=loc_dims)
 res = {}

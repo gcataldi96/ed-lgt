@@ -92,8 +92,8 @@ def Ham_eff(ops, state, d_loc):
     Effective operator
     """
 
-    H_l, H_r = 0, 0  # Initialize H_l and H_r as scalars (will become arrays)
-    H = 0  # Initialize H as scalar (will become array)
+    H_l, H_r = 0, 0  
+    H = 0  
     Id_A = np.identity(d_loc)
     Id_B = np.identity(d_loc)
 
@@ -182,28 +182,17 @@ def Ham_eff_sparse(ops, state):
 
 
 def test_decomp_sparse(ops_decomp, ops, atol=1e-13, rtol=1e-13):
-    C_rec = 0
-    for A, B in ops_decomp:
-        C_rec += np.kron(A.toarray(), B.toarray())
+    C_rec = sum([np.kron(A.toarray(), B.toarray()) for A, B in ops_decomp])
     assert np.allclose(ops.toarray(), C_rec, atol=1e-13, rtol=1e-13)
 
 
 def test_decomp(ops_decomp, ops, atol=1e-12, rtol=1e-12):
-    C_rec = 0
-    for A, B in ops_decomp:
-        C_rec += np.kron(A, B)
+    C_rec = sum([np.kron(A, B) for A, B in ops_decomp])
     assert np.allclose(ops, C_rec, atol, rtol)
 
 
 def sim(Hij, par, error_mean, error_dec):
-    """
-    Step 1:
-    Decompose operators
-
-    """
     d_loc = par["n_max"] + 1
-
-    # #get random state
     state = rand_state(d_loc**2)
 
     op_decomp_dens = decomp_2body(
@@ -211,18 +200,9 @@ def sim(Hij, par, error_mean, error_dec):
     )
 
     test_decomp(op_decomp_dens, Hij.toarray(), atol=1e-12, rtol=1e-12)
-
     eigval, eigvec = np.linalg.eigh(Hij.toarray())
-    print("gs", eigval[0] / 2)
-
-    # do contraction
-    # h = contract(op_decomp_dens, state, d_loc)
     h = Ham_eff(op_decomp_dens, state, d_loc)
-
     eigval, eigvec = np.linalg.eigh(h)
-
-    # # #Something goes wrong in the contraction
-    # eigval, eigvec = np.linalg.eig(h)
 
     diff = 1 + error_mean
     E = [eigval[0] / 2]
@@ -230,10 +210,7 @@ def sim(Hij, par, error_mean, error_dec):
     ii = 1
     while diff > error_mean:
 
-        # contraction
         h = Ham_eff(op_decomp_dens, eigvec[:, 0], d_loc)
-
-        # diagonalize
         eigval, eigvec = np.linalg.eigh(h)
 
         E.append(eigval[0] / 6)
@@ -241,7 +218,4 @@ def sim(Hij, par, error_mean, error_dec):
         conv.append(abs(E[ii] - E[ii - 1]))
         ii += 1
 
-    for item in E:
-        print(item)
-
-    return {"E_conv": E, "state": state, "conv": 0}
+    return {"E_conv": E, "state": eigvec[:, 0], "conv": conv}
