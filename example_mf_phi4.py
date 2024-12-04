@@ -17,7 +17,7 @@ dim = len(lvals)
 # directions = "xyz"[:dim]
 n_sites = prod(lvals)
 has_obc = [False]
-d_loc = 7
+d_loc = 10
 loc_dims = np.array([d_loc for _ in range(n_sites)])
 # parameters
 par = {
@@ -28,19 +28,18 @@ par = {
 
 # ACQUIRE HAMILTONIAN COEFFICIENTS
 coeffs = {"mu2": -0.2, "lambda": 0.6}
-# ACQUIRE OPERATORS
 
 start = time()
 # CONSTRUCT THE HAMILTONIAN
 model = phi4_model.Phi4Model(**par)
 model.build_Hamiltonian_bulk(coeffs=coeffs)
-simulation = sim(model.H.Ham, par, error_mean=1e-5, error_dec=1e-15)
+simulation = sim(model.H.Ham, par, error_mean=1e-10, error_dec=1e-15)
 
-# diag=model.H.diagonalize(n_eigs=n_eigs,format="sparse",loc_dims=loc_dims)
-# res={}
-# res["energy"] = model.H.Nenergies
+diag = model.H.diagonalize(n_eigs=n_eigs, format="sparse", loc_dims=loc_dims)
+res = {}
+res["energy"] = model.H.Nenergies
 
-# print(res["energy"]/lvals[0])
+print(res["energy"] / lvals[0])
 
 # ---------------------------------------------------------------------------
 # NEAREST NEIGHBOR INTERACTION
