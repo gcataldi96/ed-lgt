@@ -45,7 +45,7 @@ class mean_field:
         C_rec = sum([np.kron(A, B) for A, B in ops_decomp])
         assert np.allclose(ops, C_rec, atol, rtol)
 
-    def decomp_2body(C, m_A, n_A, m_B, n_B, error=1e-16):
+    def decomp_2body(C, d_loc, error=1e-16):
         """
         Input
         A two body operator C.
@@ -55,14 +55,14 @@ class mean_field:
         Such that C=∑_i Ai ⊗ Bi
 
         """
-        C_reshaped = C.reshape((m_A, n_A, m_B, n_B))
-        C_flat = C_reshaped.transpose(0, 2, 1, 3).reshape(m_A * m_B, n_A * n_B)
+        C_reshaped = C.reshape(4 * [d_loc])
+        C_flat = C_reshaped.transpose(0, 2, 1, 3).reshape(d_loc**2, d_loc**2)
         U, S, Vh = svd(C_flat)
 
         ops = [
             [
-                np.sqrt(Si) * U[:, ii].reshape(m_A, m_B),
-                np.sqrt(Si) * Vh[ii, :].reshape(n_A, n_B),
+                np.sqrt(Si) * U[:, ii].reshape(d_loc, d_loc),
+                np.sqrt(Si) * Vh[ii, :].reshape(d_loc, d_loc),
             ]
             for ii, Si in enumerate(S)
             if Si >= error
@@ -118,10 +118,7 @@ class mean_field:
 
         op_decomp_dens = mean_field.decomp_2body(
             self.Hij.toarray(),
-            m_A=d_loc,
-            n_A=d_loc,
-            m_B=d_loc,
-            n_B=d_loc,
+            d_loc,
             error=self.decomp_error,
         )
 
@@ -137,7 +134,6 @@ class mean_field:
         conv = [self.mf_error + 1]
         ii = 1
         while diff > self.mf_error:
-
             h = mean_field.Ham_eff(op_decomp_dens, eigvec[:, 0], d_loc)
             eigval, eigvec = np.linalg.eigh(h)
 
