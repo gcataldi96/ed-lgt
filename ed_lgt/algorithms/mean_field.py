@@ -36,7 +36,7 @@ class mean_field:
     -Generalize to n-side mf
     """
 
-    def __init__(self, Hij, mf_error, decomp_error):
+    def __init__(self, Hij: list, mf_error, decomp_error):
 
         self.Hij = Hij
         self.mf_error = mf_error
@@ -57,27 +57,32 @@ class mean_field:
         C_rec = sum([np.kron(A, B) for A, B in ops_decomp])
         assert np.allclose(ops, C_rec, atol, rtol)
 
-    def decomp_2body(C, d_loc, error=1e-16):
+    def decomp_2body(C: list, d_loc, par_m, error=1e-16):
         """
         Input
-        A two body operator C.
+        C: list of operators
+        d_loc: local dim of H_i
+        error:
 
         Returns:
         [[A1,B1,],[A2,B2],...]
         Such that C=∑_i Ai ⊗ Bi
         """
-        C_reshaped = C.reshape(4 * [d_loc])
-        C_flat = C_reshaped.transpose(0, 2, 1, 3).reshape(d_loc**2, d_loc**2)
-        U, S, Vh = svd(C_flat)
+        for op in C:  # generalize for case where I have more than one item in list
+            op_reshaped = op.reshape(4 * [d_loc])
+            C_flat = op_reshaped.transpose(0, 2, 1, 3).reshape(
+                d_loc ** par_m["n_side_mf"], d_loc ** par_m["n_side_mf"]
+            )
+            U, S, Vh = svd(C_flat)
 
-        ops = [
-            [
-                np.sqrt(Si) * U[:, ii].reshape(d_loc, d_loc),
-                np.sqrt(Si) * Vh[ii, :].reshape(d_loc, d_loc),
+            ops = [
+                [
+                    np.sqrt(Si) * U[:, ii].reshape(d_loc, d_loc),
+                    np.sqrt(Si) * Vh[ii, :].reshape(d_loc, d_loc),
+                ]
+                for ii, Si in enumerate(S)
+                if Si >= error
             ]
-            for ii, Si in enumerate(S)
-            if Si >= error
-        ]
         return ops
 
     def Ham_eff(ops, state, d_loc):
@@ -111,33 +116,37 @@ class mean_field:
 
         return H_l + H + H_r
 
-    def sim(self, par):
-        d_loc = par["n_max"] + 1
-        state = mean_field.rand_state(d_loc**2)
+    def sim(self, par_m: dict):
+        d_loc = par_m["d_loc"]
+        state = mean_field.rand_state(d_loc ** par_m["n_side_mf"])
 
         op_decomp_dens = mean_field.decomp_2body(
-            self.Hij.toarray(),
+            [x.toarray() for x in self.Hij],
             d_loc,
+            par_m,
             error=self.decomp_error,
         )
 
         mean_field.test_decomp(
-            op_decomp_dens, self.Hij.toarray(), atol=1e-12, rtol=1e-12
+            op_decomp_dens,
+            [x.toarray() for x in self.Hij],
+            atol=1e-12,
+            rtol=1e-12,
         )  # NOTE remove in final version
 
-        eigval, eigvec = np.linalg.eigh(self.Hij.toarray())
+        eigval, eigvec = np.linalg.eigh(self.Hij[0].toarray())
         h = mean_field.Ham_eff(op_decomp_dens, state, d_loc)
         eigval, eigvec = np.linalg.eigh(h)
 
         diff = 1 + self.mf_error
-        E = [eigval[0] / 2]
+        E = [eigval[0] / (3 * par_m["n_side_mf"])]
         conv = [self.mf_error + 1]
         ii = 1
         while diff > self.mf_error:
             h = mean_field.Ham_eff(op_decomp_dens, eigvec[:, 0], d_loc)
             eigval, eigvec = np.linalg.eigh(h)
 
-            E.append(eigval[0] / (3 * par["n_site_mf"]))
+            E.append(eigval[0] / ((3 * par_m["n_side_mf"])))
             diff = abs(E[ii] - E[ii - 1])
             conv.append(abs(E[ii] - E[ii - 1]))
             ii += 1

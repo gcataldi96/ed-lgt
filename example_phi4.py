@@ -50,8 +50,6 @@ print(res["energy"] / lvals[0])
 loc_obs = ["phi"]
 model.get_observables(loc_obs)  # how can I check if the set of observbles is not zero?
 
-print(model.get_observables())
-
 for ii in range(model.H.n_eigs):
     # MEASURE OBSERVABLES
     model.measure_observables(ii)
