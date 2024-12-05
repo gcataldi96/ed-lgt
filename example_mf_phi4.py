@@ -34,30 +34,20 @@ start = time()
 model = phi4_model.Phi4Model(**par)
 model.build_Hamiltonian_bulk(coeffs=coeffs)
 simulation = mean_field(model.H.Ham, mf_error=1e-10, decomp_error=1e-10)
+simulation.sim(par)
 
-res = simulation.sim(par)
-
-
+# observable
+res = simulation.get_result()
 for E in res["E_conv"]:
     print(E)
 
+
+# ===========================================================================
+# DIAGONALIZE THE HAMILTONIAN
 
 diag = model.H.diagonalize(n_eigs=n_eigs, format="sparse", loc_dims=loc_dims)
 res = {}
 res["energy"] = model.H.Nenergies
 
 print(res["energy"] / lvals[0])
-
-# ---------------------------------------------------------------------------
-# NEAREST NEIGHBOR INTERACTION
-
-# EXTERNAL MAGNETIC FIELD
-
-# ===========================================================================
-# DIAGONALIZE THE HAMILTONIAN
-
-
-# # Dictionary for results
-# res = {}
-# res["energy"] = H.Nenergies
 # ===========================================================================

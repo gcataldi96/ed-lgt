@@ -23,7 +23,7 @@ loc_dims = np.array([d_loc for _ in range(n_sites)])
 par = {"lvals": lvals, "has_obc": has_obc, "n_max": d_loc - 1}
 
 
-# ACQUIRE HAMILTONIAN COEFFICIENTS
+# HAMILTONIAN COEFFICIENTS
 coeffs = {"mu2": -0.2, "lambda": 0.6}
 # ACQUIRE OPERATORS
 
@@ -37,18 +37,3 @@ res = {}
 res["energy"] = model.H.Nenergies
 
 print(res["energy"] / lvals[0])
-
-
-# ---------------------------------------------------------------------------
-# NEAREST NEIGHBOR INTERACTION
-
-# EXTERNAL MAGNETIC FIELD
-
-# ===========================================================================
-# DIAGONALIZE THE HAMILTONIAN
-
-
-# # Dictionary for results
-# res = {}
-# res["energy"] = H.Nenergies
-# ===========================================================================

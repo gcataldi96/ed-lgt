@@ -7,8 +7,9 @@ class mean_field:
     Assumption: Hamiltonian H= ∑ h_{i,i+1}
 
     (In genrall h_{i,i+1} is not the same for all i.
-    Due to the staggering we have for LGT for example, 
-    alternating terms 
+    Due to the staggering we have for LGT for example,
+    alternating terms
+
     ...h_{i,i+1}^{A}+h_{i+1,i+2}^{B}+h_{i+2,i+3}^{A}+...
 
     Step 1:
@@ -28,11 +29,12 @@ class mean_field:
     Output:
     Effective operator
 
-    TODO: 
+    TODO:
     -Generalize to alternating Hamiltonian terms
     -Observables
-    -Speed up to sparse matrices
-    -Sparse representation 
+    -Speed up with sparse matrices
+    -Sparse representation
+    -Generalize to n-side mf
     """
 
     def __init__(self, Hij, mf_error, decomp_error):
@@ -42,10 +44,10 @@ class mean_field:
         self.decomp_error = decomp_error
 
     @staticmethod
-    def rand_state(d):
+    def rand_state(d: int):
         """
         Argument:
-        int d, which gives length of state
+        d: length of state
         Returns:
         Random normalized state of length d
         """
@@ -64,7 +66,6 @@ class mean_field:
         Returns:
         [[A1,B1,],[A2,B2],...]
         Such that C=∑_i Ai ⊗ Bi
-
         """
         C_reshaped = C.reshape(4 * [d_loc])
         C_flat = C_reshaped.transpose(0, 2, 1, 3).reshape(d_loc**2, d_loc**2)
@@ -82,18 +83,6 @@ class mean_field:
 
     def Ham_eff(ops, state, d_loc):
         """
-        Assuming a Hamiltonian H= ∑ H_{i,i+1}
-        Step 1:
-        With an SVD decomposition we find A_i, B_i,
-        such that H_{i,i+1}=∑ A_i ⊗ B_i.
-
-        Step 2:
-        Do the contraction with the state with:
-        Id ⊗ A_i ⊗ B_i and A_i ⊗ B_i ⊗ Id
-
-        Step 3:
-        Calculate: H_eff
-
         Input:
         Operators and state
 
@@ -135,7 +124,8 @@ class mean_field:
 
         mean_field.test_decomp(
             op_decomp_dens, self.Hij.toarray(), atol=1e-12, rtol=1e-12
-        )
+        )  # NOTE remove in final version
+
         eigval, eigvec = np.linalg.eigh(self.Hij.toarray())
         h = mean_field.Ham_eff(op_decomp_dens, state, d_loc)
         eigval, eigvec = np.linalg.eigh(h)
@@ -153,4 +143,17 @@ class mean_field:
             conv.append(abs(E[ii] - E[ii - 1]))
             ii += 1
 
-        return {"E_conv": E, "state": eigvec[:, 0], "conv": conv}
+        self.res = {"E_conv": E, "state": eigvec[:, 0], "conv": conv}
+
+    def loc_obs(self) -> dict:
+        """
+        Calculate <state| O_i |state>
+
+        Return:
+        dict
+        {loc_obs: [val_1,..,N], mean_obs: ...}
+        """
+        pass
+
+    def get_result(self) -> dict:
+        return self.res
