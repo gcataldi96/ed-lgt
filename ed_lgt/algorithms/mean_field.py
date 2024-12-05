@@ -7,10 +7,12 @@ class mean_field:
     Assumption: Hamiltonian H= ∑ h_{i,i+1}
 
     (In genrall h_{i,i+1} is not the same for all i.
-    Due to the staggering we have for LGT for example,
-    alternating terms
+    Example: staggering for for LGT+matter
 
     ...h_{i,i+1}^{A}+h_{i+1,i+2}^{B}+h_{i+2,i+3}^{A}+...
+
+    As a convetnion we say that h_{i,i+1}^{B} is in the middle
+    -> only h_{i,i+1}^A has to be decomposed
 
     Step 1:
     With an SVD decomposition we find A_i, B_i,
@@ -30,7 +32,6 @@ class mean_field:
     Effective operator
 
     TODO:
-    -Generalize to alternating Hamiltonian terms
     -Observables (outside of this class)
     -Sparse representation
     -Generalize to n-side mf
@@ -58,7 +59,7 @@ class mean_field:
         C_rec = sum([np.kron(A, B) for A, B in ops_decomp])
         assert np.allclose(ops, C_rec, atol, rtol)
 
-    def decomp_2body(C: list, d_loc, par_m, error=1e-16):
+    def decomp_2body(op, d_loc, error=1e-16):
         """
         Input
         C: list of operators
@@ -69,24 +70,22 @@ class mean_field:
         [[A1,B1,],[A2,B2],...]
         Such that C=∑_i Ai ⊗ Bi
         """
-        for op in C:  # generalize for case where I have more than one item in list
-            op_reshaped = op.reshape(4 * [d_loc])
-            C_flat = op_reshaped.transpose(0, 2, 1, 3).reshape(
-                d_loc ** par_m["n_side_mf"], d_loc ** par_m["n_side_mf"]
-            )
-            U, S, Vh = svd(C_flat)
 
-            ops = [
-                [
-                    np.sqrt(Si) * U[:, ii].reshape(d_loc, d_loc),
-                    np.sqrt(Si) * Vh[ii, :].reshape(d_loc, d_loc),
-                ]
-                for ii, Si in enumerate(S)
-                if Si >= error
+        op_reshaped = op.reshape(4 * [d_loc])
+        C_flat = op_reshaped.transpose(0, 2, 1, 3).reshape(d_loc**2, d_loc**2)
+        U, S, Vh = svd(C_flat)
+
+        ops = [
+            [
+                np.sqrt(Si) * U[:, ii].reshape(d_loc, d_loc),
+                np.sqrt(Si) * Vh[ii, :].reshape(d_loc, d_loc),
             ]
+            for ii, Si in enumerate(S)
+            if Si >= error
+        ]
         return ops
 
-    def Ham_eff(ops, state, d_loc):
+    def Ham_eff(ops, h_B, state, d_loc):
         """
         Input:
         Operators and state
@@ -95,7 +94,7 @@ class mean_field:
         Effective operator
         """
 
-        H_l, H, H_r = 0, 0, 0
+        H_l, H_r = 0, 0
         Id_A = np.identity(d_loc)
         Id_B = np.identity(d_loc)
 
@@ -112,31 +111,30 @@ class mean_field:
 
             H_l += v_L_i * np.kron(Bi, Id_A)
             H_r += v_R_i * np.kron(Id_B, Ai)
-            H += np.kron(Ai, Bi)
 
-        return H_l + H + H_r
+        return H_l + h_B + H_r
 
     def sim(self, par_m: dict):
 
         # init rnd state
         state = mean_field.rand_state(self.d_loc ** par_m["n_side_mf"])
 
+        h_A, h_B = (
+            (self.Hij[0].toarray(), self.Hij[0].toarray())
+            if len(self.Hij) == 1
+            else (self.Hij[0].toarray(), self.Hij[1].toarray())
+        )
+
         # decompose two site Hamiltonian
-        op_decomp_dens = mean_field.decomp_2body(
-            [x.toarray() for x in self.Hij],
+        op_decomp = mean_field.decomp_2body(
+            h_A,
             self.d_loc,
-            par_m,
             error=self.decomp_error,
         )
 
-        mean_field.test_decomp(
-            op_decomp_dens,
-            [x.toarray() for x in self.Hij],
-            atol=1e-12,
-            rtol=1e-12,
-        )  # NOTE remove in final version
+        mean_field.test_decomp(op_decomp, h_A)  # NOTE remove in final version
 
-        h = mean_field.Ham_eff(op_decomp_dens, state, self.d_loc)
+        h = mean_field.Ham_eff(op_decomp, h_B, state, self.d_loc)
         eigval, eigvec = np.linalg.eigh(h)
 
         diff = 1 + self.mf_error
@@ -144,7 +142,7 @@ class mean_field:
         conv = [self.mf_error + 1]
         ii = 1
         while diff > self.mf_error:
-            h = mean_field.Ham_eff(op_decomp_dens, eigvec[:, 0], self.d_loc)
+            h = mean_field.Ham_eff(op_decomp, h_B, eigvec[:, 0], self.d_loc)
             eigval, eigvec = np.linalg.eigh(h)
 
             E.append(eigval[0] / ((3 * par_m["n_side_mf"])))
