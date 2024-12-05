@@ -36,11 +36,12 @@ class mean_field:
     -Generalize to n-side mf
     """
 
-    def __init__(self, Hij: list, mf_error, decomp_error):
+    def __init__(self, Hij: list, par: dict, mf_error, decomp_error):
 
         self.Hij = Hij
         self.mf_error = mf_error
         self.decomp_error = decomp_error
+        self.d_loc = par["n_max"] + 1
 
     @staticmethod
     def rand_state(d: int):
@@ -94,12 +95,11 @@ class mean_field:
         Effective operator
         """
 
-        H_l, H_r = 0, 0
-        H = 0
+        H_l, H, H_r = 0, 0, 0
         Id_A = np.identity(d_loc)
         Id_B = np.identity(d_loc)
 
-        state = state.flatten()  # do I need this?
+        state = state.flatten()  # NOTE do I need this?
 
         for Ai, Bi in ops:
             # Compute contractions for the current operator pair
@@ -117,12 +117,14 @@ class mean_field:
         return H_l + H + H_r
 
     def sim(self, par_m: dict):
-        d_loc = par_m["d_loc"]
-        state = mean_field.rand_state(d_loc ** par_m["n_side_mf"])
 
+        # init rnd state
+        state = mean_field.rand_state(self.d_loc ** par_m["n_side_mf"])
+
+        # decompose two site Hamiltonian
         op_decomp_dens = mean_field.decomp_2body(
             [x.toarray() for x in self.Hij],
-            d_loc,
+            self.d_loc,
             par_m,
             error=self.decomp_error,
         )
@@ -134,8 +136,7 @@ class mean_field:
             rtol=1e-12,
         )  # NOTE remove in final version
 
-        eigval, eigvec = np.linalg.eigh(self.Hij[0].toarray())
-        h = mean_field.Ham_eff(op_decomp_dens, state, d_loc)
+        h = mean_field.Ham_eff(op_decomp_dens, state, self.d_loc)
         eigval, eigvec = np.linalg.eigh(h)
 
         diff = 1 + self.mf_error
@@ -143,7 +144,7 @@ class mean_field:
         conv = [self.mf_error + 1]
         ii = 1
         while diff > self.mf_error:
-            h = mean_field.Ham_eff(op_decomp_dens, eigvec[:, 0], d_loc)
+            h = mean_field.Ham_eff(op_decomp_dens, eigvec[:, 0], self.d_loc)
             eigval, eigvec = np.linalg.eigh(h)
 
             E.append(eigval[0] / ((3 * par_m["n_side_mf"])))
@@ -151,7 +152,13 @@ class mean_field:
             conv.append(abs(E[ii] - E[ii - 1]))
             ii += 1
 
-        self.res = {"E_conv": E, "state": eigvec[:, 0], "conv": conv}
+        self.res = {
+            "E_conv": E,
+            "state": eigvec[:, 0],
+            "conv": conv,
+            "mf_error": self.mf_error,
+            "decomp_error": self.decomp_error,
+        }
 
     def get_result(self) -> dict:
         return self.res

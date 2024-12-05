@@ -30,7 +30,7 @@ start = time()
 # CONSTRUCT THE HAMILTONIAN
 model = phi4_model.Phi4Model(**par)
 model.build_Hamiltonian_bulk(coeffs=coeffs)
-simulation = mean_field([model.H.Ham], mf_error=1e-10, decomp_error=1e-10)
+simulation = mean_field([model.H.Ham], par, mf_error=1e-10, decomp_error=1e-10)
 simulation.sim(par_m)
 
 # observable
