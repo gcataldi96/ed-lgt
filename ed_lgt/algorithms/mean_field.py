@@ -6,6 +6,11 @@ class mean_field:
     """
     Assumption: Hamiltonian H= ∑ h_{i,i+1}
 
+    (In genrall h_{i,i+1} is not the same for all i.
+    Due to the staggering we have for LGT for example, 
+    alternating terms 
+    ...h_{i,i+1}^{A}+h_{i+1,i+2}^{B}+h_{i+2,i+3}^{A}+...
+
     Step 1:
     With an SVD decomposition we find A_i, B_i,
     such that h_{i,i+1}=∑_j A_i^{j} ⊗ B_i+1^{j}
@@ -18,10 +23,16 @@ class mean_field:
     Calculate: H_eff
 
     Input:
-    Sparse matrix h_{i,i+1}
+    Matrix h_{i,i+1}
 
     Output:
     Effective operator
+
+    TODO: 
+    -Generalize to alternating Hamiltonian terms
+    -Observables
+    -Speed up to sparse matrices
+    -Sparse representation 
     """
 
     def __init__(self, Hij, mf_error, decomp_error):
