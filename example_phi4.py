@@ -4,6 +4,8 @@ from math import prod
 
 # from ed_lgt.modeling import abelian_sector_indices
 from ed_lgt.models import phi4_model
+from ed_lgt.modeling import LocalTerm, TwoBodyTerm
+
 from time import time
 import logging
 
@@ -32,8 +34,24 @@ start = time()
 model = phi4_model.Phi4Model(**par)
 model.build_Hamiltonian(coeffs=coeffs)
 
-diag = model.H.diagonalize(n_eigs=n_eigs, format="sparse", loc_dims=loc_dims)
+model.H.diagonalize(n_eigs=n_eigs, format="sparse", loc_dims=loc_dims)
+# diagonalize_Hamiltonian
+
+
 res = {}
 res["energy"] = model.H.Nenergies
 
+print("Eigenvalues computed:", model.H.Nenergies)
+print("Number of eigenvalus:", model.H.n_eigs)
+
 print(res["energy"] / lvals[0])
+
+# observable
+loc_obs = ["phi"]
+model.get_observables(loc_obs)  # how can I check if the set of observbles is not zero?
+
+print(model.get_observables())
+
+for ii in range(model.H.n_eigs):
+    # MEASURE OBSERVABLES
+    model.measure_observables(ii)

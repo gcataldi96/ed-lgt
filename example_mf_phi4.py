@@ -20,11 +20,7 @@ has_obc = [False]
 d_loc = 10
 loc_dims = np.array([d_loc for _ in range(n_sites)])
 # parameters
-par = {
-    "lvals": lvals,
-    "has_obc": has_obc,
-    "n_max": d_loc - 1,
-}
+par = {"lvals": lvals, "has_obc": has_obc, "n_max": d_loc - 1, "n_site_mf": 2}
 
 # ACQUIRE HAMILTONIAN COEFFICIENTS
 coeffs = {"mu2": -0.2, "lambda": 0.6}

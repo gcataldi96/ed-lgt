@@ -31,8 +31,7 @@ class mean_field:
 
     TODO:
     -Generalize to alternating Hamiltonian terms
-    -Observables
-    -Speed up with sparse matrices
+    -Observables (outside of this class)
     -Sparse representation
     -Generalize to n-side mf
     """
@@ -138,22 +137,12 @@ class mean_field:
             h = mean_field.Ham_eff(op_decomp_dens, eigvec[:, 0], d_loc)
             eigval, eigvec = np.linalg.eigh(h)
 
-            E.append(eigval[0] / 6)
+            E.append(eigval[0] / (3 * par["n_site_mf"]))
             diff = abs(E[ii] - E[ii - 1])
             conv.append(abs(E[ii] - E[ii - 1]))
             ii += 1
 
         self.res = {"E_conv": E, "state": eigvec[:, 0], "conv": conv}
-
-    def loc_obs(self) -> dict:
-        """
-        Calculate <state| O_i |state>
-
-        Return:
-        dict
-        {loc_obs: [val_1,..,N], mean_obs: ...}
-        """
-        pass
 
     def get_result(self) -> dict:
         return self.res

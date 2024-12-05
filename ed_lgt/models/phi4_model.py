@@ -1,9 +1,9 @@
 import numpy as np
 from scipy.sparse import csc_matrix
+from scipy.special import ellipk as ellipt_int
 
-from ed_lgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
 
-
+from ed_lgt.modeling import LocalTerm, TwoBodyTerm
 from ed_lgt.operators import bose_fermi_operators
 from .quantum_model import QuantumModel
 
@@ -18,7 +18,7 @@ class Phi4Model(QuantumModel):
         self.loc_dims = np.array(
             [n_max + 1 for _ in range(self.n_sites)], dtype=np.uint8
         )
-        # Acquire operators
+        # Operators
         self.ops = bose_fermi_operators.bose_operators(n_max=n_max)
         self.ops["phi"] = (1 / np.sqrt(2)) * (self.ops["b"] + self.ops["b_dagger"])
         self.ops["pi"] = (1 / np.sqrt(2)) * (self.ops["b_dagger"] - self.ops["b"])
@@ -26,11 +26,10 @@ class Phi4Model(QuantumModel):
         self.ops["phi2"] = self.ops["phi"] * self.ops["phi"]
         self.ops["phi4"] = self.ops["phi2"] * self.ops["phi2"]
         self.ops["pi2"] = self.ops["pi"] * self.ops["pi"]
-        self.ops["Id"] = csc_matrix(np.identity(n_max+1))
+        self.ops["Id"] = csc_matrix(np.identity(n_max + 1))  # get read of this
 
         # Acquire local dimension and lattice label
         self.default_params()
-
 
     def build_Hamiltonian(self, coeffs):
         # Hamiltonian Coefficients
@@ -46,21 +45,27 @@ class Phi4Model(QuantumModel):
 
         for d in self.directions:
             # Define the Hamiltonian term
-            h_terms[f"Idphi_{d}"] = TwoBodyTerm(axis=d, op_list=op_list, op_names_list=op_names_list ,**self.def_params )
+            h_terms[f"Idphi_{d}"] = TwoBodyTerm(
+                axis=d, op_list=op_list, op_names_list=op_names_list, **self.def_params
+            )
             self.H.Ham += h_terms[f"Idphi_{d}"].get_Hamiltonian(strength=0.5)
 
         op_names_list = ["phi", "phi"]
         op_list = [self.ops[op] for op in op_names_list]
         for d in self.directions:
             # Define the Hamiltonian term
-            h_terms[f"phiphi_{d}"] = TwoBodyTerm(axis=d, op_list=op_list, op_names_list=op_names_list ,**self.def_params )
+            h_terms[f"phiphi_{d}"] = TwoBodyTerm(
+                axis=d, op_list=op_list, op_names_list=op_names_list, **self.def_params
+            )
             self.H.Ham += h_terms[f"phiphi_{d}"].get_Hamiltonian(strength=-1)
 
         op_names_list = ["phi2", "Id"]
         op_list = [self.ops[op] for op in op_names_list]
         for d in self.directions:
             # Define the Hamiltonian term
-            h_terms[f"phi2Id_{d}"] = TwoBodyTerm(axis=d, op_list=op_list, op_names_list=op_names_list ,**self.def_params )
+            h_terms[f"phi2Id_{d}"] = TwoBodyTerm(
+                axis=d, op_list=op_list, op_names_list=op_names_list, **self.def_params
+            )
             self.H.Ham += h_terms[f"phi2Id_{d}"].get_Hamiltonian(strength=0.5)
 
         # SINGLE BODY TERM
@@ -80,9 +85,9 @@ class Phi4Model(QuantumModel):
             strength=self.coeffs["lambda"] / (24)
         )
 
-    def build_Hamiltonian_bulk(self,coeffs):
+    def build_Hamiltonian_bulk(self, coeffs):
         """
-        Build n-side Hamiltonian 
+        Build n-side Hamiltonian
         of the bulk of the theory
         """
         # Hamiltonian Coefficients
@@ -95,7 +100,9 @@ class Phi4Model(QuantumModel):
         op_list = [self.ops[op] for op in op_names_list]
         for d in self.directions:
             # Define the Hamiltonian term
-            h_terms[f"phiphi_{d}"] = TwoBodyTerm(axis=d, op_list=op_list, op_names_list=op_names_list ,**self.def_params )
+            h_terms[f"phiphi_{d}"] = TwoBodyTerm(
+                axis=d, op_list=op_list, op_names_list=op_names_list, **self.def_params
+            )
             self.H.Ham += h_terms[f"phiphi_{d}"].get_Hamiltonian(strength=-1)
 
         # SINGLE BODY TERM
@@ -106,7 +113,7 @@ class Phi4Model(QuantumModel):
         op_name = "phi2"
         h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
         self.H.Ham += h_terms[op_name].get_Hamiltonian(
-            strength=0.5 * self.coeffs["mu2"]+1
+            strength=0.5 * self.coeffs["mu2"] + 1
         )
 
         op_name = "phi4"
@@ -115,6 +122,9 @@ class Phi4Model(QuantumModel):
             strength=self.coeffs["lambda"] / (24)
         )
 
+    @staticmethod
+    def substraction_mu02(musquare, lamb):
 
-
-
+        return (musquare) - (lamb / 2) * (1 / np.pi) * (
+            1 / (np.sqrt(musquare + 4))
+        ) * ellipt_int(4 / (musquare + 4), out=None)
