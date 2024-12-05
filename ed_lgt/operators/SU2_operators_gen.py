@@ -12,7 +12,7 @@ from ed_lgt.modeling import (
 from ed_lgt.tools import validate_parameters, get_time
 from .SU2_singlets import get_SU2_singlets, SU2_singlet_canonical_vector
 from .spin_operators import spin_space, SU2_generators
-from .SU2_rishons_gen import SU2_Rishon_gen
+from .SU2_rishons import SU2_Rishon_gen
 from .bose_fermi_operators import fermi_operators as SU2_matter_operators
 import logging
 
@@ -62,7 +62,7 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
     ops = {}
     if lattice_dim == 1:
         # T generators for electric term
-        for op in ["T2", "T4", "Tx", "Ty", "Tz", "P"]:
+        for op in ["T2", "P"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz"])
             ops[f"{op}_px"] = qmb_op(in_ops, ["IDz", op])
         if not pure_theory:
@@ -92,7 +92,7 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
             ops |= Qs
     elif lattice_dim == 2:
         # T generators for electric term
-        for op in ["T2", "T4", "Tx", "Ty", "Tz", "P"]:
+        for op in ["T2", "P"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz", "IDz", "IDz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["IDz", op, "IDz", "IDz"])
             ops[f"{op}_px"] = qmb_op(in_ops, ["IDz", "IDz", op, "IDz"])
@@ -153,7 +153,7 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
             ops |= Qs
     elif lattice_dim == 3:
         # T generators for electric term
-        for op in ["T2", "T4", "Tx", "Ty", "Tz", "P"]:
+        for op in ["T2", "P"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz", "IDz", "IDz", "IDz", "IDz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["IDz", op, "IDz", "IDz", "IDz", "IDz"])
             ops[f"{op}_mz"] = qmb_op(in_ops, ["IDz", "IDz", op, "IDz", "IDz", "IDz"])
@@ -290,6 +290,7 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
             ops[f"N_{label}"] = qmb_op(
                 in_ops, [f"N_{label}"] + ["IDz" for i in range(2 * lattice_dim)]
             )
+        """
         # Psi CASIMIR OPERATORS
         ops["S2_matter"] = 0
         for Td in ["x", "y", "z"]:
@@ -298,11 +299,13 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
                 ** 2,
                 dtype=float,
             )
+        """
     # CASIMIR/ELECTRIC OPERATOR
     ops[f"E_square"] = 0
     for s in "pm":
         for d in dimensions:
             ops[f"E_square"] += 0.5 * ops[f"T2_{s}{d}"]
+    """
     # DRESSED SITE CASIMIR OPERATOR S^{2}
     ops[f"S2_tot"] = 0
     for Td in ["x", "y", "z"]:
@@ -311,6 +314,7 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
                 ops["S2_tot"] += csr_matrix(ops[f"T{Td}_{s}{d}"] ** 2, dtype=float)
     if not pure_theory:
         ops["S2_tot"] += ops["S2_matter"]
+    """
     if background:
         for op in ops.keys():
             ops[op] = kron(identity(3), ops[op])
@@ -431,17 +435,23 @@ def SU2_gen_Hamiltonian_couplings(lattice_dim, pure_theory, g, m=None):
 
     Returns:
         dict: dictionary of Hamiltonian coefficients
+
+    # NOTE: in the actual version of the coefficients, we rescale the Hamiltonian
+    in such a way that the hopping term is dimensionless as in
+    https://doi.org/10.1103/PRXQuantum.5.040309.
+    To do so, we need to multiply
+    - the hopping by 4*np.sqrt(2) (the original coupling is 1/2) --> 2*np.sqrt(2)
+    - the electric by 8/3 (the original was g_{0}^{2}/2) --> 8g^{2}/3, g^{2}=(3/2np.sqrt(2))*g_{0}^{2}
+    - the magnetic by 3 ()
+    - the other convention here is g is intended to be g^{2}
     """
     validate_parameters(lattice_dim=lattice_dim, pure_theory=pure_theory)
     if lattice_dim == 1:
-        E = 8 * g / 3  # The correct one is g**2 / 4
+        E = 8 * g / 3  # The correct one is g**2 / 2
         B = 0
-    elif lattice_dim == 2:
-        E = 8 * g**2 / 3  # The correct one is 3 * (g**2) / 16
-        B = -512 / (g**2)
     else:
-        E = 3 * (g**2) / 16
-        B = -16 / (g**2)
+        E = 8 * g / 3  # The correct one is g**2 / 2
+        B = -3 / g  # The correct one is -1/2*g**2
     # Dictionary with Hamiltonian COEFFICIENTS
     coeffs = {
         "g": g,
@@ -450,14 +460,14 @@ def SU2_gen_Hamiltonian_couplings(lattice_dim, pure_theory, g, m=None):
     }
     if not pure_theory:
         coeffs |= {
-            "m": m,
-            "tx_even": -complex(0, 2) * np.sqrt(2),
-            # x HOPPING (EVEN SITES) -complex(0, 1/(2*np.sqrt(2)))
-            "tx_odd": -complex(0, 2) * np.sqrt(2),  # x HOPPING (ODD SITES)
+            # The correct hopping in original units should be 1/2
+            "tx_even": -complex(0, 2 * np.sqrt(2)),  # x HOPPING (EVEN SITES)
+            "tx_odd": -complex(0, 2 * np.sqrt(2)),  # x HOPPING (ODD SITES)
             "ty_even": -2 * np.sqrt(2),  # y HOPPING (EVEN SITES)
             "ty_odd": 2 * np.sqrt(2),  # y HOPPING (ODD SITES)
-            "tz_even": -0.5 * np.sqrt(2),  # z HOPPING (EVEN SITES)
-            "tz_odd": 0.5 * np.sqrt(2),  # z HOPPING (ODD SITES)
+            "tz_even": -2 * np.sqrt(2),  # z HOPPING (EVEN SITES)
+            "tz_odd": 2 * np.sqrt(2),  # z HOPPING (ODD SITES)
+            "m": m,
             "m_odd": -m,  # EFFECTIVE MASS for ODD SITES
             "m_even": m,  # EFFECTIVE MASS for EVEN SITES
         }

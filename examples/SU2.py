@@ -4,6 +4,8 @@ from sympy import S
 from scipy.sparse import kron, csr_matrix
 from ed_lgt.operators import (
     SU2_dressed_site_operators,
+    Z2_FermiHubbard_gauge_invariant_states,
+    Z2_FermiHubbard_dressed_site_operators,
     SU2_gauge_invariant_states,
     fermi_operators,
     SU2_check_gauss_law,
@@ -21,16 +23,38 @@ from ed_lgt.operators import (
     m_values,
 )
 
+import logging
 
-def SU2_gauge_invariant_ops(spin, pure_theory, lattice_dim):
-    in_ops = SU2_dressed_site_operators(spin, pure_theory, lattice_dim)
-    gauge_basis, _ = SU2_gauge_invariant_states(spin, pure_theory, lattice_dim)
+logger = logging.getLogger(__name__)
+
+
+def SU2_gauge_invariant_ops(spin, pure_theory, lattice_dim, background):
+    in_ops = SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background)
+    gauge_basis, _ = SU2_gauge_invariant_states(
+        spin, pure_theory, lattice_dim, background
+    )
     ops = {}
     label = "site"
     for op in in_ops.keys():
         ops[op] = gauge_basis[label].transpose() @ in_ops[op] @ gauge_basis[label]
     return ops
 
+
+def Z2Hubbard_gauge_invariant_ops(lattice_dim):
+    in_ops = Z2_FermiHubbard_dressed_site_operators(lattice_dim)
+    gauge_basis, _ = Z2_FermiHubbard_gauge_invariant_states(lattice_dim)
+    ops = {}
+    label = "site"
+    for op in in_ops.keys():
+        ops[op] = gauge_basis[label].transpose() @ in_ops[op] @ gauge_basis[label]
+    return ops
+
+
+# %%
+ops = Z2Hubbard_gauge_invariant_ops(lattice_dim=2)
+for op in ops.keys():
+    print(op)
+    print(ops[op])
 
 # %%
 # With the simplified version of SU2
@@ -135,20 +159,31 @@ for s in sorted_states:
 singlets = get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None)
 
 # %%
-gauge_basis, gauge_states = SU2_gauge_invariant_states(1, False, lattice_dim=1)
-SU2_check_gauss_law(gauge_basis["site"])
-
-for s in gauge_states["site"]:
+gauge_basis, gauge_states = SU2_gauge_invariant_states(3 / 2, False, lattice_dim=1)
+for ii, s in enumerate(gauge_states["site"]):
+    logger.info(f"{ii}")
+    s.display_singlets()
+logger.info("TTTTTTTTTTTTTTTTTTTTTTTTTT")
+logger.info("")
+for ii, s in enumerate(gauge_states["site_mx"]):
+    logger.info(f"{ii}")
+    s.display_singlets()
+logger.info("TTTTTTTTTTTTTTTTTTTTTTTTTT")
+logger.info("")
+for ii, s in enumerate(gauge_states["site_px"]):
+    logger.info(f"{ii}")
     s.display_singlets()
 # %%
 in_ops = SU2_dressed_site_operators(spin=1 / 2, pure_theory=False, lattice_dim=1)
 # %%
-ops = SU2_gauge_invariant_ops(spin=1 / 2, pure_theory=False, lattice_dim=1)
+ops = SU2_gauge_invariant_ops(
+    spin=1 / 2, pure_theory=False, lattice_dim=1, background=False
+)
 for op in ops.keys():
-    print(op)
+    print(op + "-----")
     print(ops[op])
 
-print(8 * ops["E_square"] / 3)
+# print(8 * ops["E_square"] / 3)
 # %%
 for s in gauge_states["site"]:
     s.display_singlets()

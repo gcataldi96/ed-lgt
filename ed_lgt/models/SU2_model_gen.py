@@ -13,7 +13,7 @@ __all__ = ["SU2_Model_Gen"]
 
 
 class SU2_Model_Gen(QuantumModel):
-    def __init__(self, spin, pure_theory, background, **kwargs):
+    def __init__(self, spin, pure_theory, background, sectors, **kwargs):
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
@@ -42,7 +42,7 @@ class SU2_Model_Gen(QuantumModel):
             global_sectors = None
         else:
             global_ops = [self.ops["N_tot"]]
-            global_sectors = [self.n_sites]
+            global_sectors = sectors
         # LINK SYMMETRIES
         link_ops = [
             [self.ops[f"T2_p{d}"], -self.ops[f"T2_m{d}"]] for d in self.directions
@@ -164,16 +164,30 @@ class SU2_Model_Gen(QuantumModel):
         # POLARIZED AND BARE VACUUM in 1D
         if len(self.lvals) == 1:
             if name == "V":
-                if self.spin == 1:
-                    s1, s2, L, R = 0, 7, 0, 2
-                elif self.spin < 1:
+                if self.spin < 1:
                     s1, s2, L, R = 0, 4, 0, 2
+                elif self.spin == 1:
+                    s1, s2, L, R = 0, 7, 0, 2
+                elif self.spin > 1:
+                    s1, s2, L, R = 0, 10, 0, 2
             elif name == "PV":
-                if self.spin == 1:
-                    s1, s2, L, R = 1, 8, 1, 1
-                elif self.spin < 1:
+                if self.spin < 1:
                     s1, s2, L, R = 1, 5, 1, 1
-            config_state = [s1 if ii % 2 == 0 else s2 for ii in range(self.n_sites)]
+                elif self.spin == 1:
+                    s1, s2, L, R = 1, 8, 1, 1
+                elif self.spin > 1:
+                    s1, s2, L, R = 1, 11, 1, 1
+            elif name == "T":
+                s1, s2, L, R = 6, 12, 1, 1
+            elif name == "M":
+                s1, s2, L, R = 2, 3, 1, 1
+            elif name == "B":
+                s1, s2, L, R = 7, 11, 1, 1
+            # config_state = [s1 if ii % 2 == 0 else s2 for ii in range(self.n_sites)]
+            if name == "DW":
+                config_state = [0, 0, 4, 4, 0, 0, 4, 4]
+            elif name == "FD":
+                config_state = [0, 4, 4, 0, 0, 0, 4, 4, 0, 0]
             if self.has_obc[0]:
                 config_state[0] = L
                 config_state[-1] = R
@@ -181,7 +195,12 @@ class SU2_Model_Gen(QuantumModel):
         else:
             if not self.pure_theory:
                 if self.has_obc[0]:
-                    config_state = [0, 9, 0, 4, 4, 0, 9, 0]
+                    if name == "V":
+                        config_state = [0, 9, 0, 4, 4, 0, 9, 0]
+                    elif name == "PV1":
+                        config_state = [1, 12, 3, 5, 5, 2, 11, 1]
+                    elif name == "PV2":
+                        config_state = [1, 11, 1, 5, 5, 3, 10, 1]
                 else:
                     config_state = [0, 9, 0, 9, 9, 0, 9, 0]
             else:

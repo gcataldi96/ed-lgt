@@ -35,7 +35,7 @@ with run_sim() as sim:
         local_obs = [f"N_{label}" for label in ["tot"]]
     # Store the observables
     partition_indices = list(np.arange(0, int(np.prod(model.lvals) / 2), 1))
-    for measure in ["entropy", "delta", "delta0", "entropy0"]:
+    for measure in ["delta", "entropy", "overlap"][:2]:
         sim.res[measure] = np.zeros(n_steps, dtype=float)
     # ==============================================================================
     # GLOBAL SYMMETRIES
@@ -92,22 +92,19 @@ with run_sim() as sim:
     # ENUMERATE ALL THE BACKGROUND SYMMETRY SECTORS
     logical_stag_basis = sim.par["dynamics"]["logical_stag_basis"]
     bg_configs, bg_sectors = model.get_background_charges_configs(logical_stag_basis)
-    n_charge_sectors = bg_sectors.shape[0]
-    logger.info(f"charge sector configs {n_charge_sectors}")
-    for ii in range(len(bg_configs)):
-        logger.info(f"{bg_configs[ii]}")
+    logger.info(f"charge sector configs {bg_sectors.shape[0]}")
     # Calculate the norm_scalar product with the matter config of the initial state
     if model.n_sites % (2 * logical_stag_basis) != 0:
         raise ValueError(f"the staggered basis is not compatible with n_sites")
-
+    # -------------------------------------------------------------------------------
     num_blocks = model.n_sites // (2 * logical_stag_basis)
     stag_array = np.array(
         [-1] * logical_stag_basis + [1] * logical_stag_basis, dtype=int
     )
     norm_scalar_product = np.tile(stag_array, num_blocks)
     logger.info(f"norm scalar product {norm_scalar_product}")
+    # -------------------------------------------------------------------------------
     # DEFINE THE GLOBAL OPERATOR for the BACKGROUND CHARGE
-    logger.info(f"bg_global_ops")
     bg_global_ops = get_symmetry_sector_generators(
         [model.ops["bg"]],
         loc_dims=model.loc_dims,
@@ -115,12 +112,25 @@ with run_sim() as sim:
         gauge_basis=model.gauge_basis,
         lattice_labels=model.lattice_labels,
     )
+    # Step 1: Find unique rows and their indices
+    unique_bg_sectors, indices = np.unique(bg_sectors, axis=0, return_inverse=True)
+    num_bg_sectors = len(unique_bg_sectors)
+    # Step 2: Define the array where bg configs are stored according to their associated sector
+    bg_configs_per_sector = np.zeros((num_bg_sectors, 2, model.n_sites), dtype=int)
+    counts = np.zeros(num_bg_sectors, dtype=int)
+    # Step 3: Group rows from the second array based on the indices
+    for idx, group_id in enumerate(indices):
+        bg_configs_per_sector[group_id, counts[group_id]] = bg_configs[idx]
+        counts[group_id] += 1  # Increment the count for the current group
     # -------------------------------------------------------------------------------
     # RUN OVER THE POSSIBLE BACKGROUND SECTORS
-    for bg_num, bg_sector in enumerate(bg_sectors):
-        bg_config = bg_configs[bg_num]
+    for bg_num, bg_sector in enumerate(unique_bg_sectors):
+        bg_config_list = [
+            list(bg_configs_per_sector[bg_num, 0, :]),
+            list(bg_configs_per_sector[bg_num, 1, :]),
+        ]
         logger.info("----------------------------------------------")
-        logger.info(f"BG SECTOR {bg_sector}  CONFIG {bg_config+1}")
+        logger.info(f"BG SECTOR {bg_sector}  CONFIGS {bg_config_list}")
         # ---------------------------------------------------------------------------
         # SELECT THE SYMMETRY SECTOR OF THE BACKGROUNG CHARGE
         model.sector_indices, model.sector_configs = global_abelian_sector(
@@ -142,16 +152,17 @@ with run_sim() as sim:
         # ---------------------------------------------------------------------------
         name = sim.par["dynamics"]["state"]
         if name == "background" and sim.par["model"]["background"]:
-            in_state = model.get_qmb_state_from_configs([bg_config])
+            in_state = model.get_qmb_state_from_configs(bg_config_list)
         else:
             raise ValueError("initial state expected to be background")
         # TIME EVOLUTION
         model.time_evolution_Hamiltonian(in_state, start, stop, n_steps)
         # -----------------------------------------------------------------------
         for ii in range(n_steps):
-            logger.info(
-                f"====== {bg_num} ============ TIME {format(delta_n*ii, '.2f')} ===================="
-            )
+            t_step = format(delta_n * ii, ".2f")
+            msg = f"====== {bg_num} ============ TIME {t_step} ===================="
+            logger.info(msg)
+            """
             if not model.momentum_basis:
                 # ---------------------------------------------------------------
                 # ENTROPY
@@ -159,24 +170,24 @@ with run_sim() as sim:
                     partition_indices,
                     model.sector_configs,
                 )
-                """
-                # STATE CONFIGURATIONS
-                model.H.psi_time[ii].get_state_configurations(
-                    1e-1, model.sector_configs
-                )
-                """
                 # Save the entropy
-                if bg_num == 0:
-                    sim.res["entropy0"][ii] += entropy
-                sim.res["entropy"][ii] += entropy / n_charge_sectors
+                sim.res["entropy"][ii] += (
+                    entropy + np.log2(num_bg_sectors)
+                ) / num_bg_sectors
+                # STATE CONFIGURATIONS
+                # model.H.psi_time[ii].get_state_configurations(
+                #    1e-1, model.sector_configs
+                # )
+            """
             # -------------------------------------------------------------------
             # MEASURE OBSERVABLES
             model.measure_observables(ii, dynamics=True)
             # TAKE THE SPECIAL AVERAGE TO LOOK AT THE IMBALANCE
             delta = np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
-            if bg_num == 0:
-                sim.res["delta0"][ii] = delta
-            sim.res["delta"][ii] = delta / n_charge_sectors
+            sim.res["delta"][ii] += delta / num_bg_sectors
+            # OVERLAPS with the INITIAL STATE
+            # overlap = model.measure_fidelity(in_state, ii, True, True)
+            # sim.res["overlap"][ii] += overlap / num_bg_sectors
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

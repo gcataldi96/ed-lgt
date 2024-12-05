@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 with run_sim() as sim:
     start_time = perf_counter()
     # -------------------------------------------------------------------------------
-    if sim.par["model"]["spin"] > 1:
+    if sim.par["model"]["spin"] > 2:
         model = SU2_Model(**sim.par["model"])
         m = sim.par["m"] if not model.pure_theory else None
         coeffs = SU2_Hamiltonian_couplings(
@@ -46,10 +46,16 @@ with run_sim() as sim:
     # QUENCH STATE FOR OVERLAP
     name = sim.par["hamiltonian"]["state"]
     config = model.overlap_QMB_state(name)
+    logger.info(f"config {config}")
     in_state = model.get_qmb_state_from_configs([config])
     # -------------------------------------------------------------------------------
     # ALLOCATE OBSERVABLES
-    partition_indices = list(np.arange(0, int(model.n_sites / 2), 1))
+    if len(model.has_obc) == 1:
+        partition_indices = list(np.arange(0, int(model.lvals[0] / 2), 1))
+    else:
+        partition_indices = list(np.arange(0, int(model.lvals[0] / 2), 1)) + list(
+            np.arange(model.lvals[0], model.lvals[0] + int(model.lvals[0] / 2), 1)
+        )
     sim.res["entropy"] = np.zeros(model.H.n_eigs, dtype=float)
     sim.res["overlap"] = np.zeros(model.H.n_eigs, dtype=float)
     for obs in local_obs:
@@ -61,7 +67,7 @@ with run_sim() as sim:
             # -----------------------------------------------------------------------
             # ENTROPY
             sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
-                partition_indices, sector_configs=model.sector_configs
+                partition_indices, model.sector_configs
             )
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS
