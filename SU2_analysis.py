@@ -1,6 +1,8 @@
 # %%
 from simsio import *
-from matplotlib import pyplot as plt
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from matplotlib.colors import LogNorm
 from ed_lgt.tools import save_dictionary, load_dictionary
 
 textwidth_pt = 510.0
@@ -54,16 +56,23 @@ local_obs = [f"T2_{s}{d}" for d in "x" for s in "mp"]
 local_obs += ["E_square"]
 local_obs += [f"N_{label}" for label in ["r", "g", "tot", "single", "pair"]]
 # %%
-# SPECTRUM
+# ==========================================================================
+# 2D SPECTRUM
+# ==========================================================================
+index_list = ["g5m1", "g1m5"]
+idx = 1
+name = index_list[idx]
 res = {}
 # Acquire simulations of finite E field
-config_filename = f"scars/pure_sp"
+config_filename = f"scars/PVspectrum2D"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
-res["overlap"] = get_sim(ugrid[0]).res["overlap"]
-res["energy"] = get_sim(ugrid[0]).res["energy"]
-fig, ax = plt.subplots(1, 1, constrained_layout=True)
-ax.plot(
+res["overlap"] = get_sim(ugrid[idx]).res["overlap"]
+res["energy"] = get_sim(ugrid[idx]).res["energy"]
+res["entropy"] = get_sim(ugrid[idx]).res["entropy"]
+
+fig, ax = plt.subplots(2, 1, constrained_layout=True)
+ax[0].plot(
     res["energy"],
     res["overlap"],
     "o",
@@ -72,36 +81,255 @@ ax.plot(
     markerfacecolor="white",
     markeredgewidth=0.5,
 )
-ax.set(ylabel="Overlap", yscale="log", ylim=[1e-6, 2], xlabel="Energy")
+ax[0].set(ylabel="Overlap", yscale="log", xlabel="Energy")
+ax[1].plot(
+    res["energy"],
+    res["entropy"],
+    "o",
+    markersize=1,
+    markeredgecolor="darkblue",
+    markerfacecolor="white",
+    markeredgewidth=0.5,
+)
+ax[1].set(ylabel="Ent Entropy", xlabel="Energy")
+
+# Define energy interval length
+energy_interval = 17
+start_energy = res["energy"][0]
+end_energy = start_energy + energy_interval
+lista = []
+# Loop through energy intervals
+while start_energy < max(res["energy"]):
+    # Find indices within the current energy interval
+    interval_indices = [
+        i for i, e in enumerate(res["energy"]) if start_energy <= e < end_energy
+    ]
+
+    # Proceed if there are any points in this interval
+    if interval_indices:
+        # Find the index of the maximum overlap within the current energy interval
+        max_overlap_idx = max(interval_indices, key=lambda i: res["overlap"][i])
+
+        # Mark the maximum overlap point in the current interval with a red cross
+        ax[0].scatter(
+            res["energy"][max_overlap_idx],
+            res["overlap"][max_overlap_idx],
+            color="red",
+            marker="x",
+            s=50,  # size of the cross
+        )
+        ax[1].scatter(
+            res["energy"][max_overlap_idx],
+            res["entropy"][max_overlap_idx],
+            color="red",
+            marker="x",
+            s=50,  # size of the cross
+        )
+        print(res["energy"][max_overlap_idx], res["overlap"][max_overlap_idx])
+        lista.append(res["energy"][max_overlap_idx])
+    # Move to the next energy interval
+    start_energy = end_energy
+    end_energy = start_energy + energy_interval
+
+ax[0].set(ylim=[1e-9, 2])
+plt.savefig(f"PV_{name}_spectrum.pdf")
+save_dictionary(res, f"PV_2D_spectrum_{name}.pkl")
+# for obs in ["energy", "overlap"]:
+#    np.savetxt(f"{obs}.txt", res[obs], fmt="%f")
+# %%
+# ==========================================================================
+# DYNAMICS
+# ==========================================================================
+res = {}
+# Acquire simulations of finite E field
+config_filename = f"scars/PVdynamics2D"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+res["overlap"] = get_sim(ugrid[idx]).res["overlap"]
+res["entropy"] = get_sim(ugrid[idx]).res["entropy"]
+tline = (
+    np.arange(res["overlap"].shape[0]) * get_sim(ugrid[0]).par["dynamics"]["delta_n"]
+)
+res["tline"] = tline
+fig, ax = plt.subplots(2, 1, constrained_layout=True)
+ax[0].plot(tline, res["overlap"])
+ax[0].set(ylabel="Overlap", xlabel="T")
+ax[1].plot(tline, res["entropy"])
+ax[1].set(ylabel="Ent Entropy", xlabel="T")
+# for obs in ["entropy", "overlap"]:
+#    np.savetxt(f"{obs}_dyn.txt", res[obs], fmt="%f")
+# np.savetxt(f"time_dyn.txt", tline, fmt="%f")
+plt.savefig(f"PV2_{name}_dynamics.pdf")
+save_dictionary(res, f"PV_2D_dynamics_{name}.pkl")
+# ==========================================================================
+# %%
+# ==========================================================================
+# DYNAMICS 1D
+# ==========================================================================
+state_list = ["PV", "V"]
+j_list = ["12", "1", "32"]
+idx = 1
+res = {}
+tline = np.arange(0, 10, 0.0025)
+
+for ii, jmax in enumerate(j_list):
+    # Acquire simulations of finite E field
+    config_filename = f"scars/1D/{state_list[idx]}/j{jmax}"
+    match = SimsQuery(group_glob=config_filename)
+    ugrid, vals = uids_grid(match.uids, ["g"])
+    for kk, gval in enumerate(vals["g"]):
+        res[f"overlap_j{jmax}_g{gval}"] = get_sim(ugrid[kk]).res["overlap"]
+        res[f"entropy_j{jmax}_g{gval}"] = get_sim(ugrid[kk]).res["entropy"]
+
+for kk, gval in enumerate(vals["g"]):
+    fig, ax = plt.subplots(2, 1, constrained_layout=True)
+    for ii, jmax in enumerate(j_list):
+        ax[0].plot(tline, res[f"overlap_j{jmax}_g{gval}"], label=f"j={jmax}")
+        ax[0].set(ylabel="Overlap", xlabel="T")
+        ax[1].plot(tline, res[f"entropy_j{jmax}_g{gval}"], label=f"j={jmax}")
+        ax[1].set(ylabel="Ent Entropy", xlabel="T")
+    plt.legend()
+# for obs in ["entropy", "overlap"]:
+#    np.savetxt(f"{obs}_dyn.txt", res[obs], fmt="%f")
+# np.savetxt(f"time_dyn.txt", tline, fmt="%f")
+# plt.savefig(f"BV_dynamics1D_m5g1_j32.pdf")
+save_dictionary(res, f"{state_list[idx]}_1D_dynamics.pkl")
 # %%
 # DYNAMICS
 res = {}
 # Acquire simulations of finite E field
-config_filename = f"scars/dynamics1D"
+config_filename = f"scars/testDFL_FD"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
-res["overlap"] = get_sim(ugrid[0]).res["overlap"]
-res["entropy"] = get_sim(ugrid[0]).res["entropy"]
-tline = (
-    np.arange(res["overlap"].shape[0]) * get_sim(ugrid[0]).par["dynamics"]["delta_n"]
-)
-fig, ax = plt.subplots(1, 1, constrained_layout=True)
-ax.plot(tline, res["overlap"])
-ax.set(xlabel=r"$t$", ylabel="Ov (bare vacuum)")
-# %%
+obs_list = ["delta", "entropy", "overlap"][:2]
+for obs in obs_list:
+    res[obs] = get_sim(ugrid[0]).res[obs]
+tline = np.arange(res["delta"].shape[0]) * get_sim(ugrid[0]).par["dynamics"]["delta_n"]
 # DYNAMICS
-res = {}
+res1 = {}
 # Acquire simulations of finite E field
 config_filename = f"DFL/test"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
-for obs in ["delta0", "delta", "entropy", "entropy0"]:
-    res[obs] = get_sim(ugrid[0]).res[obs]
+obs_list = ["delta", "entropy", "overlap"][:2]
+for obs in obs_list:
+    res1[obs] = get_sim(ugrid[0]).res[obs]
+tline1 = (
+    np.arange(res1["delta"].shape[0]) * get_sim(ugrid[0]).par["dynamics"]["delta_n"]
+)
 
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+for ii, obs in enumerate(obs_list[:1]):
+    ax.plot(tline, res[obs], "--", label="DW")
+    # ax.plot(tline1, res1[obs], "-", label="DW-BG")
+    ax.set(xlabel=r"$t$", ylabel=obs)
+    # ax.set(ylim=[0, 1.1])
+    # if ii == 1:
+    # ax[ii].set(xscale="log")
+    ax.grid()
+plt.legend()
+# np.savetxt(f"overlap6.txt", res["overlap"], fmt="%f")
+# np.savetxt(f"delta6.txt", res["delta"], fmt="%f")
+# %%
+# ===================================================================
+# DFL phase diagram
+res = {}
+# Acquire simulations of finite E field
+config_filename = f"DFL/grid"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g", "m"])
+obs_list = ["delta", "entropy", "overlap"]
+for obs in obs_list:
+    res[obs] = np.zeros((len(vals["g"]), len(vals["m"]), 800), dtype=float)
+res["imshow"] = np.zeros((len(vals["g"]), len(vals["m"])), dtype=float)
+for ii, g in enumerate(vals["g"]):
+    for jj, m in enumerate(vals["m"]):
+        print(ii, jj, g, m)
+        res["imshow"][ii, jj] = np.mean(get_sim(ugrid[ii, jj]).res["delta"][-30:])
+        for obs in obs_list:
+            res[obs][ii, jj, :] = get_sim(ugrid[ii, jj]).res[obs]
+# %%
+# ===================================================================
+# PLot phase diagram
+stop = get_sim(ugrid[0, 0]).par["dynamics"]["stop"]
+tstep = get_sim(ugrid[0, 0]).par["dynamics"]["delta_n"]
+tline = np.arange(0, stop, tstep)
+
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+# IMSHOW
+img = ax.imshow(
+    np.transpose(res["imshow"]),
+    origin="lower",
+    cmap="magma",
+    extent=[-1, 1, -1, 1],
+)
+ax.set(xticks=[-1, 0, 1], yticks=[-1, 0, 1], ylabel=r"m", xlabel=r"g^{2}")
+ax.xaxis.set_major_formatter(fake_log)
+ax.yaxis.set_major_formatter(fake_log)
+
+cb = fig.colorbar(
+    img,
+    ax=ax,
+    aspect=20,
+    location="right",
+    orientation="vertical",
+    pad=0.01,
+    label=r"<Delta>",
+)
+plt.savefig(f"phase_diagram.pdf")
+# ===================================================================
+# PLot single mass value curves
+sm = cm.ScalarMappable(cmap="magma", norm=LogNorm())
+palette = sm.to_rgba(vals["g"])
+
+jj = -6
+for ii, obs in enumerate(obs_list):
+    fig, ax = plt.subplots(1, 1, constrained_layout=True)
+    for kk, g in enumerate(vals["g"]):
+        ax.plot(tline, 
+                res[obs][kk, jj],
+            "o-",
+            linewidth=0.7,
+            markersize=2,
+            c=palette[kk],
+            markerfacecolor="black",
+            markeredgewidth=0.6,)
+        ax.set(xlabel=r"$t$", ylabel=obs)
+        if ii == 0:
+            ax.set(ylim=[0, 1.1])
+        if ii == 1:
+            ax.set(xscale="log")
+        ax.grid(visible=True)
+
+    cb = fig.colorbar(
+        sm, ax=ax, aspect=80, location="top", orientation="horizontal", pad=0.02
+    )
+    cb.set_label(label=r"$g^{2}$", labelpad=-22, x=-0.02, y=0)
+    plt.savefig(f"m{vals['m'][jj]}_{obs}.pdf",
+    )
+# %%
+# DYNAMICS
+res = {}
+# Acquire simulations of finite E field
+config_filename = f"scars/testDFL"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+for obs in ["delta", "E_square", "overlap"]:
+    res[obs] = get_sim(ugrid[0]).res[obs]
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+tline = (
+    np.arange(res["overlap"].shape[0]) * get_sim(ugrid[0]).par["dynamics"]["delta_n"]
+)
+ax.plot(tline, res["overlap"], label="Vacuum")
+# ax.plot(tline, res["delta"], label="DFL")
+ax.set(xlabel=r"$t$", ylabel="overlap")
+ax.grid()
+plt.legend()
+# %%
 tline = np.arange(res["delta"].shape[0]) * get_sim(ugrid[0]).par["dynamics"]["delta_n"]
 fig, ax = plt.subplots(1, 1, constrained_layout=True)
-ax.plot(tline, res["delta0"], label="Vacuum")
-ax.plot(tline, res["delta"], label="DFL")
+ax.plot(tline, res["N_tot"], label="Vacuum")
+# ax.plot(tline, res["delta"], label="DFL")
 ax.set(xlabel=r"$t$", ylabel="Delta")
 ax.grid()
 plt.legend()
