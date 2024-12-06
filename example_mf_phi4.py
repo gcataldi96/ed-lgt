@@ -17,7 +17,7 @@ dim = len(lvals)
 # directions = "xyz"[:dim]
 n_sites = prod(lvals)
 has_obc = [False]
-d_loc = 10
+d_loc = 14
 loc_dims = np.array([d_loc for _ in range(n_sites)])
 # parameters
 par = {"lvals": lvals, "has_obc": has_obc, "n_max": d_loc - 1}
@@ -35,8 +35,36 @@ simulation.sim(par_m)
 
 # observable
 res = simulation.get_result()
-for E in res["E_conv"]:
-    print(E)
+state = res["state"]
+
+
+def red_densities(state, n_side_mf, d_loc):
+    """
+    Arguments:
+    state: state of mf calculation
+    n_side_mf: 2, 3 .. mf
+    d_loc: local dim
+
+    Return:
+    Reduces densites and mean density
+    TODO: Generalize this
+    """
+
+    state_r = state.reshape(-1, 1)
+    rho = np.dot(state_r, state_r.T)
+
+    rho_r = rho.reshape(2 * n_side_mf * [d_loc])
+    rho_r = rho_r.transpose(0, 2, 1, 3)
+
+    rho1 = np.trace(rho_r, axis1=2, axis2=3)
+    rho2 = np.trace(rho_r, axis1=0, axis2=1)
+    rho_m = (1 / 2) * (rho1 + rho2)
+
+    return [rho1, rho2, rho_m]
+
+
+red_densities(state, par_m["n_side_mf"], d_loc)
+
 
 # ===========================================================================
 # DIAGONALIZE THE HAMILTONIAN
