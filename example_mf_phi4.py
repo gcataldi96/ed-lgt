@@ -1,13 +1,44 @@
 # %%
 import numpy as np
 from math import prod
-from ed_lgt.models import phi4_model
+import os
+import json
 
+from ed_lgt.models import phi4_model
 from ed_lgt.algorithms.mean_field import mean_field
 from time import time
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+############# Simulation
+def red_densities(state, n_side_mf, d_loc):
+    """
+    Arguments:
+    state: state of mf calculation
+    n_side_mf: 2, 3 .. mf
+    d_loc: local dim
+
+    Return:
+    Reduces densites and mean density
+    TODO: Generalize this n-side mean field.
+    (reshaping is already fine, work on tracing)
+    """
+
+    state_r = state.reshape(-1, 1)
+    rho = np.dot(state_r, state_r.T)
+    rho_r = rho.reshape(2 * n_side_mf * [d_loc])
+
+    t = [2 * i for i in range(n_side_mf)] + [2 * i + 1 for i in range(n_side_mf)]
+    rho_r = rho_r.transpose(t)
+
+    rho1 = np.trace(rho_r, axis1=2, axis2=3)
+    rho2 = np.trace(rho_r, axis1=0, axis2=1)
+    rho_m = (1 / 2) * (rho1 + rho2)
+
+    return [rho1, rho2, rho_m]
+
 
 # N eigenvalues
 n_eigs = 1
@@ -35,36 +66,19 @@ simulation.sim(par_m)
 
 # observable
 res = simulation.get_result()
-state = res["state"]
+rhos = red_densities(res["state"], par_m["n_side_mf"], d_loc)
 
 
-def red_densities(state, n_side_mf, d_loc):
-    """
-    Arguments:
-    state: state of mf calculation
-    n_side_mf: 2, 3 .. mf
-    d_loc: local dim
+# print to dict
+dir_path = "mf_data"
+os.makedirs(dir_path, exist_ok=True)
 
-    Return:
-    Reduces densites and mean density
-    TODO: Generalize this
-    """
+# turn np.array into list
+res["state"] = res["state"].tolist()
 
-    state_r = state.reshape(-1, 1)
-    rho = np.dot(state_r, state_r.T)
-
-    rho_r = rho.reshape(2 * n_side_mf * [d_loc])
-    rho_r = rho_r.transpose(0, 2, 1, 3)
-
-    rho1 = np.trace(rho_r, axis1=2, axis2=3)
-    rho2 = np.trace(rho_r, axis1=0, axis2=1)
-    rho_m = (1 / 2) * (rho1 + rho2)
-
-    return [rho1, rho2, rho_m]
-
-
-red_densities(state, par_m["n_side_mf"], d_loc)
-
+name = dir_path + "/output.json"
+with open(name, "w") as json_file:
+    json.dump(res, json_file, indent=4)
 
 # ===========================================================================
 # DIAGONALIZE THE HAMILTONIAN
