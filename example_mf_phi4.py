@@ -48,7 +48,7 @@ dim = len(lvals)
 # directions = "xyz"[:dim]
 n_sites = prod(lvals)
 has_obc = [False]
-d_loc = 14
+d_loc = 24
 loc_dims = np.array([d_loc for _ in range(n_sites)])
 # parameters
 par = {"lvals": lvals, "has_obc": has_obc, "n_max": d_loc - 1}
@@ -68,6 +68,8 @@ simulation.sim(par_m)
 res = simulation.get_result()
 rhos = red_densities(res["state"], par_m["n_side_mf"], d_loc)
 
+#
+eigval, eigvec = np.linalg.eigh(rhos[0])
 
 # print to dict
 dir_path = "mf_data"
@@ -75,17 +77,17 @@ os.makedirs(dir_path, exist_ok=True)
 
 # turn np.array into list
 res["state"] = res["state"].tolist()
+res["eigval"] = eigval.tolist()
 
-name = dir_path + "/output.json"
+name = (
+    dir_path
+    + "/d_loc"
+    + str(d_loc)
+    + "mu2"
+    + str(coeffs["mu2"])
+    + "lambda_"
+    + str(coeffs["lambda"])
+    + ".json"
+)
 with open(name, "w") as json_file:
     json.dump(res, json_file, indent=4)
-
-# ===========================================================================
-# DIAGONALIZE THE HAMILTONIAN
-
-diag = model.H.diagonalize(n_eigs=n_eigs, format="sparse", loc_dims=loc_dims)
-res = {}
-res["energy"] = model.H.Nenergies
-
-print(res["energy"] / lvals[0])
-# ===========================================================================

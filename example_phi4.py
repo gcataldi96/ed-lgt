@@ -1,6 +1,8 @@
 # %%
 import numpy as np
 from math import prod
+import json
+import os
 
 # from ed_lgt.modeling import abelian_sector_indices
 from ed_lgt.models import phi4_model
@@ -19,7 +21,7 @@ dim = len(lvals)
 # directions = "xyz"[:dim]
 n_sites = prod(lvals)
 has_obc = [False]
-d_loc = 10
+d_loc = 8
 loc_dims = np.array([d_loc for _ in range(n_sites)])
 # parameters
 par = {"lvals": lvals, "has_obc": has_obc, "n_max": d_loc - 1}
@@ -53,3 +55,26 @@ model.get_observables(loc_obs)  # how can I check if the set of observbles is no
 for ii in range(model.H.n_eigs):
     # MEASURE OBSERVABLES
     model.measure_observables(ii)
+
+# printing data
+# print to dict
+folder_name = "L_" + str(lvals[0]) + "d_loc_" + str(d_loc)
+dir_path = "ed_data/phi4/" + folder_name
+os.makedirs(dir_path, exist_ok=True)
+res["energy"] = res["energy"][0] / lvals[0]
+
+res.update(coeffs)
+res.update(par)
+res["d_loc"] = d_loc
+
+name_file = (
+    dir_path
+    + "/"
+    + folder_name
+    + "mu2_"
+    + str(coeffs["mu2"])
+    + "lamb_"
+    + str(coeffs["lambda"])
+)
+with open(name_file, "w") as json_file:
+    json.dump(res, json_file, indent=4)
