@@ -21,13 +21,13 @@ with run_sim() as sim:
         coeffs = SU2_gen_Hamiltonian_couplings(
             model.dim, model.pure_theory, sim.par["g"], m
         )
+    # -------------------------------------------------------------------------------
     logical_stag_basis = 2
     num_blocks = model.n_sites // (2 * logical_stag_basis)
     stag_array = np.array(
         [-1] * logical_stag_basis + [1] * logical_stag_basis, dtype=int
     )
     norm_scalar_product = np.tile(stag_array, num_blocks)
-    norm_scalar_product = np.array([-1, 1, 1, -1, -1, -1, 1, 1, -1, -1])
     logger.info(f"norm scalar product {norm_scalar_product}")
     # -------------------------------------------------------------------------------
     # BUILD THE HAMILTONIAN
@@ -81,8 +81,7 @@ with run_sim() as sim:
                 model.diagonalize_Hamiltonian("full", "dense")
                 sim.res["energy"] = model.H.Nenergies
         else:
-            # Here we assume the microcanonical state has been already computed
-            # and so the full Hamiltonian spectrum
+            # Assume the microcanonical state and the full Hamiltonian spectrum already computed
             ref_state = micro_state
         sim.res["diagonal_avg"] = model.diagonal_avg(obs, ref_state)
     # -------------------------------------------------------------------------------

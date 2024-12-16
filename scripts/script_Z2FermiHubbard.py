@@ -29,7 +29,7 @@ with run_sim() as sim:
     # LIST OF LOCAL OBSERVABLES
     local_obs = [f"n_{s}{d}" for d in model.directions for s in "mp"]
     local_obs += [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
-    local_obs = ["N_pair"]  # ["X_Cross", "S2_psi", "E"]
+    local_obs = ["N_pair", "X_Cross", "S2_psi"]
     # LIST OF TWOBODY CORRELATORS
     twobody_obs = [["Sz_psi", "Sz_psi"]]
     twobody_axes = None
@@ -83,7 +83,7 @@ with run_sim() as sim:
         if not model.has_obc[0]:
             sim.res["string"][ii] = np.mean(model.res["_".join(nbody_obs[0])])
         # CHECK LINK SYMMETRIES
-        model.check_symmetries()
+        # model.check_symmetries()
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

@@ -138,7 +138,7 @@ save_dictionary(res, f"PV_2D_spectrum_{name}.pkl")
 #    np.savetxt(f"{obs}.txt", res[obs], fmt="%f")
 # %%
 # ==========================================================================
-# DYNAMICS
+# 2D DYNAMICS
 # ==========================================================================
 res = {}
 # Acquire simulations of finite E field
@@ -194,17 +194,66 @@ for kk, gval in enumerate(vals["g"]):
 # np.savetxt(f"time_dyn.txt", tline, fmt="%f")
 # plt.savefig(f"BV_dynamics1D_m5g1_j32.pdf")
 save_dictionary(res, f"{state_list[idx]}_1D_dynamics.pkl")
+
+
 # %%
-# DYNAMICS
+# ==========================================================================
+# 1D DFL TIME INTEGRAL
+# ==========================================================================
+def time_integral(tline, obs):
+    avg = np.zeros(len(obs) - 1)
+    for ii, t in enumerate(tline):
+        if ii > 0:
+            avg[ii - 1] = np.sum(obs[:ii]) / t
+    return avg
+
+
+def get_tline(par: dict):
+    start = par["start"]
+    stop = par["stop"]
+    delta_n = par["delta_n"]
+    n_steps = int((stop - start) / delta_n)
+    return np.arange(n_steps) * delta_n
+
+
 res = {}
 # Acquire simulations of finite E field
-config_filename = f"scars/testDFL_FD"
+config_filename = f"DFL/DW2sites"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
-obs_list = ["delta", "entropy", "overlap"][:2]
+obs_list = ["delta", "entropy", "overlap"][:1]
+# Get the time line
+tline = get_tline(get_sim(ugrid[0]).par["dynamics"])
+
 for obs in obs_list:
-    res[obs] = get_sim(ugrid[0]).res[obs]
-tline = np.arange(res["delta"].shape[0]) * get_sim(ugrid[0]).par["dynamics"]["delta_n"]
+    res[obs] = np.zeros((6, len(tline)), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        print(g, get_sim(ugrid[ii]).par["m"])
+        res[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+obs_name = "delta"
+for ii, g in enumerate(vals["g"]):
+    m = get_sim(ugrid[ii]).par["m"]
+    fig, ax = plt.subplots(1, 1, constrained_layout=True)
+    ax.plot(
+        tline[1:],
+        time_integral(tline, res[obs_name][ii, :]),
+        "--",
+        label=f"t_DW m={m},g={g}",
+    )
+    ax.plot(
+        tline,
+        res[obs_name][ii, :],
+        "--",
+        label=f"DW m={m},g={g}",
+    )
+    # ax.plot(tline1[1:], time_integral(tline1, res1[obs])[1:], "-", label="DW-BG")
+    ax.set(xlabel=r"$t$", ylabel=f"time integral({obs})")
+    # ax.set(ylim=[0, 1.1])
+    # if ii == 1:
+    # ax[ii].set(xscale="log")
+    ax.grid()
+    plt.legend()
+# %%
 # DYNAMICS
 res1 = {}
 # Acquire simulations of finite E field
@@ -217,12 +266,12 @@ for obs in obs_list:
 tline1 = (
     np.arange(res1["delta"].shape[0]) * get_sim(ugrid[0]).par["dynamics"]["delta_n"]
 )
-
+obs = "delta"
 fig, ax = plt.subplots(1, 1, constrained_layout=True)
 for ii, obs in enumerate(obs_list[:1]):
-    ax.plot(tline, res[obs], "--", label="DW")
-    # ax.plot(tline1, res1[obs], "-", label="DW-BG")
-    ax.set(xlabel=r"$t$", ylabel=obs)
+    ax.plot(tline[1:], time_integral(tline, res[obs])[1:], "--", label="DW")
+    ax.plot(tline1[1:], time_integral(tline1, res1[obs])[1:], "-", label="DW-BG")
+    ax.set(xlabel=r"$t$", ylabel=f"time integral({obs})")
     # ax.set(ylim=[0, 1.1])
     # if ii == 1:
     # ax[ii].set(xscale="log")
@@ -230,27 +279,31 @@ for ii, obs in enumerate(obs_list[:1]):
 plt.legend()
 # np.savetxt(f"overlap6.txt", res["overlap"], fmt="%f")
 # np.savetxt(f"delta6.txt", res["delta"], fmt="%f")
+plt.savefig(f"time_integral_N8m1g5_2siteDW.pdf")
 # %%
 # ===================================================================
-# DFL phase diagram
+# DFL PHASE DIAGRAM
+# ===================================================================
 res = {}
 # Acquire simulations of finite E field
 config_filename = f"DFL/grid"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g", "m"])
-obs_list = ["delta", "entropy", "overlap"]
+obs_list = ["delta"]  # , "entropy", "overlap"]
 for obs in obs_list:
-    res[obs] = np.zeros((len(vals["g"]), len(vals["m"]), 800), dtype=float)
+    res[obs] = np.zeros((len(vals["g"]), len(vals["m"]), 200), dtype=float)
 res["imshow"] = np.zeros((len(vals["g"]), len(vals["m"])), dtype=float)
 for ii, g in enumerate(vals["g"]):
     for jj, m in enumerate(vals["m"]):
-        print(ii, jj, g, m)
-        res["imshow"][ii, jj] = np.mean(get_sim(ugrid[ii, jj]).res["delta"][-30:])
+        print(ii, jj, f"g{g}", f"m{m}")
+        res["imshow"][ii, jj] = np.mean(get_sim(ugrid[ii, jj]).res["delta"][-10:])
         for obs in obs_list:
             res[obs][ii, jj, :] = get_sim(ugrid[ii, jj]).res[obs]
+save_dictionary(res, "DFL_phase_diagram.pkl")
 # %%
 # ===================================================================
-# PLot phase diagram
+# Plot phase diagram
+# ===================================================================
 stop = get_sim(ugrid[0, 0]).par["dynamics"]["stop"]
 tstep = get_sim(ugrid[0, 0]).par["dynamics"]["delta_n"]
 tline = np.arange(0, stop, tstep)
@@ -282,18 +335,20 @@ plt.savefig(f"phase_diagram.pdf")
 sm = cm.ScalarMappable(cmap="magma", norm=LogNorm())
 palette = sm.to_rgba(vals["g"])
 
-jj = -6
+jj = 10
 for ii, obs in enumerate(obs_list):
     fig, ax = plt.subplots(1, 1, constrained_layout=True)
     for kk, g in enumerate(vals["g"]):
-        ax.plot(tline, 
-                res[obs][kk, jj],
+        ax.plot(
+            tline,
+            res[obs][kk, jj],
             "o-",
             linewidth=0.7,
             markersize=2,
             c=palette[kk],
             markerfacecolor="black",
-            markeredgewidth=0.6,)
+            markeredgewidth=0.6,
+        )
         ax.set(xlabel=r"$t$", ylabel=obs)
         if ii == 0:
             ax.set(ylim=[0, 1.1])
@@ -305,7 +360,54 @@ for ii, obs in enumerate(obs_list):
         sm, ax=ax, aspect=80, location="top", orientation="horizontal", pad=0.02
     )
     cb.set_label(label=r"$g^{2}$", labelpad=-22, x=-0.02, y=0)
-    plt.savefig(f"m{vals['m'][jj]}_{obs}.pdf",
+    plt.savefig(
+        f"m{vals['m'][jj]}_{obs}.pdf",
+    )
+# %%
+# ==========================================================================
+# DFL SPECTRUM
+# ==========================================================================
+res = {}
+# Acquire simulations of finite E field
+config_filename = f"DFL/spectra"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = ["energy", "entropy", "overlap"]
+
+for obs in obs_list:
+    res[obs] = np.zeros((6, 2214), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        print(g, get_sim(ugrid[ii]).par["m"])
+        res[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+
+for ii, g in enumerate(vals["g"]):
+    m = get_sim(ugrid[ii]).par["m"]
+    fig, ax = plt.subplots(2, 1, constrained_layout=True)
+    ax[0].grid()
+    ax[0].plot(
+        res["energy"][ii, :],
+        res["overlap"][ii, :],
+        "o",
+        markersize=2,
+        markeredgecolor="darkblue",
+        markerfacecolor="white",
+        markeredgewidth=0.5,
+        label=f"DW m={m},g={g}",
+    )
+    ax[0].set(ylabel="Overlap", yscale="log", xlabel="Energy", ylim=[1e-9, 1])
+    ax[1].plot(
+        res["energy"][ii, :],
+        res["entropy"][ii, :],
+        "o",
+        markersize=1,
+        markeredgecolor="darkblue",
+        markerfacecolor="white",
+        markeredgewidth=0.5,
+    )
+    ax[1].set(ylabel="Ent Entropy", xlabel="Energy")
+    ax[0].legend()
+    plt.savefig(
+        f"spectra_m{m}_g{g}.pdf",
     )
 # %%
 # DYNAMICS

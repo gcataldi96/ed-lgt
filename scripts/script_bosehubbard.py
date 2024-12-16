@@ -1,19 +1,24 @@
 from ed_lgt.models import BoseHubbard_Model
 from simsio import run_sim
+from time import perf_counter
+import logging
+
+logger = logging.getLogger(__name__)
 
 with run_sim() as sim:
+    start_time = perf_counter()
     model = BoseHubbard_Model(**sim.par["model"])
-    # SYMMETRIES
-    global_ops = [model.ops[op] for op in sim.par["symmetries"]["sym_ops"]]
-    global_sectors = sim.par["symmetries"]["sym_sectors"]
-    global_sym_type = sim.par["symmetries"]["sym_type"]
-    model.get_abelian_symmetry_sector(
-        global_ops=global_ops,
-        global_sectors=global_sectors,
-        global_sym_type=global_sym_type,
+    # -------------------------------------------------------------------------------
+    # BUILD THE HAMILTONIAN
+    coeffs = {"h": sim.par["h"]}
+    model.build_Hamiltonian(coeffs)
+    # -------------------------------------------------------------------------------
+    # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
+    model.diagonalize_Hamiltonian(
+        n_eigs=sim.par["hamiltonian"]["n_eigs"],
+        format=sim.par["hamiltonian"]["format"],
     )
-    # DEFAUL PARAMS
-    model.default_params()
+    sim.res["energy"] = model.H.Nenergies
     # BUILD AND DIAGONALIZE HAMILTONIAN
     coeffs = {"t": sim.par["t"], "U": sim.par["U"]}
     model.build_Hamiltonian(coeffs)

@@ -7,7 +7,7 @@ __all__ = ["BoseHubbard_Model"]
 
 
 class BoseHubbard_Model(QuantumModel):
-    def __init__(self, n_max, **kwargs):
+    def __init__(self, n_max, sectors, **kwargs):
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         # Initialize specific attributes for BOSE HUBBARD model
@@ -19,11 +19,17 @@ class BoseHubbard_Model(QuantumModel):
         self.ops = bose_operators(self.n_max)
         # Acquire lattice label
         self.get_local_site_dimensions()
+        # GLOBAL SYMMETRY
+        global_ops = [self.ops["N"]]
+        global_sectors = sectors
+        # GET SYMMETRY SECTOR
+        self.get_abelian_symmetry_sector(global_ops, global_sectors)
+        self.default_params()
 
     def build_Hamiltonian(self, coeffs):
+        # Hamiltonian Coefficients
         self.coeffs = coeffs
         # CONSTRUCT THE HAMILTONIAN
-        self.H = QMB_hamiltonian(0, self.lvals, self.loc_dims)
         h_terms = {}
         # ---------------------------------------------------------------------------
         # NEAREST NEIGHBOR INTERACTION

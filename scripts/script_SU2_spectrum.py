@@ -63,6 +63,7 @@ with run_sim() as sim:
     # -------------------------------------------------------------------------------
     for ii in range(model.H.n_eigs):
         logger.info(f"================== {ii} ===================")
+        model.H.print_energy(ii)
         if not model.momentum_basis:
             # -----------------------------------------------------------------------
             # ENTROPY
