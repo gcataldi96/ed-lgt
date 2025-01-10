@@ -1,29 +1,22 @@
 import numpy as np
-from ed_lgt.models import SU2_Model, SU2_Model_Gen
-from ed_lgt.operators import SU2_Hamiltonian_couplings, SU2_gen_Hamiltonian_couplings
+import os
+from numba import set_num_threads
+from ed_lgt.modeling import get_entropy_partition
+from ed_lgt.models import SU2_Model
 from simsio import run_sim
 from time import perf_counter
 import logging
 
 logger = logging.getLogger(__name__)
 with run_sim() as sim:
+    # Set the number of threads per simulation
+    set_num_threads(int(os.environ.get("NUMBA_NUM_THREADS", sim.par["n_threads"])))
     start_time = perf_counter()
     # -------------------------------------------------------------------------------
-    if sim.par["model"]["spin"] > 2:
-        model = SU2_Model(**sim.par["model"])
-        m = sim.par["m"] if not model.pure_theory else None
-        coeffs = SU2_Hamiltonian_couplings(
-            model.dim, model.pure_theory, sim.par["g"], m
-        )
-    else:
-        model = SU2_Model_Gen(**sim.par["model"])
-        m = sim.par["m"] if not model.pure_theory else None
-        coeffs = SU2_gen_Hamiltonian_couplings(
-            model.dim, model.pure_theory, sim.par["g"], m
-        )
-    # -------------------------------------------------------------------------------
-    # BUILD THE HAMILTONIAN
-    model.build_Hamiltonian(coeffs)
+    # MODEL HAMILTONIAN
+    model = SU2_Model(**sim.par["model"])
+    m = sim.par["m"] if not model.pure_theory else None
+    model.build_Hamiltonian1(sim.par["g"], m)
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     n_eigs = sim.par["hamiltonian"]["n_eigs"]
@@ -35,7 +28,8 @@ with run_sim() as sim:
     local_obs = [f"T2_{s}{d}" for d in model.directions for s in "mp"]
     local_obs = []  # ["E_square"]
     if not model.pure_theory:
-        local_obs = []  # [f"N_{label}" for label in ["tot", "single", "pair"]]
+        local_obs = ["N_single"]
+        # [f"N_{label}" for label in ["tot", "single", "pair"]]
     # LIST OF TWOBODY CORRELATORS
     twobody_obs = []  # [[f"P_p{d}", f"P_m{d}"] for d in model.directions]
     twobody_axes = []  # [d for d in model.directions]
@@ -50,34 +44,30 @@ with run_sim() as sim:
     in_state = model.get_qmb_state_from_configs([config])
     # -------------------------------------------------------------------------------
     # ALLOCATE OBSERVABLES
-    if len(model.has_obc) == 1:
-        partition_indices = list(np.arange(0, int(model.lvals[0] / 2), 1))
-    else:
-        partition_indices = list(np.arange(0, int(model.lvals[0] / 2), 1)) + list(
-            np.arange(model.lvals[0], model.lvals[0] + int(model.lvals[0] / 2), 1)
-        )
+    partition_indices = get_entropy_partition(model.lvals)
     sim.res["entropy"] = np.zeros(model.H.n_eigs, dtype=float)
     sim.res["overlap"] = np.zeros(model.H.n_eigs, dtype=float)
     for obs in local_obs:
         sim.res[obs] = np.zeros(model.H.n_eigs, dtype=float)
     # -------------------------------------------------------------------------------
     for ii in range(model.H.n_eigs):
-        logger.info(f"================== {ii} ===================")
         model.H.print_energy(ii)
         if not model.momentum_basis:
             # -----------------------------------------------------------------------
             # ENTROPY
-            sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
-                partition_indices, model.sector_configs
-            )
+            if sim.par["get_entropy"]:
+                sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
+                    partition_indices, model.sector_configs
+                )
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS
-            # model.H.Npsi[ii].get_state_configurations(1e-1, model.sector_configs)
-            # -----------------------------------------------------------------------
-            # MEASURE OBSERVABLES
-            model.measure_observables(ii)
-            for obs in local_obs:
-                sim.res[obs][ii] = np.mean(model.res[obs])
+            if sim.par["get_state_configs"]:
+                model.H.Npsi[ii].get_state_configurations(1e-1, model.sector_configs)
+        # -----------------------------------------------------------------------
+        # MEASURE OBSERVABLES
+        model.measure_observables(ii)
+        for obs in local_obs:
+            sim.res[obs][ii] = np.mean(model.res[obs])
         # ---------------------------------------------------------------------------
         # OVERLAPS with the INITIAL STATE
         sim.res["overlap"][ii] = model.measure_fidelity(in_state, ii, print_value=True)

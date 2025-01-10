@@ -47,6 +47,7 @@ class SU2_Rishon:
                 # Useful operators for corner operators
                 self.ops[f"Z{color}_P"] = self.ops[f"Z{color}"] * self.ops["P"]
                 self.ops[f"P_Z{color}_dag"] = self.ops["P"] * self.ops[f"Z{color}_dag"]
+                self.ops[f"Z{color}_dag_P"] = self.ops[f"Z{color}_dag"] * self.ops["P"]
         # ---------------------------------------------------------------------
         else:
             raise ValueError("For the moment it works only with j=1/2")
