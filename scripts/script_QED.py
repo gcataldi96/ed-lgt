@@ -1,27 +1,29 @@
 import numpy as np
+import os
+from numba import set_num_threads
+from ed_lgt.modeling import get_entropy_partition
 from ed_lgt.models import QED_Model
-from ed_lgt.operators import QED_Hamiltonian_couplings
 from simsio import run_sim
+from time import perf_counter
 import logging
 
 logger = logging.getLogger(__name__)
 with run_sim() as sim:
-    par = sim.par["model"]
-    par["spin"] = sim.par["spin"]
-    model = QED_Model(**par)
-    # BUILD AND DIAGONALIZE HAMILTONIAN
-    coeffs = QED_Hamiltonian_couplings(
-        model.dim, model.pure_theory, sim.par["g"], sim.par["m"]
-    )
-    model.build_Hamiltonian(coeffs)
+    # Set the number of threads per simulation
+    set_num_threads(int(os.environ.get("NUMBA_NUM_THREADS", sim.par["n_threads"])))
+    # Start measuring time
+    start_time = perf_counter()
+    # -------------------------------------------------------------------------------
+    # MODEL HAMILTONIAN
+    model = QED_Model(**sim.par["model"])
+    m = sim.par["m"] if not model.pure_theory else None
+    model.build_Hamiltonian(sim.par["g"], m)
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
-    if sim.par["hamiltonian"]["diagonalize"]:
-        model.diagonalize_Hamiltonian(
-            n_eigs=sim.par["hamiltonian"]["n_eigs"],
-            format=sim.par["hamiltonian"]["format"],
-        )
-        sim.res["energy"] = model.H.Nenergies
+    n_eigs = sim.par["hamiltonian"]["n_eigs"]
+    format = sim.par["hamiltonian"]["format"]
+    model.diagonalize_Hamiltonian(n_eigs, format)
+    sim.res["energy"] = model.H.Nenergies
     # ---------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
     local_obs = [f"E_{s}{d}" for d in model.directions for s in "mp"] + ["E_square"]
@@ -39,25 +41,28 @@ with run_sim() as sim:
     model.get_observables(
         local_obs, twobody_obs, plaquette_obs, twobody_axes=twobody_axes
     )
-    sim.res["entropy"] = np.zeros(sim.par["hamiltonian"]["n_eigs"], dtype=float)
+    # ENTROPY
+    partition_indices = get_entropy_partition(model.lvals)
+    sim.res["entropy"] = np.zeros(n_eigs, dtype=float)
     # -------------------------------------------------------------------------------
-    for ii in range(model.n_eigs):
-        logger.info(f"================== {ii} ===================")
-        # -----------------------------------------------------------------------
-        # PRINT ENERGY
+    for ii in range(model.H.n_eigs):
         model.H.print_energy(ii)
-        # -----------------------------------------------------------------------
-        # ENTROPY
-        sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
-            list(np.arange(0, int(model.n_sites / 2), 1)),
-            sector_configs=model.sector_configs,
-        )
-        # -----------------------------------------------------------------------
-        # STATE CONFIGURATIONS
-        model.H.Npsi[ii].get_state_configurations(
-            threshold=1e-1, sector_configs=model.sector_configs
-        )
+        if not model.momentum_basis:
+            # -----------------------------------------------------------------------
+            # ENTROPY
+            if sim.par["get_entropy"]:
+                sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
+                    partition_indices, model.sector_configs
+                )
+            # -----------------------------------------------------------------------
+            # STATE CONFIGURATIONS
+            if sim.par["get_state_configs"]:
+                model.H.Npsi[ii].get_state_configurations(1e-1, model.sector_configs)
+        # ---------------------------------------------------------------------------
         # MEASURE OBSERVABLES
         model.measure_observables(ii)
-        # CHECK LINK SYMMETRIES
-        model.check_symmetries()
+        for obs in local_obs:
+            sim.res[obs][ii] = np.mean(model.res[obs])
+    # -------------------------------------------------------------------------------
+    end_time = perf_counter()
+    logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

@@ -1,16 +1,20 @@
-from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm, QMB_hamiltonian
+from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm
 from ed_lgt.modeling import check_link_symmetry, staggered_mask
 from .quantum_model import QuantumModel
 from ed_lgt.operators import QED_dressed_site_operators, QED_gauge_invariant_states
 
+import logging
+
+logger = logging.getLogger(__name__)
 __all__ = ["QED_Model"]
 
 
 class QED_Model(QuantumModel):
-    def __init__(self, spin, pure_theory, **kwargs):
+    def __init__(self, spin, pure_theory, ham_format, **kwargs):
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
+        self.ham_format = ham_format
         self.pure_theory = pure_theory
         self.staggered_basis = False if self.pure_theory else True
         # Acquire operators
@@ -43,15 +47,16 @@ class QED_Model(QuantumModel):
         # DEFAULT PARAMS
         self.default_params()
 
-    def build_Hamiltonian(self, coeffs):
+    def build_Hamiltonian(self, g, m=None):
+        logger.info("BUILDING HAMILTONIAN")
         # Hamiltonian Coefficients
-        self.coeffs = coeffs
+        self.QED_Hamiltonian_couplings(g, m)
         h_terms = {}
         # -------------------------------------------------------------------------------
         # ELECTRIC ENERGY
         op_name = "E_square"
         h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
-        self.H.Ham += h_terms[op_name].get_Hamiltonian(strength=self.coeffs["E"])
+        self.H.add_term(h_terms[op_name].get_Hamiltonian(strength=self.coeffs["E"]))
         # -------------------------------------------------------------------------------
         # PLAQUETTE TERM: MAGNETIC INTERACTION
         if self.dim > 1:
@@ -60,8 +65,10 @@ class QED_Model(QuantumModel):
             h_terms["plaq_xy"] = PlaquetteTerm(
                 ["x", "y"], op_list, op_names_list, **self.def_params
             )
-            self.H.Ham += h_terms["plaq_xy"].get_Hamiltonian(
-                strength=self.coeffs["B"], add_dagger=True
+            self.H.add_term(
+                h_terms["plaq_xy"].get_Hamiltonian(
+                    strength=self.coeffs["B"], add_dagger=True
+                )
             )
         if self.dim == 3:
             # XZ Plane
@@ -70,8 +77,10 @@ class QED_Model(QuantumModel):
             h_terms["plaq_xz"] = PlaquetteTerm(
                 ["x", "z"], op_list, op_names_list, **self.def_params
             )
-            self.H.Ham += h_terms["plaq_xz"].get_Hamiltonian(
-                strength=self.coeffs["B"], add_dagger=True
+            self.H.add_term(
+                h_terms["plaq_xz"].get_Hamiltonian(
+                    strength=self.coeffs["B"], add_dagger=True
+                )
             )
             # YZ Plane
             op_names_list = ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"]
@@ -79,8 +88,10 @@ class QED_Model(QuantumModel):
             h_terms["plaq_yz"] = PlaquetteTerm(
                 ["y", "z"], op_list, op_names_list, **self.def_params
             )
-            self.H.Ham += h_terms["plaq_yz"].get_Hamiltonian(
-                strength=self.coeffs["B"], add_dagger=True
+            self.H.add_term(
+                h_terms["plaq_yz"].get_Hamiltonian(
+                    strength=self.coeffs["B"], add_dagger=True
+                )
             )
         # -------------------------------------------------------------------------------
         if not self.pure_theory:
@@ -90,8 +101,11 @@ class QED_Model(QuantumModel):
                 h_terms[f"N_{stag_label}"] = LocalTerm(
                     operator=self.ops["N"], op_name="N", **self.def_params
                 )
-                self.H.Ham += h_terms[f"N_{stag_label}"].get_Hamiltonian(
-                    coeffs[f"m_{stag_label}"], staggered_mask(self.lvals, stag_label)
+                self.H.add_term(
+                    h_terms[f"N_{stag_label}"].get_Hamiltonian(
+                        self.coeffs[f"m_{stag_label}"],
+                        staggered_mask(self.lvals, stag_label),
+                    )
                 )
             # ---------------------------------------------------------------------------
             # HOPPING
@@ -104,11 +118,14 @@ class QED_Model(QuantumModel):
                     h_terms[f"{d}_hop_{stag_label}"] = TwoBodyTerm(
                         d, op_list, op_names_list, **self.def_params
                     )
-                    self.H.Ham += h_terms[f"{d}_hop_{stag_label}"].get_Hamiltonian(
-                        strength=self.coeffs[f"t{d}_{stag_label}"],
-                        add_dagger=True,
-                        mask=staggered_mask(self.lvals, stag_label),
+                    self.H.add_term(
+                        h_terms[f"{d}_hop_{stag_label}"].get_Hamiltonian(
+                            strength=self.coeffs[f"t{d}_{stag_label}"],
+                            add_dagger=True,
+                            mask=staggered_mask(self.lvals, stag_label),
+                        )
                     )
+        self.build(format=ham_format)
 
     def check_symmetries(self):
         # CHECK LINK SYMMETRIES
@@ -120,3 +137,52 @@ class QED_Model(QuantumModel):
                 value=0,
                 sign=1,
             )
+
+    def QED_Hamiltonian_couplings(self, g, m=None, magnetic_basis=False):
+        """
+        This function provides the QED Hamiltonian coefficients
+        starting from the gauge coupling g and the bare mass parameter m
+
+        Args:
+            pure_theory (bool): True if the theory does not include matter
+
+            g (scalar): gauge coupling
+
+            m (scalar, optional): bare mass parameter
+
+        Returns:
+            dict: dictionary of Hamiltonian coefficients
+        """
+        if not magnetic_basis:
+            if self.dim == 1:
+                E = (g**2) / 2
+                B = -1 / (2 * (g**2))
+            elif self.dim == 2:
+                E = (g**2) / 2
+                B = -1 / (2 * (g**2))
+            else:
+                E = (g**2) / 2
+                B = -1 / (2 * (g**2))
+            # DICTIONARY WITH MODEL COEFFICIENTS
+            coeffs = {
+                "g": g,
+                "E": E,  # ELECTRIC FIELD coupling
+                "B": B,  # MAGNETIC FIELD coupling
+                "m": m,
+                "tx_even": 0.5,  # HORIZONTAL HOPPING
+                "tx_odd": 0.5,
+                "ty_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
+                "ty_odd": -0.5,  # VERTICAL HOPPING (ODD SITES)
+                "tz_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
+                "tz_odd": 0.5,  # VERTICAL HOPPING (ODD SITES)
+                "m_even": m,
+                "m_odd": -m,
+            }
+        else:
+            # DICTIONARY WITH MODEL COEFFICIENTS
+            coeffs = {
+                "g": g,
+                "E": -(g**2),
+                "B": -0.5 / (g**2),
+            }
+        return coeffs
