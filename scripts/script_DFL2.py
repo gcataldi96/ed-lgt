@@ -1,7 +1,10 @@
 import numpy as np
-from ed_lgt.models import DFL_Model
-from ed_lgt.modeling import get_lattice_link_site_pairs, QMB_hamiltonian
-from ed_lgt.operators import SU2_Hamiltonian_couplings
+from ed_lgt.models import DFL_Model, SU2_Hamiltonian_couplings
+from ed_lgt.modeling import (
+    get_lattice_link_site_pairs,
+    QMB_hamiltonian,
+    get_entropy_partition,
+)
 from ed_lgt.symmetries import (
     get_symmetry_sector_generators,
     link_abelian_sector,
@@ -33,7 +36,7 @@ with run_sim() as sim:
     if not model.pure_theory:
         local_obs = [f"N_{label}" for label in ["tot"]]
     # Store the observables
-    partition_indices = list(np.arange(0, int(np.prod(model.lvals) / 2), 1))
+    partition_indices = get_entropy_partition(model.lvals)
     for measure in ["entropy", "delta", "overlap"]:
         sim.res[measure] = np.zeros(n_steps, dtype=float)
     # ==============================================================================

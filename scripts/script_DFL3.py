@@ -1,16 +1,9 @@
 import numpy as np
-from ed_lgt.models import DFL_Model, SU2_Hamiltonian_couplings
-from ed_lgt.modeling import (
-    get_lattice_link_site_pairs,
-    QMB_hamiltonian,
-    get_entropy_partition,
-)
-from ed_lgt.symmetries import (
-    get_symmetry_sector_generators,
-    global_abelian_sector,
-    link_abelian_sector,
-    symmetry_sector_configs,
-)
+import os
+from numba import set_num_threads
+from ed_lgt.models import DFL_Model
+from ed_lgt.modeling import get_lattice_link_site_pairs, get_entropy_partition
+from ed_lgt.symmetries import get_symmetry_sector_generators, symmetry_sector_configs
 from simsio import run_sim
 from time import perf_counter
 import logging
@@ -19,36 +12,38 @@ import logging
 logger = logging.getLogger(__name__)
 
 with run_sim() as sim:
+    # Set the number of threads per simulation
+    set_num_threads(int(os.environ.get("NUMBA_NUM_THREADS", sim.par["n_threads"])))
     start_time = perf_counter()
     # ==============================================================================
     # DYNAMICS PARAMETERS
     start = sim.par["dynamics"]["start"]
     stop = sim.par["dynamics"]["stop"]
-    delta_n = sim.par["dynamics"]["delta_n"]
-    n_steps = int((stop - start) / delta_n)
-    sim.res["time_steps"] = np.arange(n_steps) * delta_n
+    delta_t = sim.par["dynamics"]["delta_n"]
+    time_line = np.arange(start, stop + delta_t, delta_t)
+    sim.res["time_steps"] = time_line
+    n_steps = len(sim.res["time_steps"])
     # ==============================================================================
     # MODEL PROPERTIES
     model = DFL_Model(**sim.par["model"])
     m = sim.par["m"] if not model.pure_theory else None
-    coeffs = SU2_Hamiltonian_couplings(model.dim, model.pure_theory, sim.par["g"], m)
     # ===============================================================================
     # OBSERVABLES
     if not model.pure_theory:
-        local_obs = [f"N_{label}" for label in ["tot"]]
+        local_obs = [f"N_{label}" for label in ["tot", "single"]] + ["S2_matter"]
+        for measure in local_obs:
+            sim.res[measure] = np.zeros(n_steps, dtype=float)
     # Store the observables
     partition_indices = get_entropy_partition(model.lvals)
-    for measure in ["delta", "entropy", "overlap"][:2]:
+    for measure in ["delta", "entropy", "overlap"][:1]:
         sim.res[measure] = np.zeros(n_steps, dtype=float)
-    sim.res["microcan_avg"] = 0
+    sim.res["microcan_avg"] = 0.0
+    sim.res["micro_Nsingle"] = 0.0
+    sim.res["micro_S2_matter"] = 0.0
     # ==============================================================================
     # GLOBAL SYMMETRIES
-    if model.pure_theory:
-        global_ops = None
-        global_sectors = None
-    else:
-        global_ops = [model.ops["N_tot"]]
-        global_sectors = [model.n_sites]
+    global_ops = [model.ops["N_tot"]]
+    global_sectors = [model.n_sites]
     # GLOBAL OPERATORS
     global_ops = get_symmetry_sector_generators(
         global_ops,
@@ -73,26 +68,6 @@ with run_sim() as sim:
     )
     pair_list = get_lattice_link_site_pairs(model.lvals, model.has_obc)
     # ==============================================================================
-    # SELECT THE U(1) GLOBAL and LINK SYMMETRY SECTOR
-    # ==============================================================================
-    if global_ops is not None and link_ops is not None:
-        sector_indices, sector_configs = symmetry_sector_configs(
-            loc_dims=model.loc_dims,
-            glob_op_diags=global_ops,
-            glob_sectors=np.array(global_sectors, dtype=float),
-            sym_type_flag="U",
-            link_op_diags=link_ops,
-            link_sectors=link_sectors,
-            pair_list=pair_list,
-        )
-    elif link_ops is not None:
-        sector_indices, sector_configs = link_abelian_sector(
-            loc_dims=model.loc_dims,
-            sym_op_diags=link_ops,
-            sym_sectors=link_sectors,
-            pair_list=pair_list,
-        )
-    # ==============================================================================
     # ENUMERATE ALL THE BACKGROUND SYMMETRY SECTORS
     logical_stag_basis = sim.par["dynamics"]["logical_stag_basis"]
     bg_configs, bg_sectors = model.get_background_charges_configs(logical_stag_basis)
@@ -107,8 +82,8 @@ with run_sim() as sim:
     )
     norm_scalar_product = np.tile(stag_array, num_blocks)
     logger.info(f"norm scalar product {norm_scalar_product}")
-    # -------------------------------------------------------------------------------
-    # DEFINE THE GLOBAL OPERATOR for the BACKGROUND CHARGE
+    # ==============================================================================
+    # STRING BACKGROUND SYMMETRY OPERATORS
     bg_global_ops = get_symmetry_sector_generators(
         [model.ops["bg"]],
         loc_dims=model.loc_dims,
@@ -126,6 +101,12 @@ with run_sim() as sim:
     for idx, group_id in enumerate(indices):
         bg_configs_per_sector[group_id, counts[group_id]] = bg_configs[idx]
         counts[group_id] += 1  # Increment the count for the current group
+    # Measures of the effective Hilbert space of each sector
+    sim.res["Deff"] = np.zeros(num_bg_sectors, dtype=float)
+    if sim.par["get_entropy"]:
+        sim.res["eigen_entropy"] = np.zeros(
+            (num_bg_sectors, int(model.n_sites / 2)), dtype=float
+        )
     # -------------------------------------------------------------------------------
     # RUN OVER THE POSSIBLE BACKGROUND SECTORS
     for bg_num, bg_sector in enumerate(unique_bg_sectors):
@@ -135,22 +116,26 @@ with run_sim() as sim:
         ]
         logger.info("----------------------------------------------")
         logger.info(f"BG SECTOR {bg_sector}")
-        logger.info(f"CONFIGS {bg_config_list}")
-        # ---------------------------------------------------------------------------
-        # SELECT THE SYMMETRY SECTOR OF THE BACKGROUNG CHARGE
-        model.sector_indices, model.sector_configs = global_abelian_sector(
+        for bg_config in bg_config_list:
+            logger.info(f"BG CONFIG {bg_config}")
+        # ==============================================================================
+        # SELECT THE U(1) GLOBAL and LINK SYMMETRY & BACKGROUND STRING SECTOR
+        # ==============================================================================
+        model.sector_indices, model.sector_configs = symmetry_sector_configs(
             loc_dims=model.loc_dims,
-            sym_op_diags=bg_global_ops,
-            sym_sectors=np.array([bg_sector], dtype=float),
-            sym_type="string",
-            configs=sector_configs,
+            glob_op_diags=global_ops,
+            glob_sectors=np.array(global_sectors, dtype=float),
+            sym_type_flag="U",
+            link_op_diags=link_ops,
+            link_sectors=link_sectors,
+            pair_list=pair_list,
+            string_op_diags=bg_global_ops,
+            string_sectors=np.array([bg_sector], dtype=float),
         )
+        # DEFINE SETTINGS, OBSERVABLES, and BUILD HAMILTONIAN
         model.default_params()
-        # DEFINE OBSERVABLES
         model.get_observables(local_obs)
-        # ---------------------------------------------------------------------------
-        # BUILD THE HAMILTONIAN
-        model.build_Hamiltonian(coeffs)
+        model.build_Hamiltonian(sim.par["g"], m)
         # ---------------------------------------------------------------------------
         # DYNAMICS: INITIAL STATE PREPARATION
         # ---------------------------------------------------------------------------
@@ -167,13 +152,33 @@ with run_sim() as sim:
             # DIAGONALIZE THE HAMILTONIAN
             model.diagonalize_Hamiltonian("full", "dense")
             _, microavg = model.microcanonical_avg1(obs, in_state, norm_scalar_product)
+            _, microNsingle = model.microcanonical_avg1("N_single", in_state)
+            _, microS2casimir = model.microcanonical_avg1("S2_matter", in_state)
             sim.res["microcan_avg"] += microavg / num_bg_sectors
+            sim.res["micro_Nsingle"] += microNsingle / num_bg_sectors
+            sim.res["micro_S2_matter"] += microS2casimir / num_bg_sectors
         # TIME EVOLUTION
-        model.time_evolution_Hamiltonian(in_state, start, stop, n_steps)
+        model.time_evolution_Hamiltonian(in_state, time_line)
+        # model.H.get_r_value()
+        if hasattr(model.H, "Deff"):
+            # Save the Effective Hilbert space of each superselection sector
+            sim.res["Deff"][bg_num] = model.H.Deff
+            if sim.par["get_entropy"]:
+                # Save the eigenstate entropy as a function of the partition
+                for L in range(int(model.n_sites / 2)):
+                    partition = list(np.arange(0, L + 1, 1))
+                    for kk in range(model.H.shape[0]):
+                        sim.res["eigen_entropy"][bg_num, L] += (
+                            model.H.Npsi[kk].entanglement_entropy(
+                                partition,
+                                model.sector_configs,
+                            )
+                            / model.H.shape[0]
+                        )
         # -----------------------------------------------------------------------
-        for ii in range(n_steps):
-            t_step = format(delta_n * ii, ".2f")
-            msg = f"====== {bg_num} ============ TIME {t_step} ===================="
+        for ii, tstep in enumerate(time_line):
+            msg_tstep = f"TIME {round(tstep, 2)}"
+            msg = f"====== {bg_num} ============ {msg_tstep} ===================="
             logger.info(msg)
             if not model.momentum_basis:
                 # ---------------------------------------------------------------
@@ -195,6 +200,8 @@ with run_sim() as sim:
             # -------------------------------------------------------------------
             # MEASURE OBSERVABLES
             model.measure_observables(ii, dynamics=True)
+            for obs in local_obs:
+                sim.res[obs][ii] += np.mean(model.res[obs]) / num_bg_sectors
             # TAKE THE SPECIAL AVERAGE TO LOOK AT THE IMBALANCE
             delta = np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
             sim.res["delta"][ii] += delta / num_bg_sectors

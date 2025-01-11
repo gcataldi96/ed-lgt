@@ -11,13 +11,14 @@ __all__ = ["DFL_Model"]
 
 
 class DFL_Model(QuantumModel):
-    def __init__(self, spin, pure_theory, background, **kwargs):
+    def __init__(self, spin, pure_theory, background, ham_format, **kwargs):
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
         self.pure_theory = pure_theory
         self.background = background
         self.staggered_basis = False
+        self.ham_format = ham_format
         # Acquire operators
         self.ops = SU2_dressed_site_operators(
             self.spin,
@@ -36,16 +37,17 @@ class DFL_Model(QuantumModel):
         self.get_local_site_dimensions()
         # Rather than for SU2, here we do not select the symmetry sector
 
-    def build_Hamiltonian(self, coeffs):
+    def build_Hamiltonian(self, g, m=None):
         logger.info("BUILDING HAMILTONIAN")
         # Hamiltonian Coefficients
-        self.coeffs = coeffs
+        self.DFL_Hamiltonian_couplings(g, m)
         h_terms = {}
         # -------------------------------------------------------------------------
         # ELECTRIC ENERGY
         op_name = "E_square"
         h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
-        self.H.Ham += h_terms[op_name].get_Hamiltonian(strength=coeffs["E"])
+        if not np.isclose(self.coeffs["E"], 1e-10):
+            self.H.add_term(h_terms[op_name].get_Hamiltonian(strength=self.coeffs["E"]))
         # -------------------------------------------------------------------------
         # PLAQUETTE TERM: MAGNETIC INTERACTION
         if self.dim > 1:
@@ -54,9 +56,12 @@ class DFL_Model(QuantumModel):
             h_terms["plaq_xy"] = PlaquetteTerm(
                 ["x", "y"], op_list, op_names_list, **self.def_params
             )
-            self.H.Ham += h_terms["plaq_xy"].get_Hamiltonian(
-                strength=-self.coeffs["B"], add_dagger=True
-            )
+            if not np.isclose(self.coeffs["B"], 1e-10):
+                self.H.add_term(
+                    h_terms["plaq_xy"].get_Hamiltonian(
+                        strength=-self.coeffs["B"], add_dagger=True
+                    )
+                )
         if self.dim == 3:
             # XZ Plane
             op_names_list = ["C_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"]
@@ -64,45 +69,107 @@ class DFL_Model(QuantumModel):
             h_terms["plaq_xz"] = PlaquetteTerm(
                 ["x", "z"], op_list, op_names_list, **self.def_params
             )
-            self.H.Ham += h_terms["plaq_xz"].get_Hamiltonian(
-                strength=-self.coeffs["B"], add_dagger=True
-            )
+            if not np.isclose(self.coeffs["B"], 1e-10):
+                self.H.add_term(
+                    h_terms["plaq_xz"].get_Hamiltonian(
+                        strength=-self.coeffs["B"], add_dagger=True
+                    )
+                )
             # YZ Plane
             op_names_list = ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"]
             op_list = [self.ops[op] for op in op_names_list]
             h_terms["plaq_yz"] = PlaquetteTerm(
                 ["y", "z"], op_list, op_names_list, **self.def_params
             )
-            self.H.Ham += h_terms["plaq_yz"].get_Hamiltonian(
-                strength=-self.coeffs["B"], add_dagger=True
-            )
+            if not np.isclose(self.coeffs["B"], 1e-10):
+                self.H.add_term(
+                    h_terms["plaq_yz"].get_Hamiltonian(
+                        strength=-self.coeffs["B"], add_dagger=True
+                    )
+                )
         # -------------------------------------------------------------------------
         if not self.pure_theory:
             # ---------------------------------------------------------------------
             # STAGGERED MASS TERM
+            h_terms["N_tot"] = LocalTerm(self.ops["N_tot"], "N_tot", **self.def_params)
             for site in ["even", "odd"]:
-                h_terms[f"N_{site}"] = LocalTerm(
-                    self.ops["N_tot"], "N_tot", **self.def_params
-                )
-                self.H.Ham += h_terms[f"N_{site}"].get_Hamiltonian(
-                    coeffs[f"m_{site}"], staggered_mask(self.lvals, site)
-                )
+                if not np.isclose(self.coeffs["m"], 1e-10):
+                    self.H.add_term(
+                        h_terms["N_tot"].get_Hamiltonian(
+                            self.coeffs[f"m_{site}"], staggered_mask(self.lvals, site)
+                        )
+                    )
             # ---------------------------------------------------------------------
             # HOPPING
             for d in self.directions:
+                op_names_list = [f"Qp{d}_dag", f"Qm{d}"]
+                op_list = [self.ops[op] for op in op_names_list]
+                # Define the Hamiltonian term
+                h_terms["hopping"] = TwoBodyTerm(
+                    d, op_list, op_names_list, **self.def_params
+                )
                 for site in ["even", "odd"]:
-                    op_names_list = [f"Qp{d}_dag", f"Qm{d}"]
-                    op_list = [self.ops[op] for op in op_names_list]
-                    # Define the Hamiltonian term
-                    h_terms[f"{d}_hop_{site}"] = TwoBodyTerm(
-                        d, op_list, op_names_list, **self.def_params
-                    )
+                    # Define the mask
                     mask = staggered_mask(self.lvals, site)
-                    self.H.Ham += h_terms[f"{d}_hop_{site}"].get_Hamiltonian(
-                        strength=coeffs[f"t{d}_{site}"],
-                        add_dagger=True,
-                        mask=mask,
+                    self.H.add_term(
+                        h_terms["hopping"].get_Hamiltonian(
+                            strength=self.coeffs[f"t{d}_{site}"],
+                            add_dagger=True,
+                            mask=mask,
+                        )
                     )
+        self.H.build(format=self.ham_format)
+
+    def DFL_Hamiltonian_couplings(self, g, m=None):
+        """
+        This function provides the couplings of the SU2 Yang-Mills Hamiltonian
+        starting from the gauge coupling g and the bare mass parameter m
+
+        Args:
+            pure_theory (bool): True if the theory does not include matter
+
+            g (scalar): gauge coupling
+
+            m (scalar, optional): bare mass parameter
+
+        Returns:
+            dict: dictionary of Hamiltonian coefficients
+
+        # NOTE: in the actual version of the coefficients, we rescale the Hamiltonian
+        in such a way that the hopping term is dimensionless as in
+        https://doi.org/10.1103/PRXQuantum.5.040309.
+        To do so, we need to multiply
+        - the hopping by 4*np.sqrt(2) (the original coupling is 1/2) --> 2*np.sqrt(2)
+        - the electric by 8/3 (the original was g_{0}^{2}/2) --> 8g^{2}/3, g^{2}=(3/2np.sqrt(2))*g_{0}^{2}
+        - the magnetic by 3 ()
+        - the other convention here is g is intended to be g^{2}
+        """
+        if self.dim == 1:
+            E = 8 * g / 3  # The correct one is g**2 / 2
+            B = 0
+        else:
+            E = 8 * g / 3  # The correct one is g**2 / 2
+            B = -3 / g  # The correct one is -1/2*g**2
+        # Dictionary with Hamiltonian COEFFICIENTS
+        self.coeffs = {
+            "g": g,
+            "E": E,  # ELECTRIC FIELD coupling
+            "B": B,  # MAGNETIC FIELD coupling
+        }
+        if not self.pure_theory:
+            # The correct hopping in original units should be 1/2
+            t = 2 * np.sqrt(2)
+            self.coeffs |= {
+                "tx_even": -complex(0, t),  # x HOPPING (EVEN SITES)
+                "tx_odd": -complex(0, t),  # x HOPPING (ODD SITES)
+                "ty_even": -t,  # y HOPPING (EVEN SITES)
+                "ty_odd": t,  # y HOPPING (ODD SITES)
+                "tz_even": -t,  # z HOPPING (EVEN SITES)
+                "tz_odd": t,  # z HOPPING (ODD SITES)
+                "m": m,
+                "m_odd": -m,  # EFFECTIVE MASS for ODD SITES
+                "m_even": m,  # EFFECTIVE MASS for EVEN SITES
+            }
 
     def check_symmetries(self):
         # CHECK LINK SYMMETRIES
