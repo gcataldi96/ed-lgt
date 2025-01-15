@@ -7,7 +7,12 @@ from .qmb_operations import local_op
 from .qmb_state import QMB_state, exp_val_data
 from .qmb_term import QMBTerm
 from ed_lgt.tools import validate_parameters, get_time
-from ed_lgt.symmetries import nbody_term, nbody_data_par
+from ed_lgt.symmetries import (
+    nbody_term,
+    nbody_data_par,
+    nbody_data_momentum_basis_par,
+    process_batches_with_nbody,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -28,6 +33,7 @@ class LocalTerm(QMBTerm):
 
             **kwargs: Additional keyword arguments for QMBTerm.
         """
+        logger.info(f"LocalTerm: {op_name}")
         # Validate type of parameters
         validate_parameters(op_list=[operator], op_names_list=[op_name])
         # Preprocess arguments
@@ -57,23 +63,39 @@ class LocalTerm(QMBTerm):
         if not np.isscalar(strength):
             raise TypeError(f"strength must be SCALAR not a {type(strength)}")
         # LOCAL HAMILTONIAN
-        H_Local = 0
-        for ii in range(prod(self.lvals)):
-            coords = zig_zag(self.lvals, ii)
-            # CHECK MASK CONDITION ON THE SITE
-            if self.get_mask_conditions(coords, mask):
-                if self.sector_configs is None:
+        if self.sector_configs is None:
+            H_Local = 0
+            for ii in range(prod(self.lvals)):
+                coords = zig_zag(self.lvals, ii)
+                # CHECK MASK CONDITION ON THE SITE
+                if self.get_mask_conditions(coords, mask):
                     H_Local += local_op(operator=self.op, op_site=ii, **self.def_params)
-                else:
+            return strength * H_Local
+        else:
+            # Initialize lists for nonzero entries
+            all_row_list = []
+            all_col_list = []
+            all_value_list = []
+            for ii in range(prod(self.lvals)):
+                coords = zig_zag(self.lvals, ii)
+                # CHECK MASK CONDITION ON THE SITE
+                if self.get_mask_conditions(coords, mask):
                     # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
-                    H_Local += nbody_term(
+                    row_list, col_list, value_list = nbody_term(
                         self.sym_ops,
                         np.array([ii]),
                         self.sector_configs,
                         self.momentum_basis,
                         self.momentum_k,
                     )
-        return strength * H_Local
+                    all_row_list.append(row_list)
+                    all_col_list.append(col_list)
+                    all_value_list.append(value_list)
+            # Concatenate global lists
+            row_list = np.concatenate(all_row_list)
+            col_list = np.concatenate(all_col_list)
+            value_list = np.concatenate(all_value_list) * strength
+            return row_list, col_list, value_list
 
     def get_expval(self, psi, stag_label=None):
         """
@@ -94,32 +116,45 @@ class LocalTerm(QMBTerm):
             raise TypeError(f"psi must be instance of class:QMB_state not {type(psi)}")
         validate_parameters(stag_label=stag_label)
         # PRINT OBSERVABLE NAME
+        msg = "" if stag_label is None else f"{stag_label}"
         logger.info(f"----------------------------------------------------")
-        (
-            logger.info(f"{self.op_name}")
-            if stag_label is None
-            else logger.info(f"{self.op_name} {stag_label}")
-        )
+        logger.info(f"{self.op_name} {msg}")
+        # Number of lattice sites
         n_sites = prod(self.lvals)
+        # Distinguish between the two cases: with and without symmetry sector
         if self.sector_configs is None:
             # Stores the expectation values <O>
             self.obs = np.zeros(n_sites, dtype=float)
             # Stores the variances <O^2> - <O>^2
             self.var = np.zeros(n_sites, dtype=float)
-            for ii in range(prod(self.lvals)):
+            for ii in range(n_sites):
                 self.obs[ii] = psi.expectation_value(
                     local_op(operator=self.op, op_site=ii, **self.def_params)
                 )
-                self.var[ii] = (
-                    psi.expectation_value(
-                        local_op(operator=self.op**2, op_site=ii, **self.def_params)
-                    )
-                    - self.obs[ii] ** 2
+                self.var[ii] = psi.expectation_value(
+                    local_op(operator=self.op**2, op_site=ii, **self.def_params)
                 )
+                self.var[ii] -= self.obs[ii] ** 2
         else:
-            self.obs, self.var = lattice_local_exp_val(
-                psi.psi, n_sites, self.sector_configs, self.sym_ops
-            )
+            # Compute the operator for the variance
+            shape = (1, n_sites, max(self.loc_dims), max(self.loc_dims))
+            opvar = np.zeros(shape, dtype=float)
+            for ii in range(n_sites):
+                opvar[0, ii] = np.dot(self.sym_ops[0, ii], self.sym_ops[0, ii])
+            # GET THE EXPVAL ON THE SYMMETRY SECTOR
+            if self.momentum_basis is not None:
+                self.obs, self.var = lattice_local_exp_val_mom(
+                    psi.psi,
+                    n_sites,
+                    self.sector_configs,
+                    self.sym_ops,
+                    self.momentum_basis,
+                    opvar,
+                )
+            else:
+                self.obs, self.var = lattice_local_exp_val(
+                    psi.psi, n_sites, self.sector_configs, self.sym_ops
+                )
         # CHECK STAGGERED CONDITION AND PRINT VALUES
         self.avg = 0.0
         self.std = 0.0
@@ -186,14 +221,64 @@ def lattice_local_exp_val(psi, n_sites, sector_configs, sym_ops):
     # Initialize arrays for storing expectation values and variances for all sites
     obs = np.zeros(n_sites, dtype=float)  # Stores the expectation values <O>
     var = np.zeros(n_sites, dtype=float)  # Stores the variances <O^2> - <O>^2
+    chunk_size = n_sites if n_sites < 11 else 4
+    # Divide the sites into chunks
+    num_chunks = (n_sites + chunk_size - 1) // chunk_size
+    for chunk_idx in range(num_chunks):
+        start = chunk_idx * chunk_size
+        end = min((chunk_idx + 1) * chunk_size, n_sites)
+
+        # Process the current chunk in parallel
+        for ii in prange(start, end):
+            row_list, col_list, value_list = process_batches_with_nbody(
+                sym_ops, np.array([ii]), sector_configs
+            )
+            obs[ii] = exp_val_data(psi, row_list, col_list, value_list)
+            # var[ii] = exp_val_data(psi, row_list, col_list, value_list**2)
+            # var[ii] =- obs[ii] ** 2
+
+    return obs, var
+
+
+@njit(parallel=True, cache=True)
+def lattice_local_exp_val_mom(
+    psi, n_sites, sector_configs, sym_ops, momentum_basis, opvar
+):
+    """
+    Computes the expectation value <O> and the variance <O^2> - <O>^2
+    for a local operator O on all lattice sites in parallel.
+
+    Args:
+        psi (np.ndarray): The quantum state (wavefunction) in the form of a vector.
+        n_sites (int): The total number of lattice sites on which the local operator acts.
+        sector_configs (np.ndarray): Array representing the symmetry sectors or configurations for the system.
+        sym_ops (np.ndarray): Symmetry operators for the local operator O, represented as a set of nonzero matrix elements.
+
+    Returns:
+        obs (np.ndarray): The expectation values <O> for the local operator O on each lattice site.
+        var (np.ndarray): The variances <O^2> - <O>^2 for the local operator O on each lattice site.
+
+    Notes:
+        - The expectation value <O> is computed for each site using matrix-vector multiplication.
+        - The variance <O^2> - <O>^2 is also computed for each site. For local operators,
+          squaring the non-zero entries in `value_list` (the matrix elements of O) is
+          sufficient to compute O^2.
+        - The function runs in parallel over all lattice sites using `prange` for performance optimization.
+    """
+    # Initialize arrays for storing expectation values and variances for all sites
+    obs = np.zeros(n_sites, dtype=float)  # Stores the expectation values <O>
+    var = np.zeros(n_sites, dtype=float)  # Stores the variances <O^2> - <O>^2
     # Loop over each lattice site in parallel using prange
     for ii in prange(n_sites):
         # Compute the n-body operator's non-zero elements for site 'ii'
-        row_list, col_list, value_list = nbody_data_par(
-            sym_ops, np.array([ii]), sector_configs
+        row_list, col_list, value_list = nbody_data_momentum_basis_par(
+            sym_ops, np.array([ii]), sector_configs, momentum_basis
         )
         # Compute the expectation value <O> for site 'ii'
         obs[ii] = exp_val_data(psi, row_list, col_list, value_list)
         # For local operators, the variance <O^2> - <O>^2 can be computed by squaring value_list
-        var[ii] = exp_val_data(psi, row_list, col_list, value_list**2) - obs[ii] ** 2
+        row_list1, col_list1, value_list1 = nbody_data_momentum_basis_par(
+            opvar, np.array([ii]), sector_configs, momentum_basis
+        )
+        var[ii] = exp_val_data(psi, row_list1, col_list1, value_list1) - obs[ii] ** 2
     return obs, var

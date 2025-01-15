@@ -37,6 +37,7 @@ class TwoBodyTerm(QMBTerm):
             op_names_list=op_names_list,
         )
         # Preprocess arguments
+        logger.info(f"TwoBodyTerm: {op_names_list}")
         super().__init__(op_list=op_list, op_names_list=op_names_list, **kwargs)
         if axis not in self.dimensions:
             raise ValueError(f"axis should be in {self.dimensions}: got {axis}")
@@ -67,41 +68,68 @@ class TwoBodyTerm(QMBTerm):
         if not np.isscalar(strength):
             raise TypeError(f"strength must be SCALAR, not {type(strength)}")
         validate_parameters(add_dagger=add_dagger)
-        # Hamiltonian
-        H_twobody = 0
-        # Run over all the single lattice sites, ordered with the ZIG ZAG CURVE
-        for ii in range(prod(self.lvals)):
-            # Compute the corresponding coords
-            coords = zig_zag(self.lvals, ii)
-            # Check if it admits a twobody term according to the lattice geometry
-            _, sites_list = get_neighbor_sites(
-                coords, self.lvals, self.axis, self.has_obc
-            )
-            if sites_list is None:
-                continue
-            # CHECK MASK CONDITION ON THE SITE
-            if self.get_mask_conditions(coords, mask):
-                # ADD THE TERM TO THE HAMILTONIAN
-                if self.sector_configs is None:
+        # Case with no symmetry sector
+        if self.sector_configs is None:
+            H_twobody = 0
+            for ii in range(prod(self.lvals)):
+                coords = zig_zag(self.lvals, ii)
+                _, sites_list = get_neighbor_sites(
+                    coords, self.lvals, self.axis, self.has_obc
+                )
+                if sites_list is None:
+                    continue
+                if self.get_mask_conditions(coords, mask):
                     H_twobody += strength * two_body_op(
                         op_list=self.op_list,
                         op_sites_list=sites_list,
                         **self.def_params,
                     )
-                else:
+            if not isspmatrix(H_twobody):
+                H_twobody = csr_matrix(H_twobody)
+            if add_dagger:
+                H_twobody += csr_matrix(H_twobody.conj().transpose())
+            return H_twobody
+        else:
+            # Case with symmetry sector
+            all_row_list = []
+            all_col_list = []
+            all_value_list = []
+            # Run over all the single lattice sites, ordered with the ZIG ZAG CURVE
+            for ii in range(prod(self.lvals)):
+                # Compute the corresponding coords
+                coords = zig_zag(self.lvals, ii)
+                # Check if it admits a twobody term according to the lattice geometry
+                _, sites_list = get_neighbor_sites(
+                    coords, self.lvals, self.axis, self.has_obc
+                )
+                if sites_list is None:
+                    continue
+                # CHECK MASK CONDITION ON THE SITE
+                if self.get_mask_conditions(coords, mask):
                     # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
-                    H_twobody += strength * nbody_term(
+                    row_list, col_list, value_list = nbody_term(
                         op_list=self.sym_ops,
                         op_sites_list=np.array(sites_list),
                         sector_configs=self.sector_configs,
                         momentum_basis=self.momentum_basis,
                         k=self.momentum_k,
                     )
-        if not isspmatrix(H_twobody):
-            H_twobody = csr_matrix(H_twobody)
-        if add_dagger:
-            H_twobody += csr_matrix(H_twobody.conj().transpose())
-        return H_twobody
+                    all_row_list.append(row_list)
+                    all_col_list.append(col_list)
+                    all_value_list.append(value_list)
+            row_list = np.concatenate(all_row_list)
+            col_list = np.concatenate(all_col_list)
+            value_list = np.concatenate(all_value_list) * strength
+            if add_dagger:
+                # Add Hermitian conjugate after the full term construction
+                dagger_row_list = col_list
+                dagger_col_list = row_list
+                dagger_value_list = np.conjugate(value_list)
+                # Concatenate the dagger part to the original term
+                row_list = np.concatenate([row_list, dagger_row_list])
+                col_list = np.concatenate([col_list, dagger_col_list])
+                value_list = np.concatenate([value_list, dagger_value_list])
+            return row_list, col_list, value_list
 
     def get_expval(self, psi):
         """
@@ -183,9 +211,7 @@ def lattice_twobody_exp_val(psi, n_sites, sector_configs, sym_ops):
         for jj in range(ii + 1, n_sites):
             # Compute the n-body operator's non-zero elements for the pair (ii, jj)
             row_list, col_list, value_list = nbody_data_par(
-                sym_ops,
-                np.array([ii, jj]),
-                sector_configs,
+                sym_ops, np.array([ii, jj]), sector_configs
             )
             # Compute the expectation value <O> for the pair (ii, jj)
             exp_value = exp_val_data(psi, row_list, col_list, value_list)

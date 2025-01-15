@@ -19,7 +19,7 @@ __all__ = [
 
 
 class QMB_state:
-    def __init__(self, psi, lvals=None, loc_dims=None):
+    def __init__(self, psi: np.ndarray, lvals=None, loc_dims=None):
         """
         Args:
             psi (np.ndarray): QMB states
@@ -61,23 +61,44 @@ class QMB_state:
         """
         return truncation(self.psi, threshold)
 
-    def expectation_value(
-        self, operator=None, row_list=None, col_list=None, value_list=None
-    ):
+    def expectation_value(self, operator):
         """
         Calculates the expectation value of the given operator with the current quantum state.
+        The operator can be provided in one of the following formats:
+            - As a tuple of nonzero elements: (row_list, col_list, value_list).
+            - As a dense matrix (np.ndarray).
+            - As a sparse matrix (e.g., scipy.sparse.csc_matrix or csr_matrix).
 
         Args:
-            operator (np.ndarray or sparse_matrix): The operator to apply.
+            operator (tuple or np.ndarray or sparse_matrix): The operator to apply.
+                - If a tuple, it should contain (row_list, col_list, value_list), where:
+                    * row_list (np.ndarray): Row indices of nonzero elements.
+                    * col_list (np.ndarray): Column indices of nonzero elements.
+                    * value_list (np.ndarray): Values corresponding to (row, col) pairs.
+                - If a dense matrix, it should be a NumPy array (np.ndarray).
+                - If a sparse matrix, it should be a scipy sparse matrix.
 
         Returns:
             float: The real part of the expectation value.
         """
-        if operator is not None:
+        if isinstance(operator, tuple) and len(operator) == 3:
+            # Case 1: Operator as (row_list, col_list, value_list)
+            row_list, col_list, value_list = operator
+            return exp_val_data(self.psi, row_list, col_list, value_list)
+        elif isinstance(operator, np.ndarray) or isspmatrix(operator):
+            # Case 2: Dense or Sparse Matrix
+            if self.psi.shape[0] != operator.shape[0]:
+                msg = f"The dimensions of the quantum state {self.psi.shape[0]} and the operator {operator.shape[0]} do not match."
+                raise ValueError(msg)
+            if isinstance(operator, np.ndarray):
+                operator = csr_array(operator)
             validate_parameters(op_list=[operator])
             return np.real(np.dot(np.conjugate(self.psi), (operator.dot(self.psi))))
         else:
-            return exp_val_data(self.psi, row_list, col_list, value_list)
+            raise TypeError(
+                "Operator must be provided as a tuple (row_list, col_list, value_list), "
+                "a dense matrix (np.ndarray), or a sparse matrix (scipy sparse matrix)."
+            )
 
     def bipartite_psi(self, keep_indices):
         """
@@ -105,7 +126,7 @@ class QMB_state:
         psi_partitioned = psi_tensor.reshape((subsystem_dim, env_dim))
         return psi_partitioned, subsystem_dim, env_dim
 
-    def reduced_density_matrix(self, keep_indices, sector_configs=None):
+    def reduced_density_matrix(self, keep_indices, sector_configs: np.ndarray = None):
         """
         Computes the reduced density matrix of the quantum state for specified lattice sites.
         Optionally handles different symmetry sectors.

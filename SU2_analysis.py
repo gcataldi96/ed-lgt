@@ -5,9 +5,47 @@ import matplotlib.cm as cm
 from matplotlib.colors import LogNorm
 from ed_lgt.tools import save_dictionary, load_dictionary
 
+
+def set_size(width_pt, fraction=1, subplots=(1, 1)):
+    """
+    Set figure dimensions to avoid scaling in LaTeX.
+
+    Parameters
+    ----------
+    width: float
+            Document width in points
+    fraction: float, optional
+            Fraction of the width which you wish the figure to occupy
+    subplots: array-like, optional
+            The number of rows and columns of subplots.
+    Returns
+    -------
+    fig_dim: tuple
+            Dimensions of figure in inches
+    """
+
+    # Width of figure (in pts)
+    fig_width_pt = width_pt * fraction
+    # Convert from pt to inches
+    inches_per_pt = 1 / 72.27
+
+    # Golden ratio to set aesthetic figure height
+    # https://disq.us/p/2940ij3
+    golden_ratio = (5**0.5 - 1) / 2
+
+    # Figure width in inches
+    fig_width_in = fig_width_pt * inches_per_pt
+    # Figure height in inches
+    fig_height_in = fig_width_in * golden_ratio * (subplots[0] / subplots[1])
+    fig_height_pt = fig_width_pt * golden_ratio * (subplots[0] / subplots[1])
+    print(fig_width_pt, fig_height_pt)
+    return (fig_width_in, fig_height_in)
+
+
 textwidth_pt = 510.0
 textwidth_in = textwidth_pt / 72.27
-
+columnwidth_pt = 246.0
+columnwidth_in = columnwidth_pt / 72.27
 """
 To extract simulations use
     op1) energy[ii][jj] = extract_dict(ugrid[ii][jj], key="res", glob="energy")
@@ -23,6 +61,36 @@ To acquire the psi file
 def fake_log(x, pos):
     "The two args are the value and tick position"
     return r"$10^{%d}$" % (x)
+
+
+def time_integral(time, M):
+    """
+    Computes the running time integral/average of an observable M over a given time line.
+
+    Parameters:
+    time (numpy.ndarray): Array of time points.
+    M (numpy.ndarray): Array of observable values corresponding to each time point.
+
+    Returns:
+    numpy.ndarray: Array of the running average of M at each time point.
+    """
+    Mavg = np.zeros_like(M)
+    Mavg[0] = M[0]
+
+    for cnt in range(1, len(time)):
+        for tnc in range(1, cnt + 1):
+            Mavg[cnt] += (
+                0.5 * (M[tnc] + M[tnc - 1]) * (time[tnc] - time[tnc - 1]) / time[cnt]
+            )
+    return Mavg
+
+
+def get_tline(par: dict):
+    start = par["start"]
+    stop = par["stop"]
+    delta_n = par["delta_n"]
+    n_steps = int((stop - start) / delta_n)
+    return np.arange(n_steps) * delta_n
 
 
 def custom_average(arr, staggered=None, norm=None):
@@ -55,6 +123,58 @@ def custom_average(arr, staggered=None, norm=None):
 local_obs = [f"T2_{s}{d}" for d in "x" for s in "mp"]
 local_obs += ["E_square"]
 local_obs += [f"N_{label}" for label in ["r", "g", "tot", "single", "pair"]]
+
+
+# %%
+def calculate_preallocation_memory(sparsity, sector_dim, N):
+    """
+    Calculate the memory used in GB for preallocating arrays based on sparsity, sector_dim, and N.
+
+    Args:
+        sparsity (float): Estimated sparsity of the operator.
+        sector_dim (int): Dimension of the symmetry sector (number of configurations).
+        N (int): Number of lattice sites.
+
+    Returns:
+        float: Memory used in GB for preallocation.
+    """
+    # Estimate the number of non-zero elements based on sparsity
+    estimated_nonzero_elements = int(sparsity * sector_dim**2)
+
+    # Memory requirements for row_list, col_list, and value_list
+    # row_list and col_list use np.int32 (4 bytes per entry)
+    # value_list uses np.float64 (8 bytes per entry)
+    memory_bytes = 16 * estimated_nonzero_elements
+    # Convert to GB
+    memory_gb = memory_bytes / (1024**3)
+    return memory_gb
+
+
+from scipy import stats
+
+N = np.array([4, 6, 8, 10, 12])
+X = 1 - 0.01 * np.array([86.285, 97.530, 99.600, 99.940, 99.9912])
+dim = np.array([38, 282, 2214, 17906, 147578])
+fig, ax = plt.subplots(2, 1, constrained_layout=True)
+ax[0].plot(N, X, "o-")
+ax[0].set(xlabel="N", ylabel="X", yscale="log")
+ax[1].plot(N, dim, "o-")
+ax[1].set(xlabel="N", ylabel="hilbert space", yscale="log")
+# Perform linear regression
+slope, intercept, r_value, p_value, std_err = stats.linregress(N, np.log(X))
+# Convert slope and intercept back to the original scale
+b = slope
+a = np.exp(intercept)
+ax[0].plot(N, a * np.exp(b * N), "--")
+print(a, b, r_value**2)
+# Perform linear regression
+slope, intercept, r_value, p_value, std_err = stats.linregress(N, np.log(dim))
+# Convert slope and intercept back to the original scale
+b = slope
+a = np.exp(intercept)
+print(a, b, r_value**2)
+for ii in range(N.shape[0]):
+    print(N[ii], calculate_preallocation_memory(X[ii], dim[ii], N[ii]))
 # %%
 # ==========================================================================
 # 2D SPECTRUM
@@ -63,7 +183,6 @@ index_list = ["g5m1", "g1m5"]
 idx = 1
 name = index_list[idx]
 res = {}
-# Acquire simulations of finite E field
 config_filename = f"scars/PVspectrum2D"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
@@ -141,7 +260,6 @@ save_dictionary(res, f"PV_2D_spectrum_{name}.pkl")
 # 2D DYNAMICS
 # ==========================================================================
 res = {}
-# Acquire simulations of finite E field
 config_filename = f"scars/PVdynamics2D"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
@@ -173,7 +291,6 @@ res = {}
 tline = np.arange(0, 10, 0.0025)
 
 for ii, jmax in enumerate(j_list):
-    # Acquire simulations of finite E field
     config_filename = f"scars/1D/{state_list[idx]}/j{jmax}"
     match = SimsQuery(group_glob=config_filename)
     ugrid, vals = uids_grid(match.uids, ["g"])
@@ -194,30 +311,107 @@ for kk, gval in enumerate(vals["g"]):
 # np.savetxt(f"time_dyn.txt", tline, fmt="%f")
 # plt.savefig(f"BV_dynamics1D_m5g1_j32.pdf")
 save_dictionary(res, f"{state_list[idx]}_1D_dynamics.pkl")
-
-
 # %%
 # ==========================================================================
 # 1D DFL TIME INTEGRAL
 # ==========================================================================
-def time_integral(tline, obs):
-    avg = np.zeros(len(obs) - 1)
-    for ii, t in enumerate(tline):
-        if ii > 0:
-            avg[ii - 1] = np.sum(obs[:ii]) / t
-    return avg
-
-
-def get_tline(par: dict):
-    start = par["start"]
-    stop = par["stop"]
-    delta_n = par["delta_n"]
-    n_steps = int((stop - start) / delta_n)
-    return np.arange(n_steps) * delta_n
-
-
 res = {}
-# Acquire simulations of finite E field
+config_filename = f"DFL/DW2sitesmicro"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = ["delta", "entropy", "overlap"]
+# Get the time line
+tline = get_tline(get_sim(ugrid[0]).par["dynamics"])
+res["micro"] = get_sim(ugrid[0]).res["microcan_avg"]
+for obs in obs_list:
+    res[obs] = np.zeros((6, len(tline)), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        res[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+
+res1 = {}
+config_filename = f"DFL/DW2sitesBGmicro"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = ["delta"]  # , "entropy", "overlap"]
+# Get the time line
+tline1 = get_tline(get_sim(ugrid[0]).par["dynamics"])
+res1["micro"] = get_sim(ugrid[0]).res["microcan_avg"]
+for obs in obs_list:
+    res1[obs] = np.zeros((6, len(tline1)), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        res1[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+
+obs = "delta"
+for ii, g in enumerate(vals["g"]):
+    m = get_sim(ugrid[ii]).par["m"]
+    fig, ax = plt.subplots(1, 1, constrained_layout=True)
+    ax.plot(
+        tline,
+        time_integral(tline, res[obs][ii, :]),
+        "--",
+        label=f"t_DW m={m},g={g}",
+    )
+    ax.plot(
+        tline,
+        res[obs][ii, :],
+        "--",
+        label=f"DW m={m},g={g}",
+    )
+    ax.axhline(y=res["micro"], linestyle="-")
+    ax.axhline(y=res1["micro"], linestyle="-.")
+    ax.plot(tline1, time_integral(tline1, res1[obs][ii, :]), "-", label="t_DW-BG")
+    ax.plot(tline1, res1[obs][ii, :], "-", label="DW-BG")
+    ax.set(xlabel=r"$t$", ylabel=f"time integral({obs})")
+    ax.grid()
+    plt.legend()
+# %%
+# ==========================================================================
+# DFL SPECTRUM
+# ==========================================================================
+res = {}
+config_filename = f"DFL/spectra"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = ["energy", "entropy", "overlap"]
+
+for obs in obs_list:
+    res[obs] = np.zeros((6, 2214), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        print(g, get_sim(ugrid[ii]).par["m"])
+        res[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+
+for ii, g in enumerate(vals["g"]):
+    m = get_sim(ugrid[ii]).par["m"]
+    fig, ax = plt.subplots(2, 1, constrained_layout=True)
+    ax[0].plot(
+        res["energy"][ii, :],
+        res["overlap"][ii, :],
+        "o",
+        markersize=2,
+        markeredgecolor="darkblue",
+        markerfacecolor="white",
+        markeredgewidth=0.5,
+    )
+    ax[0].set(yscale="log", ylim=[1e-12, 1])
+    ax[1].grid()
+    ax[1].plot(
+        res["energy"][ii, :],
+        res["entropy"][ii, :],
+        "o",
+        markersize=2,
+        markeredgecolor="darkblue",
+        markerfacecolor="white",
+        markeredgewidth=1,
+        label=f"DW m={m},g={g}",
+    )
+    ax[1].set(ylabel="Ent Entropy", xlabel="Energy")
+    ax[1].legend()
+    # plt.savefig(f"spectra_m{m}_g{g}.pdf")
+# %%
+# ==========================================================================
+# 1D DFL TIME INTEGRAL & SPECTRA
+# ==========================================================================
+res = {}
 config_filename = f"DFL/DW2sites"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
@@ -228,97 +422,125 @@ tline = get_tline(get_sim(ugrid[0]).par["dynamics"])
 for obs in obs_list:
     res[obs] = np.zeros((6, len(tline)), dtype=float)
     for ii, g in enumerate(vals["g"]):
-        print(g, get_sim(ugrid[ii]).par["m"])
         res[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
-obs_name = "delta"
-for ii, g in enumerate(vals["g"]):
-    m = get_sim(ugrid[ii]).par["m"]
-    fig, ax = plt.subplots(1, 1, constrained_layout=True)
-    ax.plot(
-        tline[1:],
-        time_integral(tline, res[obs_name][ii, :]),
-        "--",
-        label=f"t_DW m={m},g={g}",
-    )
-    ax.plot(
-        tline,
-        res[obs_name][ii, :],
-        "--",
-        label=f"DW m={m},g={g}",
-    )
-    # ax.plot(tline1[1:], time_integral(tline1, res1[obs])[1:], "-", label="DW-BG")
-    ax.set(xlabel=r"$t$", ylabel=f"time integral({obs})")
-    # ax.set(ylim=[0, 1.1])
-    # if ii == 1:
-    # ax[ii].set(xscale="log")
-    ax.grid()
-    plt.legend()
-# %%
-# DYNAMICS
+
 res1 = {}
-# Acquire simulations of finite E field
-config_filename = f"DFL/test"
+config_filename = f"DFL/DW2sitesBG"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
-obs_list = ["delta", "entropy", "overlap"][:2]
+obs_list = ["delta", "entropy", "overlap"][:1]
+# Get the time line
+tline1 = get_tline(get_sim(ugrid[0]).par["dynamics"])
+
 for obs in obs_list:
-    res1[obs] = get_sim(ugrid[0]).res[obs]
-tline1 = (
-    np.arange(res1["delta"].shape[0]) * get_sim(ugrid[0]).par["dynamics"]["delta_n"]
-)
+    res1[obs] = np.zeros((6, len(tline1)), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        res1[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+
+res_spectra = {}
+config_filename = f"DFL/spectra"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = ["energy", "entropy", "overlap"]
+
+for obs in obs_list:
+    res_spectra[obs] = np.zeros((6, 2214), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        res_spectra[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+
 obs = "delta"
-fig, ax = plt.subplots(1, 1, constrained_layout=True)
-for ii, obs in enumerate(obs_list[:1]):
-    ax.plot(tline[1:], time_integral(tline, res[obs])[1:], "--", label="DW")
-    ax.plot(tline1[1:], time_integral(tline1, res1[obs])[1:], "-", label="DW-BG")
-    ax.set(xlabel=r"$t$", ylabel=f"time integral({obs})")
-    # ax.set(ylim=[0, 1.1])
-    # if ii == 1:
-    # ax[ii].set(xscale="log")
-    ax.grid()
-plt.legend()
-# np.savetxt(f"overlap6.txt", res["overlap"], fmt="%f")
-# np.savetxt(f"delta6.txt", res["delta"], fmt="%f")
-plt.savefig(f"time_integral_N8m1g5_2siteDW.pdf")
+for ii, g in enumerate(vals["g"]):
+    m = get_sim(ugrid[ii]).par["m"]
+    delta = time_integral(tline, res[obs][ii, :])
+    deltaDLF = time_integral(tline, res1[obs][ii, :])
+    # TIME INTEGRAL DYNAMICS
+    fig, ax = plt.subplots(
+        2,
+        1,
+        figsize=set_size(textwidth_pt),
+        constrained_layout=True,
+    )
+    ax[0].grid()
+    ax[0].plot(tline, delta, "--", label=f"t_DW m={m},g={g}")
+    ax[0].plot(tline1, deltaDLF, "-", label="t_DW-BG")
+    ax[0].set(xlabel=r"$t$", ylabel=f"T.I.({obs})")
+    ax[0].legend()
+    # SPECTRA
+    ax[1].grid()
+    ax[1].plot(
+        res_spectra["energy"][ii, :],
+        res_spectra["entropy"][ii, :],
+        "o",
+        markersize=2,
+        markeredgecolor="darkblue",
+        markerfacecolor="white",
+        markeredgewidth=1,
+        label=f"DW m={m},g={g}",
+    )
+    ax[1].set(ylabel="Entropy", xlabel="Energy")
+    plt.savefig(f"DFL_m{m}_g{g}.pdf")
 # %%
 # ===================================================================
 # DFL PHASE DIAGRAM
 # ===================================================================
 res = {}
-# Acquire simulations of finite E field
-config_filename = f"DFL/grid"
+config_filename = f"DFL/gridtest_DFL"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g", "m"])
-obs_list = ["delta"]  # , "entropy", "overlap"]
-for obs in obs_list:
-    res[obs] = np.zeros((len(vals["g"]), len(vals["m"]), 200), dtype=float)
-res["imshow"] = np.zeros((len(vals["g"]), len(vals["m"])), dtype=float)
+res["Deff"] = np.zeros((len(vals["g"]), len(vals["m"]), 128), dtype=float)
+res["delta"] = np.zeros((len(vals["g"]), len(vals["m"]), 201), dtype=float)
+res["imshow_delta"] = np.zeros((len(vals["g"]), len(vals["m"])), dtype=float)
+res["imshow_deff"] = np.zeros((len(vals["g"]), len(vals["m"])), dtype=float)
+res["time_line"] = get_sim(ugrid[0, 0]).res["time_steps"]
 for ii, g in enumerate(vals["g"]):
     for jj, m in enumerate(vals["m"]):
-        print(ii, jj, f"g{g}", f"m{m}")
-        res["imshow"][ii, jj] = np.mean(get_sim(ugrid[ii, jj]).res["delta"][-10:])
-        for obs in obs_list:
-            res[obs][ii, jj, :] = get_sim(ugrid[ii, jj]).res[obs]
-save_dictionary(res, "DFL_phase_diagram.pkl")
+        res["delta"][ii, jj, :] = get_sim(ugrid[ii, jj]).res["delta"]
+        res["imshow_delta"][ii, jj] = np.mean(get_sim(ugrid[ii, jj]).res["delta"])
+        res["imshow_deff"][ii, jj] = np.mean(get_sim(ugrid[ii, jj]).res["Deff"])
+
+res1 = {}
+config_filename = f"DFL/gridtest_BV"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g", "m"])
+res1["Deff"] = np.zeros((len(vals["g"]), len(vals["m"])), dtype=float)
+res1["delta"] = np.zeros((len(vals["g"]), len(vals["m"]), 201), dtype=float)
+res1["imshow_delta"] = np.zeros((len(vals["g"]), len(vals["m"])), dtype=float)
+res1["imshow_deff"] = np.zeros((len(vals["g"]), len(vals["m"])), dtype=float)
+res1["time_line"] = get_sim(ugrid[0, 0]).res["time_steps"]
+for ii, g in enumerate(vals["g"]):
+    for jj, m in enumerate(vals["m"]):
+        res1["delta"][ii, jj, :] = get_sim(ugrid[ii, jj]).res["delta"]
+        res1["imshow_delta"][ii, jj] = np.mean(get_sim(ugrid[ii, jj]).res["delta"])
+        res1["imshow_deff"][ii, jj] = get_sim(ugrid[ii, jj]).res["Deff"]
 # %%
 # ===================================================================
 # Plot phase diagram
 # ===================================================================
-stop = get_sim(ugrid[0, 0]).par["dynamics"]["stop"]
-tstep = get_sim(ugrid[0, 0]).par["dynamics"]["delta_n"]
-tline = np.arange(0, stop, tstep)
-
 fig, ax = plt.subplots(1, 1, constrained_layout=True)
 # IMSHOW
-img = ax.imshow(
-    np.transpose(res["imshow"]),
-    origin="lower",
-    cmap="magma",
-    extent=[-1, 1, -1, 1],
-)
-ax.set(xticks=[-1, 0, 1], yticks=[-1, 0, 1], ylabel=r"m", xlabel=r"g^{2}")
-ax.xaxis.set_major_formatter(fake_log)
-ax.yaxis.set_major_formatter(fake_log)
+measure = "deff"
+X = np.transpose(res[f"imshow_{measure}"])
+centers = [0, 4, 0, 4]
+(dx,) = np.diff(centers[:2]) / (X.shape[1] - 1)
+(dy,) = np.diff(centers[2:]) / (X.shape[0] - 1)
+extent = [
+    centers[0] - dx / 2,
+    centers[1] + dx / 2,
+    centers[2] - dy / 2,
+    centers[3] + dy / 2,
+]
+img = plt.imshow(X, cmap="magma", origin="lower", extent=extent)
+
+xticks = np.arange(centers[0], centers[1] + dx, dx)
+yticks = np.arange(centers[2], centers[3] + dy, dy)
+tick_labels = np.array([0.1, 0.8, 5, 10, 15])
+ax.set(ylabel=r"m", xlabel=r"g^{2}")
+
+# Custom ticks
+ax.set_xticks(xticks)
+ax.set_yticks(yticks)
+ax.set_xticklabels(tick_labels)
+ax.set_yticklabels(tick_labels)
 
 cb = fig.colorbar(
     img,
@@ -327,14 +549,35 @@ cb = fig.colorbar(
     location="right",
     orientation="vertical",
     pad=0.01,
-    label=r"<Delta>",
+    label=rf"<{measure}>",
 )
-plt.savefig(f"phase_diagram.pdf")
+plt.savefig(f"small_diagram{measure}.pdf")
+# %%
+ii = 2
+jj = 4
+m = vals["m"]
+g = vals["g"]
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+ax.plot(
+    res["time_line"],
+    res["delta"][ii, jj, :],
+    "-",
+    label=f"BG m={m[jj]},g={g[ii]}",
+)
+ax.plot(
+    res1["time_line"],
+    res1["delta"][ii, jj, :],
+    "-",
+    label=f"DW m={m[jj]},g={g[ii]}",
+)
+ax.set(xlabel=r"$t$", ylabel=f"delta(t)")
+ax.grid()
+plt.legend()
+# %%
 # ===================================================================
-# PLot single mass value curves
+# ENTROPY
 sm = cm.ScalarMappable(cmap="magma", norm=LogNorm())
 palette = sm.to_rgba(vals["g"])
-
 jj = 10
 for ii, obs in enumerate(obs_list):
     fig, ax = plt.subplots(1, 1, constrained_layout=True)
@@ -363,56 +606,203 @@ for ii, obs in enumerate(obs_list):
     plt.savefig(
         f"m{vals['m'][jj]}_{obs}.pdf",
     )
+
 # %%
 # ==========================================================================
-# DFL SPECTRUM
+# 1D DFL TIME INTEGRAL
 # ==========================================================================
 res = {}
-# Acquire simulations of finite E field
-config_filename = f"DFL/spectra"
+config_filename = f"DFL/test1"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
-obs_list = ["energy", "entropy", "overlap"]
+obs_list = ["delta", "N_single", "S2_matter"]
+# Get the time line
+time_line = get_sim(ugrid[0]).res["time_steps"]
 
 for obs in obs_list:
-    res[obs] = np.zeros((6, 2214), dtype=float)
+    res[obs] = np.zeros((4, len(time_line)), dtype=float)
     for ii, g in enumerate(vals["g"]):
-        print(g, get_sim(ugrid[ii]).par["m"])
         res[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+for micro in ["microcan_avg", "micro_Nsingle", "micro_S2_matter"]:
+    res[micro] = np.zeros((4), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        res[micro][ii] = get_sim(ugrid[ii]).res[micro]
 
+res1 = {}
+config_filename = f"DFL/testnobg"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = ["delta", "N_single", "N_pair"]
+# Get the time line
+time_line1 = get_sim(ugrid[0]).res["time_steps"]
+
+
+for obs in obs_list:
+    res1[obs] = np.zeros((4, len(time_line1)), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        res1[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+for micro in ["micro_delta", "micro_N_single", "micro_N_pair", "Deff", "Hspace_size"]:
+    res1[micro] = np.zeros(4, dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        res1[micro][ii] = get_sim(ugrid[ii]).res[micro]
+
+obs = "N_single"
+fig, ax = plt.subplots(2, 2, constrained_layout=True, sharex=True, sharey=True)
 for ii, g in enumerate(vals["g"]):
+    ir = ii // 2
+    ic = ii % 2
     m = get_sim(ugrid[ii]).par["m"]
-    fig, ax = plt.subplots(2, 1, constrained_layout=True)
-    ax[0].grid()
-    ax[0].plot(
-        res["energy"][ii, :],
-        res["overlap"][ii, :],
-        "o",
-        markersize=2,
-        markeredgecolor="darkblue",
-        markerfacecolor="white",
-        markeredgewidth=0.5,
-        label=f"DW m={m},g={g}",
+    ax[ir, ic].grid()
+    ax[ir, ic].axhline(
+        y=res1[f"micro_{obs}"][ii],
+        linestyle="-",
+        c="black",
+        linewidth=0.9,
+        label="micro NOBG",
     )
-    ax[0].set(ylabel="Overlap", yscale="log", xlabel="Energy", ylim=[1e-9, 1])
-    ax[1].plot(
-        res["energy"][ii, :],
-        res["entropy"][ii, :],
-        "o",
-        markersize=1,
-        markeredgecolor="darkblue",
-        markerfacecolor="white",
-        markeredgewidth=0.5,
+    ax[ir, ic].axhline(
+        y=res["micro_Nsingle"][ii],
+        linestyle="-",
+        c="darkgreen",
+        linewidth=0.9,
+        label="micro BG",
     )
-    ax[1].set(ylabel="Ent Entropy", xlabel="Energy")
-    ax[0].legend()
-    plt.savefig(
-        f"spectra_m{m}_g{g}.pdf",
+    """
+    ax[ir, ic].plot(
+        time_line,
+        time_integral(time_line, res[obs][ii, :]),
+        "--",
+        label=f"BGs m={m},g={g}",
     )
+    ax[ir, ic].plot(
+        time_line1,
+        time_integral(time_line1, res1[obs][ii, :]),
+        "--",
+        label=f"NOBG  D= {round(-np.log(res1['Deff'][ii])/np.log(res1['Hspace_size'][ii]),4)}",
+        c="darkred",
+    )
+    """
+    ax[ir, ic].plot(
+        time_line,
+        res[obs][ii, :],
+        "--",
+        label=f"BG m={m},g={g}",
+    )
+
+    ax[ir, ic].plot(
+        time_line1,
+        res1[obs][ii, :],
+        "--",
+        label=f"nobg",
+    )
+    if ic == 0:
+        ax[ir, ic].set(ylabel=f"{obs}")
+    if ir == 1:
+        ax[ir, ic].set(xlabel=f"time")
+    ax[ir, ic].legend()
+plt.savefig(
+    f"snapshots_{obs}.pdf",
+)
+# %%
+# DYNAMICS
+data = np.loadtxt(f"delta_Q0_N8g5m1.txt")
+dataDFL = np.loadtxt(f"delta4.txt")
+tline3 = 10 * np.arange(len(dataDFL)) / len(dataDFL)
+tline4 = 60 * np.arange(len(data)) / len(data)
+
+res1 = {}
+
+config_filename = f"DFL/testgiuseppe"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = ["delta"]
+for obs in obs_list:
+    res1[obs] = get_sim(ugrid[0]).res[obs]
+tline1 = get_sim(ugrid[0]).res["time_steps"]
+
+res2 = {}
+config_filename = f"DFL/tested2"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+for obs in obs_list:
+    res2[obs] = get_sim(ugrid[0]).res[obs]
+tline2 = get_sim(ugrid[0]).res["time_steps"]
+
+obs = "delta"
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+ax.plot(tline4, data, "-", label="Giuseppe")
+ax.plot(tline1, res1[obs], "x", label="ED")
+ax.plot(tline2, res2[obs], "--", label="ED2")
+ax.set(xlabel=r"$t$", ylabel=f"overlap")
+ax.grid()
+plt.legend()
+# %%
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+ax.plot(tline4, np.abs(data - res1[obs]), "-", label="diff")
+# ax.plot(tline, res1[obs], "+", label="ED2")
+ax.set(xlabel=r"$t$", ylabel=f"overlap", yscale="log")
+ax.grid()
+plt.legend()
+# %%
+res = {}
+config_filename = f"test/dfl"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = ["delta"]
+for obs in obs_list:
+    res[obs] = get_sim(ugrid[0]).res[obs]
+tline = get_tline(get_sim(ugrid[0]).par["dynamics"])
+obs = "delta"
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+ax.plot(tline, res[obs], "--", label="ED")
+ax.plot(tline1, dataDFL, "-", label="Giuseppe")
+ax.set(xlabel=r"$t$", ylabel=f"overlap")
+ax.grid()
+plt.legend()
+# %%
+res = {}
+config_filename = f"DFL/testgiuseppe"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = ["delta"]
+for obs in obs_list:
+    res[obs] = get_sim(ugrid[0]).res[obs]
+tline = get_tline(get_sim(ugrid[0]).par["dynamics"])
+obs = "delta"
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+ax.plot(tline, res[obs], "--", label="ED")
+ax.set(xlabel=r"$t$", ylabel=f"overlap")
+ax.grid()
+plt.legend()
+# %%
+# DYNAMICS
+res1 = {}
+config_filename = f"DFL/test"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = ["delta", "entropy", "overlap"][:2]
+for obs in obs_list:
+    res1[obs] = get_sim(ugrid[0]).res[obs]
+tline1 = (
+    np.arange(res1["delta"].shape[0]) * get_sim(ugrid[0]).par["dynamics"]["delta_n"]
+)
+obs = "delta"
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+for ii, obs in enumerate(obs_list[:1]):
+    ax.plot(tline[1:], time_integral(tline, res[obs])[1:], "--", label="DW")
+    ax.plot(tline1[1:], time_integral(tline1, res1[obs])[1:], "-", label="DW-BG")
+    ax.set(xlabel=r"$t$", ylabel=f"time integral({obs})")
+    # ax.set(ylim=[0, 1.1])
+    # if ii == 1:
+    # ax[ii].set(xscale="log")
+    ax.grid()
+plt.legend()
+# np.savetxt(f"overlap6.txt", res["overlap"], fmt="%f")
+# np.savetxt(f"delta6.txt", res["delta"], fmt="%f")
+plt.savefig(f"time_integral_N8m1g5_2siteDW.pdf")
 # %%
 # DYNAMICS
 res = {}
-# Acquire simulations of finite E field
 config_filename = f"scars/testDFL"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])

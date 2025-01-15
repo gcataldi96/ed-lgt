@@ -10,6 +10,7 @@ __all__ = [
     "check_global_sym_sitebased",
     "global_abelian_sector",
     "global_sector_configs",
+    "check_string_sym_sitebased",
 ]
 
 

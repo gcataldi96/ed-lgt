@@ -1,6 +1,7 @@
 import numpy as np
 import os
 from numba import set_num_threads
+from ed_lgt.tools import stag_avg
 from ed_lgt.modeling import get_entropy_partition
 from ed_lgt.models import SU2_Model
 from simsio import run_sim
@@ -38,8 +39,7 @@ with run_sim() as sim:
     local_obs = [f"T2_{s}{d}" for d in model.directions for s in "mp"]
     local_obs = ["E_square"]
     if not model.pure_theory:
-        local_obs = ["N_tot"]  # ["N_pair"]
-        # [f"N_{label}" for label in ["r", "g", "tot", "single", "pair"]]
+        local_obs = [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
     # LIST OF TWOBODY CORRELATORS
     twobody_obs = [[f"P_p{d}", f"P_m{d}"] for d in model.directions]
     twobody_axes = [d for d in model.directions]
@@ -56,7 +56,6 @@ with run_sim() as sim:
         sim.res[obs] = np.zeros(n_steps, dtype=float)
     # -------------------------------------------------------------------------------
     # ENSEMBLE BEHAVIORS
-    obs = sim.par["ensemble"]["local_obs"]
     get_micro_avg = sim.par["ensemble"]["microcanonical"]["average"]
     # -------------------------------------------------------------------------------
     # MICROCANONICAL ENSEMBLE (it requires a large part of the Hamiltonian spectrum)
@@ -66,8 +65,15 @@ with run_sim() as sim:
         sim.res["energy"] = model.H.Nenergies
         config = model.overlap_QMB_state(sim.par["ensemble"]["microcanonical"]["state"])
         ref_state = model.get_qmb_state_from_configs([config])
-        micro_state, sim.res["microcan_avg"] = model.microcanonical_avg1(
-            obs, ref_state, norm_scalar_product
+        micro_state, sim.res["micro_delta"] = model.microcanonical_avg1(
+            "N_tot", ref_state, norm_scalar_product
+        )
+        _, sim.res["micro_N_single"] = model.microcanonical_avg1("N_single", ref_state)
+        _, sim.res["micro_N_pair"] = model.microcanonical_avg1(
+            "N_pair", ref_state, staggered_avg="even"
+        )
+        _, sim.res["micro_N_zero"] = model.microcanonical_avg1(
+            "N_zero", ref_state, staggered_avg="odd"
         )
     # -------------------------------------------------------------------------------
     # CANONICAL ENSEMBLE (it does not need the full spectrum)
@@ -106,7 +112,10 @@ with run_sim() as sim:
     # -------------------------------------------------------------------------------
     # TIME EVOLUTION
     model.time_evolution_Hamiltonian(in_state, time_line)
-    sim.res["Deff"] = model.H.Deff
+    if hasattr(model.H, "Deff"):
+        sim.res["Deff"] = model.H.Deff
+        sim.res["Hspace_size"] = model.H.shape[0]
+        logger.info(f"D {-np.log(model.H.Deff)/np.log(model.H.shape[0])}")
     # -------------------------------------------------------------------------------
     for ii, tstep in enumerate(time_line):
         msg = f"TIME {round(tstep, 2)}"
@@ -127,8 +136,13 @@ with run_sim() as sim:
         # -----------------------------------------------------------------------
         # MEASURE OBSERVABLES
         model.measure_observables(ii, dynamics=True)
-        for obs in local_obs:
-            sim.res[obs][ii] = np.mean(model.res[obs])
+        sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
+        sim.res["N_pair"][ii] = (
+            stag_avg(model.res["N_pair"], "even") + stag_avg(model.res["N_zero"], "odd")
+        ) / 2
+        sim.res["N_zero"][ii] = (
+            stag_avg(model.res["N_zero"], "even") + stag_avg(model.res["N_pair"], "odd")
+        ) / 2
         sim.res["delta"][ii] = (
             np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
         )

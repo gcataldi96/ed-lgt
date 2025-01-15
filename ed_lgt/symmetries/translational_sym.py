@@ -1,5 +1,5 @@
 import numpy as np
-from numba import njit
+from numba import njit, prange
 from .generate_configs import get_translated_state_indices
 
 __all__ = [
@@ -7,6 +7,7 @@ __all__ = [
     "check_orthogonality",
     "momentum_basis_k0",
     "momentum_basis",
+    "momentum_basis_k0_par",
 ]
 
 
@@ -25,6 +26,63 @@ def check_orthogonality(basis):
             if not np.isclose(np.vdot(basis[:, ii], basis[:, jj]), 0, atol=1e-10):
                 return False
     return True
+
+
+@njit(cache=True, parallel=True)
+def momentum_basis_k0_par(sector_configs: np.ndarray, logical_unit_size: int):
+    """
+    Compute the momentum basis (k=0) in parallel for a given symmetry sector.
+
+    Args:
+        sector_configs (np.ndarray): Array of unique sector configurations.
+        logical_unit_size (int): Size of the logical unit for translation symmetry.
+
+    Returns:
+        basis (np.ndarray): Momentum basis matrix for k=0.
+    """
+    # Initialize dimensions and arrays
+    sector_dim = sector_configs.shape[0]
+    num_translations = sector_configs.shape[1] // logical_unit_size
+    normalization = np.zeros(sector_dim, dtype=np.int32)
+    independent_indices = np.zeros(sector_dim, dtype=np.bool_)
+    all_trans_indices = np.zeros((sector_dim, num_translations), dtype=np.int32)
+
+    # Step 1: Precompute all translations in parallel
+    for ii in prange(sector_dim):
+        config = sector_configs[ii]
+        all_trans_indices[ii] = get_translated_state_indices(
+            config, sector_configs, logical_unit_size
+        )
+
+    # Step 2: Mark independent indices sequentially
+    for ii in range(sector_dim):
+        trans_indices = all_trans_indices[ii]
+        is_independent = True
+        for jj in range(ii):  # Sequential check for independence
+            if independent_indices[jj] and jj in trans_indices:
+                is_independent = False
+                break
+        if is_independent:
+            independent_indices[ii] = True
+            # The norm for the state is the number of unique translations
+            normalization[ii] = len(np.unique(trans_indices))
+
+    # Step 3: Parallelize basis construction
+    ref_indices = np.flatnonzero(independent_indices)  # Extract independent indices
+    norm = normalization[ref_indices]
+    basis = np.zeros((sector_dim, len(ref_indices)), dtype=np.float64)
+
+    for ii in prange(len(ref_indices)):  # Parallelized
+        ind_index = ref_indices[ii]
+        trans_indices = all_trans_indices[ind_index]
+        for jj in range(norm[ii]):
+            basis[trans_indices[jj], ii] = 1 / np.sqrt(norm[ii])
+
+    # Optional: Uncomment for debugging
+    # if not check_normalization(basis) or not check_orthogonality(basis):
+    #     raise ValueError("Basis normalization or orthogonality failed.")
+
+    return basis
 
 
 @njit(cache=True)

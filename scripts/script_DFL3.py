@@ -2,6 +2,7 @@ import numpy as np
 import os
 from numba import set_num_threads
 from ed_lgt.models import DFL_Model
+from ed_lgt.tools import stag_avg
 from ed_lgt.modeling import get_lattice_link_site_pairs, get_entropy_partition
 from ed_lgt.symmetries import get_symmetry_sector_generators, symmetry_sector_configs
 from simsio import run_sim
@@ -30,16 +31,15 @@ with run_sim() as sim:
     # ===============================================================================
     # OBSERVABLES
     if not model.pure_theory:
-        local_obs = [f"N_{label}" for label in ["tot", "single"]] + ["S2_matter"]
+        local_obs = [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
         for measure in local_obs:
             sim.res[measure] = np.zeros(n_steps, dtype=float)
     # Store the observables
     partition_indices = get_entropy_partition(model.lvals)
     for measure in ["delta", "entropy", "overlap"][:1]:
         sim.res[measure] = np.zeros(n_steps, dtype=float)
-    sim.res["microcan_avg"] = 0.0
-    sim.res["micro_Nsingle"] = 0.0
-    sim.res["micro_S2_matter"] = 0.0
+    for micro_obs in ["delta", "N_single", "N_pair", "N_zero"]:
+        sim.res[f"micro_{micro_obs}"] = 0.0
     # ==============================================================================
     # GLOBAL SYMMETRIES
     global_ops = [model.ops["N_tot"]]
@@ -93,19 +93,20 @@ with run_sim() as sim:
     )
     # Step 1: Find unique rows and their indices
     unique_bg_sectors, indices = np.unique(bg_sectors, axis=0, return_inverse=True)
-    num_bg_sectors = len(unique_bg_sectors)
+    n_bg_sectors = len(unique_bg_sectors)
     # Step 2: Define the array where bg configs are stored according to their associated sector
-    bg_configs_per_sector = np.zeros((num_bg_sectors, 2, model.n_sites), dtype=int)
-    counts = np.zeros(num_bg_sectors, dtype=int)
+    bg_configs_per_sector = np.zeros((n_bg_sectors, 2, model.n_sites), dtype=int)
+    counts = np.zeros(n_bg_sectors, dtype=int)
     # Step 3: Group rows from the second array based on the indices
     for idx, group_id in enumerate(indices):
         bg_configs_per_sector[group_id, counts[group_id]] = bg_configs[idx]
         counts[group_id] += 1  # Increment the count for the current group
     # Measures of the effective Hilbert space of each sector
-    sim.res["Deff"] = np.zeros(num_bg_sectors, dtype=float)
+    sim.res["Deff"] = np.zeros(n_bg_sectors, dtype=float)
+    sim.res["Hspace_size"] = np.zeros(n_bg_sectors, dtype=float)
     if sim.par["get_entropy"]:
         sim.res["eigen_entropy"] = np.zeros(
-            (num_bg_sectors, int(model.n_sites / 2)), dtype=float
+            (n_bg_sectors, int(model.n_sites / 2)), dtype=float
         )
     # -------------------------------------------------------------------------------
     # RUN OVER THE POSSIBLE BACKGROUND SECTORS
@@ -151,18 +152,28 @@ with run_sim() as sim:
             obs = sim.par["ensemble"]["local_obs"]
             # DIAGONALIZE THE HAMILTONIAN
             model.diagonalize_Hamiltonian("full", "dense")
-            _, microavg = model.microcanonical_avg1(obs, in_state, norm_scalar_product)
-            _, microNsingle = model.microcanonical_avg1("N_single", in_state)
-            _, microS2casimir = model.microcanonical_avg1("S2_matter", in_state)
-            sim.res["microcan_avg"] += microavg / num_bg_sectors
-            sim.res["micro_Nsingle"] += microNsingle / num_bg_sectors
-            sim.res["micro_S2_matter"] += microS2casimir / num_bg_sectors
+            _, micro_delta = model.microcanonical_avg1(
+                obs, in_state, norm_scalar_product
+            )
+            _, micro_N_single = model.microcanonical_avg1("N_single", in_state)
+            _, micro_N_pair = model.microcanonical_avg1(
+                "N_pair", in_state, staggered_avg="even"
+            )
+            _, micro_N_zero = model.microcanonical_avg1(
+                "N_zero", in_state, staggered_avg="odd"
+            )
+            sim.res["micro_delta"] += micro_delta / n_bg_sectors
+            sim.res["micro_N_single"] += micro_N_single / n_bg_sectors
+            sim.res["micro_N_pair"] += micro_N_pair / n_bg_sectors
+            sim.res["micro_N_zero"] += micro_N_zero / n_bg_sectors
         # TIME EVOLUTION
         model.time_evolution_Hamiltonian(in_state, time_line)
         # model.H.get_r_value()
         if hasattr(model.H, "Deff"):
             # Save the Effective Hilbert space of each superselection sector
             sim.res["Deff"][bg_num] = model.H.Deff
+            sim.res["Hspace_size"][bg_num] = model.H.shape[0]
+            logger.info(f"D {-np.log(model.H.Deff)/np.log(model.H.shape[0])}")
             if sim.par["get_entropy"]:
                 # Save the eigenstate entropy as a function of the partition
                 for L in range(int(model.n_sites / 2)):
@@ -189,9 +200,7 @@ with run_sim() as sim:
                         model.sector_configs,
                     )
                     # Save the entropy
-                    sim.res["entropy"][ii] += (
-                        entropy + np.log2(num_bg_sectors)
-                    ) / num_bg_sectors
+                    sim.res["entropy"][ii] += entropy / n_bg_sectors
                 # STATE CONFIGURATIONS
                 if sim.par["get_state_configs"]:
                     model.H.psi_time[ii].get_state_configurations(
@@ -200,14 +209,29 @@ with run_sim() as sim:
             # -------------------------------------------------------------------
             # MEASURE OBSERVABLES
             model.measure_observables(ii, dynamics=True)
-            for obs in local_obs:
-                sim.res[obs][ii] += np.mean(model.res[obs]) / num_bg_sectors
+            sim.res["N_single"][ii] += stag_avg(model.res["N_single"]) / n_bg_sectors
+            sim.res["N_pair"][ii] += (
+                (
+                    stag_avg(model.res["N_pair"], "even")
+                    + stag_avg(model.res["N_zero"], "odd")
+                )
+                / 2
+                * n_bg_sectors
+            )
+            sim.res["N_zero"][ii] += (
+                (
+                    stag_avg(model.res["N_zero"], "even")
+                    + stag_avg(model.res["N_pair"], "odd")
+                )
+                / 2
+                * n_bg_sectors
+            )
             # TAKE THE SPECIAL AVERAGE TO LOOK AT THE IMBALANCE
             delta = np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
-            sim.res["delta"][ii] += delta / num_bg_sectors
+            sim.res["delta"][ii] += delta / n_bg_sectors
             # OVERLAPS with the INITIAL STATE
             # overlap = model.measure_fidelity(in_state, ii, True, True)
-            # sim.res["overlap"][ii] += overlap / num_bg_sectors
+            # sim.res["overlap"][ii] += overlap / n_bg_sectors
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

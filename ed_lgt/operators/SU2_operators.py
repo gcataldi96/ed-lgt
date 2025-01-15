@@ -223,7 +223,7 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
     # -----------------------------------------------------------------------------
     if not pure_theory:
         # Psi NUMBER OPERATORS
-        for label in ["r", "g", "tot", "single", "pair"]:
+        for label in ["r", "g", "tot", "single", "pair", "zero"]:
             ops[f"N_{label}"] = qmb_op(
                 in_ops, [f"N_{label}"] + ["IDz" for _ in range(2 * lattice_dim)]
             )
@@ -598,7 +598,7 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
     # -----------------------------------------------------------------------------
     if not pure_theory:
         # Psi NUMBER OPERATORS
-        for label in ["r", "g", "tot", "single", "pair"]:
+        for label in ["r", "g", "tot", "single", "pair", "zero"]:
             ops[f"N_{label}"] = qmb_op(
                 in_ops, [f"N_{label}"] + ["IDz" for i in range(2 * lattice_dim)]
             )

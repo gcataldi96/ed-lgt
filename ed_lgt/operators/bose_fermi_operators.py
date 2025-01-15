@@ -35,6 +35,7 @@ def fermi_operators(has_spin, colors=False):
         ops["N_pair"] = ops["N_up"] * ops["N_down"]
         ops["N_tot"] = ops["N_up"] + ops["N_down"]
         ops["N_single"] = ops["N_tot"] - 2 * ops["N_pair"]
+        ops["N_zero"] = identity(4, dtype=float) - ops["N_pair"] - ops["N_single"]
         # identity on the whole matter site
         ops["ID_psi"] = identity(4, dtype=float)
         ops["P_psi"] = qmb_op(ops, ["P_psi", "P_psi"])

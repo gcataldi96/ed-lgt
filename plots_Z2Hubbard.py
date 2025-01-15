@@ -341,6 +341,34 @@ cb = fig.colorbar(
 )
 cb.set_label(label=r"$U$", labelpad=-22, x=-0.02, y=0)
 # %%
+Umin = 31
+Umax = 49
+hhmin = 35
+obs_name = "N_pair"
+hmax = np.zeros(len(vals["U"][Umin:Umax]), dtype=float)
+sm = cm.ScalarMappable(cmap="plasma", norm=LogNorm())
+palette = sm.to_rgba(vals["U"][Umin:Umax])
+fig, axs = plt.subplots(1, 1, constrained_layout=True)
+axs.grid()
+axs.set(ylabel=obs_name + " suscept", xlabel="$h$", xscale="log")
+for jj, U in enumerate(vals["U"][Umin:Umax]):
+    print(U)
+    df = np.gradient(res[obs_name][jj + Umin, hhmin:], 0.28194919506049576)
+    hmax[jj] = vals["h"][hhmin:][np.argmax(df)]
+    axs.plot(
+        vals["h"][hhmin:],
+        df,
+        "o-",
+        linewidth=1,
+        markersize=3,
+        c=palette[jj],
+        markerfacecolor="black",
+    )
+cb = fig.colorbar(
+    sm, ax=axs, aspect=80, location="top", orientation="horizontal", pad=0.02
+)
+cb.set_label(label=r"$U$", labelpad=-22, x=-0.02, y=0)
+# %%
 fig, axs = plt.subplots(1, 1, constrained_layout=True)
 axs.plot(
     vals["U"][Umin:Umax],

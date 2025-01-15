@@ -1,9 +1,9 @@
 import numpy as np
-import pickle
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm
 from ed_lgt.modeling import staggered_mask
 from .quantum_model import QuantumModel
 import logging
+import pickle
 
 
 def load_dictionary(filename):
@@ -75,7 +75,7 @@ class QCD_Model(QuantumModel):
         # HOPPING
         # ---------------------------------------------------------------------------
         for flavor in ["u", "d"]:
-            hop_names_list = [f"{flavor}R_hc", f"L{flavor}_hc"]
+            hop_names_list = [f"L{flavor}_hc", f"{flavor}R_hc"]
             op_list = [self.ops[op] for op in hop_names_list]
             # Define the Hamiltonian term
             h_terms[f"{flavor}_hop"] = TwoBodyTerm(
@@ -122,10 +122,7 @@ class QCD_Model(QuantumModel):
         }
 
 
-"""# %%
-
-res = load_dictionary("SU3_2flavor_site.pkl")
+"""res = load_dictionary("SU3_2flavor_site.pkl")
 for op in res["operators"].keys():
     print(op)
-print(res["operators"]["uL_hc"])
-"""
+print(res["operators"]["uR_hc"])"""
