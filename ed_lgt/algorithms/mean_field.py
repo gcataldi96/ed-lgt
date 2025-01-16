@@ -70,7 +70,6 @@ class mean_field:
         [[A1,B1,],[A2,B2],...]
         Such that C=∑_i Ai ⊗ Bi
         """
-
         op_reshaped = op.reshape(4 * [d_loc])
         C_flat = op_reshaped.transpose(0, 2, 1, 3).reshape(d_loc**2, d_loc**2)
         U, S, Vh = svd(C_flat)
@@ -119,10 +118,16 @@ class mean_field:
         # init rnd state
         state = mean_field.rand_state(self.d_loc ** par_m["n_side_mf"])
 
+        #h_A, h_B = (
+        #    (self.Hij[0].toarray(), self.Hij[0].toarray())
+        #    if len(self.Hij) == 1
+        #    else (self.Hij[0].toarray(), self.Hij[1].toarray())
+        #)
+
         h_A, h_B = (
-            (self.Hij[0].toarray(), self.Hij[0].toarray())
+            (self.Hij[0], self.Hij[0])
             if len(self.Hij) == 1
-            else (self.Hij[0].toarray(), self.Hij[1].toarray())
+            else (self.Hij[0], self.Hij[1])
         )
 
         # decompose two site Hamiltonian

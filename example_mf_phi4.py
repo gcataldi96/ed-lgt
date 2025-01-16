@@ -11,6 +11,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+from test_model import phi4_model_test
 
 ############# Simulation
 def red_densities(state, n_side_mf, d_loc):
@@ -48,28 +49,37 @@ dim = len(lvals)
 # directions = "xyz"[:dim]
 n_sites = prod(lvals)
 has_obc = [False]
-d_loc = 24
+d_loc = 44
 loc_dims = np.array([d_loc for _ in range(n_sites)])
 # parameters
 par = {"lvals": lvals, "has_obc": has_obc, "n_max": d_loc - 1}
 par_m = {"d_loc": d_loc, "n_side_mf": 2}
 
 # ACQUIRE HAMILTONIAN COEFFICIENTS
-coeffs = {"mu2": -0.2, "lambda": 0.6}
+coeffs = {"mu2": -2, "lambda": 0.6}
 
 start = time()
 # CONSTRUCT THE HAMILTONIAN
 model = phi4_model.Phi4Model(**par)
 model.build_Hamiltonian_bulk(coeffs=coeffs)
-simulation = mean_field([model.H.Ham], par, mf_error=1e-12, decomp_error=1e-12)
+
+
+#try other hamiltonian
+#H=phi4_model_test(d_loc,coeffs)
+#simulation = mean_field([H], par, mf_error=1e-12, decomp_error=1e-12)
+
+simulation = mean_field([model.H.Ham.toarray()], par, mf_error=1e-12, decomp_error=1e-12)
 simulation.sim(par_m)
 
 # observable
 res = simulation.get_result()
 rhos = red_densities(res["state"], par_m["n_side_mf"], d_loc)
 
-#
+#of rho1
 eigval, eigvec = np.linalg.eigh(rhos[0])
+
+#just save rho1
+np.savetxt("rho1.txt", rhos[0], delimiter=" ")
 
 # print to dict
 dir_path = "mf_data"
@@ -91,3 +101,22 @@ name = (
 )
 with open(name, "w") as json_file:
     json.dump(res, json_file, indent=4)
+
+#sorting according size of eigval
+idx = eigval.argsort()[::-1]
+eigenValues = eigval[idx]
+eigenVectors = eigvec[:, idx]
+
+np.savetxt("rho1_eigVec.txt", eigenVectors, delimiter=" ")
+np.savetxt("rho1_eigVal.txt", eigenValues, delimiter=" ")
+
+
+#mean rho
+eigval, eigvec = np.linalg.eigh(rhos[0])
+
+idx = eigval.argsort()[::-1]
+eigenValues = eigval[idx]
+eigenVectors = eigvec[:, idx]
+
+np.savetxt("rhomean_eigVec.txt", eigenVectors, delimiter=" ")
+np.savetxt("rhomean_eigVal.txt", eigenValues, delimiter=" ")
