@@ -18,10 +18,10 @@ def extend_basis(basis: np.ndarray, eigvals: np.ndarray, op: np.ndarray, tol: fl
     new_states = np.matmul(op, good_basis)
     # Extract an augmented basis
     U = gram_schmidt_augment(good_basis, new_states, tol)
-    print(U.shape)
+    #print(U.shape)
     A = np.matmul(U.conj().T, U)
-    print(A.shape)
-    print(A)
+    #print(A.shape)
+    #print(A)
     return U
 
 
@@ -65,7 +65,34 @@ ops_dens = {k: it.toarray() for k, it in ops.items()}
 # field operator
 phi = 1 / (np.sqrt(2)) * (ops_dens["b"] + ops_dens["b_dagger"])
 pi = 1j / (np.sqrt(2)) * (-ops_dens["b"] + ops_dens["b_dagger"])
-print(rho_vals)
 
 # %%
 ext_basis = extend_basis(rho_vecs, rho_vals, phi + pi, 1e-16)
+
+for v in ext_basis:
+    print(v)
+
+print(" ")
+print("shape",ext_basis.shape)
+
+
+#np.savetxt("output.txt", ext_basis, fmt="%d", delimiter=",")
+
+with open("output.txt", "w") as f:
+    for row in ext_basis:
+        f.write(" ".join(str(val) for val in row) + "\n")
+
+
+load_matrix=[]
+
+with open("output.txt", "r") as f:
+    for line in f:
+        # Split the line into complex number strings and convert them to complex numbers
+        row = [complex(num) for num in line.strip().split()]
+        load_matrix.append(row)
+
+# Convert the list of lists to a numpy array
+complex_matrix = np.array(load_matrix)
+
+
+assert np.array_equal(ext_basis, complex_matrix)
