@@ -44,25 +44,24 @@ def red_densities(state, n_side_mf, d_loc):
 # N eigenvalues
 n_eigs = 1
 # LATTICE GEOMETRY
-lvals = [2]
+lvals = [4]
 dim = len(lvals)
 # directions = "xyz"[:dim]
 n_sites = prod(lvals)
 has_obc = [False]
-d_loc = 44
+d_loc = 24
 loc_dims = np.array([d_loc for _ in range(n_sites)])
 # parameters
 par = {"lvals": lvals, "has_obc": has_obc, "n_max": d_loc - 1}
 par_m = {"d_loc": d_loc, "n_side_mf": 2}
 
 # ACQUIRE HAMILTONIAN COEFFICIENTS
-coeffs = {"mu2": -2, "lambda": 0.6}
+coeffs = {"mu2": -0.2, "lambda": 0.6}
 
 start = time()
 # CONSTRUCT THE HAMILTONIAN
 model = phi4_model.Phi4Model(**par)
 model.build_Hamiltonian_bulk(coeffs=coeffs)
-
 
 #try other hamiltonian
 #H=phi4_model_test(d_loc,coeffs)
@@ -75,7 +74,7 @@ simulation.sim(par_m)
 res = simulation.get_result()
 rhos = red_densities(res["state"], par_m["n_side_mf"], d_loc)
 
-#of rho1
+#of rho1, double check precission
 eigval, eigvec = np.linalg.eigh(rhos[0])
 
 #just save rho1

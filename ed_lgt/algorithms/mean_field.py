@@ -91,6 +91,8 @@ class mean_field:
 
         Output:
         Effective operator
+
+        So far this is only for 2-side MF
         """
 
         H_l, H_r = 0, 0
