@@ -40,39 +40,53 @@ def red_densities(state, n_side_mf, d_loc):
 
     return [rho1, rho2, rho_m]
 
+def H_effective(H,rho):
+    Pi=np.kron(rho,rho)
+    return np.matmul(Pi.conj().T,np.matmul(H,Pi))
+
+
+
 
 # N eigenvalues
 n_eigs = 1
 # LATTICE GEOMETRY
-lvals = [4]
+lvals = [2]
 dim = len(lvals)
 # directions = "xyz"[:dim]
 n_sites = prod(lvals)
 has_obc = [False]
-d_loc = 24
+d_loc = 44
 loc_dims = np.array([d_loc for _ in range(n_sites)])
+n_sites=2
 # parameters
 par = {"lvals": lvals, "has_obc": has_obc, "n_max": d_loc - 1}
-par_m = {"d_loc": d_loc, "n_side_mf": 2}
+par_m = {"d_loc": d_loc,"n_sites":n_sites}
 
 # ACQUIRE HAMILTONIAN COEFFICIENTS
-coeffs = {"mu2": -0.2, "lambda": 0.6}
+coeffs = {"mu2": -2, "lambda": 0.6}
 
 start = time()
 # CONSTRUCT THE HAMILTONIAN
 model = phi4_model.Phi4Model(**par)
 model.build_Hamiltonian_bulk(coeffs=coeffs)
 
-#try other hamiltonian
-#H=phi4_model_test(d_loc,coeffs)
-#simulation = mean_field([H], par, mf_error=1e-12, decomp_error=1e-12)
+#load reduced density
+rho=np.loadtxt("rho1.txt",dtype=complex)
+eigval, eigvec = np.linalg.eigh(rho)
+
+idx = eigval.argsort()[::-1]
+eigenValues = eigval[idx]
+eigenVectors = eigvec[:, idx]
+
+Pi=eigenVectors[:,10]
+#project 
 
 simulation = mean_field([model.H.Ham.toarray()], par, mf_error=1e-12, decomp_error=1e-12)
 simulation.sim(par_m)
 
 # observable
 res = simulation.get_result()
-rhos = red_densities(res["state"], par_m["n_side_mf"], d_loc)
+rhos = red_densities(res["state"], par_m["n_sites"], d_loc)
 
 #of rho1, double check precission
 eigval, eigvec = np.linalg.eigh(rhos[0])
@@ -111,7 +125,7 @@ np.savetxt("rho1_eigVal.txt", eigenValues, delimiter=" ")
 
 
 #mean rho
-eigval, eigvec = np.linalg.eigh(rhos[0])
+eigval, eigvec = np.linalg.eigh(rhos[2])
 
 idx = eigval.argsort()[::-1]
 eigenValues = eigval[idx]
