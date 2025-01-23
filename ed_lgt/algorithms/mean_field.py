@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.linalg import svd
+from functools import reduce
 
 
 class mean_field:
@@ -83,9 +84,31 @@ class mean_field:
             if Si >= error
         ]
         return ops
-
-    def Ham_eff(ops, h_B, state, d_loc):
+    
+    def edge_op(A,n_site,pos):
         """
+        Create edge operator like: 
+        A \otime Id \otimes ...\otimes Id
+        """
+        op_list=[]
+        Id=np.identity(A.shape[0])
+        op_list = [A if ii == pos else Id for ii in range(n_site)]
+
+        return reduce(np.kron, op_list)
+
+    def bulk_H(h,n_site):
+        Id=np.identity(h.shape[0])
+        op_tens_list = [[h if j == i else Id for j in range(n_site-1)] for i in range(n_site-1)]
+        return sum([reduce(np.kron,op) for op in op_tens_list])
+
+
+
+    def Ham_eff(ops, h_B, state, d_loc,n_sites):
+        """
+        Assumption: 
+        Two side Hamiltonian 
+
+
         Input:
         Operators and state
 
@@ -93,8 +116,8 @@ class mean_field:
         Effective operator
 
         So far this is only for 2-side MF
-        """
 
+        """
         H_l, H_r = 0, 0
         Id_A = np.identity(d_loc)
         Id_B = np.identity(d_loc)
@@ -103,8 +126,10 @@ class mean_field:
 
         for Ai, Bi in ops:
             # Compute contractions for the current operator pair
-            kron_IdB_Ai = np.kron(Id_B, Ai)  # (Id_B ⊗ A_i)
-            kron_Bi_IdA = np.kron(Bi, Id_A)  # (B_i ⊗ Id_A)
+            #kron_IdB_Ai = np.kron(Id_B, Ai)  # (Id_B ⊗ A_i)
+            #kron_Bi_IdA = np.kron(Bi, Id_A)  # (B_i ⊗ Id_A)
+            kron_IdB_Ai = mean_field.edge_op(Ai,n_sites,0)  # (Id_B ⊗ A_i)
+            kron_Bi_IdA = mean_field.edge_op(Bi, n_sites,n_sites-1)  # (B_i ⊗ Id_A)
 
             # Compute <state | (Id_B ⊗ A_i) | state>, <state | (B_i ⊗ Id_A) | state>
             v_L_i = np.inner(state, kron_IdB_Ai @ state)
@@ -113,12 +138,12 @@ class mean_field:
             H_l += v_L_i * np.kron(Bi, Id_A)
             H_r += v_R_i * np.kron(Id_B, Ai)
 
-        return H_l + h_B + H_r
+        return H_l + mean_field.bulk_H(h_B,n_sites) + H_r
 
     def sim(self, par_m: dict):
 
         # init rnd state
-        state = mean_field.rand_state(self.d_loc ** par_m["n_side_mf"])
+        state = mean_field.rand_state(self.d_loc ** par_m["n_sites"])
 
         #h_A, h_B = (
         #    (self.Hij[0].toarray(), self.Hij[0].toarray())
@@ -141,18 +166,18 @@ class mean_field:
 
         mean_field.test_decomp(op_decomp, h_A)  # NOTE remove in final version
 
-        h = mean_field.Ham_eff(op_decomp, h_B, state, self.d_loc)
+        h = mean_field.Ham_eff(op_decomp, h_B, state, self.d_loc,par_m["n_sites"])
         eigval, eigvec = np.linalg.eigh(h)
 
         diff = 1 + self.mf_error
-        E = [eigval[0] / (3 * par_m["n_side_mf"])]
+        E = [eigval[0] / (3 * par_m["n_sites"])]
         conv = [self.mf_error + 1]
         ii = 1
         while diff > self.mf_error:
-            h = mean_field.Ham_eff(op_decomp, h_B, eigvec[:, 0], self.d_loc)
+            h = mean_field.Ham_eff(op_decomp, h_B, eigvec[:, 0], self.d_loc,par_m["n_sites"])
             eigval, eigvec = np.linalg.eigh(h)
 
-            E.append(eigval[0] / ((3 * par_m["n_side_mf"])))
+            E.append(eigval[0] / ((3 * par_m["n_sites"])))
             diff = abs(E[ii] - E[ii - 1])
             conv.append(abs(E[ii] - E[ii - 1]))
             ii += 1
