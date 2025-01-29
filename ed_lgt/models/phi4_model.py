@@ -11,25 +11,31 @@ __all__ = ["Phi4Model"]
 
 
 class Phi4Model(QuantumModel):
-    def __init__(self, n_max, **kwargs):
+    def __init__(self ,n_max,reduction,d_red,map,**kwargs):
         # Initialize base class with the common parameters
-        super().__init__(**kwargs)
-        # Initialize specific attributes for IsingModel
-        self.loc_dims = np.array(
-            [n_max + 1 for _ in range(self.n_sites)], dtype=np.uint8
-        )
+        super().__init__(reduction=reduction,d_red=d_red,map=map,**kwargs)
+
+        if reduction==False:
+            dim_red=n_max+1
+        else:
+            dim_red=map.shape[1]
+
         # Operators
         self.ops = bose_fermi_operators.bose_operators(n_max=n_max)
+        if reduction:
+            self.ops={k: csc_matrix(map.T) @ (it@ csc_matrix(map)) for k,it in self.ops.items() }
+
         self.ops["phi"] = (1 / np.sqrt(2)) * (self.ops["b"] + self.ops["b_dagger"])
         self.ops["pi"] = (1 / np.sqrt(2)) * (self.ops["b_dagger"] - self.ops["b"])
 
         self.ops["phi2"] = self.ops["phi"] * self.ops["phi"]
         self.ops["phi4"] = self.ops["phi2"] * self.ops["phi2"]
         self.ops["pi2"] = self.ops["pi"] * self.ops["pi"]
-        self.ops["Id"] = csc_matrix(np.identity(n_max + 1))  # get read of this
-
+        self.ops["Id"] = csc_matrix(np.identity(dim_red))  # get read of this
+  
         # Acquire local dimension and lattice label
         self.default_params()
+
 
     def build_Hamiltonian(self, coeffs):
         # Hamiltonian Coefficients

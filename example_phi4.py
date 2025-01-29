@@ -6,13 +6,10 @@ import os
 
 # from ed_lgt.modeling import abelian_sector_indices
 from ed_lgt.models import phi4_model
-from ed_lgt.modeling import LocalTerm, TwoBodyTerm
-
 from time import time
 import logging
 
 logger = logging.getLogger(__name__)
-
 # N eigenvalues
 n_eigs = 1
 # LATTICE GEOMETRY
@@ -21,11 +18,21 @@ dim = len(lvals)
 # directions = "xyz"[:dim]
 n_sites = prod(lvals)
 has_obc = [False]
-d_loc = 8
-loc_dims = np.array([d_loc for _ in range(n_sites)])
-# parameters
-par = {"lvals": lvals, "has_obc": has_obc, "n_max": d_loc - 1}
+d_loc = 7
+d_red = 5
+loc_dims = np.array([d_red for _ in range(n_sites)])
+# map
+P = np.eye(d_loc, d_red)
 
+# parameter
+par = {
+    "lvals": lvals,
+    "has_obc": has_obc,
+    "d_red": d_red,
+    "reduction": True,
+    "n_max": d_loc - 1,
+    "map": P,
+}
 
 # HAMILTONIAN COEFFICIENTS
 coeffs = {"mu2": -0.2, "lambda": 0.6}
@@ -33,12 +40,12 @@ coeffs = {"mu2": -0.2, "lambda": 0.6}
 
 start = time()
 # CONSTRUCT THE HAMILTONIAN
+
 model = phi4_model.Phi4Model(**par)
 model.build_Hamiltonian(coeffs=coeffs)
 
 model.H.diagonalize(n_eigs=n_eigs, format="sparse", loc_dims=loc_dims)
 # diagonalize_Hamiltonian
-
 
 res = {}
 res["energy"] = model.H.Nenergies
@@ -46,7 +53,7 @@ res["energy"] = model.H.Nenergies
 print("Eigenvalues computed:", model.H.Nenergies)
 print("Number of eigenvalus:", model.H.n_eigs)
 
-print(res["energy"] / lvals[0])
+print("groundstate", res["energy"] / lvals[0])
 
 # observable
 loc_obs = ["phi"]
@@ -66,6 +73,7 @@ res["energy"] = res["energy"][0] / lvals[0]
 res.update(coeffs)
 res.update(par)
 res["d_loc"] = d_loc
+res["map"]=res["map"].tolist()
 
 name_file = (
     dir_path
