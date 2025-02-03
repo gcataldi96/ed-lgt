@@ -95,6 +95,9 @@ gen_configs("template", params, f"Z2FermiHubbard/PBCxy/largeh")
 params = {"U": np.logspace(-1, 3, 50), "h": np.logspace(-3, 3, 50)}
 gen_configs("template", params, f"Z2FermiHubbard/OBC/4x2grid")
 # %%
+params = {"U": np.logspace(-1, 3, 50), "h": np.logspace(-3, 3, 50)}
+gen_configs("template", params, f"Z2FermiHubbard/grid")
+# %%
 params = {"U": np.logspace(0.5, 1.5, 50)[26:]}
 gen_configs("template", params, f"Z2FermiHubbard/finitesize")
 # %%
@@ -103,6 +106,9 @@ gen_configs("template", params, f"Z2FermiHubbard/PBCx/test")
 # %%
 params = {"m": np.logspace(-1, 1, 20), "g": np.logspace(-1, 1, 20)}
 gen_configs("template", params, f"DFL/grid")
+# %%
+params = {"g": np.linspace(0, 15, 20)}
+gen_configs("template", params, f"DFL/gscale_NOBG")
 # %%
 # ISING MODEL
 params = {"lvals": [[6], [8], [10], [12]], "h": np.logspace(-2, 2, 20)}

@@ -20,12 +20,20 @@ with run_sim() as sim:
     model.build_Hamiltonian(sim.par["g"], m)
     # -------------------------------------------------------------------------------
     # DYNAMICS PARAMETERS
+    name = sim.par["dynamics"]["state"]
     start = sim.par["dynamics"]["start"]
     stop = sim.par["dynamics"]["stop"]
     delta_t = sim.par["dynamics"]["delta_n"]
     time_line = np.arange(start, stop + delta_t, delta_t)
     sim.res["time_steps"] = time_line
     n_steps = len(sim.res["time_steps"])
+    # -------------------------------------------------------------------------------
+    # INITIAL STATE PREPARATION
+    if name != "micro":
+        config = model.overlap_QMB_state(name)
+        logger.info(f"config {config}")
+        in_state = model.get_qmb_state_from_configs([config])
+    # -------------------------------------------------------------------------------
     # STAGGERED BASIS
     logical_stag_basis = sim.par["dynamics"]["logical_stag_basis"]
     num_blocks = model.n_sites // (2 * logical_stag_basis)
@@ -63,17 +71,15 @@ with run_sim() as sim:
         # DIAGONALIZE THE HAMILTONIAN
         model.diagonalize_Hamiltonian("full", "dense")
         sim.res["energy"] = model.H.Nenergies
-        config = model.overlap_QMB_state(sim.par["ensemble"]["microcanonical"]["state"])
-        ref_state = model.get_qmb_state_from_configs([config])
         micro_state, sim.res["micro_delta"] = model.microcanonical_avg1(
-            "N_tot", ref_state, norm_scalar_product
+            "N_tot", in_state, norm_scalar_product
         )
-        _, sim.res["micro_N_single"] = model.microcanonical_avg1("N_single", ref_state)
+        _, sim.res["micro_N_single"] = model.microcanonical_avg1("N_single", in_state)
         _, sim.res["micro_N_pair"] = model.microcanonical_avg1(
-            "N_pair", ref_state, staggered_avg="even"
+            "N_pair", in_state, staggered_avg="even"
         )
         _, sim.res["micro_N_zero"] = model.microcanonical_avg1(
-            "N_zero", ref_state, staggered_avg="odd"
+            "N_zero", in_state, staggered_avg="odd"
         )
     # -------------------------------------------------------------------------------
     # CANONICAL ENSEMBLE (it does not need the full spectrum)
@@ -89,26 +95,30 @@ with run_sim() as sim:
     # -------------------------------------------------------------------------------
     # DIAGONAL ENSEMBLE (it requires the full spectrum of the Hamiltonian)
     if sim.par["ensemble"]["diagonal"]["average"]:
-        if sim.par["ensemble"]["diagonal"]["state"] != "micro":
-            config = model.overlap_QMB_state(sim.par["ensemble"]["diagonal"]["state"])
-            ref_state = model.get_qmb_state_from_configs([config])
-            if not get_micro_avg:
-                # DIAGONALIZE THE HAMILTONIAN
-                model.diagonalize_Hamiltonian("full", "dense")
-                sim.res["energy"] = model.H.Nenergies
-        else:
-            # Assume the microcanonical state and the full spectrum already computed
-            ref_state = micro_state
-        sim.res["diagonal_avg"] = model.diagonal_avg(obs, ref_state)
-    # -------------------------------------------------------------------------------
-    # INITIAL STATE PREPARATION
-    name = sim.par["dynamics"]["state"]
-    if name != "micro":
-        config = model.overlap_QMB_state(name)
-        logger.info(f"config {config}")
-        in_state = model.get_qmb_state_from_configs([config])
-    else:
-        in_state = micro_state
+        if not get_micro_avg:
+            # DIAGONALIZE THE HAMILTONIAN
+            model.diagonalize_Hamiltonian("full", "dense")
+            sim.res["energy"] = model.H.Nenergies
+        # MEASURE DIAGONAL ENSEMBLE of some OBSERVABLES
+        sim.res["DE_delta"] = model.diagonal_avg1(
+            "N_tot", in_state, norm_scalar_product
+        )
+        sim.res["DE_N_single"] = model.diagonal_avg1("N_single", in_state)
+        sim.res["DE_N_pair"] = model.diagonal_avg1(
+            "N_pair", in_state, staggered_avg="even"
+        )
+        sim.res["DE_N_zero"] = model.diagonal_avg1(
+            "N_zero", in_state, staggered_avg="odd"
+        )
+    # ---------------------------------------------------------------------------
+    # OVERLAPS and entropy of the eigenstates with the INITIAL STATE
+    sim.res["eig_overlap"] = np.zeros(model.H.shape[0], dtype=float)
+    sim.res["eig_entropy"] = np.zeros(model.H.shape[0], dtype=float)
+    for ii in range(model.H.shape[0]):
+        sim.res["eig_overlap"][ii] = model.measure_fidelity(in_state, ii)
+        sim.res["eig_entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
+            partition_indices, sector_configs=model.sector_configs
+        )
     # -------------------------------------------------------------------------------
     # TIME EVOLUTION
     model.time_evolution_Hamiltonian(in_state, time_line)

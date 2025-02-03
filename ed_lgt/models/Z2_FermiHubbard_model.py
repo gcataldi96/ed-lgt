@@ -14,9 +14,10 @@ __all__ = ["Z2_FermiHubbard_Model"]
 
 
 class Z2_FermiHubbard_Model(QuantumModel):
-    def __init__(self, sectors, **kwargs):
+    def __init__(self, sectors, ham_format, **kwargs):
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
+        self.ham_format = ham_format
         # Acquire operators
         self.ops = Z2_FermiHubbard_dressed_site_operators(lattice_dim=self.dim)
         # Acquire gauge invariant basis and states
@@ -43,6 +44,7 @@ class Z2_FermiHubbard_Model(QuantumModel):
         self.default_params()
 
     def build_Hamiltonian(self, coeffs):
+        logger.info("BUILDING HAMILTONIAN")
         # Hamiltonian Coefficients
         self.coeffs = coeffs
         # CONSTRUCT THE HAMILTONIAN
@@ -51,7 +53,7 @@ class Z2_FermiHubbard_Model(QuantumModel):
         # COULOMB POTENTIAL
         op_name = "N_pair_half"
         h_terms["V"] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
-        self.H.Ham += h_terms["V"].get_Hamiltonian(strength=self.coeffs["U"])
+        self.H.add_term(h_terms["V"].get_Hamiltonian(strength=self.coeffs["U"]))
         # -------------------------------------------------------------------------------
         # HOPPING
         for d in self.directions:
@@ -63,14 +65,16 @@ class Z2_FermiHubbard_Model(QuantumModel):
                 h_terms[f"{d}_hop_{s}"] = TwoBodyTerm(
                     d, op_list, op_names_list, **self.def_params
                 )
-                self.H.Ham += h_terms[f"{d}_hop_{s}"].get_Hamiltonian(
-                    strength=self.coeffs["t"], add_dagger=True
+                self.H.add_term(
+                    h_terms[f"{d}_hop_{s}"].get_Hamiltonian(
+                        strength=self.coeffs["t"], add_dagger=True
+                    )
                 )
         # -------------------------------------------------------------------------------
         # EXTERNAL ELECTRIC FIELD
         """op_name = "E"
         h_terms["E"] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
-        self.H.Ham += h_terms["E"].get_Hamiltonian(strength=self.coeffs["h"])"""
+        self.H.add_term(h_terms["E"].get_Hamiltonian(strength=self.coeffs["h"])"""
         for ii, d in enumerate(self.directions):
             border = f"p{d}"
             op_name = f"P_{border}"
@@ -80,8 +84,8 @@ class Z2_FermiHubbard_Model(QuantumModel):
             else:
                 mask = None
             h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
-            self.H.Ham += h_terms[op_name].get_Hamiltonian(
-                strength=self.coeffs["h"], mask=mask
+            self.H.add_term(
+                h_terms[op_name].get_Hamiltonian(strength=self.coeffs["h"], mask=mask)
             )
         # -------------------------------------------------------------------------------
         # STRING Z OPERATOR (only in case of PBCx)
@@ -95,10 +99,11 @@ class Z2_FermiHubbard_Model(QuantumModel):
             h_terms["Zflux"] = NBodyTerm(
                 op_list, op_names_list, distances, **self.def_params
             )
-            self.H.Ham += h_terms["Zflux"].get_Hamiltonian(
-                strength=-self.coeffs["J"], mask=mask
+            self.H.add_term(
+                h_terms["Zflux"].get_Hamiltonian(strength=-self.coeffs["J"], mask=mask)
             )
         # -------------------------------------------------------------------------------
+        self.H.build(self.ham_format)
 
     def check_symmetries(self):
         # CHECK LINK SYMMETRIES

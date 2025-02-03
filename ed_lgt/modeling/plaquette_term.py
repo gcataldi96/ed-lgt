@@ -10,7 +10,7 @@ from scipy.sparse import isspmatrix, csr_matrix
 from .lattice_geometry import get_plaquette_neighbors
 from .lattice_mappings import zig_zag
 from .qmb_operations import four_body_op
-from .qmb_state import QMB_state
+from .qmb_state import QMB_state, exp_val_data
 from .qmb_term import QMBTerm
 from ed_lgt.tools import validate_parameters
 from ed_lgt.symmetries import nbody_term
@@ -44,6 +44,8 @@ class PlaquetteTerm(QMBTerm):
         super().__init__(op_list=op_list, op_names_list=op_names_list, **kwargs)
         self.axes = axes
         self.print_plaq = print_plaq
+        # Number of lattice sites
+        self.n_sites = prod(self.lvals)
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
         """
@@ -68,34 +70,60 @@ class PlaquetteTerm(QMBTerm):
         if not np.isscalar(strength):
             raise TypeError(f"strength must be SCALAR not a {type(strength)}")
         validate_parameters(add_dagger=add_dagger)
-        # Define the Hamiltonian
-        H_plaq = 0
-        for ii in range(prod(self.lvals)):
-            # Compute the corresponding coords of the BL site of the Plaquette
-            coords = zig_zag(self.lvals, ii)
-            _, sites_list = get_plaquette_neighbors(
-                coords, self.lvals, self.axes, self.has_obc
-            )
-            if sites_list is None:
-                continue
-            # CHECK MASK CONDITION ON THE SITE
-            if self.get_mask_conditions(coords, mask):
-                # ADD THE TERM TO THE HAMILTONIAN
-                if self.sector_configs is None:
+        # PLAQUETTE HAMILTONIAN
+        if self.sector_configs is None:
+            H_plaq = 0
+            for ii in range(self.n_sites):
+                # Compute the corresponding coords of the BL site of the Plaquette
+                coords = zig_zag(self.lvals, ii)
+                _, sites_list = get_plaquette_neighbors(
+                    coords, self.lvals, self.axes, self.has_obc
+                )
+                if sites_list is None:
+                    continue
+                # CHECK MASK CONDITION ON THE SITE
+                if self.get_mask_conditions(coords, mask):
+                    # ADD THE TERM TO THE HAMILTONIAN
                     H_plaq += strength * four_body_op(
                         op_list=self.op_list,
                         op_sites_list=sites_list,
                         **self.def_params,
                     )
-                else:
-                    H_plaq += strength * nbody_term(
+            if not isspmatrix(H_plaq):
+                H_plaq = csr_matrix(H_plaq)
+            if add_dagger:
+                H_plaq += csr_matrix(H_plaq.conj().transpose())
+            return H_plaq
+        else:
+            # Initialize lists for nonzero entries
+            all_row_list = []
+            all_col_list = []
+            all_value_list = []
+            for ii in range(self.n_sites):
+                # Compute the corresponding coords of the BL site of the Plaquette
+                coords = zig_zag(self.lvals, ii)
+                _, sites_list = get_plaquette_neighbors(
+                    coords, self.lvals, self.axes, self.has_obc
+                )
+                if sites_list is None:
+                    continue
+                # CHECK MASK CONDITION ON THE SITE
+                if self.get_mask_conditions(coords, mask):
+                    # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
+                    row_list, col_list, value_list = nbody_term(
                         self.sym_ops, np.array(sites_list), self.sector_configs
                     )
-        if not isspmatrix(H_plaq):
-            H_plaq = csr_matrix(H_plaq)
-        if add_dagger:
-            H_plaq += csr_matrix(H_plaq.conj().transpose())
-        return H_plaq
+                    all_row_list.append(row_list)
+                    all_col_list.append(col_list)
+                    all_value_list.append(value_list)
+            # Concatenate global lists
+            row_list = np.concatenate(all_row_list)
+            col_list = np.concatenate(all_col_list)
+            value_list = np.concatenate(all_value_list) * strength
+            if add_dagger:
+                return np.concatenate(row_list, col_list), np.concatenate(col_list, row_list), np.concatenate(value_list, value_list.conj())
+            else:
+                return row_list, col_list, value_list
 
     def get_expval(self, psi, get_imag=False, stag_label=None):
         """
@@ -127,7 +155,7 @@ class PlaquetteTerm(QMBTerm):
         # MEASURE NUMBER OF PLAQUETTES:
         list_of_plaq_sites = []
         list_of_plaq_strings = []
-        for ii in range(prod(self.lvals)):
+        for ii in range(self.n_sites):
             # Compute the corresponding coords of the BL site of the Plaquette
             coords = zig_zag(self.lvals, ii)
             coords_list, sites_list = get_plaquette_neighbors(
@@ -166,9 +194,9 @@ class PlaquetteTerm(QMBTerm):
         # GET THE EXPVAL ON THE SYMMETRY SECTOR
         else:
             for ii, sites_list in enumerate(list_of_plaq_sites):
-                self.obs[ii] = psi.expectation_value(
-                    nbody_term(self.sym_ops, np.array(sites_list), self.sector_configs)
-                )
+                rows, cols, vals =nbody_term(self.sym_ops, np.array(sites_list), self.sector_configs)
+                self.obs[ii] = exp_val_data(psi.psi, rows, cols, vals)
+                """
                 self.var[ii] = (
                     psi.expectation_value(
                         nbody_term(
@@ -180,6 +208,7 @@ class PlaquetteTerm(QMBTerm):
                     )
                     - self.obs[ii] ** 2
                 )
+                """
                 if self.print_plaq:
                     self.print_Plaquette(list_of_plaq_strings[ii], self.obs[ii])
         # GET STATISTICS

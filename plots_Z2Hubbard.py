@@ -300,17 +300,156 @@ axs.legend()
 # %%
 res = {}
 # Acquire simulations of finite E field
-config_filename = f"Z2FermiHubbard/OBC/4x2grid"
+config_filename = f"Z2FermiHubbard/grid"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["U", "h"])
-for obs in ["N_pair", "energy", "entropy", plaq_name]:
-    res[obs] = np.zeros((len(vals["U"]), len(vals["h"])), dtype=float)
+for obs in ["N_pair", "energy", "entropy", plaq_name, "X_Cross", "S2_psi", "Efield"]:
+    res[obs] = np.zeros((len(vals["U"]), len(vals["h"]), 4), dtype=float)
 for ii, U in enumerate(vals["U"]):
     for jj, h in enumerate(vals["h"]):
-        res["energy"][ii, jj] = get_sim(ugrid[ii, jj]).res["energy"]
-        for obs in ["N_pair", "entropy", plaq_name]:
-            res[obs][ii, jj] = get_sim(ugrid[ii, jj]).res[obs]
+        res["energy"][ii, jj, :] = get_sim(ugrid[ii, jj]).res["energy"]
+        for obs in ["N_pair", "entropy", plaq_name, "X_Cross", "S2_psi"]:
+            res[obs][ii, jj, :] = get_sim(ugrid[ii, jj]).res[obs]
+        if ii < 36 or (ii == 36 and jj < 36):
+            res["Efield"][ii, jj, :] = get_sim(ugrid[ii, jj]).res["E_field"]
+        else:
+            res["Efield"][ii, jj, :] = get_sim(ugrid[ii, jj]).res["Efield"]
 save_dictionary(res, "phase_diagram.pkl")
+# %%
+# VERTICAL TRANSITION
+Emin = 0
+Emax = 18
+obs_name = "N_pair"
+Umax = np.zeros(len(vals["h"][Emin:Emax]), dtype=float)
+
+sm = cm.ScalarMappable(cmap="plasma", norm=LogNorm())
+palette = sm.to_rgba(vals["h"][Emin:Emax])
+fig, axs = plt.subplots(1, 1, constrained_layout=True)
+axs.grid()
+axs.set(ylabel=obs_name + " suscept", xlabel="$U$", xscale="log")
+axs.axvline(x=5.179474679231209, color="black", linestyle="--", label=r"$h_{c}=5.179$")
+for jj, h in enumerate(vals["h"][Emin:Emax]):
+    df = np.gradient(res[obs_name][:, jj + Emin, 0], 0.1879661300403302)
+    Umax[jj] = vals["U"][np.argmin(df)]
+    axs.plot(
+        vals["U"],
+        df,
+        "o-",
+        linewidth=1,
+        markersize=3,
+        c=palette[jj],
+        markerfacecolor="black",
+    )
+cb = fig.colorbar(
+    sm, ax=axs, aspect=80, location="top", orientation="horizontal", pad=0.02
+)
+cb.set_label(label=r"$h$", labelpad=-22, x=-0.02, y=0)
+axs.legend()
+plt.savefig(f"vertical_transition_{obs_name}.pdf")
+fig, axs = plt.subplots(1, 1, constrained_layout=True)
+axs.plot(
+    vals["h"][Emin:Emax],
+    Umax,
+    "o-",
+    linewidth=1,
+    markersize=3,
+    c=palette[0],
+    markerfacecolor="black",
+    label="Data",
+)
+axs.set(xscale="log", xlabel="U")
+
+# Perform linear regression
+slope, intercept, r_value, p_value, std_err = stats.linregress(
+    np.log(vals["h"][Emin:Emax]), np.log(Umax)
+)
+# Convert slope and intercept back to the original scale
+b = slope
+a = np.exp(intercept)
+
+axs.plot(
+    vals["h"][Emin:Emax],
+    a * vals["h"][Emin:Emax] ** b,
+    label=r"$h_{\max} = a\cdot U^b$",
+    linestyle="--",
+    color="red",
+)
+# Show legend
+axs.legend()
+print("---", a, b)
+hfit = a * vals["U"][Emin:Emax] ** b  # Only using the slice [21:] for hmax
+# %%
+# HORIZONTAL TRANSITION
+Umin = 0
+Umax = 14
+obs_name = "plaq"
+hmax = np.zeros(len(vals["U"][Umin:Umax]), dtype=float)
+
+sm = cm.ScalarMappable(cmap="plasma", norm=LogNorm())
+palette = sm.to_rgba(vals["U"][Umin:Umax])
+fig, axs = plt.subplots(1, 1, constrained_layout=True)
+axs.grid()
+axs.set(ylabel=obs_name + " suscept", xlabel="$h$", xscale="log")
+axs.axvline(
+    x=0.49417133613238334, color="black", linestyle="--", label=r"$h_{c}=0.494$"
+)
+for jj, U in enumerate(vals["U"][Umin:Umax]):
+    print(U)
+    df = np.gradient(res[obs_name][jj + Umin, :, 0], 0.28194919506049576)
+    if obs_name == "Efield":
+        hmax[jj] = vals["h"][np.argmin(df)]
+    elif obs_name == "plaq":
+        hmax[jj] = vals["h"][np.argmax(df)]
+    axs.plot(
+        vals["h"],
+        df,
+        "o-",
+        linewidth=1,
+        markersize=3,
+        c=palette[jj],
+        markerfacecolor="black",
+    )
+cb = fig.colorbar(
+    sm, ax=axs, aspect=80, location="top", orientation="horizontal", pad=0.02
+)
+cb.set_label(label=r"$U$", labelpad=-22, x=-0.02, y=0)
+axs.legend()
+plt.savefig(f"horizontal_transition_{obs_name}.pdf")
+
+fig, axs = plt.subplots(1, 1, constrained_layout=True)
+axs.plot(
+    vals["U"][Umin:Umax],
+    hmax,
+    "o-",
+    linewidth=1,
+    markersize=3,
+    c=palette[0],
+    markerfacecolor="black",
+    label="Data",
+)
+axs.set(xscale="log", yscale="log", xlabel="U")
+
+# Perform linear regression
+slope, intercept, r_value, p_value, std_err = stats.linregress(
+    np.log(vals["U"][Umin:Umax]), np.log(hmax)
+)
+
+# Convert slope and intercept back to the original scale
+b = slope
+a = np.exp(intercept)
+
+axs.plot(
+    vals["U"][Umin:Umax],
+    a * vals["U"][Umin:Umax] ** b,
+    label=r"$h_{\max} = a\cdot U^b$",
+    linestyle="--",
+    color="red",
+)
+# Show legend
+axs.legend()
+print("---", a, b)
+
+hfit = a * vals["U"][Umin:Umax] ** b  # Only using the slice [21:] for hmax
 # %%
 Umin = 23
 Umax = 31
@@ -325,7 +464,7 @@ axs.grid()
 axs.set(ylabel=obs_name + " suscept", xlabel="$h$", xscale="log")
 for jj, U in enumerate(vals["U"][Umin:Umax]):
     print(U)
-    df = np.gradient(res[obs_name][jj + Umin, :hhmax], 0.28194919506049576)
+    df = np.gradient(res[obs_name][jj + Umin, :hhmax, 0], 0.28194919506049576)
     hmax[jj] = vals["h"][:hhmax][np.argmax(df)]
     axs.plot(
         vals["h"][:hhmax],
@@ -340,7 +479,43 @@ cb = fig.colorbar(
     sm, ax=axs, aspect=80, location="top", orientation="horizontal", pad=0.02
 )
 cb.set_label(label=r"$U$", labelpad=-22, x=-0.02, y=0)
+
+fig, axs = plt.subplots(1, 1, constrained_layout=True)
+axs.plot(
+    vals["U"][Umin:Umax],
+    hmax,
+    "o-",
+    linewidth=1,
+    markersize=3,
+    c=palette[0],
+    markerfacecolor="black",
+    label="Data",
+)
+axs.set(xscale="log", yscale="log", xlabel="U")
+
+# Perform linear regression
+slope, intercept, r_value, p_value, std_err = stats.linregress(
+    np.log(vals["U"][Umin:Umax]), np.log(hmax)
+)
+
+# Convert slope and intercept back to the original scale
+b = slope
+a = np.exp(intercept)
+
+axs.plot(
+    vals["U"][Umin:Umax],
+    a * vals["U"][Umin:Umax] ** b,
+    label=r"$h_{\max} = a\cdot U^b$",
+    linestyle="--",
+    color="red",
+)
+# Show legend
+axs.legend()
+print("---", a, b)
+
+hfit = a * vals["U"][Umin:Umax] ** b  # Only using the slice [21:] for hmax
 # %%
+# LARGE h Transition
 Umin = 31
 Umax = 49
 hhmin = 35
@@ -352,8 +527,7 @@ fig, axs = plt.subplots(1, 1, constrained_layout=True)
 axs.grid()
 axs.set(ylabel=obs_name + " suscept", xlabel="$h$", xscale="log")
 for jj, U in enumerate(vals["U"][Umin:Umax]):
-    print(U)
-    df = np.gradient(res[obs_name][jj + Umin, hhmin:], 0.28194919506049576)
+    df = np.gradient(res[obs_name][jj + Umin, hhmin:, 0], 0.28194919506049576)
     hmax[jj] = vals["h"][hhmin:][np.argmax(df)]
     axs.plot(
         vals["h"][hhmin:],
@@ -368,7 +542,7 @@ cb = fig.colorbar(
     sm, ax=axs, aspect=80, location="top", orientation="horizontal", pad=0.02
 )
 cb.set_label(label=r"$U$", labelpad=-22, x=-0.02, y=0)
-# %%
+
 fig, axs = plt.subplots(1, 1, constrained_layout=True)
 axs.plot(
     vals["U"][Umin:Umax],
@@ -403,7 +577,8 @@ axs.legend()
 print(a, b)
 
 hfit = a * vals["U"][Umin:Umax] ** b  # Only using the slice [21:] for hmax
-#
+
+# %%
 # Set up the plot
 fig, axs = plt.subplots(
     1,
@@ -412,15 +587,15 @@ fig, axs = plt.subplots(
     constrained_layout=True,
 )
 
-# Plot hmax as a dashed line
+"""# Plot hmax as a dashed line
 axs.plot(
     np.log10(vals["U"][Umin:Umax]),
     np.log10(hfit),
     color="white",
     linestyle="--",
     linewidth=2,
-)
-
+)"""
+obs_name = "Efield"
 # Logarithmic scale formatting (assuming fake_log is a log formatter)
 axs.xaxis.set_major_formatter(plt.FuncFormatter(lambda x, _: f"$10^{{{int(x)}}}$"))
 axs.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"$10^{{{int(y)}}}$"))
@@ -428,7 +603,10 @@ axs.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"$10^{{{int(y)}}}$
 # Plot imshow with extent reflecting the log10 scale
 extent = [-1, 3, -3, 3]
 img = axs.imshow(
-    np.transpose(res[obs_name]), origin="lower", cmap="magma", extent=extent
+    np.transpose(res[obs_name][:, :, 0]),
+    origin="lower",
+    cmap="magma",
+    extent=extent,
 )
 # Add colorbar
 cb = fig.colorbar(

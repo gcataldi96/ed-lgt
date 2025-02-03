@@ -40,10 +40,7 @@ def nbody_term(
                 op_list, op_sites_list, sector_configs, momentum_basis
             )
     else:
-        logger.info("process_batches_with_nbody")
         r, c, v = process_batches_with_nbody(op_list, op_sites_list, sector_configs)
-        # for i in range(len(r)):
-        #    logger.info(f"r: {r[i]}, c: {c[i]}, v: {v[i]}")
         return r, c, v
 
 
@@ -101,7 +98,7 @@ def process_batches_with_nbody(
     op_list: list[np.ndarray],
     op_sites_list: list[int],
     sector_configs: np.ndarray,
-    batch_size: int = int(1.2 * 2**18),
+    batch_size: int = int(2**20),
 ):
     """
     Process nbody_data_par in batches to handle large sector dimensions.
@@ -119,6 +116,9 @@ def process_batches_with_nbody(
             - value_list (np.ndarray of floats): The nonzero values of the operator elements.
     """
     sector_dim = sector_configs.shape[0]
+    if len(op_list)==1:
+        # Use a dedicated function for local operators
+        return localbody_data_par(op_list[0], op_sites_list[0], sector_configs)
     if sector_dim <= batch_size:
         # Directly use `nbody_data_par` if the sector fits in one batch
         return nbody_data_par(op_list, op_sites_list, sector_configs)
@@ -271,9 +271,9 @@ def nbody_data_par(
     """
     # Step 1: Initialize the problem dimensions and arrays
     sector_dim = sector_configs.shape[0]
+
     # Exclude specified sites where the operators act from the list of configs
     m_states = exclude_columns(sector_configs, op_sites_list)
-
     # Initialize boolean arrays: check_array tracks valid (row, col) pairs, check_rows tracks valid rows
     check_array = np.zeros((sector_dim, sector_dim), dtype=np.bool_)
     check_rows = np.zeros(sector_dim, dtype=np.bool_)
@@ -339,6 +339,39 @@ def nbody_data_par(
     # Return the final lists of nonzero elements: row indices, column indices, and values
     return row_list, col_list, value_list
 
+@njit(parallel=True,cache=True)
+def localbody_data_par(op: np.ndarray, op_site: int, sector_configs: np.ndarray):
+    """
+    Efficiently process a diagonal operator on a given sector of configurations.
+
+    Args:
+        op (np.ndarray): A single-site diagonal operator matrix.
+        op_sites_list (int): site index where the operator acts.
+        sector_configs (np.ndarray): Array of sector configurations for lattice sites.
+
+    Returns:
+        (row_list, col_list, value_list):
+            - row_list (np.ndarray of ints): The row indices of diagonal elements.
+            - col_list (np.ndarray of ints): Same as row_list (since diagonal).
+            - value_list (np.ndarray of floats): The diagonal elements of the operator.
+    """
+    sector_dim = sector_configs.shape[0]
+    # Initialize row_list and col_list as the diagonal indices
+    row_list = np.arange(sector_dim, dtype=np.int32)
+    check_rows = np.zeros(sector_dim, dtype=np.bool_)
+    value_list = np.zeros(sector_dim, dtype=np.float64)
+    # Isolate the action of the operator on the site
+    op_diag = op[op_site]
+    for row in prange(len(row_list)):
+        value_list[row] = op_diag[sector_configs[row, op_site], sector_configs[row, op_site]]
+        # Check that the element is nonzero
+        if not np.isclose(value_list[row], 0, atol=1e-10):
+            # Mark the row as having at least one nonzero element
+            check_rows[row] = True
+    # Filter out zero elements
+    row_list = row_list[check_rows]
+    value_list = value_list[check_rows]
+    return row_list, row_list, value_list
 
 @njit(cache=True)
 def nbody_data_momentum_basis(op_list, op_sites_list, sector_configs, momentum_basis):

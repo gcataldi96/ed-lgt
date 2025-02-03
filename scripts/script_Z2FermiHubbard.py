@@ -20,16 +20,13 @@ with run_sim() as sim:
     model.build_Hamiltonian(coeffs)
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
-    model.diagonalize_Hamiltonian(
-        n_eigs=sim.par["hamiltonian"]["n_eigs"],
-        format=sim.par["hamiltonian"]["format"],
-    )
+    n_eigs = sim.par["hamiltonian"]["n_eigs"]
+    model.diagonalize_Hamiltonian(n_eigs, model.ham_format)
     sim.res["energy"] = model.H.Nenergies
     # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
-    local_obs = [f"n_{s}{d}" for d in model.directions for s in "mp"]
-    local_obs += [f"N_{label}" for label in ["up", "down", "tot", "single", "pair"]]
-    local_obs = ["N_pair", "X_Cross", "S2_psi"]
+    local_obs = [f"P_p{d}" for d in model.directions]
+    local_obs += ["N_pair", "X_Cross", "S2_psi"]
     # LIST OF TWOBODY CORRELATORS
     twobody_obs = [["Sz_psi", "Sz_psi"]]
     twobody_axes = None
@@ -59,27 +56,35 @@ with run_sim() as sim:
     sim.res["plaq"] = np.zeros(model.n_eigs, dtype=float)
     if not model.has_obc[0]:
         sim.res["string"] = np.zeros(model.n_eigs, dtype=float)
-    for obs in local_obs:
+    for obs in local_obs[2:]:
         sim.res[obs] = np.zeros(model.n_eigs, dtype=float)
+    sim.res["E_field"] = np.zeros(model.n_eigs, dtype=float)
     # -------------------------------------------------------------------------------
     for ii in range(model.n_eigs):
         logger.info(f"================== {ii} ===================")
         # PRINT ENERGY
         model.H.print_energy(ii)
-        # -----------------------------------------------------------------------
+        # ---------------------------------------------------------------------------
         # ENTROPY
         sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
             partition_indices, model.sector_configs
         )
-        # -----------------------------------------------------------------------
+        # ---------------------------------------------------------------------------
         # STATE CONFIGURATIONS
         model.H.Npsi[ii].get_state_configurations(1e-1, model.sector_configs)
         # ---------------------------------------------------------------------------
         # MEASURE OBSERVABLES
         model.measure_observables(ii)
         sim.res["plaq"][ii] = model.res["_".join(plaquette_obs[0])]
-        for obs in local_obs:
+        for obs in local_obs[2:]:
             sim.res[obs][ii] = np.mean(model.res[obs])
+        sim.res["E_field"][ii] = np.sum(model.res["P_px"]) + np.sum(model.res["P_py"])
+        count = 0 if not model.has_obc[0] else model.lvals[1]
+        count += 0 if not model.has_obc[1] else model.lvals[0]
+        sim.res["E_field"][ii] -= count
+        sim.res["E_field"][ii] /= 2 * model.n_sites - count
+        logger.info(f"E_field {sim.res['E_field'][ii]}")
+        # ---------------------------------------------------------------------------
         if not model.has_obc[0]:
             sim.res["string"][ii] = np.mean(model.res["_".join(nbody_obs[0])])
         # CHECK LINK SYMMETRIES

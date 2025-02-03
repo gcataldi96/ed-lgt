@@ -9,7 +9,6 @@ from .qmb_term import QMBTerm
 from ed_lgt.tools import validate_parameters, get_time
 from ed_lgt.symmetries import (
     nbody_term,
-    nbody_data_par,
     nbody_data_momentum_basis_par,
     process_batches_with_nbody,
 )
@@ -38,6 +37,8 @@ class LocalTerm(QMBTerm):
         validate_parameters(op_list=[operator], op_names_list=[op_name])
         # Preprocess arguments
         super().__init__(operator=operator, op_name=op_name, **kwargs)
+        # Number of lattice sites
+        self.n_sites = prod(self.lvals)
 
     @get_time
     def get_Hamiltonian(self, strength, mask=None):
@@ -65,7 +66,7 @@ class LocalTerm(QMBTerm):
         # LOCAL HAMILTONIAN
         if self.sector_configs is None:
             H_Local = 0
-            for ii in range(prod(self.lvals)):
+            for ii in range(self.n_sites):
                 coords = zig_zag(self.lvals, ii)
                 # CHECK MASK CONDITION ON THE SITE
                 if self.get_mask_conditions(coords, mask):
@@ -76,7 +77,7 @@ class LocalTerm(QMBTerm):
             all_row_list = []
             all_col_list = []
             all_value_list = []
-            for ii in range(prod(self.lvals)):
+            for ii in range(self.n_sites):
                 coords = zig_zag(self.lvals, ii)
                 # CHECK MASK CONDITION ON THE SITE
                 if self.get_mask_conditions(coords, mask):
@@ -97,7 +98,7 @@ class LocalTerm(QMBTerm):
             value_list = np.concatenate(all_value_list) * strength
             return row_list, col_list, value_list
 
-    def get_expval(self, psi, stag_label=None):
+    def get_expval(self, psi, stag_label=None, print_values=True):
         """
         The function calculates the expectation value (and it variance) of the Local Hamiltonian
         and is averaged over all the lattice sites.
@@ -116,18 +117,17 @@ class LocalTerm(QMBTerm):
             raise TypeError(f"psi must be instance of class:QMB_state not {type(psi)}")
         validate_parameters(stag_label=stag_label)
         # PRINT OBSERVABLE NAME
-        msg = "" if stag_label is None else f"{stag_label}"
-        logger.info(f"----------------------------------------------------")
-        logger.info(f"{self.op_name} {msg}")
-        # Number of lattice sites
-        n_sites = prod(self.lvals)
+        if print_values:
+            msg = "" if stag_label is None else f"{stag_label}"
+            logger.info(f"----------------------------------------------------")
+            logger.info(f"{self.op_name} {msg}")
         # Distinguish between the two cases: with and without symmetry sector
         if self.sector_configs is None:
             # Stores the expectation values <O>
-            self.obs = np.zeros(n_sites, dtype=float)
+            self.obs = np.zeros(self.n_sites, dtype=float)
             # Stores the variances <O^2> - <O>^2
-            self.var = np.zeros(n_sites, dtype=float)
-            for ii in range(n_sites):
+            self.var = np.zeros(self.n_sites, dtype=float)
+            for ii in range(self.n_sites):
                 self.obs[ii] = psi.expectation_value(
                     local_op(operator=self.op, op_site=ii, **self.def_params)
                 )
@@ -137,15 +137,15 @@ class LocalTerm(QMBTerm):
                 self.var[ii] -= self.obs[ii] ** 2
         else:
             # Compute the operator for the variance
-            shape = (1, n_sites, max(self.loc_dims), max(self.loc_dims))
+            shape = (1, self.n_sites, max(self.loc_dims), max(self.loc_dims))
             opvar = np.zeros(shape, dtype=float)
-            for ii in range(n_sites):
+            for ii in range(self.n_sites):
                 opvar[0, ii] = np.dot(self.sym_ops[0, ii], self.sym_ops[0, ii])
             # GET THE EXPVAL ON THE SYMMETRY SECTOR
             if self.momentum_basis is not None:
                 self.obs, self.var = lattice_local_exp_val_mom(
                     psi.psi,
-                    n_sites,
+                    self.n_sites,
                     self.sector_configs,
                     self.sym_ops,
                     self.momentum_basis,
@@ -153,23 +153,25 @@ class LocalTerm(QMBTerm):
                 )
             else:
                 self.obs, self.var = lattice_local_exp_val(
-                    psi.psi, n_sites, self.sector_configs, self.sym_ops
+                    psi.psi, self.n_sites, self.sector_configs, self.sym_ops
                 )
         # CHECK STAGGERED CONDITION AND PRINT VALUES
         self.avg = 0.0
         self.std = 0.0
         counter = 0
-        for ii in range(n_sites):
+        for ii in range(self.n_sites):
             # Given the 1D point on the d-dimensional lattice, get the corresponding coords
             coords = zig_zag(self.lvals, ii)
             if self.get_staggered_conditions(coords, stag_label):
-                logger.info(f"{coords} {format(self.obs[ii], '.12f')}")
+                if print_values:
+                    logger.info(f"{coords} {format(self.obs[ii], '.12f')}")
                 counter += 1
                 self.avg += self.obs[ii]
                 self.std += self.var[ii]
         self.avg = self.avg / counter
         self.std = np.sqrt(np.abs(self.std) / counter)
-        logger.info(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
+        if print_values:
+            logger.info(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 
 
 def check_link_symmetry(axis, loc_op1, loc_op2, value=0, sign=1):
@@ -227,7 +229,6 @@ def lattice_local_exp_val(psi, n_sites, sector_configs, sym_ops):
     for chunk_idx in range(num_chunks):
         start = chunk_idx * chunk_size
         end = min((chunk_idx + 1) * chunk_size, n_sites)
-
         # Process the current chunk in parallel
         for ii in prange(start, end):
             row_list, col_list, value_list = process_batches_with_nbody(
@@ -236,7 +237,6 @@ def lattice_local_exp_val(psi, n_sites, sector_configs, sym_ops):
             obs[ii] = exp_val_data(psi, row_list, col_list, value_list)
             # var[ii] = exp_val_data(psi, row_list, col_list, value_list**2)
             # var[ii] =- obs[ii] ** 2
-
     return obs, var
 
 

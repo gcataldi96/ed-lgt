@@ -385,3 +385,28 @@ class QuantumModel:
         logger.info(f"Microcanonical avg: {microcanonical_avg}")
         logger.info("----------------------------------------------------")
         return psi_thermal, microcanonical_avg
+
+    def diagonal_avg1(
+        self, local_obs: str, state: np.ndarray, special_norm=None, staggered_avg=None
+    ):
+        logger.info("----------------------------------------------------")
+        logger.info("DIAGONAL ENSEMBLE")
+        # check that the hamiltonian has been already fully diagonalized:
+        if self.n_eigs != self.H.Ham.shape[0]:
+            msg = f"Need all H eigvals {self.H.Ham.shape[0]}, not only {self.n_eigs}"
+            raise ValueError(msg)
+        # Define the local observable as an operator
+        local_op = LocalTerm(self.ops[local_obs], local_obs, **self.def_params)
+        # Measure the operator on every eigenstate
+        diagonal_avg = 0
+        for ii in range(self.n_eigs):
+            prob = self.measure_fidelity(state, ii, False)
+            local_op.get_expval(self.H.Npsi[ii], print_values=False)
+            if special_norm is not None:
+                exp_val = np.dot(local_op.obs, special_norm) / self.n_sites
+            else:
+                exp_val = stag_avg(local_op.obs, staggered_avg)
+            diagonal_avg += prob * exp_val
+        logger.info(f"Diagonal avg: {diagonal_avg}")
+        logger.info("----------------------------------------------------")
+        return diagonal_avg

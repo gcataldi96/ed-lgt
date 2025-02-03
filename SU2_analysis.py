@@ -608,6 +608,333 @@ for ii, obs in enumerate(obs_list):
     )
 
 # %%
+res = {}
+config_filename = f"DFL/gscale"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = ["delta", "N_single", "N_pair", "N_zero", "Deff", "Hspace_size"]
+time_line = get_sim(ugrid[0]).res["time_steps"]
+
+for obs in obs_list[:4]:
+    res[obs] = np.zeros((len(vals["g"]), len(time_line)), dtype=float)
+    res[f"micro_{obs}"] = np.zeros(len(vals["g"]), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        if obs in ["N_pair", "N_zero"]:
+            res[obs][ii, :] = get_sim(ugrid[ii]).res[obs] / (128**2)
+        else:
+            res[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+        res[f"micro_{obs}"][ii] = get_sim(ugrid[ii]).res[f"micro_{obs}"]
+
+res["D"] = np.zeros((len(vals["g"]), 128), dtype=float)
+for obs in obs_list[4:]:
+    res[obs] = np.zeros((len(vals["g"]), 128), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        res[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+for ii, g in enumerate(vals["g"]):
+    for sec in range(128):
+        res["D"][ii, sec] = -np.log(res["Deff"][ii, sec]) / np.log(
+            res["Hspace_size"][ii, sec]
+        )
+
+res1 = {}
+config_filename = f"DFL/gscale_NOBG"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = ["delta", "N_single", "N_pair", "N_zero", "Deff", "Hspace_size"]
+time_line1 = get_sim(ugrid[0]).res["time_steps"]
+for obs in obs_list[:4]:
+    res1[obs] = np.zeros((len(vals["g"]), len(time_line1)), dtype=float)
+    res1[f"micro_{obs}"] = np.zeros(len(vals["g"]), dtype=float)
+    res1[f"DE_{obs}"] = np.zeros(len(vals["g"]), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        res1[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+        res1[f"micro_{obs}"][ii] = get_sim(ugrid[ii]).res[f"micro_{obs}"]
+        res1[f"DE_{obs}"][ii] = get_sim(ugrid[ii]).res[f"DE_{obs}"]
+
+res1["D"] = np.zeros(len(vals["g"]), dtype=float)
+for obs in obs_list[4:]:
+    res1[obs] = np.zeros(len(vals["g"]), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        res1[obs][ii] = get_sim(ugrid[ii]).res[obs]
+for ii, g in enumerate(vals["g"]):
+    res1["D"][ii] = -np.log(res1["Deff"][ii]) / np.log(res1["Hspace_size"][ii])
+# %%
+obs_names = [
+    r"$\hat{\rho}_{\rm{mes}}$",
+    r"$\hat{\rho}_{\rm{bar}}$",
+    r"$\hat{\rho}_{\rm{vac}}$",
+]
+colors = ["darkred", "darkblue", "darkgreen"]
+m = get_sim(ugrid[ii]).par["m"]
+fig, ax = plt.subplots(1, 1, constrained_layout=True, sharex=True, sharey=True)
+for ii, obs in enumerate(["N_single", "N_pair", "N_zero"]):
+    """
+    ax.plot(
+        vals["g"],
+        np.mean(res[obs], axis=1),
+        "-o",
+        c=colors[ii],
+        linewidth=2,
+        markeredgecolor=colors[ii],
+        markerfacecolor="white",
+        markeredgewidth=1,
+        label=f"{obs_names[ii]} DE",
+    )
+    ax.plot(
+        vals["g"],
+        res[f"micro_{obs}"],
+        "--",
+        c=colors[ii],
+        label=f"{obs_names[ii]} ME",
+    )
+    """
+    ax.plot(
+        vals["g"],
+        res1[f"DE_{obs}"],
+        "-x",
+        c=colors[ii],
+        linewidth=2,
+        markeredgecolor=colors[ii],
+        markerfacecolor="white",
+        markeredgewidth=1,
+        label=f"{obs_names[ii]} DE NO BG",
+    )
+    ax.plot(
+        vals["g"],
+        res1[f"micro_{obs}"],
+        "-",
+        c=colors[ii],
+        label=f"{obs_names[ii]} ME NO BG",
+    )
+    """
+    ax.plot(
+        vals["g"],
+        np.mean(res["N_single"], axis=1)
+        + np.mean(res["N_pair"], axis=1)
+        + np.mean(res["N_zero"], axis=1),
+        "-o",
+        label=f"{obs} DE",
+    )"""
+    ax.set(
+        xlabel=r"$g^{2}$", ylabel=r"Pariticle Densities $\hat{\rho}(t\gg1, g^{2},m=1)$"
+    )
+    ax.legend(loc="upper left", bbox_to_anchor=(0.5, 0.8))
+plt.savefig(f"particle_density.pdf")
+# %%
+sm = cm.ScalarMappable(cmap="copper")
+palette = sm.to_rgba(np.arange(128))
+fig, ax = plt.subplots(1, 1, constrained_layout=True, sharex=True, sharey=True)
+m = get_sim(ugrid[ii]).par["m"]
+
+for sec in range(128):
+    ax.plot(
+        vals["g"],
+        res["D"][:, sec],
+        "-",
+        c=palette[sec],
+        linewidth=0.7,
+    )
+ax.plot(
+    vals["g"],
+    np.mean(res["D"], axis=1),
+    "-o",
+    c="black",
+    linewidth=2,
+    markeredgecolor="black",
+    markerfacecolor="white",
+    markeredgewidth=1,
+    label=r"$\langle D \rangle$ (BG)",
+)
+ax.plot(
+    vals["g"],
+    res1["D"],
+    "-o",
+    c="blue",
+    linewidth=2,
+    markeredgecolor="blue",
+    markerfacecolor="yellow",
+    markeredgewidth=1,
+    label=r"$D$ (NO BG)",
+)
+ax.set(
+    xlabel=r"$g^{2}$", ylabel=r"Fractal Dimension $D=\log(\rm{IPR})/\log(\mathcal{N})$"
+)
+ax.legend(loc="upper left", bbox_to_anchor=(0.5, 0.9))
+plt.savefig(f"fractal_dimension.pdf")
+# %%
+fig, ax = plt.subplots(1, 1, constrained_layout=True, sharex=True, sharey=True)
+m = get_sim(ugrid[ii]).par["m"]
+ax.plot(vals["g"], np.mean(res["delta"], axis=1), "-", label="BG")
+ax.plot(vals["g"], res1["DE_delta"], "-", label="no BG")
+ax.plot(vals["g"], res["micro_delta"], "-", label="ME (BG)")
+# ax.plot(vals["g"], res1["micro_delta"], "--", label="ME (NO BG)")
+ax.set(xlabel=r"$g^{2}$", ylabel=r"Imbalance $\Delta(t\gg1, g^{2},m=1)$")
+ax.legend(loc="upper left", bbox_to_anchor=(0.01, 0.8))
+plt.savefig(f"imbalance.pdf")
+# %%
+res = {}
+config_filename = f"DFL/mscale"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["m"])
+obs_list = ["delta", "N_single", "N_pair", "N_zero", "Deff", "Hspace_size"]
+time_line = get_sim(ugrid[0]).res["time_steps"]
+
+for obs in obs_list[:4]:
+    res[obs] = np.zeros((len(vals["m"]), len(time_line)), dtype=float)
+    res[f"micro_{obs}"] = np.zeros(len(vals["m"]), dtype=float)
+    for ii, g in enumerate(vals["m"]):
+        if obs in ["N_pair", "N_zero"]:
+            res[obs][ii, :] = get_sim(ugrid[ii]).res[obs] / (128**2)
+        else:
+            res[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+        res[f"micro_{obs}"][ii] = get_sim(ugrid[ii]).res[f"micro_{obs}"]
+
+res["D"] = np.zeros((len(vals["m"]), 128), dtype=float)
+for obs in obs_list[4:]:
+    res[obs] = np.zeros((len(vals["m"]), 128), dtype=float)
+    for ii, g in enumerate(vals["m"]):
+        res[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+for ii, g in enumerate(vals["m"]):
+    for sec in range(128):
+        res["D"][ii, sec] = -np.log(res["Deff"][ii, sec]) / np.log(
+            res["Hspace_size"][ii, sec]
+        )
+
+
+res1 = {}
+config_filename = f"DFL/mscale_NOBG"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["m"])
+obs_list = ["delta", "N_single", "N_pair", "N_zero", "Deff", "Hspace_size"]
+time_line1 = get_sim(ugrid[0]).res["time_steps"]
+for obs in obs_list[:4]:
+    res1[obs] = np.zeros((len(vals["m"]), len(time_line1)), dtype=float)
+    res1[f"micro_{obs}"] = np.zeros(len(vals["m"]), dtype=float)
+    res1[f"DE_{obs}"] = np.zeros(len(vals["m"]), dtype=float)
+    for ii, m in enumerate(vals["m"]):
+        res1[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+        res1[f"micro_{obs}"][ii] = get_sim(ugrid[ii]).res[f"micro_{obs}"]
+        res1[f"DE_{obs}"][ii] = get_sim(ugrid[ii]).res[f"DE_{obs}"]
+
+res1["D"] = np.zeros(len(vals["m"]), dtype=float)
+for obs in obs_list[4:]:
+    res1[obs] = np.zeros(len(vals["m"]), dtype=float)
+    for ii, g in enumerate(vals["m"]):
+        res1[obs][ii] = get_sim(ugrid[ii]).res[obs]
+for ii, g in enumerate(vals["m"]):
+    res1["D"][ii] = -np.log(res1["Deff"][ii]) / np.log(res1["Hspace_size"][ii])
+
+
+# %%
+fig, ax = plt.subplots(1, 1, constrained_layout=True, sharex=True, sharey=True)
+g = get_sim(ugrid[ii]).par["g"]
+ax.plot(vals["m"], np.mean(res["delta"], axis=1), "-", label="BG")
+ax.plot(vals["m"], res1["DE_delta"], "-", label="no BG")
+ax.plot(vals["m"], res["micro_delta"], "-", label="ME (BG)")
+# ax.plot(vals["g"], res1["micro_delta"], "--", label="ME (NO BG)")
+ax.set(xlabel=r"$m$", ylabel=r"Imbalance $\Delta(t\gg1,m ,g^{2}=1)$")
+ax.legend(loc="upper left", bbox_to_anchor=(0.01, 0.8))
+plt.savefig(f"imbalance_m.pdf")
+# %%
+obs_names = [
+    r"$\hat{\rho}_{\rm{mes}}$",
+    r"$\hat{\rho}_{\rm{bar}}$",
+    r"$\hat{\rho}_{\rm{vac}}$",
+]
+colors = ["darkred", "darkblue", "darkgreen"]
+g = get_sim(ugrid[ii]).par["g"]
+fig, ax = plt.subplots(1, 1, constrained_layout=True, sharex=True, sharey=True)
+for ii, obs in enumerate(["N_single", "N_pair", "N_zero"]):
+    """
+    ax.plot(
+        vals["g"],
+        np.mean(res[obs], axis=1),
+        "-o",
+        c=colors[ii],
+        linewidth=2,
+        markeredgecolor=colors[ii],
+        markerfacecolor="white",
+        markeredgewidth=1,
+        label=f"{obs_names[ii]} DE",
+    )
+    ax.plot(
+        vals["g"],
+        res[f"micro_{obs}"],
+        "--",
+        c=colors[ii],
+        label=f"{obs_names[ii]} ME",
+    )"""
+    ax.plot(
+        vals["m"],
+        res1[f"DE_{obs}"],
+        "-o",
+        c=colors[ii],
+        linewidth=2,
+        markeredgecolor=colors[ii],
+        markerfacecolor="white",
+        markeredgewidth=1,
+        label=f"{obs_names[ii]} DE NO BG",
+    )
+    ax.plot(
+        vals["m"],
+        res1[f"micro_{obs}"],
+        "--",
+        c=colors[ii],
+        label=f"{obs_names[ii]} ME NO BG",
+    )
+    """
+    ax.plot(
+        vals["m"],
+        np.mean(res["N_single"], axis=1)
+        + np.mean(res["N_pair"], axis=1)
+        + np.mean(res["N_zero"], axis=1),
+        "-o",
+        label=f"{obs} DE",
+    )"""
+    ax.set(xlabel="m", ylabel="obs")
+    ax.legend()
+# %%
+sm = cm.ScalarMappable(cmap="copper")
+palette = sm.to_rgba(np.arange(128))
+fig, ax = plt.subplots(1, 1, constrained_layout=True, sharex=True, sharey=True)
+g = get_sim(ugrid[ii]).par["g"]
+
+for sec in range(128):
+    ax.plot(
+        vals["m"],
+        res["D"][:, sec],
+        "-",
+        c=palette[sec],
+        linewidth=0.7,
+    )
+ax.plot(
+    vals["m"],
+    np.mean(res["D"], axis=1),
+    "-o",
+    c="black",
+    linewidth=2,
+    markeredgecolor="black",
+    markerfacecolor="white",
+    markeredgewidth=1,
+    label=r"$\langle D \rangle$ (BG)",
+)
+ax.plot(
+    vals["m"],
+    res1["D"],
+    "-o",
+    c="blue",
+    linewidth=2,
+    markeredgecolor="blue",
+    markerfacecolor="yellow",
+    markeredgewidth=1,
+    label=r"$D$ (NO BG)",
+)
+ax.set(
+    xlabel=r"$g^{2}$", ylabel=r"Fractal Dimension $D=\log(\rm{IPR})/\log(\mathcal{N})$"
+)
+ax.legend(loc="upper left", bbox_to_anchor=(0.5, 1))
+plt.savefig(f"fractal_dimension_m.pdf")
+# %%
 # ==========================================================================
 # 1D DFL TIME INTEGRAL
 # ==========================================================================

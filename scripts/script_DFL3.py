@@ -211,21 +211,13 @@ with run_sim() as sim:
             model.measure_observables(ii, dynamics=True)
             sim.res["N_single"][ii] += stag_avg(model.res["N_single"]) / n_bg_sectors
             sim.res["N_pair"][ii] += (
-                (
-                    stag_avg(model.res["N_pair"], "even")
-                    + stag_avg(model.res["N_zero"], "odd")
-                )
-                / 2
-                * n_bg_sectors
-            )
+                stag_avg(model.res["N_pair"], "even")
+                + stag_avg(model.res["N_zero"], "odd")
+            ) / (2 * n_bg_sectors)
             sim.res["N_zero"][ii] += (
-                (
-                    stag_avg(model.res["N_zero"], "even")
-                    + stag_avg(model.res["N_pair"], "odd")
-                )
-                / 2
-                * n_bg_sectors
-            )
+                stag_avg(model.res["N_zero"], "even")
+                + stag_avg(model.res["N_pair"], "odd")
+            ) / (2 * n_bg_sectors)
             # TAKE THE SPECIAL AVERAGE TO LOOK AT THE IMBALANCE
             delta = np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
             sim.res["delta"][ii] += delta / n_bg_sectors
