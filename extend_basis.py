@@ -1,78 +1,53 @@
 # %%
 import numpy as np
 from ed_lgt.operators.bose_fermi_operators import bose_operators
+from numpy.linalg import norm, qr,matrix_power
 
 
 def truncate(array, threshold=1e-15):
     return np.where(np.abs(array) > threshold, array, 0)
 
+def gram_schmidt_columns(X):
+    Q, R =qr(X)
+    return Q
 
-def extend_basis(basis: np.ndarray, eigvals: np.ndarray, op: np.ndarray, tol: float):
-    # select the meaningful eigenvalues associated to the states of the basis
-    good_eigvals = [val for val in eigvals if val >= tol]
-    # normalize the associated meaningful vectors
-    good_basis = basis[:,:len(good_eigvals)]
-    print(np.matmul(good_basis.T.conj(), good_basis))
-    new_states = np.matmul(op, good_basis)
-    print("AAAA",norm(np.matmul(good_basis.T.conj(),good_basis)-np.identity(good_basis.shape[1])))
+def extend_basis(basis, op,norm_err):
 
+    col_norms=norm(basis, axis=0)
+    basis = basis / col_norms
 
-    # Extract an augmented basis
-    U = gram_schmidt_augment(good_basis, new_states, tol)#
-    #print(U.shape)
-    A = np.matmul(U.T.conj(), U)
+    #new states
+    basis_new=np.matmul(op,basis)
+    #normalize basis_new
+    col_norms = norm(basis_new, axis=0)
+    basis_new = basis_new / col_norms
 
-    print("test, after extend",norm(A-np.identity(A.shape[0])))
+    new_vec=[]
+    new_vec_norms=[]
+    for v_p in basis_new.T:
+        r=v_p.copy() 
+        for v in basis.T:
+            r-=np.dot(v,v_p)*v
 
-    return U
-
-
-def gram_schmidt_augment(
-    old_basis: np.ndarray, new_vectors: np.ndarray, tol=1e-16#set overall basis
-) -> np.ndarray:
-    """
-    old_basis: ndarray of shape (n, k)
-               Columns are already orthonormal.
-    new_vectors: ndarray of shape (n, m)
-    tol: threshold below which a vector is considered "zero" and discarded.
-
-    Returns: augmented_basis of shape (n, k + r)
-             where r <= m is the number of new vectors that survive.
-    """
-    # Copy over the original orthonormal basis
-    augmented = [old_basis[:, ii] for ii in range(old_basis.shape[1])]
-    # Process each new vector
-    for ii in range(new_vectors.shape[1]):
-        new_vec = new_vectors[:, ii].copy()
-        # Subtract projections onto all existing basis vectors in 'augmented'
-        for jj in range(old_basis.shape[1]):
-            old_vec=old_basis[:,jj]
-            #wrong, phases! 
-            new_vec -= np.dot(old_vec.conj(), new_vectors[:, ii]) * old_vec
-        # Check if v is effectively zero
-        norm_v = np.linalg.norm(new_vec)
-        print("norm, gram",norm_v)
-
-        if norm_v > tol: #should same threshold as before, when selecting eigenvectors!
-            # Normalize and add to augmented set
-            new_vec = new_vec / norm_v
-            augmented.append(new_vec)
-    # Convert list of vectors back to a 2D array
-    return np.column_stack(augmented)
+        norm_r=norm(r)
+        if norm_r>norm_err:
+            new_vec_norms.append(norm_r)
+            r /= norm_r 
+            new_vec.append(r)    
+            basis = np.column_stack((basis, r))
+    
+    return np.array(new_vec).T,np.array(new_vec_norms)
 
 
 # %%
 # load basis
-rho_vecs = np.loadtxt("rho1_eigVec.txt", delimiter=" ")
-rho_vals = np.loadtxt("rho1_eigVal.txt", delimiter=" ")
+rho_vecs = np.loadtxt("d_loc44mu2-2lambda_0.6rho0_eigVec.txt", delimiter=" ")
+rho_vals = np.loadtxt("d_loc44mu2-2lambda_0.6rho0_eigVal.txt", delimiter=" ")
 
-for ii in range(rho_vecs.shape[0]):
-    print(norm(rho_vecs[:,ii]))
 
 A=np.matmul(rho_vecs,rho_vecs.T.conj())
-from numpy.linalg import norm
-print("norm",norm(A-np.identity(A.shape[0])))
-assert np.allclose(A,np.identity(A.shape[0]),atol=1e-15)
+assert np.allclose(A,np.identity(A.shape[0]),atol=1e-14)
+assert norm(A-np.identity(A.shape[0]))<1e-14
 
 #check if all vectors are normalized, done 
 # acquire operators
@@ -84,26 +59,35 @@ pi = 1j / (np.sqrt(2)) * (-ops_dens["b"] + ops_dens["b_dagger"])
 
 # %%
 #lets use one operator after the other.
-ext_basis = extend_basis(rho_vecs, rho_vals, phi, 1e-16)
+error=1e-9
+norm_err=1e-2
+eigvals=[vals for vals in rho_vals if vals>error]
+eigVec=rho_vecs[:,:len(eigvals)]
+
+B=np.matmul(eigVec.T.conj(),eigVec)
+assert np.allclose(B,np.identity(B.shape[0]),atol=1e-14)
+assert norm(B-np.identity(B.shape[0]))<1e-14, norm
+
+basis=eigVec.copy()
+print("start shape",basis.shape)
+for op in [phi,matrix_power(pi,2),matrix_power(phi,2),matrix_power(phi,4)]:
+
+    expand_basis,norms_r=extend_basis(basis,op,norm_err)
+    
+    #order according to norms
+    idx = norms_r.argsort()[::-1]
+
+    basis=np.column_stack((basis,expand_basis[:,idx]))
+    basis=gram_schmidt_columns(basis)
 
 
+print("start shape",basis.shape)
+C=np.matmul(basis.T.conj(),basis)
+assert np.allclose(C,np.identity(C.shape[0]),atol=1e-14)
+assert norm(C-np.identity(C.shape[0]))<1e-14, norm
 
-#np.savetxt("output.txt", ext_basis, fmt="%d", delimiter=",")
 
 with open("output.txt", "w") as f:
-    for row in ext_basis:
+    for row in basis:
         f.write(" ".join(str(val) for val in row) + "\n")
 
-load_matrix=[]
-with open("output.txt", "r") as f:
-    for line in f:
-        # Split the line into complex number strings and convert them to complex numbers
-        row = [complex(num) for num in line.strip().split()]
-        load_matrix.append(row)
-
-# Convert the list of lists to a numpy array
-complex_matrix = np.array(load_matrix)
-
-
-assert np.array_equal(ext_basis, complex_matrix)
-# %%
