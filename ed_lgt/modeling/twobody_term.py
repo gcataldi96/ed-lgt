@@ -106,6 +106,7 @@ class TwoBodyTerm(QMBTerm):
                     continue
                 # CHECK MASK CONDITION ON THE SITE
                 if self.get_mask_conditions(coords, mask):
+                    logger.info(f"Sites {sites_list}")
                     # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
                     row_list, col_list, value_list = nbody_term(
                         op_list=self.sym_ops,

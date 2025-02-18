@@ -10,8 +10,6 @@ from ed_lgt.operators import (
     fermi_operators,
     SU2_check_gauss_law,
     SU2_generators,
-    SU2_rishon_operators,
-    SU2_gen_rishon_operators,
     get_SU2_singlets,
     couple_two_spins,
     add_new_spin,
@@ -19,7 +17,6 @@ from ed_lgt.operators import (
     SU2_singlet_canonical_vector,
     SU2_Rishon,
     SU2_Rishon_gen,
-    SU2_operators_gen,
     m_values,
 )
 
@@ -159,7 +156,8 @@ for s in sorted_states:
 singlets = get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None)
 
 # %%
-gauge_basis, gauge_states = SU2_gauge_invariant_states(3 / 2, False, lattice_dim=1)
+gauge_basis, gauge_states = SU2_gauge_invariant_states(5, False, lattice_dim=1)
+# %%
 for ii, s in enumerate(gauge_states["site"]):
     logger.info(f"{ii}")
     s.display_singlets()

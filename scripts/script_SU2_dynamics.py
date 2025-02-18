@@ -17,7 +17,7 @@ with run_sim() as sim:
     # MODEL HAMILTONIAN
     model = SU2_Model(**sim.par["model"])
     m = sim.par["m"] if not model.pure_theory else None
-    model.build_Hamiltonian(sim.par["g"], m)
+    model.build_Hamiltonian1(sim.par["g"], m)
     # -------------------------------------------------------------------------------
     # DYNAMICS PARAMETERS
     name = sim.par["dynamics"]["state"]
@@ -44,10 +44,7 @@ with run_sim() as sim:
     logger.info(f"norm scalar product {norm_scalar_product}")
     # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
-    local_obs = [f"T2_{s}{d}" for d in model.directions for s in "mp"]
-    local_obs = ["E_square"]
-    if not model.pure_theory:
-        local_obs = [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
+    local_obs = [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
     # LIST OF TWOBODY CORRELATORS
     twobody_obs = [[f"P_p{d}", f"P_m{d}"] for d in model.directions]
     twobody_axes = [d for d in model.directions]
@@ -71,16 +68,25 @@ with run_sim() as sim:
         # DIAGONALIZE THE HAMILTONIAN
         model.diagonalize_Hamiltonian("full", "dense")
         sim.res["energy"] = model.H.Nenergies
-        micro_state, sim.res["micro_delta"] = model.microcanonical_avg1(
-            "N_tot", in_state, norm_scalar_product
+        stag_avgs = {
+            "N_tot": None,
+            "N_single": None,
+            "N_pair": "even",
+            "N_zero": "odd",
+        }
+        norms = {
+            "N_tot": norm_scalar_product,
+            "N_single": None,
+            "N_pair": None,
+            "N_zero": None,
+        }
+        psi_thermal, ME = model.microcanonical_avg1(
+            ["N_tot", "N_single", "N_pair", "N_zero"],
+            in_state,
+            staggered_avg=stag_avgs,
+            special_norm=norms,
         )
-        _, sim.res["micro_N_single"] = model.microcanonical_avg1("N_single", in_state)
-        _, sim.res["micro_N_pair"] = model.microcanonical_avg1(
-            "N_pair", in_state, staggered_avg="even"
-        )
-        _, sim.res["micro_N_zero"] = model.microcanonical_avg1(
-            "N_zero", in_state, staggered_avg="odd"
-        )
+        sim.res |= ME
     # -------------------------------------------------------------------------------
     # CANONICAL ENSEMBLE (it does not need the full spectrum)
     if sim.par["ensemble"]["canonical"]["average"]:
@@ -100,16 +106,13 @@ with run_sim() as sim:
             model.diagonalize_Hamiltonian("full", "dense")
             sim.res["energy"] = model.H.Nenergies
         # MEASURE DIAGONAL ENSEMBLE of some OBSERVABLES
-        sim.res["DE_delta"] = model.diagonal_avg1(
-            "N_tot", in_state, norm_scalar_product
+        sim.res |= model.diagonal_avg1(
+            ["N_tot", "N_single", "N_pair", "N_zero"],
+            in_state,
+            staggered_avg=stag_avgs,
+            special_norms=norms,
         )
-        sim.res["DE_N_single"] = model.diagonal_avg1("N_single", in_state)
-        sim.res["DE_N_pair"] = model.diagonal_avg1(
-            "N_pair", in_state, staggered_avg="even"
-        )
-        sim.res["DE_N_zero"] = model.diagonal_avg1(
-            "N_zero", in_state, staggered_avg="odd"
-        )
+    """
     # ---------------------------------------------------------------------------
     # OVERLAPS and entropy of the eigenstates with the INITIAL STATE
     sim.res["eig_overlap"] = np.zeros(model.H.shape[0], dtype=float)
@@ -119,6 +122,7 @@ with run_sim() as sim:
         sim.res["eig_entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
             partition_indices, sector_configs=model.sector_configs
         )
+    """
     # -------------------------------------------------------------------------------
     # TIME EVOLUTION
     model.time_evolution_Hamiltonian(in_state, time_line)
@@ -129,7 +133,7 @@ with run_sim() as sim:
     # -------------------------------------------------------------------------------
     for ii, tstep in enumerate(time_line):
         msg = f"TIME {round(tstep, 2)}"
-        logger.info(f"================== {msg} ========================")
+        logger.info(f"================== {msg} ==========================")
         if not model.momentum_basis:
             # -----------------------------------------------------------------------
             # ENTROPY
@@ -155,6 +159,13 @@ with run_sim() as sim:
         ) / 2
         sim.res["delta"][ii] = (
             np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
+        )
+        logger.info(f"delta {sim.res['delta'][ii]}")
+        logger.info(f"N_single {sim.res['N_single'][ii]}")
+        logger.info(f"N_pair {sim.res['N_pair'][ii]}")
+        logger.info(f"N_zero {sim.res['N_zero'][ii]}")
+        logger.info(
+            f"TOT {sim.res['N_single'][ii]+ sim.res['N_zero'][ii]+sim.res['N_pair'][ii]}"
         )
         # ---------------------------------------------------------------------------
         # OVERLAPS with the INITIAL STATE

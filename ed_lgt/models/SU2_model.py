@@ -21,7 +21,7 @@ class SU2_Model(QuantumModel):
         self.pure_theory = pure_theory
         self.background = background
         self.ham_format = ham_format
-        if self.spin > 1:
+        if self.spin < 1:
             # Acquire operators
             self.ops = SU2_dressed_site_operators(
                 self.spin,

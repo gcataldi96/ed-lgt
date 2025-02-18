@@ -98,7 +98,7 @@ def process_batches_with_nbody(
     op_list: list[np.ndarray],
     op_sites_list: list[int],
     sector_configs: np.ndarray,
-    batch_size: int = int(2**20),
+    batch_size: int = int(2**19),
 ):
     """
     Process nbody_data_par in batches to handle large sector dimensions.
@@ -116,7 +116,7 @@ def process_batches_with_nbody(
             - value_list (np.ndarray of floats): The nonzero values of the operator elements.
     """
     sector_dim = sector_configs.shape[0]
-    if len(op_list)==1:
+    if len(op_list) == 1:
         # Use a dedicated function for local operators
         return localbody_data_par(op_list[0], op_sites_list[0], sector_configs)
     if sector_dim <= batch_size:
@@ -126,7 +126,7 @@ def process_batches_with_nbody(
     # Step 1: Allocate conservatively large arrays for final results
     n_sites = sector_configs.shape[1]
     sparsity = 5.9 * np.exp(-0.92 * n_sites) / n_sites
-    estimated_elements = int(0.0001 * sector_dim**2)  # Estimate sparsity
+    estimated_elements = int(0.00005 * sector_dim**2)  # Estimate sparsity
     final_row_list = np.zeros(estimated_elements, dtype=np.int32)
     final_col_list = np.zeros(estimated_elements, dtype=np.int32)
     final_value_list = np.zeros(estimated_elements, dtype=np.float64)
@@ -339,7 +339,8 @@ def nbody_data_par(
     # Return the final lists of nonzero elements: row indices, column indices, and values
     return row_list, col_list, value_list
 
-@njit(parallel=True,cache=True)
+
+@njit(parallel=True, cache=True)
 def localbody_data_par(op: np.ndarray, op_site: int, sector_configs: np.ndarray):
     """
     Efficiently process a diagonal operator on a given sector of configurations.
@@ -363,7 +364,9 @@ def localbody_data_par(op: np.ndarray, op_site: int, sector_configs: np.ndarray)
     # Isolate the action of the operator on the site
     op_diag = op[op_site]
     for row in prange(len(row_list)):
-        value_list[row] = op_diag[sector_configs[row, op_site], sector_configs[row, op_site]]
+        value_list[row] = op_diag[
+            sector_configs[row, op_site], sector_configs[row, op_site]
+        ]
         # Check that the element is nonzero
         if not np.isclose(value_list[row], 0, atol=1e-10):
             # Mark the row as having at least one nonzero element
@@ -372,6 +375,7 @@ def localbody_data_par(op: np.ndarray, op_site: int, sector_configs: np.ndarray)
     row_list = row_list[check_rows]
     value_list = value_list[check_rows]
     return row_list, row_list, value_list
+
 
 @njit(cache=True)
 def nbody_data_momentum_basis(op_list, op_sites_list, sector_configs, momentum_basis):

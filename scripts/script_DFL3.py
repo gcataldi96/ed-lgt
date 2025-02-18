@@ -1,6 +1,4 @@
 import numpy as np
-import os
-from numba import set_num_threads
 from ed_lgt.models import DFL_Model
 from ed_lgt.tools import stag_avg
 from ed_lgt.modeling import get_lattice_link_site_pairs, get_entropy_partition
@@ -13,9 +11,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 with run_sim() as sim:
-    # Set the number of threads per simulation
-    set_num_threads(int(os.environ.get("NUMBA_NUM_THREADS", sim.par["n_threads"])))
     start_time = perf_counter()
+    # ==============================================================================
+    # MODEL PROPERTIES
+    model = DFL_Model(**sim.par["model"])
+    m = sim.par["m"] if not model.pure_theory else None
     # ==============================================================================
     # DYNAMICS PARAMETERS
     start = sim.par["dynamics"]["start"]
@@ -24,22 +24,19 @@ with run_sim() as sim:
     time_line = np.arange(start, stop + delta_t, delta_t)
     sim.res["time_steps"] = time_line
     n_steps = len(sim.res["time_steps"])
-    # ==============================================================================
-    # MODEL PROPERTIES
-    model = DFL_Model(**sim.par["model"])
-    m = sim.par["m"] if not model.pure_theory else None
     # ===============================================================================
     # OBSERVABLES
-    if not model.pure_theory:
-        local_obs = [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
-        for measure in local_obs:
-            sim.res[measure] = np.zeros(n_steps, dtype=float)
+    local_obs = [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
+    for obs in local_obs:
+        sim.res[obs] = np.zeros(n_steps, dtype=float)
+        sim.res[f"ME_{obs}"] = 0.0
+        sim.res[f"DE_{obs}"] = 0.0
+    # Usefull quantities for the staggered averages
+    stag_avgs = {"N_tot": None, "N_single": None, "N_pair": "even", "N_zero": "odd"}
     # Store the observables
     partition_indices = get_entropy_partition(model.lvals)
     for measure in ["delta", "entropy", "overlap"][:1]:
         sim.res[measure] = np.zeros(n_steps, dtype=float)
-    for micro_obs in ["delta", "N_single", "N_pair", "N_zero"]:
-        sim.res[f"micro_{micro_obs}"] = 0.0
     # ==============================================================================
     # GLOBAL SYMMETRIES
     global_ops = [model.ops["N_tot"]]
@@ -82,6 +79,13 @@ with run_sim() as sim:
     )
     norm_scalar_product = np.tile(stag_array, num_blocks)
     logger.info(f"norm scalar product {norm_scalar_product}")
+    # Set the norm only for the total number of particles
+    norms = {
+        "N_tot": norm_scalar_product,
+        "N_single": None,
+        "N_pair": None,
+        "N_zero": None,
+    }
     # ==============================================================================
     # STRING BACKGROUND SYMMETRY OPERATORS
     bg_global_ops = get_symmetry_sector_generators(
@@ -101,13 +105,6 @@ with run_sim() as sim:
     for idx, group_id in enumerate(indices):
         bg_configs_per_sector[group_id, counts[group_id]] = bg_configs[idx]
         counts[group_id] += 1  # Increment the count for the current group
-    # Measures of the effective Hilbert space of each sector
-    sim.res["Deff"] = np.zeros(n_bg_sectors, dtype=float)
-    sim.res["Hspace_size"] = np.zeros(n_bg_sectors, dtype=float)
-    if sim.par["get_entropy"]:
-        sim.res["eigen_entropy"] = np.zeros(
-            (n_bg_sectors, int(model.n_sites / 2)), dtype=float
-        )
     # -------------------------------------------------------------------------------
     # RUN OVER THE POSSIBLE BACKGROUND SECTORS
     for bg_num, bg_sector in enumerate(unique_bg_sectors):
@@ -148,44 +145,36 @@ with run_sim() as sim:
         # -------------------------------------------------------------------------------
         # MICROCANONICAL ENSEMBLE (it requires a large part of the Hamiltonian spectrum)
         if sim.par["ensemble"]["microcanonical"]["average"]:
-            # OBSERVABLE
-            obs = sim.par["ensemble"]["local_obs"]
             # DIAGONALIZE THE HAMILTONIAN
             model.diagonalize_Hamiltonian("full", "dense")
-            _, micro_delta = model.microcanonical_avg1(
-                obs, in_state, norm_scalar_product
+            sim.res["energy"] = model.H.Nenergies
+            _, ME = model.microcanonical_avg1(
+                local_obs,
+                in_state,
+                staggered_avg=stag_avgs,
+                special_norm=norms,
             )
-            _, micro_N_single = model.microcanonical_avg1("N_single", in_state)
-            _, micro_N_pair = model.microcanonical_avg1(
-                "N_pair", in_state, staggered_avg="even"
+            for obs in local_obs:
+                sim.res[f"ME_{obs}"] += ME[f"ME_{obs}"] / n_bg_sectors
+        # -------------------------------------------------------------------------------
+        # DIAGONAL ENSEMBLE (it requires the full spectrum of the Hamiltonian)
+        if sim.par["ensemble"]["diagonal"]["average"]:
+            if not sim.par["ensemble"]["microcanonical"]["average"]:
+                # DIAGONALIZE THE HAMILTONIAN
+                model.diagonalize_Hamiltonian("full", "dense")
+                sim.res["energy"] = model.H.Nenergies
+            # MEASURE DIAGONAL ENSEMBLE of some OBSERVABLES
+            DE = model.diagonal_avg1(
+                ["N_tot", "N_single", "N_pair", "N_zero"],
+                in_state,
+                staggered_avg=stag_avgs,
+                special_norms=norms,
             )
-            _, micro_N_zero = model.microcanonical_avg1(
-                "N_zero", in_state, staggered_avg="odd"
-            )
-            sim.res["micro_delta"] += micro_delta / n_bg_sectors
-            sim.res["micro_N_single"] += micro_N_single / n_bg_sectors
-            sim.res["micro_N_pair"] += micro_N_pair / n_bg_sectors
-            sim.res["micro_N_zero"] += micro_N_zero / n_bg_sectors
+            for obs in local_obs:
+                sim.res[f"DE_{obs}"] += DE[f"DE_{obs}"] / n_bg_sectors
+        """
         # TIME EVOLUTION
-        model.time_evolution_Hamiltonian(in_state, time_line)
-        # model.H.get_r_value()
-        if hasattr(model.H, "Deff"):
-            # Save the Effective Hilbert space of each superselection sector
-            sim.res["Deff"][bg_num] = model.H.Deff
-            sim.res["Hspace_size"][bg_num] = model.H.shape[0]
-            logger.info(f"D {-np.log(model.H.Deff)/np.log(model.H.shape[0])}")
-            if sim.par["get_entropy"]:
-                # Save the eigenstate entropy as a function of the partition
-                for L in range(int(model.n_sites / 2)):
-                    partition = list(np.arange(0, L + 1, 1))
-                    for kk in range(model.H.shape[0]):
-                        sim.res["eigen_entropy"][bg_num, L] += (
-                            model.H.Npsi[kk].entanglement_entropy(
-                                partition,
-                                model.sector_configs,
-                            )
-                            / model.H.shape[0]
-                        )
+        # model.time_evolution_Hamiltonian(in_state, time_line)
         # -----------------------------------------------------------------------
         for ii, tstep in enumerate(time_line):
             msg_tstep = f"TIME {round(tstep, 2)}"
@@ -224,6 +213,7 @@ with run_sim() as sim:
             # OVERLAPS with the INITIAL STATE
             # overlap = model.measure_fidelity(in_state, ii, True, True)
             # sim.res["overlap"][ii] += overlap / n_bg_sectors
+        """
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

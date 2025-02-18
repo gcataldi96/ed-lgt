@@ -635,91 +635,76 @@ for ii, g in enumerate(vals["g"]):
         res["D"][ii, sec] = -np.log(res["Deff"][ii, sec]) / np.log(
             res["Hspace_size"][ii, sec]
         )
-
+# %%
 res1 = {}
-config_filename = f"DFL/gscale_NOBG"
+config_filename = f"newDFL/gscale_NOBG"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
-obs_list = ["delta", "N_single", "N_pair", "N_zero", "Deff", "Hspace_size"]
+obs_list = ["N_single", "N_pair", "N_zero"]
 time_line1 = get_sim(ugrid[0]).res["time_steps"]
-for obs in obs_list[:4]:
+res1["entropy"] = np.zeros((len(vals["g"]), len(time_line1)), dtype=float)
+for obs in obs_list:
     res1[obs] = np.zeros((len(vals["g"]), len(time_line1)), dtype=float)
-    res1[f"micro_{obs}"] = np.zeros(len(vals["g"]), dtype=float)
+    res1[f"ME_{obs}"] = np.zeros(len(vals["g"]), dtype=float)
     res1[f"DE_{obs}"] = np.zeros(len(vals["g"]), dtype=float)
     for ii, g in enumerate(vals["g"]):
         res1[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
-        res1[f"micro_{obs}"][ii] = get_sim(ugrid[ii]).res[f"micro_{obs}"]
+        res1[f"ME_{obs}"][ii] = get_sim(ugrid[ii]).res[f"ME_{obs}"]
         res1[f"DE_{obs}"][ii] = get_sim(ugrid[ii]).res[f"DE_{obs}"]
-
-res1["D"] = np.zeros(len(vals["g"]), dtype=float)
-for obs in obs_list[4:]:
-    res1[obs] = np.zeros(len(vals["g"]), dtype=float)
-    for ii, g in enumerate(vals["g"]):
-        res1[obs][ii] = get_sim(ugrid[ii]).res[obs]
 for ii, g in enumerate(vals["g"]):
-    res1["D"][ii] = -np.log(res1["Deff"][ii]) / np.log(res1["Hspace_size"][ii])
+    res1["entropy"][ii, :] = get_sim(ugrid[ii]).res["entropy"]
 # %%
 obs_names = [
-    r"$\hat{\rho}_{\rm{mes}}$",
-    r"$\hat{\rho}_{\rm{bar}}$",
-    r"$\hat{\rho}_{\rm{vac}}$",
+    r"$\hat{\rho}_{\rm{1}}$",
+    r"$\hat{\rho}_{\rm{2}}$",
+    r"$\hat{\rho}_{\rm{0}}$",
 ]
-colors = ["darkred", "darkblue", "darkgreen"]
+sizes = [5, 8, 5]
+styles = ["--", "-", ":"]
+colors = ["darkgreen", "darkblue", "darkred"]
 m = get_sim(ugrid[ii]).par["m"]
 fig, ax = plt.subplots(1, 1, constrained_layout=True, sharex=True, sharey=True)
 for ii, obs in enumerate(["N_single", "N_pair", "N_zero"]):
-    """
     ax.plot(
         vals["g"],
-        np.mean(res[obs], axis=1),
-        "-o",
-        c=colors[ii],
-        linewidth=2,
-        markeredgecolor=colors[ii],
-        markerfacecolor="white",
-        markeredgewidth=1,
-        label=f"{obs_names[ii]} DE",
-    )
-    ax.plot(
-        vals["g"],
-        res[f"micro_{obs}"],
-        "--",
+        res1[f"ME_{obs}"],
+        styles[ii],
         c=colors[ii],
         label=f"{obs_names[ii]} ME",
     )
-    """
     ax.plot(
         vals["g"],
         res1[f"DE_{obs}"],
-        "-x",
+        f"{styles[ii]}o",
         c=colors[ii],
         linewidth=2,
         markeredgecolor=colors[ii],
         markerfacecolor="white",
         markeredgewidth=1,
-        label=f"{obs_names[ii]} DE NO BG",
+        markersize=sizes[ii],
+        label=f"{obs_names[ii]} DE",
     )
-    ax.plot(
-        vals["g"],
-        res1[f"micro_{obs}"],
-        "-",
-        c=colors[ii],
-        label=f"{obs_names[ii]} ME NO BG",
-    )
-    """
-    ax.plot(
-        vals["g"],
-        np.mean(res["N_single"], axis=1)
-        + np.mean(res["N_pair"], axis=1)
-        + np.mean(res["N_zero"], axis=1),
-        "-o",
-        label=f"{obs} DE",
-    )"""
-    ax.set(
-        xlabel=r"$g^{2}$", ylabel=r"Pariticle Densities $\hat{\rho}(t\gg1, g^{2},m=1)$"
-    )
-    ax.legend(loc="upper left", bbox_to_anchor=(0.5, 0.8))
-plt.savefig(f"particle_density.pdf")
+    ax.set(xlabel=r"$g$", ylabel=r"Pariticle Densities $\hat{\rho}(m=1)$")
+    ax.legend(loc="upper left", bbox_to_anchor=(0.05, 0.45))
+plt.savefig(f"gscale_NOBG.pdf")
+sm = cm.ScalarMappable(cmap="copper")
+palette = sm.to_rgba(vals["g"])
+fig, ax = plt.subplots(1, 1, constrained_layout=True, sharex=True, sharey=True)
+for ii, m in enumerate(vals["g"]):
+    if ii % 2 == 0:
+        ax.plot(
+            time_line1,
+            res1[f"entropy"][ii, :],
+            "-",
+            label=f"g={g}",
+            c=palette[ii],
+        )
+cb = fig.colorbar(
+    sm, ax=ax, aspect=80, location="top", orientation="horizontal", pad=0.02
+)
+cb.set_label(label=r"$g$", labelpad=-22, x=-0.02, y=0)
+ax.set(xlabel=r"$t$", ylabel=r"Entanglement Entropy", xscale="log")
+plt.savefig(f"gscale_NOBG_entropy_log.pdf")
 # %%
 sm = cm.ScalarMappable(cmap="copper")
 palette = sm.to_rgba(np.arange(128))
