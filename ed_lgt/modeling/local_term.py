@@ -11,6 +11,7 @@ from ed_lgt.symmetries import (
     nbody_term,
     nbody_data_momentum_basis_par,
     process_batches_with_nbody,
+    localbody_data_par2,
 )
 import logging
 
@@ -41,7 +42,7 @@ class LocalTerm(QMBTerm):
         self.n_sites = prod(self.lvals)
 
     @get_time
-    def get_Hamiltonian(self, strength, mask=None):
+    def get_Hamiltonian_old(self, strength, mask=None):
         """
         The function calculates the Local Hamiltonian by summing up local terms
         for each lattice site, potentially with some sites excluded based on the mask.
@@ -81,7 +82,8 @@ class LocalTerm(QMBTerm):
                 coords = zig_zag(self.lvals, ii)
                 # CHECK MASK CONDITION ON THE SITE
                 if self.get_mask_conditions(coords, mask):
-                    logger.info(f"Site {ii}")
+                    if len(self.sector_configs) > 2**18:
+                        logger.info(f"Site {ii}")
                     # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
                     row_list, col_list, value_list = nbody_term(
                         self.sym_ops,
@@ -98,6 +100,59 @@ class LocalTerm(QMBTerm):
             col_list = np.concatenate(all_col_list)
             value_list = np.concatenate(all_value_list) * strength
             return row_list, col_list, value_list
+
+    @get_time
+    def get_Hamiltonian(self, strength, mask=None):
+        """
+        Calculate the Local Hamiltonian using local terms for each lattice site,
+        applying the operator only at those sites that satisfy the mask condition.
+        In the presence of a symmetry sector (self.sector_configs is not None), the
+        Hamiltonian is built by computing the nonzero entries of the local operator
+        (diagonal in this case) using the symmetry sector.
+
+        Args:
+            strength (scalar): The coupling constant.
+            mask (np.ndarray, optional): A d-dimensional boolean array that specifies
+                which lattice sites to include.
+
+        Returns:
+            Either a full matrix (if no symmetry sector is used) or a tuple of three
+            arrays (row_list, col_list, value_list) representing the sparse Hamiltonian.
+        """
+        if not np.isscalar(strength):
+            raise TypeError(f"strength must be SCALAR not a {type(strength)}")
+
+        # Case 1: No symmetry sector: build the Hamiltonian normally.
+        if self.sector_configs is None:
+            H_Local = 0
+            for ii in range(self.n_sites):
+                coords = zig_zag(self.lvals, ii)
+                if self.get_mask_conditions(coords, mask):
+                    H_Local += local_op(operator=self.op, op_site=ii, **self.def_params)
+            return strength * H_Local
+
+        # Case 2: With symmetry sector: build the sparse Hamiltonian using the symmetry sector.
+        else:
+            # Instead of looping over all sites and concatenating many small arrays,
+            # first determine which lattice sites satisfy the mask.
+            valid_sites_list = []
+            for ii in range(self.n_sites):
+                coords = zig_zag(self.lvals, ii)
+                if self.get_mask_conditions(coords, mask):
+                    valid_sites_list.append(int(ii))
+            if len(valid_sites_list) == 0:
+                raise ValueError("No lattice sites satisfy the mask condition.")
+
+            # Now, call a version of localbody_data_par that processes a set of sites.
+            # Here we assume that self.op is a diagonal operator such that its action at a site
+            # is given by op[site]. The function localbody_data_par (modified to accept a vector
+            # of sites) will compute for each valid site a contribution (a diagonal element)
+            # and return three arrays (row indices, col indices, and values).
+            row_list, col_list, value_list = localbody_data_par2(
+                self.sym_ops[0], np.array(valid_sites_list), self.sector_configs
+            )
+            # Multiply the nonzero values by the strength
+            return row_list, col_list, value_list * strength
 
     def get_expval(self, psi, stag_label=None, print_values=True):
         """

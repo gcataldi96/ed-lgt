@@ -60,6 +60,114 @@ def arrays_equal(arr1, arr2):
     return True
 
 
+@njit(cache=True)
+def compare_int_vectors(vec_a: np.ndarray, vec_b: np.ndarray) -> int:
+    """
+    Lexicographically compare two 1D arrays 'vec_a' and 'vec_b'.
+
+    For each position, the function compares the corresponding elements:
+      - Returns -1 if vec_a[i] < vec_b[i] at the first differing index.
+      - Returns 1 if vec_a[i] > vec_b[i].
+      - Returns 0 if all elements are equal.
+
+    Args:
+        vec_a (np.ndarray): 1D array (e.g. np.uint8).
+        vec_b (np.ndarray): 1D array (same length and type as vec_a).
+
+    Returns:
+        int: -1, 0, or 1, indicating the lexicographical order of vec_a and vec_b.
+    """
+    for ii in range(vec_a.shape[0]):
+        # If you know that the arrays are integers, you can use simple comparison:
+        if vec_a[ii] < vec_b[ii]:
+            return -1
+        elif vec_a[ii] > vec_b[ii]:
+            return 1
+    return 0
+
+
+@njit(cache=True)
+def find_equal_rows(m_states, target):
+    """
+    Given a sorted 2D array m_states and a target row, return the indices of all rows
+    in m_states that are identical to target.
+
+    The function assumes that m_states is sorted in lexicographical order.
+    It first uses binary search to locate one occurrence of the target row,
+    then scans backwards and forwards from that location to collect all indices
+    where the row equals the target.
+
+    Detailed Steps:
+      1. **Binary Search:**
+         Set `lo` = 0 and `hi` = number of rows - 1. Then, while `lo <= hi`,
+         compute `mid` as the midpoint between `lo` and `hi`. Compare `m_states[mid]` with
+         `target` using `compare_rows`:
+           - If they are equal (i.e. compare_rows returns 0), save `mid` in `found` and break.
+           - If `m_states[mid]` is less than `target`, move the lower bound up (`lo = mid + 1`).
+           - Otherwise, move the upper bound down (`hi = mid - 1`).
+         If no match is found, return an empty array.
+
+      2. **Backward Scan:**
+         Starting from the found index, decrement until you find a row that is no longer equal to target.
+         This index is the first occurrence.
+
+      3. **Forward Scan:**
+         Starting from the found index, increment until you find a row that is no longer equal to target.
+         This index is the last occurrence.
+
+      4. **Return All Indices:**
+         Allocate an array of appropriate size and fill it with the indices from the first to the last occurrence.
+
+    Args:
+        m_states (np.ndarray): 2D array of shape (num_rows, num_cols) with type np.uint8.
+        target (np.ndarray): 1D array of length num_cols (also np.uint8) representing the target row.
+
+    Returns:
+        np.ndarray: 1D array of int32 indices where each row of m_states equals target.
+                   If no match is found, returns an empty array.
+    """
+    num_rows = m_states.shape[0]
+    lo = 0
+    hi = num_rows - 1
+    found = -1
+    # Binary search for one occurrence of target in m_states
+    while lo <= hi:
+        mid = (lo + hi) // 2
+        cmp_val = compare_int_vectors(m_states[mid], target)
+        if cmp_val == 0:
+            found = mid
+            break
+        elif cmp_val < 0:
+            lo = mid + 1
+        else:
+            hi = mid - 1
+
+    if found == -1:
+        # No match found; return an empty array.
+        return np.empty(0, dtype=np.int32)
+
+    # Scan backwards from the found index to get the first occurrence.
+    first_index = found
+    while (
+        first_index > 0 and compare_int_vectors(m_states[first_index - 1], target) == 0
+    ):
+        first_index -= 1
+
+    # Scan forwards from the found index to get the last occurrence.
+    last_index = found
+    while (
+        last_index < num_rows - 1
+        and compare_int_vectors(m_states[last_index + 1], target) == 0
+    ):
+        last_index += 1
+
+    size = last_index - first_index + 1
+    result = np.empty(size, dtype=np.int32)
+    for i in range(size):
+        result[i] = first_index + i
+    return result
+
+
 @njit(parallel=True, cache=True)
 def exclude_columns(data_matrix, exclude_indices):
     """

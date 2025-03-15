@@ -1,5 +1,4 @@
 import numpy as np
-from scipy.sparse import csr_matrix
 from numba import njit, prange
 from ed_lgt.tools import (
     exclude_columns,
@@ -20,6 +19,7 @@ __all__ = [
     "nbody_data_momentum_basis",
     "nbody_data_momentum_basis_par",
     "process_batches_with_nbody",
+    "localbody_data_par2",
 ]
 
 
@@ -98,7 +98,7 @@ def process_batches_with_nbody(
     op_list: list[np.ndarray],
     op_sites_list: list[int],
     sector_configs: np.ndarray,
-    batch_size: int = int(2**19),
+    batch_size: int = int(2**20),
 ):
     """
     Process nbody_data_par in batches to handle large sector dimensions.
@@ -341,6 +341,56 @@ def nbody_data_par(
 
 
 @njit(parallel=True, cache=True)
+def localbody_data_par2(
+    op: np.ndarray, op_site_list: list[int], sector_configs: np.ndarray
+):
+    """
+    Efficiently processes a diagonal operator that acts on several sites at once.
+    For each configuration (each row in sector_configs), the function sums the
+    contributions from all sites in op_site_list. Only configurations where the
+    total contribution is nonzero are kept.
+
+    Args:
+        op (np.ndarray): A diagonal operator matrix that is used for each site.
+            (It is assumed that op[site] returns the diagonal matrix for that site.)
+        op_site_list (list[int]): List of site indices where the operator acts.
+        sector_configs (np.ndarray): Array of sector configurations for lattice sites
+            (shape (num_configs, num_sites)), with type np.uint8.
+
+    Returns:
+        tuple:
+            - row_list (np.ndarray of ints): The indices of configurations (rows) with nonzero contribution.
+            - col_list (np.ndarray of ints): Identical to row_list (since the operator is diagonal).
+            - value_list (np.ndarray of floats): The computed (summed) diagonal values for those configurations.
+    """
+    sector_dim = sector_configs.shape[0]
+    # Start with every configuration.
+    row_list = np.arange(sector_dim, dtype=np.int32)
+    # We'll use a boolean mask to filter out rows with zero contribution.
+    check_rows = np.zeros(sector_dim, dtype=np.bool_)
+    # Preallocate an array for the computed operator values.
+    value_list = np.zeros(sector_dim, dtype=np.float64)
+
+    # Process each configuration in parallel.
+    for row in prange(sector_dim):
+        # Accumulate the contribution from each site in op_site_list.
+        for ii in range(len(op_site_list)):
+            op_site = int(op_site_list[ii])
+            op_diag = op[op_site]  # Extract the diagonal matrix for this site.
+            value_list[row] += op_diag[
+                sector_configs[row, op_site], sector_configs[row, op_site]
+            ]
+        # Check that the element is nonzero
+        if not np.isclose(value_list[row], 0, atol=1e-10):
+            # Mark the row as having at least one nonzero element
+            check_rows[row] = True
+    # Filter out zero elements
+    row_list = row_list[check_rows]
+    value_list = value_list[check_rows]
+    return row_list, row_list, value_list
+
+
+@njit(parallel=True, cache=True)
 def localbody_data_par(op: np.ndarray, op_site: int, sector_configs: np.ndarray):
     """
     Efficiently process a diagonal operator on a given sector of configurations.
@@ -375,6 +425,41 @@ def localbody_data_par(op: np.ndarray, op_site: int, sector_configs: np.ndarray)
     row_list = row_list[check_rows]
     value_list = value_list[check_rows]
     return row_list, row_list, value_list
+
+
+@njit(parallel=True, cache=True)
+def nbody_data_par_optimized(op_list, op_sites_list, sector_configs):
+    sector_dim = sector_configs.shape[0]
+
+    counts = np.empty(sector_dim, dtype=np.int32)
+    # Get the modified configuration with the operator sites excluded.
+    m_states = exclude_columns(sector_configs, op_sites_list)
+    # Process each row in parallel.
+    for row in prange(sector_dim):
+        count = 0
+        cols_check = np.zeros(sector_dim, dtype=np.bool_)
+        cols_array = np.arange(sector_dim, dtype=np.int32)
+        cols_values = np.ones(sector_dim, dtype=np.float64)
+        m_states_row = m_states[row]
+        for col in range(sector_dim):
+            # Test if the action of the operators preserve the other sites
+            if arrays_equal(m_states_row, m_states[col]):
+                # Compute the operator element for this (row, col) pair.
+                element = 1.0
+                for ii, site in enumerate(op_sites_list):
+                    op = op_list[ii, site]
+                    element *= op[sector_configs[row, site], sector_configs[col, site]]
+                if not np.isclose(element, 0.0, atol=1e-10):
+                    cols_check[col] = True
+                    cols_values[col] = element
+                    count += 1
+        counts[row] = count  # store number of valid columns in this row
+
+    # Now, we need to combine the results from each row into one array.
+    total = np.sum(counts)
+    final_rows = np.empty(total, dtype=np.int32)
+    final_cols = np.empty(total, dtype=np.int32)
+    final_vals = np.empty(total, dtype=np.float64)
 
 
 @njit(cache=True)

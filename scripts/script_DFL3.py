@@ -172,48 +172,49 @@ with run_sim() as sim:
             )
             for obs in local_obs:
                 sim.res[f"DE_{obs}"] += DE[f"DE_{obs}"] / n_bg_sectors
-        """
         # TIME EVOLUTION
-        # model.time_evolution_Hamiltonian(in_state, time_line)
-        # -----------------------------------------------------------------------
-        for ii, tstep in enumerate(time_line):
-            msg_tstep = f"TIME {round(tstep, 2)}"
-            msg = f"====== {bg_num} ============ {msg_tstep} ===================="
-            logger.info(msg)
-            if not model.momentum_basis:
-                # ---------------------------------------------------------------
-                # ENTROPY
-                if sim.par["get_entropy"]:
-                    entropy = model.H.psi_time[ii].entanglement_entropy(
-                        partition_indices,
-                        model.sector_configs,
-                    )
-                    # Save the entropy
-                    sim.res["entropy"][ii] += entropy / n_bg_sectors
-                # STATE CONFIGURATIONS
-                if sim.par["get_state_configs"]:
-                    model.H.psi_time[ii].get_state_configurations(
-                        1e-1, model.sector_configs
-                    )
-            # -------------------------------------------------------------------
-            # MEASURE OBSERVABLES
-            model.measure_observables(ii, dynamics=True)
-            sim.res["N_single"][ii] += stag_avg(model.res["N_single"]) / n_bg_sectors
-            sim.res["N_pair"][ii] += (
-                stag_avg(model.res["N_pair"], "even")
-                + stag_avg(model.res["N_zero"], "odd")
-            ) / (2 * n_bg_sectors)
-            sim.res["N_zero"][ii] += (
-                stag_avg(model.res["N_zero"], "even")
-                + stag_avg(model.res["N_pair"], "odd")
-            ) / (2 * n_bg_sectors)
-            # TAKE THE SPECIAL AVERAGE TO LOOK AT THE IMBALANCE
-            delta = np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
-            sim.res["delta"][ii] += delta / n_bg_sectors
-            # OVERLAPS with the INITIAL STATE
-            # overlap = model.measure_fidelity(in_state, ii, True, True)
-            # sim.res["overlap"][ii] += overlap / n_bg_sectors
-        """
+        if sim.par["dynamics"]["time_evolution"]:
+            model.time_evolution_Hamiltonian(in_state, time_line)
+            # -----------------------------------------------------------------------
+            for ii, tstep in enumerate(time_line):
+                msg_tstep = f"TIME {round(tstep, 2)}"
+                msg = f"====== {bg_num} ============ {msg_tstep} ===================="
+                logger.info(msg)
+                if not model.momentum_basis:
+                    # ---------------------------------------------------------------
+                    # ENTROPY
+                    if sim.par["get_entropy"]:
+                        entropy = model.H.psi_time[ii].entanglement_entropy(
+                            partition_indices,
+                            model.sector_configs,
+                        )
+                        # Save the entropy
+                        sim.res["entropy"][ii] += entropy / n_bg_sectors
+                    # STATE CONFIGURATIONS
+                    if sim.par["get_state_configs"]:
+                        model.H.psi_time[ii].get_state_configurations(
+                            1e-1, model.sector_configs
+                        )
+                # -------------------------------------------------------------------
+                # MEASURE OBSERVABLES
+                model.measure_observables(ii, dynamics=True)
+                sim.res["N_single"][ii] += (
+                    stag_avg(model.res["N_single"]) / n_bg_sectors
+                )
+                sim.res["N_pair"][ii] += (
+                    stag_avg(model.res["N_pair"], "even")
+                    + stag_avg(model.res["N_zero"], "odd")
+                ) / (2 * n_bg_sectors)
+                sim.res["N_zero"][ii] += (
+                    stag_avg(model.res["N_zero"], "even")
+                    + stag_avg(model.res["N_pair"], "odd")
+                ) / (2 * n_bg_sectors)
+                # TAKE THE SPECIAL AVERAGE TO LOOK AT THE IMBALANCE
+                delta = np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
+                sim.res["delta"][ii] += delta / n_bg_sectors
+                # OVERLAPS with the INITIAL STATE
+                # overlap = model.measure_fidelity(in_state, ii, True, True)
+                # sim.res["overlap"][ii] += overlap / n_bg_sectors
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

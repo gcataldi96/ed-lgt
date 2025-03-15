@@ -56,7 +56,7 @@ with run_sim() as sim:
     sim.res["plaq"] = np.zeros(model.n_eigs, dtype=float)
     if not model.has_obc[0]:
         sim.res["string"] = np.zeros(model.n_eigs, dtype=float)
-    for obs in local_obs[2:]:
+    for obs in local_obs:
         sim.res[obs] = np.zeros(model.n_eigs, dtype=float)
     sim.res["E_field"] = np.zeros(model.n_eigs, dtype=float)
     # -------------------------------------------------------------------------------
@@ -78,6 +78,7 @@ with run_sim() as sim:
         sim.res["plaq"][ii] = model.res["_".join(plaquette_obs[0])]
         for obs in local_obs[2:]:
             sim.res[obs][ii] = np.mean(model.res[obs])
+        sim.res["P_px"] = (np.sum(model.res["P_px"]) - 2) / (model.n_sites - 2)
         sim.res["E_field"][ii] = np.sum(model.res["P_px"]) + np.sum(model.res["P_py"])
         count = 0 if not model.has_obc[0] else model.lvals[1]
         count += 0 if not model.has_obc[1] else model.lvals[0]

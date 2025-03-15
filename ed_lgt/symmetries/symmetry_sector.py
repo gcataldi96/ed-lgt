@@ -8,7 +8,12 @@ from .link_abelian_sym import check_link_sym_sitebased
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["symmetry_sector_configs", "get_symmetry_sector_generators"]
+__all__ = [
+    "symmetry_sector_configs",
+    "get_symmetry_sector_generators",
+    "check_link_sym_partial",
+    "get_link_sector_configs",
+]
 
 
 @njit(parallel=True, cache=True)
@@ -400,6 +405,88 @@ def iterative_sitebased_sym_sector_configs1(
                 and check_string_sym_sitebased(
                     configs_next[i], string_op_diags, string_sectors
                 )
+            )
+        # Filter configurations for the current site
+        configs_prev = configs_next[checks_next]
+        num_configs_prev = configs_prev.shape[0]
+
+    return configs_prev
+
+
+@get_time
+def get_link_sector_configs(
+    loc_dims,
+    link_op_diags,
+    link_sectors,
+    pair_list,
+):
+    if not isinstance(link_sectors, np.ndarray):
+        link_sectors = np.array(link_sectors, dtype=float)
+    # Acquire Sector dimension
+    sector_dim = np.prod(loc_dims)
+    logger.info(f"TOT DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
+    sector_configs = iterative_link_sector_configs(
+        loc_dims, link_op_diags, link_sectors, pair_list
+    )
+    sector_indices = np.ravel_multi_index(sector_configs.T, loc_dims)
+    # Acquire dimension of the new sector
+    sector_dim = len(sector_configs)
+    logger.info(f"SEC DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
+    return sector_indices, sector_configs
+
+
+@njit(parallel=True, cache=True)
+def iterative_link_sector_configs(loc_dims, link_op_diags, link_sectors, pair_list):
+    """
+    Iteratively compute the configurations belonging to a symmetry sector,
+    refining the configurations one site at a time.
+
+    Args:
+        loc_dims (np.ndarray): 1D array of single-site local dimensions.
+        link_op_diags (np.ndarray): 3D array of diagonals of link symmetry operators.
+        link_sectors (np.ndarray): 1D array of link symmetry sector values.
+        pair_list (np.ndarray): List of site pairs for link symmetries.
+
+    Returns:
+        np.ndarray: Array of configurations belonging to the symmetry sector.
+    """
+    # Start with the first two sites
+    num_sites = len(loc_dims)
+    configs_prev = np.zeros((loc_dims[0] * loc_dims[1], 2), dtype=np.uint8)
+    checks_prev = np.zeros(configs_prev.shape[0], dtype=np.bool_)
+
+    # Initialize configurations for the first two sites
+    for i in prange(configs_prev.shape[0]):
+        configs_prev[i, 0] = i // loc_dims[1]  # First site index
+        configs_prev[i, 1] = i % loc_dims[1]  # Second site index
+        # Perform the checks for global and link symmetries
+        checks_prev[i] = check_link_sym_partial(
+            configs_prev[i], link_op_diags, link_sectors, pair_list
+        )
+    # Filter configurations for the first two sites
+    configs_prev = configs_prev[checks_prev]
+    num_configs_prev = configs_prev.shape[0]
+
+    # Iteratively add one site at a time
+    for site_idx in range(2, num_sites):
+        loc_dim_next = loc_dims[site_idx]
+        num_configs_next = num_configs_prev * loc_dim_next
+        # Allocate new configurations and checks
+        configs_next = np.zeros((num_configs_next, site_idx + 1), dtype=np.uint8)
+        checks_next = np.zeros(num_configs_next, dtype=np.bool_)
+
+        # Build new configurations
+        for i in prange(num_configs_next):
+            prev_config_idx = i // loc_dim_next
+            new_site_state = i % loc_dim_next
+
+            # Copy the previous configuration and add the new site's state
+            configs_next[i, :site_idx] = configs_prev[prev_config_idx]
+            configs_next[i, site_idx] = new_site_state
+
+            # Perform the checks for link symmetries
+            checks_next[i] = check_link_sym_partial(
+                configs_next[i], link_op_diags, link_sectors, pair_list
             )
         # Filter configurations for the current site
         configs_prev = configs_next[checks_next]

@@ -101,6 +101,9 @@ gen_configs("template", params, f"Z2FermiHubbard/grid")
 params = {"h": np.logspace(-3, -1, 50)}
 gen_configs("template", params, f"Z2FermiHubbard/transition_c")
 # %%
+params = {"h": np.logspace(np.log10(0.05), np.log10(5), 16)}
+gen_configs("template", params, f"Z2FermiHubbard/transition_a")
+# %%
 params = {"h": np.logspace(np.log10(40), np.log10(60), 8)}
 gen_configs("template", params, f"Z2FermiHubbard/transition_b")
 # %%
@@ -117,7 +120,7 @@ params = {"g": np.linspace(0, 15, 20)}
 gen_configs("template", params, f"newDFL/gscale_BG")
 # %%
 params = {"g": np.linspace(0, 15, 30), "m": np.linspace(0, 15, 30)}
-gen_configs("template", params, f"newDFL/phase_diagram_NOBG")
+gen_configs("template", params, f"newDFL/phase_diagram_BG")
 # %%
 # ISING MODEL
 params = {"lvals": [[6], [8], [10], [12]], "h": np.logspace(-2, 2, 20)}

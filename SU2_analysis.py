@@ -63,6 +63,75 @@ def fake_log(x, pos):
     return r"$10^{%d}$" % (x)
 
 
+def gaussian_time_integral(time, M, sigma=None):
+    """
+    Computes a locally averaged version of the observable M using a Gaussian window.
+
+    For each time point t, the function computes a weighted average of M over all times,
+    where the weights are given by a Gaussian function centered at t. This helps to
+    suppress the influence of the initial condition and improves convergence.
+
+    Parameters:
+        time (numpy.ndarray): 1D array of time points (can be non-uniform).
+        M (numpy.ndarray): 1D array of observable values corresponding to each time point.
+        sigma (float, optional): Width of the Gaussian window (in the same units as time).
+            If None, sigma defaults to one-tenth of the total time range.
+
+    Returns:
+        numpy.ndarray: Array of the locally averaged observable.
+    """
+    # Choose a default sigma if none is provided.
+    if sigma is None:
+        sigma = (time[-1] - time[0]) / 10.0
+
+    M_smoothed = np.zeros_like(M)
+
+    # For each time point, compute the Gaussian-weighted average.
+    for i, t in enumerate(time):
+        # Compute Gaussian weights centered at t.
+        weights = np.exp(-0.5 * ((time - t) / sigma) ** 2)
+        # Use numerical integration (trapezoidal rule) to perform the weighted average.
+        weighted_sum = np.trapz(weights * M, time)
+        weight_norm = np.trapz(weights, time)
+        M_smoothed[i] = weighted_sum / weight_norm
+
+    return M_smoothed
+
+
+def moving_time_integral(time, M, max_points=100):
+    """
+    Computes a running time average of an observable M over a moving window of at most `max_points`
+    time steps. In the beginning, when there are fewer than `max_points` steps, the average is taken
+    over all available time points. This way, after some time the average "forgets" the early transient.
+
+    Parameters:
+        time (numpy.ndarray): 1D array of time points (can be non-uniformly spaced).
+        M (numpy.ndarray): 1D array of observable values corresponding to each time point.
+        max_points (int): Maximum number of points in the moving window for averaging.
+
+    Returns:
+        numpy.ndarray: Array of the running averaged observable.
+    """
+    M_avg = np.zeros_like(M)
+
+    for i in range(len(time)):
+        # Determine the starting index of the moving window.
+        start = max(0, i - max_points + 1)
+        t_segment = time[start : i + 1]
+        M_segment = M[start : i + 1]
+
+        # Compute the integral over the selected time window using the trapezoidal rule.
+        # Then normalize by the width of the time window to get an average.
+        dt = t_segment[-1] - t_segment[0]
+        if dt != 0:
+            integrated_value = np.trapz(M_segment, t_segment)
+            M_avg[i] = integrated_value / dt
+        else:
+            M_avg[i] = M_segment[0]
+
+    return M_avg
+
+
 def time_integral(time, M):
     """
     Computes the running time integral/average of an observable M over a given time line.
@@ -123,6 +192,36 @@ def custom_average(arr, staggered=None, norm=None):
 local_obs = [f"T2_{s}{d}" for d in "x" for s in "mp"]
 local_obs += ["E_square"]
 local_obs += [f"N_{label}" for label in ["r", "g", "tot", "single", "pair"]]
+
+# %%
+# ===================================================================
+# DFL PHASE DIAGRAM
+# ===================================================================
+res = {}
+color = ["red", "blue", "green", "orange"]
+config_filename = f"lbo"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+res["llambdas"] = np.zeros((len(vals["g"]), 58), dtype=float)
+for ii, g in enumerate(vals["g"]):
+    res["llambdas"][ii, :] = get_sim(ugrid[ii]).res["lambdas"][0, :][::-1]
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+ax.grid()
+for ii, g in enumerate(vals["g"]):
+    ax.plot(
+        np.arange(58),
+        res["llambdas"][ii, :],
+        "o-",
+        label=f"g={g}",
+        c=color[ii],
+        markersize=4,
+        markeredgecolor=color[ii],
+        markerfacecolor="white",
+        markeredgewidth=0.5,
+    )
+ax.set(xlabel="lambda index", ylabel="lambda", yscale="log")
+ax.set(ylim=[1e-11, 1])
+ax.legend()
 
 
 # %%
@@ -636,8 +735,131 @@ for ii, g in enumerate(vals["g"]):
             res["Hspace_size"][ii, sec]
         )
 # %%
+res = {}
+config_filename = f"newDFL/phase_diagram_BG"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g", "m"])
+for obs in ["N_tot", "N_single", "N_pair"]:
+    res[f"ME_{obs}"] = np.zeros((len(vals["g"]), len(vals["m"])), dtype=float)
+    res[f"DE_{obs}"] = np.zeros((len(vals["g"]), len(vals["m"])), dtype=float)
+    res[f"diff_{obs}"] = np.zeros((len(vals["g"]), len(vals["m"])), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        for jj, m in enumerate(vals["m"]):
+            res[f"DE_{obs}"][ii, jj] = get_sim(ugrid[ii, jj]).res[f"DE_{obs}"]
+            res[f"ME_{obs}"][ii, jj] = get_sim(ugrid[ii, jj]).res[f"ME_{obs}"]
+            res[f"diff_{obs}"][ii, jj] = np.abs(
+                res[f"ME_{obs}"][ii, jj] - res[f"DE_{obs}"][ii, jj]
+            )
+save_dictionary(res, "phase_dictionary_BG.pkl")
+# %%
+# %%
+# ==========================================================================
+# 1D DFL TIME INTEGRAL
+# ==========================================================================
+res = {}
+config_filename = f"newDFL/dynamics_BG"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+tline = get_sim(ugrid[0]).res["time_steps"]
+res["delta"] = np.zeros((2, len(vals["g"]), len(tline)), dtype=float)
+res["tline"] = tline
+for ii, g in enumerate(vals["g"]):
+    res["delta"][0, ii, :] = get_sim(ugrid[ii]).res["delta"]
+for obs in ["N_tot", "N_single", "N_pair"]:
+    res[obs] = np.zeros((2, len(vals["g"]), len(tline)), dtype=float)
+    for en in ["DE", "ME"]:
+        res[f"{en}_{obs}"] = np.zeros((2, len(vals["g"])), dtype=float)
+
+for ii, g in enumerate(vals["g"]):
+    for obs in ["N_tot", "N_single", "N_pair"]:
+        res[obs][0, ii, :] = get_sim(ugrid[ii]).res[obs]
+        for en in ["DE", "ME"]:
+            res[f"{en}_{obs}"][0, ii] = get_sim(ugrid[ii]).res[f"{en}_{obs}"]
+config_filename = f"newDFL/dynamics_NOBG"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+for ii, g in enumerate(vals["g"]):
+    res["delta"][1, ii, :] = get_sim(ugrid[ii]).res["delta"]
+    for obs in ["N_tot", "N_single", "N_pair"]:
+        res[obs][1, ii, :] = get_sim(ugrid[ii]).res[obs]
+        for en in ["DE", "ME"]:
+            res[f"{en}_{obs}"][1, ii] = get_sim(ugrid[ii]).res[f"{en}_{obs}"]
+save_dictionary(res, "dynamics_DFL.pkl")
+# %%
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+ax.plot(
+    tline,
+    moving_time_integral(res["tline"], res["delta"][0, 1, :], 80),
+    "--",
+)
+ax.plot(
+    tline,
+    moving_time_integral(res["tline"], res["delta"][1, 1, :], 80),
+    "--",
+)
+ax.axhline(y=res["ME_N_tot"][0, 1], linestyle="-")
+ax.axhline(y=res["ME_N_tot"][1, 1], linestyle="-.")
+ax.axhline(y=res["DE_N_tot"][0, 1], linestyle="-")
+ax.axhline(y=res["DE_N_tot"][1, 1], linestyle="-.")
+# %%
 res1 = {}
-config_filename = f"newDFL/gscale_NOBG"
+config_filename = f"DFL/DW2sitesBGmicro"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = ["delta"]  # , "entropy", "overlap"]
+# Get the time line
+tline1 = get_tline(get_sim(ugrid[0]).par["dynamics"])
+res1["micro"] = get_sim(ugrid[0]).res["microcan_avg"]
+for obs in obs_list:
+    res1[obs] = np.zeros((6, len(tline1)), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        res1[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+
+obs = "delta"
+for ii, g in enumerate(vals["g"]):
+    m = get_sim(ugrid[ii]).par["m"]
+    fig, ax = plt.subplots(1, 1, constrained_layout=True)
+    ax.plot(
+        tline,
+        time_integral(tline, res[obs][ii, :]),
+        "--",
+        label=f"t_DW m={m},g={g}",
+    )
+    ax.plot(
+        tline,
+        res[obs][ii, :],
+        "--",
+        label=f"DW m={m},g={g}",
+    )
+    ax.axhline(y=res["micro"], linestyle="-")
+    ax.axhline(y=res1["micro"], linestyle="-.")
+    ax.plot(tline1, time_integral(tline1, res1[obs][ii, :]), "-", label="t_DW-BG")
+    ax.plot(tline1, res1[obs][ii, :], "-", label="DW-BG")
+    ax.set(xlabel=r"$t$", ylabel=f"time integral({obs})")
+    ax.grid()
+    plt.legend()
+
+# %%
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+X = np.transpose(res[f"DE_{obs}"])[:22, :22]
+# X = np.transpose(res[f"diff_{obs}"])[:22,:22]
+img = plt.imshow(X, cmap="magma", origin="lower", extent=[0, 10, 0, 10])
+
+ax.set(ylabel=r"m", xlabel=r"g^{2}")
+
+cb = fig.colorbar(
+    img,
+    ax=ax,
+    aspect=20,
+    location="right",
+    orientation="vertical",
+    pad=0.01,
+    label=r"$\Delta$",
+)
+plt.savefig(f"phase_diagram_BG_delta.pdf")
+# %%
+res1 = {}
+config_filename = f"newDFL/gscale_BG_obs"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g"])
 obs_list = ["N_single", "N_pair", "N_zero"]
@@ -651,9 +873,10 @@ for obs in obs_list:
         res1[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
         res1[f"ME_{obs}"][ii] = get_sim(ugrid[ii]).res[f"ME_{obs}"]
         res1[f"DE_{obs}"][ii] = get_sim(ugrid[ii]).res[f"DE_{obs}"]
-for ii, g in enumerate(vals["g"]):
-    res1["entropy"][ii, :] = get_sim(ugrid[ii]).res["entropy"]
-# %%
+save_dictionary(res1, "gscale_BG.pkl")
+# for ii, g in enumerate(vals["g"]):
+#    res1["entropy"][ii, :] = get_sim(ugrid[ii]).res["entropy"]
+
 obs_names = [
     r"$\hat{\rho}_{\rm{1}}$",
     r"$\hat{\rho}_{\rm{2}}$",
@@ -661,10 +884,10 @@ obs_names = [
 ]
 sizes = [5, 8, 5]
 styles = ["--", "-", ":"]
-colors = ["darkgreen", "darkblue", "darkred"]
+colors = ["darkgreen", "purple", "darkred"]
 m = get_sim(ugrid[ii]).par["m"]
 fig, ax = plt.subplots(1, 1, constrained_layout=True, sharex=True, sharey=True)
-for ii, obs in enumerate(["N_single", "N_pair", "N_zero"]):
+for ii, obs in enumerate(["N_single", "N_pair"]):
     ax.plot(
         vals["g"],
         res1[f"ME_{obs}"],
@@ -685,8 +908,25 @@ for ii, obs in enumerate(["N_single", "N_pair", "N_zero"]):
         label=f"{obs_names[ii]} DE",
     )
     ax.set(xlabel=r"$g$", ylabel=r"Pariticle Densities $\hat{\rho}(m=1)$")
-    ax.legend(loc="upper left", bbox_to_anchor=(0.05, 0.45))
-plt.savefig(f"gscale_NOBG.pdf")
+    ax.legend(loc="upper left", bbox_to_anchor=(0.02, 0.75))
+plt.savefig(f"gscale_BG.pdf")
+# %%
+res1 = {}
+config_filename = f"newDFL/gscale_NOBG"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+obs_list = ["N_single", "N_pair", "N_zero"]
+time_line1 = get_sim(ugrid[0]).res["time_steps"]
+for obs in obs_list:
+    res1[obs] = np.zeros((len(vals["g"]), len(time_line1)), dtype=float)
+    res1[f"ME_{obs}"] = np.zeros(len(vals["g"]), dtype=float)
+    res1[f"DE_{obs}"] = np.zeros(len(vals["g"]), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        res1[obs][ii, :] = get_sim(ugrid[ii]).res[obs]
+        res1[f"ME_{obs}"][ii] = get_sim(ugrid[ii]).res[f"ME_{obs}"]
+        res1[f"DE_{obs}"][ii] = get_sim(ugrid[ii]).res[f"DE_{obs}"]
+save_dictionary(res1, "gscale_NOBG.pkl")
+# %%
 sm = cm.ScalarMappable(cmap="copper")
 palette = sm.to_rgba(vals["g"])
 fig, ax = plt.subplots(1, 1, constrained_layout=True, sharex=True, sharey=True)
@@ -758,7 +998,7 @@ ax.legend(loc="upper left", bbox_to_anchor=(0.01, 0.8))
 plt.savefig(f"imbalance.pdf")
 # %%
 res = {}
-config_filename = f"DFL/mscale"
+config_filename = f"newDFL/mscale"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["m"])
 obs_list = ["delta", "N_single", "N_pair", "N_zero", "Deff", "Hspace_size"]

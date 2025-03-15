@@ -17,7 +17,7 @@ from ed_lgt.modeling import (
 from ed_lgt.symmetries import (
     get_symmetry_sector_generators,
     get_operators_nbody_term as nbops,
-    link_abelian_sector,
+    get_link_sector_configs,
     global_abelian_sector,
     momentum_basis_k0_par,
     momentum_basis_k0,
@@ -139,10 +139,10 @@ class QuantumModel:
                 sym_type=global_sym_type,
             )
         elif link_ops is not None:
-            self.sector_indices, self.sector_configs = link_abelian_sector(
+            self.sector_indices, self.sector_configs = get_link_sector_configs(
                 loc_dims=self.loc_dims,
-                sym_op_diags=link_ops,
-                sym_sectors=link_sectors,
+                link_op_diags=link_ops,
+                link_sectors=link_sectors,
                 pair_list=pair_list,
             )
 

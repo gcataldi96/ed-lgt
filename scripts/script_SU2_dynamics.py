@@ -17,7 +17,10 @@ with run_sim() as sim:
     # MODEL HAMILTONIAN
     model = SU2_Model(**sim.par["model"])
     m = sim.par["m"] if not model.pure_theory else None
-    model.build_Hamiltonian1(sim.par["g"], m)
+    if model.spin > 1 / 2:
+        model.build_Hamiltonian(sim.par["g"], m)
+    else:
+        model.build_Hamiltonian1(sim.par["g"], m)
     # -------------------------------------------------------------------------------
     # DYNAMICS PARAMETERS
     name = sim.par["dynamics"]["state"]
@@ -112,64 +115,52 @@ with run_sim() as sim:
             staggered_avg=stag_avgs,
             special_norms=norms,
         )
-    """
-    # ---------------------------------------------------------------------------
-    # OVERLAPS and entropy of the eigenstates with the INITIAL STATE
-    sim.res["eig_overlap"] = np.zeros(model.H.shape[0], dtype=float)
-    sim.res["eig_entropy"] = np.zeros(model.H.shape[0], dtype=float)
-    for ii in range(model.H.shape[0]):
-        sim.res["eig_overlap"][ii] = model.measure_fidelity(in_state, ii)
-        sim.res["eig_entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
-            partition_indices, sector_configs=model.sector_configs
-        )
-    """
     # -------------------------------------------------------------------------------
     # TIME EVOLUTION
-    model.time_evolution_Hamiltonian(in_state, time_line)
-    if hasattr(model.H, "Deff"):
-        sim.res["Deff"] = model.H.Deff
-        sim.res["Hspace_size"] = model.H.shape[0]
-        logger.info(f"D {-np.log(model.H.Deff)/np.log(model.H.shape[0])}")
-    # -------------------------------------------------------------------------------
-    for ii, tstep in enumerate(time_line):
-        msg = f"TIME {round(tstep, 2)}"
-        logger.info(f"================== {msg} ==========================")
-        if not model.momentum_basis:
+    if sim.par["dynamics"]["time_evolution"]:
+        model.time_evolution_Hamiltonian(in_state, time_line)
+        # -------------------------------------------------------------------------------
+        for ii, tstep in enumerate(time_line):
+            msg = f"TIME {round(tstep, 2)}"
+            logger.info(f"================== {msg} ==========================")
+            if not model.momentum_basis:
+                # -----------------------------------------------------------------------
+                # ENTROPY
+                if sim.par["get_entropy"]:
+                    sim.res["entropy"][ii] = model.H.psi_time[ii].entanglement_entropy(
+                        partition_indices, sector_configs=model.sector_configs
+                    )
+                # -----------------------------------------------------------------------
+                # STATE CONFIGURATIONS
+                if sim.par["get_state_configs"]:
+                    model.H.psi_time[ii].get_state_configurations(
+                        1e-1, model.sector_configs
+                    )
             # -----------------------------------------------------------------------
-            # ENTROPY
-            if sim.par["get_entropy"]:
-                sim.res["entropy"][ii] = model.H.psi_time[ii].entanglement_entropy(
-                    partition_indices, sector_configs=model.sector_configs
-                )
-            # -----------------------------------------------------------------------
-            # STATE CONFIGURATIONS
-            if sim.par["get_state_configs"]:
-                model.H.psi_time[ii].get_state_configurations(
-                    1e-1, model.sector_configs
-                )
-        # -----------------------------------------------------------------------
-        # MEASURE OBSERVABLES
-        model.measure_observables(ii, dynamics=True)
-        sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
-        sim.res["N_pair"][ii] = (
-            stag_avg(model.res["N_pair"], "even") + stag_avg(model.res["N_zero"], "odd")
-        ) / 2
-        sim.res["N_zero"][ii] = (
-            stag_avg(model.res["N_zero"], "even") + stag_avg(model.res["N_pair"], "odd")
-        ) / 2
-        sim.res["delta"][ii] = (
-            np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
-        )
-        logger.info(f"delta {sim.res['delta'][ii]}")
-        logger.info(f"N_single {sim.res['N_single'][ii]}")
-        logger.info(f"N_pair {sim.res['N_pair'][ii]}")
-        logger.info(f"N_zero {sim.res['N_zero'][ii]}")
-        logger.info(
-            f"TOT {sim.res['N_single'][ii]+ sim.res['N_zero'][ii]+sim.res['N_pair'][ii]}"
-        )
-        # ---------------------------------------------------------------------------
-        # OVERLAPS with the INITIAL STATE
-        # sim.res["overlap"][ii] = model.measure_fidelity(in_state, ii, True, True)
-    # -------------------------------------------------------------------------------
+            # MEASURE OBSERVABLES
+            model.measure_observables(ii, dynamics=True)
+            sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
+            sim.res["N_pair"][ii] = (
+                stag_avg(model.res["N_pair"], "even")
+                + stag_avg(model.res["N_zero"], "odd")
+            ) / 2
+            sim.res["N_zero"][ii] = (
+                stag_avg(model.res["N_zero"], "even")
+                + stag_avg(model.res["N_pair"], "odd")
+            ) / 2
+            sim.res["delta"][ii] = (
+                np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
+            )
+            logger.info(f"delta {sim.res['delta'][ii]}")
+            logger.info(f"N_single {sim.res['N_single'][ii]}")
+            logger.info(f"N_pair {sim.res['N_pair'][ii]}")
+            logger.info(f"N_zero {sim.res['N_zero'][ii]}")
+            logger.info(
+                f"TOT {sim.res['N_single'][ii]+ sim.res['N_zero'][ii]+sim.res['N_pair'][ii]}"
+            )
+            # ---------------------------------------------------------------------------
+            # OVERLAPS with the INITIAL STATE
+            # sim.res["overlap"][ii] = model.measure_fidelity(in_state, ii, True, True)
+        # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

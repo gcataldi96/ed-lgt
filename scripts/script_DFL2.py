@@ -30,8 +30,6 @@ with run_sim() as sim:
         sim.res[measure] = np.zeros(n_steps, dtype=float)
     # Store the observables
     partition_indices = get_entropy_partition(model.lvals)
-    for measure in ["entropy", "delta", "overlap"][:1]:
-        sim.res[measure] = np.zeros(n_steps, dtype=float)
     # ==============================================================================
     # GLOBAL SYMMETRIES
     global_ops = [model.ops["N_tot"]]
@@ -102,33 +100,48 @@ with run_sim() as sim:
     else:
         raise ValueError("initial state expected to be background")
     # TIME EVOLUTION
-    model.time_evolution_Hamiltonian(in_state, time_line)
-    # -----------------------------------------------------------------------
-    for ii, tstep in enumerate(time_line):
-        msg_tstep = f"TIME {round(tstep, 2)}"
-        msg = f"==================== {msg_tstep} ===================="
-        logger.info(msg)
-        if not model.momentum_basis:
-            # ---------------------------------------------------------------
-            # ENTROPY
-            if sim.par["get_entropy"]:
-                sim.res["entropy"][ii] = model.H.psi_time[ii].entanglement_entropy(
-                    partition_indices,
-                    model.sector_configs,
-                )
-            # STATE CONFIGURATIONS
-            if sim.par["get_state_configs"]:
-                model.H.psi_time[ii].get_state_configurations(
-                    1e-1, model.sector_configs
-                )
-        # -------------------------------------------------------------------
-        # MEASURE OBSERVABLES
-        # model.measure_observables(ii, dynamics=True)
-        # TAKE THE SPECIAL AVERAGE TO LOOK AT THE IMBALANCE
-        # delta = np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
-        # sim.res["delta"][ii] = delta
-        # OVERLAPS with the INITIAL STATE
-        # sim.res["overlap"][ii] = model.measure_fidelity(in_state, ii, True, True)
-    # -------------------------------------------------------------------------------
+    starts = [0, 0.1, 1, 10]
+    stops = [0.08, 0.8, 8, 90]
+    deltas = [0.01, 0.1, 1, 10]
+    time_line_list = []
+    entropy_list = []
+    n_steps = []
+    for tt in range(4):
+        time_line = np.arange(starts[tt], stops[tt] + deltas[tt], deltas[tt])
+        n_steps = len(time_line)
+        entropy = np.zeros(n_steps, float)
+        # perform the time evolution
+        model.time_evolution_Hamiltonian(in_state, time_line)
+        # -----------------------------------------------------------------------
+        for ii, tstep in enumerate(time_line):
+            msg_tstep = f"TIME {round(tstep, 2)}"
+            msg = f"==================== {msg_tstep} ===================="
+            logger.info(msg)
+            if not model.momentum_basis:
+                # ---------------------------------------------------------------
+                # ENTROPY
+                if sim.par["get_entropy"]:
+                    entropy[ii] = model.H.psi_time[ii].entanglement_entropy(
+                        partition_indices,
+                        model.sector_configs,
+                    )
+                # STATE CONFIGURATIONS
+                if sim.par["get_state_configs"]:
+                    model.H.psi_time[ii].get_state_configurations(
+                        1e-1, model.sector_configs
+                    )
+            # -------------------------------------------------------------------
+            # MEASURE OBSERVABLES
+            # model.measure_observables(ii, dynamics=True)
+            # TAKE THE SPECIAL AVERAGE TO LOOK AT THE IMBALANCE
+            # delta = np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
+            # sim.res["delta"][ii] = delta
+            # OVERLAPS with the INITIAL STATE
+            # sim.res["overlap"][ii] = model.measure_fidelity(in_state, ii, True, True)
+        # -------------------------------------------------------------------------------
+        time_line_list.append(time_line)
+        entropy_list.append(entropy)
+    sim.res["time_steps"] = np.concatenate(time_line_list)
+    sim.res["entropy"] = np.concatenate(entropy_list)
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")
