@@ -196,7 +196,7 @@ def exclude_columns(data_matrix, exclude_indices):
 
 
 @njit
-def filter_compatible_rows(matrix, row):
+def filter_compatible_rows(matrix: np.ndarray, row):
     # Find indices corresponding to matrix of ints rows equal to row
     check = np.zeros(matrix.shape[0], dtype=np.bool_)
     matching_indices = np.arange(matrix.shape[0], dtype=np.uint16)

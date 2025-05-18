@@ -42,7 +42,7 @@ class LocalTerm(QMBTerm):
         self.n_sites = prod(self.lvals)
 
     @get_time
-    def get_Hamiltonian_old(self, strength, mask=None):
+    def get_Hamiltonian(self, strength, mask=None):
         """
         The function calculates the Local Hamiltonian by summing up local terms
         for each lattice site, potentially with some sites excluded based on the mask.
@@ -102,7 +102,7 @@ class LocalTerm(QMBTerm):
             return row_list, col_list, value_list
 
     @get_time
-    def get_Hamiltonian(self, strength, mask=None):
+    def get_Hamiltonian_v2(self, strength, mask=None):
         """
         Calculate the Local Hamiltonian using local terms for each lattice site,
         applying the operator only at those sites that satisfy the mask condition.

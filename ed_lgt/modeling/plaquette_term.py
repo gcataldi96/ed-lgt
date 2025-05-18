@@ -1,6 +1,6 @@
 """
-:class:`PlaquetteTerm` computes plaquette terms on a D>=2 lattice model, 
-providing methods for their calculation and visualization. 
+:class:`PlaquetteTerm` computes plaquette terms on a D>=2 lattice model,
+providing methods for their calculation and visualization.
 Plaquette terms are used to compute properties relevant to lattice gauge theories.
 """
 
@@ -46,6 +46,7 @@ class PlaquetteTerm(QMBTerm):
         self.print_plaq = print_plaq
         # Number of lattice sites
         self.n_sites = prod(self.lvals)
+        logger.info(f"PlaqTerm: {op_names_list}")
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
         """
@@ -66,64 +67,63 @@ class PlaquetteTerm(QMBTerm):
         Returns:
             scipy.sparse: Plaquette Hamiltonian term ready to be used for exact diagonalization/expectation values.
         """
-        # CHECK ON TYPES
         if not np.isscalar(strength):
-            raise TypeError(f"strength must be SCALAR not a {type(strength)}")
+            raise TypeError(f"strength must be scalar, not {type(strength)}")
         validate_parameters(add_dagger=add_dagger)
-        # PLAQUETTE HAMILTONIAN
+        # --------------------------------------------------------------------
+        # 1) No sector_configs ⇒ build one big sparse matrix
         if self.sector_configs is None:
-            H_plaq = 0
+            H = 0
             for ii in range(self.n_sites):
-                # Compute the corresponding coords of the BL site of the Plaquette
                 coords = zig_zag(self.lvals, ii)
-                _, sites_list = get_plaquette_neighbors(
+                _, sites = get_plaquette_neighbors(
                     coords, self.lvals, self.axes, self.has_obc
                 )
-                if sites_list is None:
+                if sites is None or not self.get_mask_conditions(coords, mask):
                     continue
-                # CHECK MASK CONDITION ON THE SITE
-                if self.get_mask_conditions(coords, mask):
-                    # ADD THE TERM TO THE HAMILTONIAN
-                    H_plaq += strength * four_body_op(
-                        op_list=self.op_list,
-                        op_sites_list=sites_list,
-                        **self.def_params,
-                    )
-            if not isspmatrix(H_plaq):
-                H_plaq = csr_matrix(H_plaq)
-            if add_dagger:
-                H_plaq += csr_matrix(H_plaq.conj().transpose())
-            return H_plaq
-        else:
-            # Initialize lists for nonzero entries
-            all_row_list = []
-            all_col_list = []
-            all_value_list = []
-            for ii in range(self.n_sites):
-                # Compute the corresponding coords of the BL site of the Plaquette
-                coords = zig_zag(self.lvals, ii)
-                _, sites_list = get_plaquette_neighbors(
-                    coords, self.lvals, self.axes, self.has_obc
+                H += strength * four_body_op(
+                    op_list=self.op_list, op_sites_list=sites, **self.def_params
                 )
-                if sites_list is None:
-                    continue
-                # CHECK MASK CONDITION ON THE SITE
-                if self.get_mask_conditions(coords, mask):
-                    # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
-                    row_list, col_list, value_list = nbody_term(
-                        self.sym_ops, np.array(sites_list), self.sector_configs
-                    )
-                    all_row_list.append(row_list)
-                    all_col_list.append(col_list)
-                    all_value_list.append(value_list)
-            # Concatenate global lists
-            row_list = np.concatenate(all_row_list)
-            col_list = np.concatenate(all_col_list)
-            value_list = np.concatenate(all_value_list) * strength
+            if not isspmatrix(H):
+                H = csr_matrix(H)
             if add_dagger:
-                return np.concatenate(row_list, col_list), np.concatenate(col_list, row_list), np.concatenate(value_list, value_list.conj())
-            else:
-                return row_list, col_list, value_list
+                H = H + csr_matrix(H.conj().T)
+            return H
+
+        # --------------------------------------------------------------------
+        # 2) With sector_configs ⇒ collect (r,c,v) arrays
+        all_r = []
+        all_c = []
+        all_v = []
+
+        for ii in range(self.n_sites):
+            coords = zig_zag(self.lvals, ii)
+            _, sites = get_plaquette_neighbors(
+                coords, self.lvals, self.axes, self.has_obc
+            )
+            if sites is None or not self.get_mask_conditions(coords, mask):
+                continue
+            # this gives three 1D arrays for this plaquette
+            r, c, v = nbody_term(
+                self.sym_ops, np.array(sites, dtype=np.int32), self.sector_configs
+            )
+            all_r.append(r)
+            all_c.append(c)
+            all_v.append(v)
+
+        # merge them
+        row = np.concatenate(all_r)
+        col = np.concatenate(all_c)
+        val = np.concatenate(all_v) * strength
+
+        if add_dagger:
+            # append the Hermitian conjugate block
+            row = np.concatenate([row, col])
+            # careful: we want original row before concat
+            col = np.concatenate([col, row[: len(row) // 2]])
+            val = np.concatenate([val, np.conjugate(val)])
+
+        return row, col, val
 
     def get_expval(self, psi, get_imag=False, stag_label=None):
         """
@@ -194,7 +194,9 @@ class PlaquetteTerm(QMBTerm):
         # GET THE EXPVAL ON THE SYMMETRY SECTOR
         else:
             for ii, sites_list in enumerate(list_of_plaq_sites):
-                rows, cols, vals =nbody_term(self.sym_ops, np.array(sites_list), self.sector_configs)
+                rows, cols, vals = nbody_term(
+                    self.sym_ops, np.array(sites_list), self.sector_configs
+                )
                 self.obs[ii] = exp_val_data(psi.psi, rows, cols, vals)
                 """
                 self.var[ii] = (

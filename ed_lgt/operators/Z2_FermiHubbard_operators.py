@@ -194,14 +194,14 @@ def Z2_FermiHubbard_dressed_site_operators(lattice_dim=2):
         ops["X_Cross"] = qmb_op(in_ops, ["ID_psi", "P", "P", "P", "P"])
         # ----------------------------------------------------------------------------
         # Corner Operators
-        ops["C_px,py"] = qmb_op(in_ops, ["ID_psi", "IDz", "IDz", "Zp_P", "Zp"])
-        ops["C_py,mx"] = qmb_op(in_ops, ["ID_psi", "P_Zm_dag", "P", "P", "Zp"])
-        ops["C_mx,my"] = qmb_op(in_ops, ["ID_psi", "Zm_P", "Zm", "IDz", "IDz"])
-        ops["C_my,px"] = qmb_op(in_ops, ["ID_psi", "IDz", "Zm_P", "Zp_dag", "IDz"])
+        ops["C_pxpy"] = qmb_op(in_ops, ["ID_psi", "IDz", "IDz", "Zp_P", "Zp"])
+        ops["C_pymx"] = qmb_op(in_ops, ["ID_psi", "P_Zm_dag", "P", "P", "Zp"])
+        ops["C_mxmy"] = qmb_op(in_ops, ["ID_psi", "Zm_P", "Zm", "IDz", "IDz"])
+        ops["C_mypx"] = qmb_op(in_ops, ["ID_psi", "IDz", "Zm_P", "Zp_dag", "IDz"])
         # ----------------------------------------------------------------------------
         # Topological Operator along axis
-        ops["Sz_my,py"] = qmb_op(in_ops, ["ID_psi", "IDz", "Zm_dag_P", "P", "Zp"])
-        ops["Sz_mx,px"] = qmb_op(in_ops, ["ID_psi", "Zm_dag_P", "P", "Zp", "IDz"])
-        ops["Sx_py,my"] = qmb_op(in_ops, ["ID_psi", "IDz", "P", "IDz", "P"])
-        ops["Sx_px,mx"] = qmb_op(in_ops, ["ID_psi", "P", "IDz", "P", "IDz"])
+        ops["Sz_mypy"] = qmb_op(in_ops, ["ID_psi", "IDz", "Zm_dag_P", "P", "Zp"])
+        ops["Sz_mxpx"] = qmb_op(in_ops, ["ID_psi", "Zm_dag_P", "P", "Zp", "IDz"])
+        ops["Sx_pymy"] = qmb_op(in_ops, ["ID_psi", "IDz", "P", "IDz", "P"])
+        ops["Sx_pxmx"] = qmb_op(in_ops, ["ID_psi", "P", "IDz", "P", "IDz"])
     return ops

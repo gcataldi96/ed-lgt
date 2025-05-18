@@ -181,3 +181,106 @@ def momentum_basis(sector_configs, k=0):
     check_normalization(basis)
     check_orthogonality(basis)
     return basis
+
+
+@njit(cache=True, parallel=True)
+def momentum_basis_par(sector_configs: np.ndarray, logical_unit_size: int, k: int):
+    """
+    Compute the momentum basis for a general momentum value k
+    using translational symmetry with a given logical unit size.
+    This version is parallelized with Numba.
+
+    Args:
+        sector_configs (np.ndarray): Array of configurations (shape = [hilbert_dim, N]).
+        logical_unit_size (int): The number of sites (logical unit) over which the translational symmetry applies.
+        k (int): Momentum index. k=0 produces a real basis, while k != 0 yields a complex basis.
+
+    Returns:
+        basis (np.ndarray): Momentum basis matrix.
+            -- For k==0, the dtype is np.float64.
+            -- For k!=0, the dtype is np.complex128.
+    """
+    sector_dim = sector_configs.shape[0]
+    # Determine how many translations there are (number of logical units in the chain)
+    num_translations = sector_configs.shape[1] // logical_unit_size
+    # Store the number of unique translations per config
+    normalization = np.zeros(sector_dim, dtype=np.int32)
+    # Mark which configs are independent
+    independent_indices = np.zeros(sector_dim, dtype=np.bool_)
+    # Store translation indices for each config
+    all_trans_indices = np.zeros((sector_dim, num_translations), dtype=np.int32)
+
+    # Step 1: Precompute all translation indices in parallel.
+    # For each configuration, obtain its set of translation indices.
+    for ii in prange(sector_dim):
+        # Here we call the helper that uses np.roll to compute the translated configuration
+        all_trans_indices[ii] = get_translated_state_indices(
+            sector_configs[ii], sector_configs, logical_unit_size
+        )
+
+    # Step 2: Sequentially mark independent configurations.
+    # A configuration is independent if none of the previously marked independent configs
+    # appears in its set of translation indices.
+    for ii in range(sector_dim):
+        trans_indices = all_trans_indices[ii]
+        is_independent = True
+        for jj in range(ii):
+            if independent_indices[jj]:
+                # Check (manually) if jj is among the translation indices for config ii.
+                for tt in range(num_translations):
+                    if trans_indices[tt] == jj:
+                        is_independent = False
+                        break
+                if not is_independent:
+                    break
+        if is_independent:
+            independent_indices[ii] = True
+            # Compute the number of unique translations.
+            count = 0
+            for j in range(num_translations):
+                unique = True
+                for prev in range(j):
+                    if trans_indices[j] == trans_indices[prev]:
+                        unique = False
+                        break
+                if unique:
+                    count += 1
+            normalization[ii] = count
+
+    # Step 3: Build the list of independent (reference) indices.
+    # (Since Numba’s support for np.flatnonzero is limited, we build it manually.)
+    num_refs = 0
+    for i in range(sector_dim):
+        if independent_indices[i]:
+            num_refs += 1
+    ref_indices = np.empty(num_refs, dtype=np.int32)
+    ptr = 0
+    for i in range(sector_dim):
+        if independent_indices[i]:
+            ref_indices[ptr] = i
+            ptr += 1
+
+    # Determine the dtype of the basis based on k.
+    if k == 0:
+        basis = np.zeros((sector_dim, num_refs), dtype=np.float64)
+    else:
+        basis = np.zeros((sector_dim, num_refs), dtype=np.complex128)
+
+    # Step 4: Construct the momentum basis for each independent state in parallel.
+    # For each reference configuration, its "orbit" under translation (with R = normalization[ref])
+    # gives the corresponding momentum state. For k != 0 add a phase factor for each translated copy.
+    for ref_ptr in prange(num_refs):
+        ref = ref_indices[ref_ptr]
+        R = normalization[ref]  # number of unique translations for this state
+        norm_val = np.sqrt(R)
+        # It is assumed that in get_translated_state_indices the first R elements
+        # correspond to the unique translated configurations.
+        for j in range(R):
+            idx = all_trans_indices[ref, j]
+            if k == 0:
+                basis[idx, ref_ptr] = 1.0 / norm_val
+            else:
+                phase = np.exp(-1j * 2 * np.pi * k * j / R) / norm_val
+                basis[idx, ref_ptr] = phase
+
+    return basis

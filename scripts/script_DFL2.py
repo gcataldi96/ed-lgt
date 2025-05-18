@@ -1,5 +1,4 @@
 import numpy as np
-from numba import set_num_threads
 from ed_lgt.models import DFL_Model
 from ed_lgt.modeling import get_lattice_link_site_pairs, get_entropy_partition
 from ed_lgt.symmetries import get_symmetry_sector_generators, symmetry_sector_configs
@@ -25,11 +24,9 @@ with run_sim() as sim:
     m = sim.par["m"] if not model.pure_theory else None
     # ===============================================================================
     # OBSERVABLES
-    local_obs = []  # [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
+    local_obs = ["N_single", "N_tot"]
     for measure in local_obs:
         sim.res[measure] = np.zeros(n_steps, dtype=float)
-    # Store the observables
-    partition_indices = get_entropy_partition(model.lvals)
     # ==============================================================================
     # GLOBAL SYMMETRIES
     global_ops = [model.ops["N_tot"]]
@@ -73,6 +70,10 @@ with run_sim() as sim:
     model.default_params()
     model.get_observables(local_obs)
     model.build_Hamiltonian(sim.par["g"], m)
+    # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
+    partition_indices = get_entropy_partition(model.lvals)
+    # Build the list of environment and subsystem sites configurations
+    model.get_subsystem_environment_configs(keep_indices=partition_indices)
     # ==============================================================================
     # ENUMERATE ALL THE BACKGROUND SYMMETRY SECTORS
     logical_stag_basis = sim.par["dynamics"]["logical_stag_basis"]
@@ -100,13 +101,12 @@ with run_sim() as sim:
     else:
         raise ValueError("initial state expected to be background")
     # TIME EVOLUTION
-    starts = [0, 0.1, 1, 10]
-    stops = [0.08, 0.8, 8, 90]
+    starts = [0, 0, 1, 10]
+    stops = [0.1, 100, 8, 90]
     deltas = [0.01, 0.1, 1, 10]
     time_line_list = []
     entropy_list = []
-    n_steps = []
-    for tt in range(4):
+    for tt in range(2):
         time_line = np.arange(starts[tt], stops[tt] + deltas[tt], deltas[tt])
         n_steps = len(time_line)
         entropy = np.zeros(n_steps, float)
@@ -123,7 +123,10 @@ with run_sim() as sim:
                 if sim.par["get_entropy"]:
                     entropy[ii] = model.H.psi_time[ii].entanglement_entropy(
                         partition_indices,
-                        model.sector_configs,
+                        model.subsystem_configs,
+                        model.env_configs,
+                        model.unique_subsys_configs,
+                        model.unique_env_configs,
                     )
                 # STATE CONFIGURATIONS
                 if sim.par["get_state_configs"]:
@@ -133,9 +136,11 @@ with run_sim() as sim:
             # -------------------------------------------------------------------
             # MEASURE OBSERVABLES
             # model.measure_observables(ii, dynamics=True)
+            # sim.res["N_single"][ii] = np.mean(model.res["N_single"])
             # TAKE THE SPECIAL AVERAGE TO LOOK AT THE IMBALANCE
             # delta = np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
             # sim.res["delta"][ii] = delta
+            # logger.info(f"delta {round(delta, 4)}")
             # OVERLAPS with the INITIAL STATE
             # sim.res["overlap"][ii] = model.measure_fidelity(in_state, ii, True, True)
         # -------------------------------------------------------------------------------

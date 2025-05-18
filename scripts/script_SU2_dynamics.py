@@ -1,6 +1,4 @@
 import numpy as np
-import os
-from numba import set_num_threads
 from ed_lgt.tools import stag_avg
 from ed_lgt.modeling import get_entropy_partition
 from ed_lgt.models import SU2_Model
@@ -10,17 +8,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 with run_sim() as sim:
-    # Set the number of threads per simulation
-    set_num_threads(int(os.environ.get("NUMBA_NUM_THREADS", sim.par["n_threads"])))
     start_time = perf_counter()
     # -------------------------------------------------------------------------------
     # MODEL HAMILTONIAN
     model = SU2_Model(**sim.par["model"])
     m = sim.par["m"] if not model.pure_theory else None
     if model.spin > 1 / 2:
-        model.build_Hamiltonian(sim.par["g"], m)
+        model.build_gen_Hamiltonian(sim.par["g"], m)
     else:
-        model.build_Hamiltonian1(sim.par["g"], m)
+        model.build_Hamiltonian(sim.par["g"], m)
     # -------------------------------------------------------------------------------
     # DYNAMICS PARAMETERS
     name = sim.par["dynamics"]["state"]
@@ -55,8 +51,10 @@ with run_sim() as sim:
     plaquette_obs = []
     # DEFINE OBSERVABLES
     model.get_observables(local_obs)
-    # ALLOCATE OBSERVABLES
+    # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
     partition_indices = get_entropy_partition(model.lvals)
+    # Build the list of environment and subsystem sites configurations
+    model.get_subsystem_environment_configs(keep_indices=partition_indices)
     sim.res["entropy"] = np.zeros(n_steps, dtype=float)
     sim.res["overlap"] = np.zeros(n_steps, dtype=float)
     sim.res["delta"] = np.zeros(n_steps, dtype=float)
@@ -128,7 +126,11 @@ with run_sim() as sim:
                 # ENTROPY
                 if sim.par["get_entropy"]:
                     sim.res["entropy"][ii] = model.H.psi_time[ii].entanglement_entropy(
-                        partition_indices, sector_configs=model.sector_configs
+                        partition_indices,
+                        model.subsystem_configs,
+                        model.env_configs,
+                        model.unique_subsys_configs,
+                        model.unique_env_configs,
                     )
                 # -----------------------------------------------------------------------
                 # STATE CONFIGURATIONS
@@ -138,29 +140,30 @@ with run_sim() as sim:
                     )
             # -----------------------------------------------------------------------
             # MEASURE OBSERVABLES
-            model.measure_observables(ii, dynamics=True)
-            sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
-            sim.res["N_pair"][ii] = (
-                stag_avg(model.res["N_pair"], "even")
-                + stag_avg(model.res["N_zero"], "odd")
-            ) / 2
-            sim.res["N_zero"][ii] = (
-                stag_avg(model.res["N_zero"], "even")
-                + stag_avg(model.res["N_pair"], "odd")
-            ) / 2
-            sim.res["delta"][ii] = (
-                np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
-            )
-            logger.info(f"delta {sim.res['delta'][ii]}")
-            logger.info(f"N_single {sim.res['N_single'][ii]}")
-            logger.info(f"N_pair {sim.res['N_pair'][ii]}")
-            logger.info(f"N_zero {sim.res['N_zero'][ii]}")
-            logger.info(
-                f"TOT {sim.res['N_single'][ii]+ sim.res['N_zero'][ii]+sim.res['N_pair'][ii]}"
-            )
+            if sim.par["measure_obs"]:
+                model.measure_observables(ii, dynamics=True)
+                sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
+                sim.res["N_pair"][ii] = (
+                    stag_avg(model.res["N_pair"], "even")
+                    + stag_avg(model.res["N_zero"], "odd")
+                ) / 2
+                sim.res["N_zero"][ii] = (
+                    stag_avg(model.res["N_zero"], "even")
+                    + stag_avg(model.res["N_pair"], "odd")
+                ) / 2
+                sim.res["delta"][ii] = (
+                    np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
+                )
+                logger.info(f"delta {sim.res['delta'][ii]}")
+                logger.info(f"N_single {sim.res['N_single'][ii]}")
+                logger.info(f"N_pair {sim.res['N_pair'][ii]}")
+                logger.info(f"N_zero {sim.res['N_zero'][ii]}")
             # ---------------------------------------------------------------------------
             # OVERLAPS with the INITIAL STATE
-            # sim.res["overlap"][ii] = model.measure_fidelity(in_state, ii, True, True)
-        # -------------------------------------------------------------------------------
+            if sim.par["get_overlap"]:
+                sim.res["overlap"][ii] = model.measure_fidelity(
+                    in_state, ii, True, True
+                )
+    # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

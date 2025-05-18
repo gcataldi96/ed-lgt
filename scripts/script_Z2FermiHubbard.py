@@ -3,6 +3,21 @@ from ed_lgt.models import Z2_FermiHubbard_Model
 from simsio import run_sim
 from time import perf_counter
 import logging
+from ed_lgt.operators import (
+    Z2_FermiHubbard_dressed_site_operators,
+    Z2_FermiHubbard_gauge_invariant_states,
+)
+
+
+def Z2Hubbard_gauge_invariant_ops(lattice_dim):
+    in_ops = Z2_FermiHubbard_dressed_site_operators(lattice_dim)
+    gauge_basis, _ = Z2_FermiHubbard_gauge_invariant_states(lattice_dim)
+    ops = {}
+    label = "site"
+    for op in in_ops.keys():
+        ops[op] = gauge_basis[label].transpose() @ in_ops[op] @ gauge_basis[label]
+    return ops
+
 
 logger = logging.getLogger(__name__)
 

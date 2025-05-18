@@ -194,6 +194,366 @@ local_obs += ["E_square"]
 local_obs += [f"N_{label}" for label in ["r", "g", "tot", "single", "pair"]]
 
 # %%
+res = {}
+config_filename = f"LBO/qed"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+res["eigvals"] = np.zeros((len(vals["g"]), 231), dtype=float)
+for obs in ["E_px", "E_mx", "E_my", "E_py", "E_square"]:
+    res[f"exp_{obs}"] = np.zeros((len(vals["g"]), 231), dtype=float)
+    for ii, g in enumerate(vals["g"]):
+        res[f"exp_{obs}"][ii] = get_sim(ugrid[ii]).res[f"exp_{obs}"]
+for ii in range(len(vals["g"])):
+    res["eigvals"][ii] = get_sim(ugrid[ii]).res["eigvals"]
+
+sm = cm.ScalarMappable(cmap="copper")
+palette = sm.to_rgba(vals["g"])
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+ax.grid()
+for ii in range(len(vals["g"])):
+    ax.plot(
+        np.arange(231),
+        res["eigvals"][ii],
+        "o-",
+        c=palette[ii],
+        markersize=2,
+        markerfacecolor=palette[ii],
+        markeredgewidth=0.2,
+    )
+ax.set(yscale="log", ylim=[1e-10, 1])
+
+
+custom_yticks = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]
+custom_yticklabels = [
+    r"$0$",
+    r"$2$",
+    r"$4$",
+    r"$6$",
+    r"$8$",
+    r"$10$",
+    r"$12$",
+    r"$14$",
+    r"$16$",
+    r"$18$",
+]
+fig, ax = plt.subplots(3, 2, constrained_layout=True, sharex=True, sharey=True)
+for ii, axs in enumerate(ax.flatten()):
+    axs.plot(
+        np.arange(231),
+        res[f"exp_E_square"][ii],
+        "o",
+        c=palette[ii],
+        markersize=2,
+        markerfacecolor=palette[ii],
+        markeredgecolor="black",
+        markeredgewidth=0.2,
+    )
+for ii in range(3):
+    ax[ii, 0].set_yticks(custom_yticks)
+    ax[ii, 0].set_yticklabels(custom_yticklabels)
+
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+ax.grid()
+for obs in ["E_px", "E_mx", "E_my", "E_py"]:
+    ax.plot(
+        np.arange(231),
+        res[f"exp_{obs}"][0],
+        "o",
+        markersize=2,
+        markeredgewidth=0.5,
+    )
+ax.set(xlim=[0, 60])
+# %%
+custom_yticks = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18]
+custom_yticklabels = [
+    r"$0$",
+    r"$2$",
+    r"$4$",
+    r"$6$",
+    r"$8$",
+    r"$10$",
+    r"$12$",
+    r"$14$",
+    r"$16$",
+    r"$18$",
+]
+fig, ax = plt.subplots(5, 1, constrained_layout=True)
+ax.grid()
+ax.plot(
+    np.arange(231),
+    res[f"exp_E_square"],
+    "o",
+    markersize=2,
+    markeredgewidth=0.5,
+)
+ax.set_yticks(custom_yticks)
+ax.set_yticklabels(custom_yticklabels)
+"""ax.plot(
+    np.arange(len(res["expvals1"])),
+    res["expvals1"],
+    "x",
+    markersize=8,
+    markerfacecolor="red",
+    markeredgewidth=0.5,
+)"""
+# %%
+# ENTROPY BG
+# ==========================================================================
+res = {}
+config_filename = f"entropy_bg"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+res["time_line"] = np.delete(get_sim(ugrid[0]).res["time_steps"], 11)
+res["entropy"] = np.zeros((len(vals["g"]), len(res["time_line"])), dtype=float)
+for ii, g in enumerate(vals["g"]):
+    res["entropy"][ii] = np.delete(get_sim(ugrid[ii]).res["entropy"], 11)
+
+sm = cm.ScalarMappable(cmap="magma")
+palette = sm.to_rgba(vals["g"])
+
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+ax.grid()
+for ii, g in enumerate(vals["g"]):
+    ax.plot(
+        res["time_line"][1:],
+        res["entropy"][ii, 1:],
+        "o-",
+        label=f"g={g}",
+        c=palette[ii],
+        markersize=1,
+        markeredgecolor=palette[ii],
+        markerfacecolor="black",
+        markeredgewidth=0.5,
+    )
+ax.set(xlabel="t", ylabel="entropy", xscale="log")
+cb = fig.colorbar(
+    sm, ax=ax, aspect=80, location="top", orientation="horizontal", pad=0.02
+)
+cb.set_label(label=r"$g^{2}$", labelpad=-22, x=-0.02, y=0)
+plt.savefig(f"entropy.pdf")
+save_dictionary(res, f"entropy_bg.pkl")
+# %%
+# ENTROPY NO BG
+# ==========================================================================
+res = {}
+config_filename = f"entropy_nobg"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+res["time_line"] = get_sim(ugrid[0]).res["time_steps"]
+res["entropy"] = np.zeros((len(vals["g"]), len(res["time_line"])), dtype=float)
+for ii, g in enumerate(vals["g"]):
+    res["entropy"][ii] = get_sim(ugrid[ii]).res["entropy"]
+
+sm = cm.ScalarMappable(cmap="magma")
+palette = sm.to_rgba(vals["g"])
+
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+ax.grid()
+for ii, g in enumerate(vals["g"]):
+    ax.plot(
+        res["time_line"][1:],
+        res["entropy"][ii, 1:],
+        "o-",
+        label=f"g={g}",
+        c=palette[ii],
+        markersize=1,
+        markeredgecolor=palette[ii],
+        markerfacecolor="black",
+        markeredgewidth=0.5,
+    )
+ax.set(xlabel="t", ylabel="entropy", xscale="log")
+cb = fig.colorbar(
+    sm, ax=ax, aspect=80, location="top", orientation="horizontal", pad=0.02
+)
+cb.set_label(label=r"$g^{2}$", labelpad=-22, x=-0.02, y=0)
+plt.savefig(f"entropy_nobg.pdf")
+save_dictionary(res, f"entropy_nobg.pkl")
+# %%
+# FRAGMENTATION
+# ==========================================================================
+res = {}
+idx = 0
+config_filename = f"fragmentation_spectrum"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+res["overlap"] = get_sim(ugrid[idx]).res["overlap"]
+res["energy"] = get_sim(ugrid[idx]).res["energy"]
+res["entropy"] = get_sim(ugrid[idx]).res["entropy"]
+res["r_array"] = get_sim(ugrid[idx]).res["r_array"]
+fig, ax = plt.subplots(2, 1, constrained_layout=True)
+ax[0].plot(
+    res["energy"],
+    res["overlap"],
+    "o",
+    markersize=2,
+    markeredgecolor="darkblue",
+    markerfacecolor="white",
+    markeredgewidth=0.5,
+)
+ax[0].set(ylabel="Overlap", yscale="log", xlabel="Energy", ylim=[1e-17, 1])
+ax[1].plot(
+    res["energy"],
+    res["entropy"],
+    "o",
+    markersize=1,
+    markeredgecolor="darkblue",
+    markerfacecolor="white",
+    markeredgewidth=0.5,
+)
+ax[1].set(ylabel="Ent Entropy", xlabel="Energy")
+plt.savefig(f"spectrum_fragmentation.pdf")
+save_dictionary(res, f"frag_spectrum.pkl")
+# %%
+# DYNAMICS FRAGMENTATION
+res = {}
+idx = 0
+config_filename = f"fragmentation_dynamics"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+for obs in [
+    "overlap",
+    "delta",
+    "time_steps",
+    "entropy",
+    "N_single",
+    "N_pair",
+    "DE_N_single",
+    "DE_N_pair",
+    "DE_N_tot",
+    "ME_N_single",
+    "ME_N_pair",
+    "ME_N_tot",
+]:
+    res[obs] = get_sim(ugrid[idx]).res[obs]
+
+
+fig, ax = plt.subplots(4, 1, constrained_layout=True, sharex=True)
+ax[0].plot(
+    res["time_steps"],
+    res["overlap"],
+    "o-",
+    markersize=0.5,
+    markeredgecolor="darkblue",
+    markerfacecolor="white",
+    markeredgewidth=0.2,
+    linewidth=0.5,
+)
+ax[0].set(ylabel="Overlap")
+ax[1].plot(
+    res["time_steps"],
+    res["entropy"],
+    "o-",
+    markersize=0.5,
+    markeredgecolor="darkblue",
+    markerfacecolor="white",
+    markeredgewidth=0.2,
+    linewidth=0.5,
+)
+ax[1].set(ylabel="Ent Entropy")
+ax[2].plot(
+    res["time_steps"],
+    res["delta"],
+    "o-",
+    markersize=0.5,
+    markeredgecolor="darkblue",
+    markerfacecolor="white",
+    markeredgewidth=0.2,
+    linewidth=0.5,
+)
+ax[2].axhline(y=res["DE_N_tot"], linestyle="-", color="red")
+ax[2].axhline(y=res["ME_N_tot"], linestyle="-.", color="darkgreen")
+ax[2].set(ylabel="Imbalance")
+ax[3].plot(
+    res["time_steps"],
+    res["N_single"],
+    "o-",
+    markersize=0.5,
+    markeredgecolor="darkblue",
+    markerfacecolor="white",
+    markeredgewidth=0.2,
+    linewidth=0.5,
+)
+ax[3].set(ylabel="N_single", xlabel="time t")
+ax[3].axhline(y=res["DE_N_single"], linestyle="-", color="red", label="DE")
+ax[3].axhline(y=res["ME_N_single"], linestyle="-", color="darkgreen", label="ME")
+fig.legend(
+    bbox_to_anchor=(0.91, 0.25),
+    ncol=2,
+    frameon=True,
+    labelspacing=0.1,
+    bbox_transform=fig.transFigure,
+)
+save_dictionary(res, f"frag_dynamics.pkl")
+plt.savefig(f"dynamics_fragmentation.pdf")
+
+
+def moving_time_integral(time, M, max_points=100):
+    """
+    Computes a running time average of an observable M over a moving window of at most `max_points`
+    time steps. In the beginning, when there are fewer than `max_points` steps, the average is taken
+    over all available time points. This way, after some time the average "forgets" the early transient.
+
+    Parameters:
+        time (numpy.ndarray): 1D array of time points (can be non-uniformly spaced).
+        M (numpy.ndarray): 1D array of observable values corresponding to each time point.
+        max_points (int): Maximum number of points in the moving window for averaging.
+
+    Returns:
+        numpy.ndarray: Array of the running averaged observable.
+    """
+    M_avg = np.zeros_like(M)
+
+    for i in range(len(time)):
+        # Determine the starting index of the moving window.
+        start = max(0, i - max_points + 1)
+        t_segment = time[start : i + 1]
+        M_segment = M[start : i + 1]
+
+        # Compute the integral over the selected time window using the trapezoidal rule.
+        # Then normalize by the width of the time window to get an average.
+        dt = t_segment[-1] - t_segment[0]
+        if dt != 0:
+            integrated_value = np.trapz(M_segment, t_segment)
+            M_avg[i] = integrated_value / dt
+        else:
+            M_avg[i] = M_segment[0]
+
+    return M_avg
+
+
+config_filename = f"fragment_dyn_bg"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+for obs in [
+    "delta",
+    "time_steps",
+    "DE_N_tot",
+    "ME_N_tot",
+]:
+    res[f"bg_{obs}"] = get_sim(ugrid[idx]).res[obs]
+fig, ax = plt.subplots(1, 1, constrained_layout=True, sharex=True)
+ax.plot(
+    res["bg_time_steps"],
+    moving_time_integral(res["bg_time_steps"], res["bg_delta"], 300),
+    "o-",
+    markersize=0.5,
+    markeredgecolor="darkblue",
+    markerfacecolor="white",
+    markeredgewidth=0.2,
+    linewidth=0.5,
+)
+ax.plot(
+    res["time_steps"],
+    moving_time_integral(res["time_steps"], res["delta"], 300),
+    "o-",
+    markersize=0.5,
+    markeredgecolor="darkblue",
+    markerfacecolor="white",
+    markeredgewidth=0.2,
+    linewidth=0.5,
+)
+save_dictionary(res, f"frag_imbalance.pkl")
+# %%
 # ===================================================================
 # DFL PHASE DIAGRAM
 # ===================================================================

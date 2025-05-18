@@ -35,7 +35,7 @@ with run_sim() as sim:
     stag_avgs = {"N_tot": None, "N_single": None, "N_pair": "even", "N_zero": "odd"}
     # Store the observables
     partition_indices = get_entropy_partition(model.lvals)
-    for measure in ["delta", "entropy", "overlap"][:1]:
+    for measure in ["delta", "entropy", "overlap"]:
         sim.res[measure] = np.zeros(n_steps, dtype=float)
     # ==============================================================================
     # GLOBAL SYMMETRIES
@@ -215,6 +215,8 @@ with run_sim() as sim:
                 # OVERLAPS with the INITIAL STATE
                 # overlap = model.measure_fidelity(in_state, ii, True, True)
                 # sim.res["overlap"][ii] += overlap / n_bg_sectors
+    logger.info(sim.res["N_single"])
+    logger.info(sim.res["delta"])
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

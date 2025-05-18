@@ -1,9 +1,8 @@
 import numpy as np
-from scipy.linalg import eig
 from scipy.sparse import csc_matrix
 from scipy.sparse.linalg import expm
 from math import prod
-from ed_lgt.tools import stag_avg
+from ed_lgt.tools import stag_avg, exclude_columns
 from ed_lgt.modeling import (
     LocalTerm,
     TwoBodyTerm,
@@ -16,11 +15,9 @@ from ed_lgt.modeling import (
 )
 from ed_lgt.symmetries import (
     get_symmetry_sector_generators,
-    get_operators_nbody_term as nbops,
     get_link_sector_configs,
     global_abelian_sector,
     momentum_basis_k0_par,
-    momentum_basis_k0,
     symmetry_sector_configs,
 )
 import logging
@@ -32,7 +29,9 @@ __all__ = ["QuantumModel"]
 
 
 class QuantumModel:
-    def __init__(self, lvals, has_obc, momentum_basis=False, logical_unit_size=1):
+    def __init__(
+        self, lvals, has_obc, momentum_basis=False, logical_unit_size=1, momentum_k=0
+    ):
         # Lattice parameters
         self.lvals = lvals
         self.dim = len(self.lvals)
@@ -48,6 +47,7 @@ class QuantumModel:
         self.staggered_basis = False
         # Momentum Basis
         self.momentum_basis = momentum_basis
+        self.momentum_k = momentum_k
         self.logical_unit_size = int(logical_unit_size)
         # Dictionary for results
         self.res = {}
@@ -56,8 +56,15 @@ class QuantumModel:
         if self.momentum_basis:
             if self.has_obc[0]:
                 raise ValueError(f"Momentum is not conserved in OBC")
-            logger.info(f"Momentum basis")
-            self.B = momentum_basis_k0_par(self.sector_configs, self.logical_unit_size)
+            logger.info(f"Momentum {self.momentum_k} basis")
+            if self.momentum_k == 0:
+                self.B = momentum_basis_k0_par(
+                    self.sector_configs, self.logical_unit_size
+                )
+            else:
+                self.B = momentum_basis_k0_par(
+                    self.sector_configs, self.logical_unit_size
+                )
             logger.info(f"Momentum basis shape {self.B.shape}")
             hamiltonian_size = self.B.shape[1]
         elif self.sector_configs is not None:
@@ -98,10 +105,14 @@ class QuantumModel:
         global_sym_type="U",
         link_ops=None,
         link_sectors=None,
+        nbody_ops=None,
+        nbody_sectors=None,
+        nbody_sites_list=None,
     ):
         # ================================================================================
         # GLOBAL ABELIAN SYMMETRIES
         if global_ops is not None:
+            logger.info("Global Symmetry operators")
             global_ops = get_symmetry_sector_generators(
                 global_ops,
                 loc_dims=self.loc_dims,
@@ -112,6 +123,7 @@ class QuantumModel:
         # ================================================================================
         # ABELIAN Z2 SYMMETRIES
         if link_ops is not None:
+            logger.info("Link Symmetry operators")
             link_ops = get_symmetry_sector_generators(
                 link_ops,
                 loc_dims=self.loc_dims,
@@ -120,6 +132,17 @@ class QuantumModel:
                 lattice_labels=self.lattice_labels,
             )
             pair_list = get_lattice_link_site_pairs(self.lvals, self.has_obc)
+        # ================================================================================
+        # nBODY ABELIAN SYMMETRIES
+        if nbody_ops is not None:
+            logger.info("Nbody Symmetry operators")
+            nbody_ops = get_symmetry_sector_generators(
+                nbody_ops,
+                loc_dims=self.loc_dims,
+                action="link",
+                gauge_basis=self.gauge_basis,
+                lattice_labels=self.lattice_labels,
+            )
         # ================================================================================
         if global_ops is not None and link_ops is not None:
             self.sector_indices, self.sector_configs = symmetry_sector_configs(
@@ -144,7 +167,23 @@ class QuantumModel:
                 link_op_diags=link_ops,
                 link_sectors=link_sectors,
                 pair_list=pair_list,
+                nbody_op_diags=nbody_ops,
+                nbody_sectors=nbody_sectors,
+                nsites_list=nbody_sites_list,
             )
+
+    def get_subsystem_environment_configs(self, keep_indices: np.ndarray):
+        # Indices for the environment
+        env_indices = [ii for ii in range(self.n_sites) if ii not in keep_indices]
+        # Separate subsystem and environment configurations
+        self.subsystem_configs = exclude_columns(
+            self.sector_configs, np.array(env_indices)
+        )
+        self.env_configs = exclude_columns(self.sector_configs, np.array(keep_indices))
+        # Find unique subsystem and environment configurations
+        self.unique_subsys_configs = np.unique(self.subsystem_configs, axis=0)
+        # Initialize the RDM with shape = number of unique subsys configs
+        self.unique_env_configs = np.unique(self.env_configs, axis=0)
 
     def diagonalize_Hamiltonian(self, n_eigs, format):
         # DIAGONALIZE THE HAMILTONIAN
@@ -280,6 +319,8 @@ class QuantumModel:
         nbody_dist=[],
         twobody_axes=None,
     ):
+        logger.info("----------------------------------------------------")
+        logger.info("BUILDING OBSERVABLES")
         self.local_obs = local_obs
         self.twobody_obs = twobody_obs
         self.twobody_axes = twobody_axes

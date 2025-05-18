@@ -4,7 +4,11 @@ from math import prod
 from scipy.linalg import eigh as array_eigh, svd
 from scipy.sparse import csr_matrix, isspmatrix, csr_array
 from ed_lgt.tools import validate_parameters, exclude_columns, filter_compatible_rows
-from ed_lgt.symmetries import config_to_index_binarysearch, index_to_config
+from ed_lgt.symmetries import (
+    config_to_index_binarysearch,
+    index_to_config,
+    config_to_index_linsearch,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -126,43 +130,41 @@ class QMB_state:
         psi_partitioned = psi_tensor.reshape((subsystem_dim, env_dim))
         return psi_partitioned, subsystem_dim, env_dim
 
-    def reduced_density_matrix(self, keep_indices, sector_configs: np.ndarray = None):
+    def reduced_density_matrix(
+        self,
+        keep_indices,
+        subsystem_configs=None,
+        env_configs=None,
+        unique_subsys_configs=None,
+        unique_env_configs=None,
+    ):
         """
         Computes the reduced density matrix of the quantum state for specified lattice sites.
         Optionally handles different symmetry sectors.
 
         Args:
-            keep_indices (list of ints): Indices of the lattice sites to keep.
-            sector_configs (np.ndarray, optional): Configurations that define symmetry sectors.
+            keep_indices (list of ints): list of lattice indices to be involved in the partition
+            subsystem_configs (np.ndarray): Configurations of the subsystem in the symmetry sector.
+            environment_configs (np.ndarray): Configurations of the environment in the symmetry sector.
+            unique_subsys_configs (np.ndarray): Unique configurations of the subsystem.
+            unique_env_configs (np.ndarray): Unique configurations of the environment.
 
         Returns:
-            np.ndarray: The reduced density matrix in sparse format.
+            np.ndarray: The reduced density matrix in dense format.
         """
         logger.info("----------------------------------------------------")
         logger.info(f"RED. DENSITY MATRIX OF SITES {keep_indices}")
         # CASE OF SYMMETRY SECTOR
-        if sector_configs is not None:
-            # Indices for the environment
-            env_indices = [
-                i for i in range(sector_configs.shape[1]) if i not in keep_indices
-            ]
-            # Separate subsystem and environment configurations
-            subsystem_configs = exclude_columns(sector_configs, np.array(env_indices))
-            env_configs = exclude_columns(sector_configs, np.array(keep_indices))
-            # Find unique subsystem and environment configurations
-            unique_subsys_configs = np.unique(subsystem_configs, axis=0)
-            subsystem_dim = unique_subsys_configs.shape[0]
-            # Initialize the RDM with shape = number of unique subsys configs
-            unique_env_configs = np.unique(env_configs, axis=0)
-            RDM = np.zeros((subsystem_dim, subsystem_dim), dtype=np.complex128)
-            # Iterate over unique environment configurations
-            return compute_RDM(
+        if subsystem_configs is not None:
+            # Compute the psi_matrix
+            psi_matrix = build_psi_matrix(
                 self.psi,
                 subsystem_configs,
                 env_configs,
                 unique_subsys_configs,
                 unique_env_configs,
             )
+            return psi_matrix.conj().T @ psi_matrix
         else:
             # NO SYMMETRIES
             # Prepare psi tensor sorting subsystem indices close each other to bipartite the system
@@ -173,7 +175,14 @@ class QMB_state:
             RDM = RDM.reshape((subsystem_dim, subsystem_dim))
             return RDM
 
-    def entanglement_entropy(self, keep_indices, sector_configs=None):
+    def entanglement_entropy(
+        self,
+        keep_indices,
+        subsystem_configs=None,
+        env_configs=None,
+        unique_subsys_configs=None,
+        unique_env_configs=None,
+    ):
         """
         This function computes the bipartite entanglement entropy of a portion of a QMB state psi
         related to a lattice model with dimension lvals where single sites
@@ -181,21 +190,29 @@ class QMB_state:
 
         Args:
             keep_indices (list of ints): list of lattice indices to be involved in the partition
+            subsystem_configs (np.ndarray): Configurations of the subsystem in the symmetry sector.
+            environment_configs (np.ndarray): Configurations of the environment in the symmetry sector.
+            unique_subsys_configs (np.ndarray): Unique configurations of the subsystem.
+            unique_env_configs (np.ndarray): Unique configurations of the environment.
 
         Returns:
             float: bipartite entanglement entropy of the lattice subsystem
         """
-        if sector_configs is not None:
-            # Compute the RDM for the partition within a symmetry sector
-            RDM = self.reduced_density_matrix(keep_indices, sector_configs)
-            # Compute its eigenvalues
-            llambdas = array_eigh(RDM, eigvals_only=True)
+        if subsystem_configs is not None:
+            # Compute the psi_matrix
+            psi_matrix = build_psi_matrix(
+                self.psi,
+                subsystem_configs,
+                env_configs,
+                unique_subsys_configs,
+                unique_env_configs,
+            )
         else:
             # Prepare psi tensor sorting subsystem indices close each other to bipartite the system
-            psi_tensor, _, _ = self.bipartite_psi(keep_indices)
-            # Compute SVD
-            _, V, _ = svd(psi_tensor, full_matrices=False)
-            llambdas = V**2
+            psi_matrix, _, _ = self.bipartite_psi(keep_indices)
+        # Compute SVD
+        _, V, _ = svd(psi_matrix, full_matrices=False)
+        llambdas = V**2
         llambdas = llambdas[llambdas > 1e-10]
         entropy = -np.sum(llambdas * np.log2(llambdas))
         logger.info(f"ENTROPY of {keep_indices}: {format(entropy, '.9f')}")
@@ -256,47 +273,60 @@ def diagonalize_density_matrix(rho):
     return rho_eigvals, rho_eigvecs
 
 
-def get_projector_for_efficient_density_matrix(rho, loc_dim, threshold):
+def get_projector_for_efficient_density_matrix(rho: np.ndarray, threshold: float):
     """
-    This function constructs the projector operator to reduce the single site dimension
-    according to the eigenvalues that mostly contributes to the reduced density matrix of the single-site
+    Build a projector P from the single-site density matrix rho.
+
+    The function diagonalizes the Hermitian matrix rho, sorts the eigenvalues
+    in descending order, and selects those eigenvectors with eigenvalues greater than
+    the given threshold. If fewer than 2 eigenvectors pass, the threshold is relaxed
+    until at least 2 are selected.
+
+    Args:
+        rho (np.ndarray): Reduced density matrix (shape (N, N)).
+        threshold (float): Initial threshold for eigenvalue significance.
+
+    Returns:
+        np.ndarray: Projector matrix P of shape (N, k), where k is the number of selected eigenvectors.
     """
-    if not isinstance(loc_dim, int) and not np.isscalar(loc_dim):
-        raise TypeError(f"loc_dim should be INT & SCALAR, not a {type(loc_dim)}")
-    if not isinstance(threshold, float) and not np.isscalar(threshold):
-        raise TypeError(f"threshold should be FLOAT & SCALAR, not a {type(threshold)}")
-    # Diagonalize the single-site density matrix rho
+    # Diagonalize the density matrix
     rho_eigvals, rho_eigvecs = diagonalize_density_matrix(rho)
-    # Counts the number of eigenvalues larger than threshold
-    P_columns = (rho_eigvals > threshold).sum()
+    # Sort eigenvalues and eigenvectors in descending order.
+    # Note: np.argsort sorts in ascending order; we reverse to get descending order.
+    sorted_indices = np.argsort(rho_eigvals)[::-1]
+    rho_eigvals = rho_eigvals[sorted_indices]
+    rho_eigvecs = rho_eigvecs[:, sorted_indices]
+    logger.info(f"DIAGONALIZED RHO eigvals")
+    for ii, eigval in enumerate(rho_eigvals):
+        logger.info(f"{ii}  {format(eigval, '.8f')}")
+    # Determine how many eigenvectors have eigenvalues greater than the threshold.
+    # (If too few are significant, relax the threshold until at least 2 are selected.)
+    P_columns = np.sum(rho_eigvals > threshold)
     while P_columns < 2:
-        threshold = threshold / 10
-        P_columns = (rho_eigvals > threshold).sum()
-    logger.info(f"TOTAL NUMBER OF SIGNIFICANT EIGENVALUES {P_columns}")
-    column_indx = -1
-    # Define the projector operator Proj: it has dimension (loc_dim,P_columns)
-    proj = np.zeros((loc_dim, P_columns), dtype=complex)
-    # S eigenvalues in <reduced_dm> are stored in increasing order,
-    # in order to compute the columns of P_proj we proceed as follows
-    for ii in range(loc_dim):
-        if rho_eigvals[ii] > threshold:
-            column_indx += 1
-            proj[:, column_indx] = rho_eigvecs[:, ii]
-    # Truncate to 0 the entries below a certain threshold and promote to sparse matrix
-    return csr_matrix(truncation(proj, 1e-14))
+        threshold /= 10
+        P_columns = np.sum(rho_eigvals > threshold)
+    logger.info(f"SIGNIFICANT EIGENVALUES {P_columns} with threshold {threshold}")
+
+    # Build the projector matrix P from the selected eigenvectors.
+    # Here we take the first P_columns eigenvectors
+    # (which correspond to the largest eigenvalues).
+    proj = np.zeros((rho.shape[0], P_columns), dtype=complex)
+    for jj in range(P_columns):
+        proj[:, jj] = rho_eigvecs[:, jj]
+    return proj, rho_eigvals, rho_eigvecs
 
 
-@njit(parallel=True)
-def compute_RDM(
-    psi,
-    subsystem_configs,
-    environment_configs,
-    unique_subsys_configs,
-    unique_env_configs,
+@njit(parallel=True, cache=True)
+def build_psi_matrix(
+    psi: np.ndarray,
+    subsystem_configs: np.ndarray,
+    environment_configs: np.ndarray,
+    unique_subsys_configs: np.ndarray,
+    unique_env_configs: np.ndarray,
 ):
     """
-    Computes the reduced density matrix of the quantum state for the specified subsystem
-    using symmetry sector configurations, parallelized using Numba.
+    Repack the full wave function vector psi into a matrix whose rows and columns
+    label the *environment* and the *subsystem* configs of a given bipartition.
 
     Args:
         psi (np.ndarray): The wavefunction of the system.
@@ -306,31 +336,21 @@ def compute_RDM(
         unique_env_configs (np.ndarray): Unique configurations of the environment.
 
     Returns:
-        RDM (np.ndarray): The reduced density matrix.
+        psi_matrix (np.ndarray): The matrix representation of the wavefunction in terms
+        of the unique environment and subsystem configurations.
     """
-    # Number of unique subsys configurato
-    subsystem_dim = unique_subsys_configs.shape[0]
-    # Initialize the reduced density matrix
-    RDM = np.zeros((subsystem_dim, subsystem_dim), dtype=np.complex128)
-    # Loop over unique environment configurations in parallel
-    for env_idx in prange(len(unique_env_configs)):
-        env_config = unique_env_configs[env_idx]
-        # Find indices where the environment matches the current env_config
-        matching_indices = filter_compatible_rows(environment_configs, env_config)
-        # Create the subsystem wavefunction slice
-        subsystem_psi = np.zeros(subsystem_dim, dtype=np.complex128)
-        for ii in range(len(matching_indices)):
-            match_idx = matching_indices[ii]
-            subsys_config = subsystem_configs[match_idx]
-            # Find the index of the subsystem configuration using a binary search
-            subsys_index = config_to_index_binarysearch(
-                subsys_config, unique_subsys_configs
-            )
-            # Populate the subsystem wavefunction with the matching psi values
-            subsystem_psi[subsys_index] = psi[match_idx]
-        # Add the contribution to the RDM for this environment configuration
-        RDM += np.outer(subsystem_psi, np.conjugate(subsystem_psi))
-    return RDM
+    # allocate the matrix
+    unique_env_dim = unique_env_configs.shape[0]
+    unique_subsys_dim = unique_subsys_configs.shape[0]
+    psi_matrix = np.zeros((unique_env_dim, unique_subsys_dim), dtype=np.complex128)
+
+    for idx in prange(len(psi)):
+        # find which row (env) of psi_matrix this idx belongs to
+        eidx = config_to_index_linsearch(environment_configs[idx], unique_env_configs)
+        # find which col (subsys) of psi_matrix this idx belongs to
+        sidx = config_to_index_linsearch(subsystem_configs[idx], unique_subsys_configs)
+        psi_matrix[eidx, sidx] = psi[idx]
+    return psi_matrix
 
 
 @njit

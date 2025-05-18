@@ -98,7 +98,7 @@ def process_batches_with_nbody(
     op_list: list[np.ndarray],
     op_sites_list: list[int],
     sector_configs: np.ndarray,
-    batch_size: int = int(2**20),
+    batch_size: int = int(2**18),
 ):
     """
     Process nbody_data_par in batches to handle large sector dimensions.
@@ -125,8 +125,7 @@ def process_batches_with_nbody(
 
     # Step 1: Allocate conservatively large arrays for final results
     n_sites = sector_configs.shape[1]
-    sparsity = 5.9 * np.exp(-0.92 * n_sites) / n_sites
-    estimated_elements = int(0.00005 * sector_dim**2)  # Estimate sparsity
+    estimated_elements = int(0.005 * sector_dim**2)  # Estimate sparsity
     final_row_list = np.zeros(estimated_elements, dtype=np.int32)
     final_col_list = np.zeros(estimated_elements, dtype=np.int32)
     final_value_list = np.zeros(estimated_elements, dtype=np.float64)

@@ -1,14 +1,7 @@
-import os
-import sys
-
-# Ensure NUMBA_NUM_THREADS is set properly before importing anything else
-B = int(sys.argv[-1])
-# Read the B parameter from command-line arguments
-os.environ["NUMBA_NUM_THREADS"] = str(B)
-
 import numpy as np
+from numpy.linalg import norm
 from scipy.sparse import csr_matrix
-from ed_lgt.models import SU2_Model
+from ed_lgt.models import QED_Model
 from simsio import run_sim
 from time import perf_counter
 from ed_lgt.modeling import get_projector_for_efficient_density_matrix
@@ -98,51 +91,42 @@ def project_operators(
 
 logger = logging.getLogger(__name__)
 with run_sim() as sim:
+    # Start measuring time
     start_time = perf_counter()
     # -------------------------------------------------------------------------------
     # MODEL HAMILTONIAN
-    model = SU2_Model(**sim.par["model"])
+    model = QED_Model(**sim.par["model"])
     m = sim.par["m"] if not model.pure_theory else None
-    if model.spin < 1:
-        model.build_gen_Hamiltonian(sim.par["g"], m)
-    else:
-        model.build_Hamiltonian(sim.par["g"], m)
+    model.build_Hamiltonian(sim.par["g"], m)
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     n_eigs = sim.par["hamiltonian"]["n_eigs"]
     model.diagonalize_Hamiltonian(n_eigs, model.ham_format)
     sim.res["energy"] = model.H.Nenergies
-    if model.ham_format == "dense":
-        sim.res["r_array"] = model.H.get_r_value()
-    # -------------------------------------------------------------------------------
+    # ---------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
-    local_obs = [f"T2_{s}{d}" for d in model.directions for s in "mp"]
-    local_obs = ["E_square"]
+    local_obs = ["E_px", "E_mx", "E_my", "E_py", "E_square"]
     if not model.pure_theory:
-        local_obs += [f"N_{label}" for label in ["tot", "single", "pair"]]
-    # LIST OF TWOBODY CORRELATORS
-    twobody_obs = []
-    twobody_axes = []
-    # LIST OF PLAQUETTE OPERATORS
-    plaquette_obs = []
-    # DEFINE OBSERVABLES
-    model.get_observables(local_obs)
+        local_obs += ["N"]
     for obs in local_obs:
-        sim.res[obs] = np.zeros(model.H.n_eigs, dtype=float)
-    # QUENCH STATE FOR OVERLAP
-    if sim.par["get_overlap"]:
-        name = sim.par["hamiltonian"]["state"]
-        config = model.overlap_QMB_state(name)
-        logger.info(f"config {config}")
-        in_state = model.get_qmb_state_from_configs([config])
-        sim.res["overlap"] = np.zeros(model.H.n_eigs, dtype=float)
-    # -------------------------------------------------------------------------------
+        sim.res[obs] = np.zeros(n_eigs, dtype=float)
+    # LIST OF TWOBODY CORRELATORS
+    twobody_obs = [[f"P_p{d}", f"P_m{d}"] for d in model.directions]
+    twobody_axes = [d for d in model.directions]
+    # LIST OF PLAQUETTE OPERATORS
+    if model.dim == 2:
+        plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
+    else:
+        plaquette_obs = None
+    # DEFINE OBSERVABLES
+    model.get_observables(
+        local_obs, twobody_obs, plaquette_obs, twobody_axes=twobody_axes
+    )
     # ENTROPY
-    # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
-    partition_indices = [0, 1, 2, 3]
+    partition_indices = [0]
     # Build the list of environment and subsystem sites configurations
     model.get_subsystem_environment_configs(keep_indices=partition_indices)
-    sim.res["entropy"] = np.zeros(model.H.n_eigs, dtype=float)
+    sim.res["entropy"] = np.zeros(n_eigs, dtype=float)
     # -------------------------------------------------------------------------------
     for ii in range(model.H.n_eigs):
         model.H.print_energy(ii)
@@ -160,21 +144,14 @@ with run_sim() as sim:
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS
             if sim.par["get_state_configs"]:
-                model.H.Npsi[ii].get_state_configurations(1e-2, model.sector_configs)
-        # -----------------------------------------------------------------------
-        # MEASURE OBSERVABLES
-        if sim.par["measure_obs"]:
-            model.measure_observables(ii)
-            for obs in local_obs:
-                sim.res[obs][ii] = np.mean(model.res[obs])
+                model.H.Npsi[ii].get_state_configurations(1e-1, model.sector_configs)
         # ---------------------------------------------------------------------------
-        # OVERLAPS with the INITIAL STATE
-        if sim.par["get_overlap"]:
-            sim.res["overlap"][ii] = model.measure_fidelity(
-                in_state, ii, print_value=True
-            )
+        # MEASURE OBSERVABLES
+        model.measure_observables(ii)
+        for obs in local_obs:
+            sim.res[obs][ii] = np.mean(model.res[obs])
     # -------------------------------------------------------------------------------
-    """
+    # LOCAL BASIS OPTIMIZATION
     # Get the reduced density matrix of a single site in the ground state
     RDM = model.H.Npsi[0].reduced_density_matrix(
         partition_indices,
@@ -183,26 +160,41 @@ with run_sim() as sim:
         model.unique_subsys_configs,
         model.unique_env_configs,
     )
+    logger.info(f"{norm(RDM-np.diag(np.diag(RDM)), ord='nuc')}")
     # Get the reduced and optimized operators of a single site in the ground state
-    proj = get_projector_for_efficient_density_matrix(RDM, 1e-2)
+    proj, sim.res["eigvals"], sim.res["vecs"] = (
+        get_projector_for_efficient_density_matrix(RDM, 1e-3)
+    )
     new_ops = {}
+    true_ops = {}
     for op in model.ops.keys():
-        new_ops[op] = (
+        true_ops[op] = (
             model.gauge_basis["site"].transpose()
             @ model.ops[op]
             @ model.gauge_basis["site"]
         ).toarray()
-        if op in ["T2_px"]:
-            logger.info(f"OPERATOR {op} {new_ops[op].shape}")
-            logger.info(f"{csr_matrix(new_ops[op])}")
+        if op in ["E_px"]:
+            logger.info(f"OPERATOR {op} {true_ops[op].shape}")
+            logger.info(f"{csr_matrix(true_ops[op])}")
     # project the operators
-    for op in new_ops.keys():
+    for op in true_ops.keys():
         new_ops[op] = (
-            csr_matrix(proj).transpose().conj() @ new_ops[op] @ csr_matrix(proj)
+            csr_matrix(proj).transpose().conj() @ true_ops[op] @ csr_matrix(proj)
         )
-        if op in ["T2_px"]:
+        if op in ["E_px"]:
             logger.info(f"{csr_matrix(new_ops[op])}")
-    """
+    sim.res["expvals"] = np.zeros(len(sim.res["eigvals"]), dtype=float)
+    for obs in ["E_px", "E_mx", "E_my", "E_py", "E_square"]:
+        sim.res[f"exp_{obs}"] = np.zeros(len(sim.res["eigvals"]), dtype=float)
+        for ii in range(len(sim.res["eigvals"])):
+            sim.res[f"exp_{obs}"][ii] = np.real(
+                np.dot(
+                    sim.res["vecs"][:, ii].conj(),
+                    np.dot(true_ops[obs], sim.res["vecs"][:, ii]),
+                )
+            )
+
+    # sim.res["E_old"] = model.gauge_basis["site"].transpose()model.ops["E_px"].data
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

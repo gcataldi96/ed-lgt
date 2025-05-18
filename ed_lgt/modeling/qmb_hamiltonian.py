@@ -399,6 +399,7 @@ class QMB_hamiltonian:
         # Compute the average r-value for the bulk
         self.r_value = np.mean(r_array[bulk_start:bulk_end])
         logger.info(f"R value {self.r_value}")
+        return r_array
 
     def print_energy(self, en_state):
         logger.info("====================================================")

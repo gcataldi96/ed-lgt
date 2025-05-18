@@ -6,7 +6,7 @@ __all__ = [
     "index_to_config",
     "config_to_index",
     "get_state_configs",
-    "config_to_index_linearsearch",
+    "config_to_index_linsearch",
     "config_to_index_binarysearch",
     "compare_configs",
     "get_translated_state_indices",
@@ -85,7 +85,7 @@ def get_state_configs(loc_dims):
 
 
 @njit
-def config_to_index_linearsearch(config, unique_configs):
+def config_to_index_linsearch(config, unique_configs):
     # Linear search (not the most efficient case)
     for idx in range(unique_configs.shape[0]):
         # Comparing each element; break early if any mismatch found
@@ -96,6 +96,7 @@ def config_to_index_linearsearch(config, unique_configs):
                 break  # Break as soon as any element doesn't match
         if match:
             return idx
+    return -1  # Configuration not found
 
 
 @njit

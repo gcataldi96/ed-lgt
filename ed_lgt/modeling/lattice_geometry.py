@@ -12,6 +12,7 @@ __all__ = [
     "lattice_base_configs",
     "get_neighbor_sites",
     "get_plaquette_neighbors",
+    "get_origin_surfaces",
     "get_lattice_borders_labels",
     "LGT_border_configs",
     "get_lattice_link_site_pairs",
@@ -230,6 +231,53 @@ def get_plaquette_neighbors(coords, lvals, axes, has_obc):
         coords_list.append(tuple(coords3))
         sites_list.append(inverse_zig_zag(lvals, coords3))
     return coords_list, sites_list
+
+
+def get_origin_surfaces(lvals):
+    """
+    For a 3D lattice with dimensions lvals = [Lx, Ly, Lz], return the three
+    “origin” faces (planes passing through (0,0,0)) both as 3D coordinates
+    and as their 1D indices along the zig-zag curve.
+
+    The three faces are:
+      • 'yz' plane at x=0  (vary y=0…Ly-1, z=0…Lz-1)
+      • 'xz' plane at y=0  (vary x=0…Lx-1, z=0…Lz-1)
+      • 'xy' plane at z=0  (vary x=0…Lx-1, y=0…Ly-1)
+
+    Args:
+        lvals (list of int): [Lx, Ly, Lz]
+
+    Returns:
+        dict: {
+          'yz': (coords_yz, sites_yz),
+          'xz': (coords_xz, sites_xz),
+          'xy': (coords_xy, sites_xy),
+        }
+        where each coords_* is a list of 3-tuples, and each sites_* is the
+        corresponding list of 1D int indices via inverse_zig_zag.
+    """
+    if len(lvals) != 3 or not all(isinstance(d, int) for d in lvals):
+        raise ValueError("lvals must be a list of three ints [Lx, Ly, Lz].")
+
+    Lx, Ly, Lz = lvals
+    surfaces = {}
+
+    # yz-plane at x=0
+    coords_yz = [(0, y, z) for y in range(Ly) for z in range(Lz)]
+    sites_yz = [inverse_zig_zag(lvals, c) for c in coords_yz]
+    surfaces["yz"] = (coords_yz, sites_yz)
+
+    # xz-plane at y=0
+    coords_xz = [(x, 0, z) for x in range(Lx) for z in range(Lz)]
+    sites_xz = [inverse_zig_zag(lvals, c) for c in coords_xz]
+    surfaces["xz"] = (coords_xz, sites_xz)
+
+    # xy-plane at z=0
+    coords_xy = [(x, y, 0) for x in range(Lx) for y in range(Ly)]
+    sites_xy = [inverse_zig_zag(lvals, c) for c in coords_xy]
+    surfaces["xy"] = (coords_xy, sites_xy)
+
+    return surfaces
 
 
 def get_lattice_link_site_pairs(lvals, has_obc):

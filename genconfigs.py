@@ -117,7 +117,7 @@ params = {"m": np.logspace(-1, 1, 20), "g": np.logspace(-1, 1, 20)}
 gen_configs("template", params, f"DFL/grid")
 # %%
 params = {"g": np.linspace(0, 15, 20)}
-gen_configs("template", params, f"newDFL/gscale_BG")
+gen_configs("template", params, f"entropy_nobg")
 # %%
 params = {"g": np.linspace(0, 15, 30), "m": np.linspace(0, 15, 30)}
 gen_configs("template", params, f"newDFL/phase_diagram_BG")

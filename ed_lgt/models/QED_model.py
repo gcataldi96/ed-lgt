@@ -1,8 +1,8 @@
+import numpy as np
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm
-from ed_lgt.modeling import check_link_symmetry, staggered_mask
+from ed_lgt.modeling import check_link_symmetry, staggered_mask, get_origin_surfaces
 from .quantum_model import QuantumModel
 from ed_lgt.operators import QED_dressed_site_operators, QED_gauge_invariant_states
-
 import logging
 
 logger = logging.getLogger(__name__)
@@ -10,7 +10,7 @@ __all__ = ["QED_Model"]
 
 
 class QED_Model(QuantumModel):
-    def __init__(self, spin, pure_theory, ham_format, **kwargs):
+    def __init__(self, spin, pure_theory, ham_format, cube_fluxes=[0], **kwargs):
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
@@ -37,12 +37,33 @@ class QED_Model(QuantumModel):
         # LINK SYMMETRIES
         link_ops = [[self.ops[f"E_p{d}"], self.ops[f"E_m{d}"]] for d in self.directions]
         link_sectors = [0 for _ in self.directions]
+        # CUBE FLUXES (4body symmetries)
+        if self.pure_theory and self.dim == 3 and (not any(self.has_obc)):
+            nbody_sectors = np.array(cube_fluxes)
+            nbody_ops = [[self.ops[f"E_px"] for ii in range(4)]]
+            # build, for each cartesian direction, the face through the origin:
+            #  - for 'x' → the yz–face at x=0
+            #  - for 'y' → the xz–face at y=0
+            #  - for 'z' → the xy–face at z=0
+            surfaces = get_origin_surfaces(self.lvals)
+            face_of = {"x": "yz", "y": "xz", "z": "xy"}
+            logger.info(f"{surfaces['yz'][0]}")
+            # pick out the 1D‐lists in exactly the same order as self.directions
+            nbody_sites_list = [np.array(surfaces[face_of["x"]][1], dtype=np.uint8)]
+            nbody_sectors = np.array(cube_fluxes, dtype=int)
+        else:
+            nbody_sectors = None
+            nbody_ops = None
+            nbody_sites_list = None
         # GET SYMMETRY SECTOR
         self.get_abelian_symmetry_sector(
             global_ops=global_ops,
             global_sectors=global_sectors,
             link_ops=link_ops,
             link_sectors=link_sectors,
+            nbody_ops=nbody_ops,
+            nbody_sectors=nbody_sectors,
+            nbody_sites_list=nbody_sites_list,
         )
         # DEFAULT PARAMS
         self.default_params()
@@ -125,7 +146,7 @@ class QED_Model(QuantumModel):
                             mask=staggered_mask(self.lvals, stag_label),
                         )
                     )
-        self.build(format=ham_format)
+        self.H.build(format=self.ham_format)
 
     def check_symmetries(self):
         # CHECK LINK SYMMETRIES
@@ -168,16 +189,19 @@ class QED_Model(QuantumModel):
                 "g": g,
                 "E": E,  # ELECTRIC FIELD coupling
                 "B": B,  # MAGNETIC FIELD coupling
-                "m": m,
-                "tx_even": 0.5,  # HORIZONTAL HOPPING
-                "tx_odd": 0.5,
-                "ty_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
-                "ty_odd": -0.5,  # VERTICAL HOPPING (ODD SITES)
-                "tz_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
-                "tz_odd": 0.5,  # VERTICAL HOPPING (ODD SITES)
-                "m_even": m,
-                "m_odd": -m,
             }
+            if m is not None:
+                coeffs |= {
+                    "m": m,
+                    "tx_even": 0.5,  # HORIZONTAL HOPPING
+                    "tx_odd": 0.5,
+                    "ty_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
+                    "ty_odd": -0.5,  # VERTICAL HOPPING (ODD SITES)
+                    "tz_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
+                    "tz_odd": 0.5,  # VERTICAL HOPPING (ODD SITES)
+                    "m_even": m,
+                    "m_odd": -m,
+                }
         else:
             # DICTIONARY WITH MODEL COEFFICIENTS
             coeffs = {
@@ -185,4 +209,4 @@ class QED_Model(QuantumModel):
                 "E": -(g**2),
                 "B": -0.5 / (g**2),
             }
-        return coeffs
+        self.coeffs = coeffs

@@ -14,14 +14,16 @@ __all__ = ["SU2_Model"]
 
 
 class SU2_Model(QuantumModel):
-    def __init__(self, spin, pure_theory, background, sectors, ham_format, **kwargs):
+    def __init__(
+        self, spin, pure_theory, background, ham_format, sectors=None, **kwargs
+    ):
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
         self.pure_theory = pure_theory
         self.background = background
         self.ham_format = ham_format
-        if self.spin < 1:
+        if self.spin > 1:
             # Acquire operators
             self.ops = SU2_dressed_site_operators(
                 self.spin,
@@ -67,16 +69,17 @@ class SU2_Model(QuantumModel):
         )
         self.default_params()
 
-    def build_Hamiltonian1(self, g, m=None):
+    def build_Hamiltonian(self, g, m=None):
         logger.info("BUILDING s=1/2 HAMILTONIAN")
         # Hamiltonian Coefficients
         self.SU2_Hamiltonian_couplings(g, m)
         h_terms = {}
         # ---------------------------------------------------------------------------
         # ELECTRIC ENERGY
-        op_name = "E_square"
-        h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
-        self.H.add_term(h_terms[op_name].get_Hamiltonian(strength=self.coeffs["E"]))
+        h_terms["E_square"] = LocalTerm(
+            self.ops["E_square"], "E_square", **self.def_params
+        )
+        self.H.add_term(h_terms["E_square"].get_Hamiltonian(strength=self.coeffs["E"]))
         # ---------------------------------------------------------------------------
         # PLAQUETTE TERM: MAGNETIC INTERACTION
         if self.dim > 1:
@@ -146,7 +149,7 @@ class SU2_Model(QuantumModel):
                     )
         self.H.build(self.ham_format)
 
-    def build_Hamiltonian(self, g, m=None):
+    def build_gen_Hamiltonian(self, g, m=None):
         logger.info("BUILDING generalized HAMILTONIAN")
         # Hamiltonian Coefficients
         self.SU2_Hamiltonian_couplings(g, m)
