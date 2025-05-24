@@ -30,7 +30,13 @@ __all__ = ["QuantumModel"]
 
 class QuantumModel:
     def __init__(
-        self, lvals, has_obc, momentum_basis=False, logical_unit_size=1, momentum_k=0
+        self,
+        lvals,
+        has_obc,
+        ham_format="sparse",
+        momentum_basis=False,
+        logical_unit_size=1,
+        momentum_k=0,
     ):
         # Lattice parameters
         self.lvals = lvals
@@ -49,6 +55,8 @@ class QuantumModel:
         self.momentum_basis = momentum_basis
         self.momentum_k = momentum_k
         self.logical_unit_size = int(logical_unit_size)
+        # Hamiltonian format
+        self.ham_format = ham_format
         # Dictionary for results
         self.res = {}
 
@@ -139,12 +147,13 @@ class QuantumModel:
             nbody_ops = get_symmetry_sector_generators(
                 nbody_ops,
                 loc_dims=self.loc_dims,
-                action="link",
+                action="nbody",
                 gauge_basis=self.gauge_basis,
                 lattice_labels=self.lattice_labels,
             )
         # ================================================================================
         if global_ops is not None and link_ops is not None:
+            logger.info("Global & Link symmetry sector")
             self.sector_indices, self.sector_configs = symmetry_sector_configs(
                 loc_dims=self.loc_dims,
                 glob_op_diags=global_ops,
@@ -155,6 +164,7 @@ class QuantumModel:
                 pair_list=pair_list,
             )
         elif global_ops is not None:
+            logger.info("Global symmetry sector")
             self.sector_indices, self.sector_configs = global_abelian_sector(
                 loc_dims=self.loc_dims,
                 sym_op_diags=global_ops,
@@ -162,6 +172,10 @@ class QuantumModel:
                 sym_type=global_sym_type,
             )
         elif link_ops is not None:
+            if nbody_ops is not None:
+                logger.info("Link & Nbody symmetry sector")
+            else:
+                logger.info("Link symmetry sector")
             self.sector_indices, self.sector_configs = get_link_sector_configs(
                 loc_dims=self.loc_dims,
                 link_op_diags=link_ops,
@@ -169,7 +183,7 @@ class QuantumModel:
                 pair_list=pair_list,
                 nbody_op_diags=nbody_ops,
                 nbody_sectors=nbody_sectors,
-                nsites_list=nbody_sites_list,
+                nbody_sites_list=nbody_sites_list,
             )
 
     def get_subsystem_environment_configs(self, keep_indices: np.ndarray):
@@ -350,7 +364,7 @@ class QuantumModel:
             obs = "_".join(op_names_list)
             op_list = [self.ops[op] for op in op_names_list]
             self.obs_list[obs] = PlaquetteTerm(
-                axes=["x", "y"],
+                axes=[op_names_list[-1][3], op_names_list[-1][6]],
                 op_list=op_list,
                 op_names_list=op_names_list,
                 **self.def_params,

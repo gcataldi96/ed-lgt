@@ -1,4 +1,5 @@
 import numpy as np
+from numba import typed
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm
 from ed_lgt.modeling import check_link_symmetry, staggered_mask, get_origin_surfaces
 from .quantum_model import QuantumModel
@@ -10,23 +11,26 @@ __all__ = ["QED_Model"]
 
 
 class QED_Model(QuantumModel):
-    def __init__(self, spin, pure_theory, ham_format, cube_fluxes=[0], **kwargs):
+    def __init__(self, spin, pure_theory, **kwargs):
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
-        self.ham_format = ham_format
         self.pure_theory = pure_theory
         self.staggered_basis = False if self.pure_theory else True
+        # -------------------------------------------------------------------------------
         # Acquire operators
         self.ops = QED_dressed_site_operators(
             self.spin, self.pure_theory, U="ladder", lattice_dim=self.dim
         )
+        # -------------------------------------------------------------------------------
         # Acquire gauge invariant basis and states
         self.gauge_basis, self.gauge_states = QED_gauge_invariant_states(
             self.spin, self.pure_theory, lattice_dim=self.dim
         )
+        # -------------------------------------------------------------------------------
         # Acquire local dimension and lattice label
         self.get_local_site_dimensions()
+        # -------------------------------------------------------------------------------
         # GLOBAL SYMMETRIES
         if self.pure_theory:
             global_ops = None
@@ -34,24 +38,47 @@ class QED_Model(QuantumModel):
         else:
             global_ops = [self.ops["N"]]
             global_sectors = [int(self.n_sites / 2)]
+        # -------------------------------------------------------------------------------
         # LINK SYMMETRIES
         link_ops = [[self.ops[f"E_p{d}"], self.ops[f"E_m{d}"]] for d in self.directions]
         link_sectors = [0 for _ in self.directions]
-        # CUBE FLUXES (4body symmetries)
-        if self.pure_theory and self.dim == 3 and (not any(self.has_obc)):
-            nbody_sectors = np.array(cube_fluxes)
-            nbody_ops = [[self.ops[f"E_px"] for ii in range(4)]]
-            # build, for each cartesian direction, the face through the origin:
-            #  - for 'x' → the yz–face at x=0
-            #  - for 'y' → the xz–face at y=0
-            #  - for 'z' → the xy–face at z=0
+        """
+        # -------------------------------------------------------------------------------
+        ELECTRIC-FLUX “NBODY” SYMMETRIES ———
+        only in the pure (no-matter) theory, more than 1D, *and* PBC
+        Constrain, for each cartesian direction, the corresponding 
+        Electric flux on the face/line through the origin:
+        3D:
+            for 'Ex' → the yz-face at x=0
+            for 'Ey' → the xz-face at y=0
+            for 'Ez' → the xy-face at z=0
+        2D:
+            for 'Ex' → the y-axis at x=0
+            for 'Ey' → the x-axis at y=0
+        """
+        if self.pure_theory and not any(self.has_obc):
+            # one flux‐constraint per cartesian direction
+            nbody_sectors = np.zeros(self.dim, dtype=float)
+            nbody_ops = []
+            nbody_sites_list = typed.List()
             surfaces = get_origin_surfaces(self.lvals)
-            face_of = {"x": "yz", "y": "xz", "z": "xy"}
-            logger.info(f"{surfaces['yz'][0]}")
-            # pick out the 1D‐lists in exactly the same order as self.directions
-            nbody_sites_list = [np.array(surfaces[face_of["x"]][1], dtype=np.uint8)]
-            nbody_sectors = np.array(cube_fluxes, dtype=int)
+            if self.dim == 2:
+                # in 2D we have two lines through (0,0):
+                line_of = {"x": "y", "y": "x"}
+                for dir in self.directions:
+                    sites = np.array(surfaces[line_of[dir]][1], dtype=np.uint8)
+                    nbody_sites_list.append(sites)
+                    nbody_ops.append(self.ops[f"E_p{dir}"])
+            elif self.dim == 3:
+                # in 3D we have three faces through (0,0,0):
+                face_of = {"x": "yz", "y": "xz", "z": "xy"}
+                for dir in self.directions:
+                    sites = np.array(surfaces[face_of[dir]][1], dtype=np.uint8)
+                    nbody_sites_list.append(sites)
+                    logger.info(f"{dir} sites: {sites} {surfaces[face_of[dir]][0]}")
+                    nbody_ops.append(self.ops[f"E_p{dir}"])
         else:
+            # no electric‐flux constraint in 1D, or in OBC or with matter
             nbody_sectors = None
             nbody_ops = None
             nbody_sites_list = None
@@ -68,10 +95,10 @@ class QED_Model(QuantumModel):
         # DEFAULT PARAMS
         self.default_params()
 
-    def build_Hamiltonian(self, g, m=None):
+    def build_Hamiltonian(self, g, m=None, theta=0.0):
         logger.info("BUILDING HAMILTONIAN")
         # Hamiltonian Coefficients
-        self.QED_Hamiltonian_couplings(g, m)
+        self.QED_Hamiltonian_couplings(g, m, theta)
         h_terms = {}
         # -------------------------------------------------------------------------------
         # ELECTRIC ENERGY
@@ -112,6 +139,55 @@ class QED_Model(QuantumModel):
             self.H.add_term(
                 h_terms["plaq_yz"].get_Hamiltonian(
                     strength=self.coeffs["B"], add_dagger=True
+                )
+            )
+        # -------------------------------------------------------------------------------
+        # TOPOLOGICAL TERM
+        if self.dim == 2 and np.abs(self.coeffs["theta"]) > 10e-10:
+            logger.info("Adding topological term")
+            op_names_list = ["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]
+            op_list = [self.ops[op] for op in op_names_list]
+            h_terms["plaq_xy"] = PlaquetteTerm(
+                ["x", "y"], op_list, op_names_list, **self.def_params
+            )
+            self.H.add_term(
+                h_terms["plaq_xy"].get_Hamiltonian(
+                    strength=self.coeffs["theta"], add_dagger=True
+                )
+            )
+        if self.dim == 3 and np.abs(self.coeffs["theta"]) > 10e-10:
+            logger.info("Adding topological term")
+            # XY Plane
+            op_names_list = ["EzC_px,py", "C_py,mx", "C_my,px", "C_mx,my"]
+            op_list = [self.ops[op] for op in op_names_list]
+            h_terms["Ez_Bxy"] = PlaquetteTerm(
+                ["x", "y"], op_list, op_names_list, **self.def_params
+            )
+            self.H.add_term(
+                h_terms["Ez_Bxy"].get_Hamiltonian(
+                    strength=self.coeffs["theta"], add_dagger=True
+                )
+            )
+            # XZ Plane
+            op_names_list = ["EyC_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"]
+            op_list = [self.ops[op] for op in op_names_list]
+            h_terms["Ey_Bxz"] = PlaquetteTerm(
+                ["x", "z"], op_list, op_names_list, **self.def_params
+            )
+            self.H.add_term(
+                h_terms["Ey_Bxz"].get_Hamiltonian(
+                    strength=self.coeffs["theta"], add_dagger=True
+                )
+            )
+            # YZ Plane
+            op_names_list = ["ExC_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"]
+            op_list = [self.ops[op] for op in op_names_list]
+            h_terms["Ex_Byz"] = PlaquetteTerm(
+                ["y", "z"], op_list, op_names_list, **self.def_params
+            )
+            self.H.add_term(
+                h_terms["Ex_Byz"].get_Hamiltonian(
+                    strength=self.coeffs["theta"], add_dagger=True
                 )
             )
         # -------------------------------------------------------------------------------
@@ -159,7 +235,7 @@ class QED_Model(QuantumModel):
                 sign=1,
             )
 
-    def QED_Hamiltonian_couplings(self, g, m=None, magnetic_basis=False):
+    def QED_Hamiltonian_couplings(self, g, m=None, theta=0, magnetic_basis=False):
         """
         This function provides the QED Hamiltonian coefficients
         starting from the gauge coupling g and the bare mass parameter m
@@ -189,6 +265,7 @@ class QED_Model(QuantumModel):
                 "g": g,
                 "E": E,  # ELECTRIC FIELD coupling
                 "B": B,  # MAGNETIC FIELD coupling
+                "theta": complex(0, theta),  # THETA TERM coupling
             }
             if m is not None:
                 coeffs |= {

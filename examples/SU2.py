@@ -23,6 +23,48 @@ from ed_lgt.operators import (
 import logging
 
 logger = logging.getLogger(__name__)
+# %%
+from ed_lgt.operators import QED_dressed_site_operators, QED_gauge_invariant_states
+
+
+def QED_gauge_invariant_ops(spin, pure_theory, lattice_dim):
+    in_ops = QED_dressed_site_operators(
+        spin,
+        pure_theory,
+        "ladder",
+        lattice_dim,
+    )
+    gauge_basis, _ = QED_gauge_invariant_states(spin, pure_theory, lattice_dim)
+    ops = {}
+    label = "site"
+    for op in in_ops.keys():
+        ops[op] = gauge_basis[label].transpose() @ in_ops[op] @ gauge_basis[label]
+    return ops
+
+
+lattice_dim = 3
+spin = 1
+pure_theory = True
+in_ops = QED_dressed_site_operators(
+    spin=spin, pure_theory=pure_theory, U="ladder", lattice_dim=lattice_dim
+)
+ops = QED_gauge_invariant_ops(
+    spin=spin, pure_theory=pure_theory, lattice_dim=lattice_dim
+)
+s, b = QED_gauge_invariant_states(
+    spin=spin, pure_theory=pure_theory, lattice_dim=lattice_dim
+)
+for op in ops.keys():
+    print(op)
+    print(ops[op])
+# %%
+for n in [15, 3, 3, 15]:
+    for op in ["E_px", "E_py", "E_mx", "E_my"]:
+        print(f"------- {op} ---------------")
+        print(ops[op].toarray()[n, n])
+        print("--------------------------")
+    print("++++++++")
+# %%
 
 
 def SU2_gauge_invariant_ops(spin, pure_theory, lattice_dim, background):

@@ -1,7 +1,7 @@
 # %%
 import numpy as np
 from math import prod
-from copy import deepcopy
+from copy import copy, deepcopy
 from itertools import product
 from numba import typed
 from .lattice_mappings import inverse_zig_zag, zig_zag
@@ -165,119 +165,126 @@ def get_neighbor_sites(coords, lvals, axis, has_obc):
 
 def get_plaquette_neighbors(coords, lvals, axes, has_obc):
     """
-    Calculates the neighboring sites forming a plaquette for a given lattice site.
-
-    This function determines the neighboring sites in a lattice system that can
-    form a plaquette with the given site. It considers the lattice dimensions,
-    specified axes for the plaquette, and whether periodic boundary conditions
-    (PBC) are applied.
+    Given a “lower-left” corner coords in an len(lvals)-D lattice,
+    and a 2-element list of axes (e.g. ['x','y'] or ['x','z']), return the
+    four sites of the elementary plaquette in that plane, or None if it
+    doesn’t fit (because you’re at the boundary in one direction under OBC).
 
     Args:
-        coords (tuple/list of ints): The coordinates of the initial site in the lattice.
-
-        lvals (list of ints ): The dimensions of the lattice. Represents the number of
-            sites along each axis (e.g., (Lx, Ly, Lz) for a 3D lattice).
-
-        axis (str): The axis along which the neighboring sites are to be found.
-            Should be a character 'x', 'y', or 'z', corresponding to the axis.
-
-        has_obc (list of bools): Indicates whether open boundary conditions (OBC) are
-            applied along each axis. List of booleans corresponding to each axis in 'lvals'.
-            True for OBC, False for PBC.
+      coords   - tuple of length D
+      lvals    - list of D integers
+      axes     - ['x','y'], ['x','z'], etc.
+      has_obc  - list of D bools (True=open BC, False=PBC)
 
     Returns:
-        coords_list: A list of tuples representing the coordinates of the initial
-            site and its plaquette neighbors. Returns None if neighbors
-            are not found or plaquette cannot be formed.
-
-        sites_list: A list of integers representing the 1D lattice indices of the
-            initial site and its plaquette neighbors, as converted by the
-            inverse_zig_zag function. Returns None if neighbors are not found
-            or plaquette cannot be formed.
-
-    Example:
-        >>> get_plaquette_neighbors(coords=[0, 0], lvals=[3, 3], axes=['x', 'y'], has_obc=[False, False])
-            ([(0, 0), (1, 0), (0, 1), (1, 1)], [0, 1, 3, 4])
+      (coords_list, sites_list) or (None, None)
     """
-    # Validate type of parameters
-    validate_parameters(coords=coords, lvals=lvals, axes=axes, has_obc=has_obc)
-    dimensions = "xyz"[: len(lvals)]
-    coords1 = list(coords)
-    i1 = inverse_zig_zag(lvals, coords1)
-    coords_list = [tuple(coords1)]
-    sites_list = [i1]
-    # Build the neighboring sites along the 2 axes.
-    # At the end of the cycle, we have 3 Plaquette sites out of 4.
-    for ax in axes:
-        coords2 = deepcopy(coords1)
-        # Get the indices of the axis
-        indx = dimensions.index(ax)
-        # Look at the neighbor site along each axis
-        if coords1[indx] < lvals[indx] - 1 or (
-            coords1[indx] == lvals[indx] - 1 and not has_obc[indx]
-        ):
-            coords2[indx] = (coords2[indx] + 1) % lvals[indx]
-            coords_list.append(tuple(coords2))
-            sites_list.append(inverse_zig_zag(lvals, coords2))
-        else:
-            # Plaquette cannot be formed in this case
-            return None, None
-    # Add the last diagonal neighbor, in case both axes adimts neighbors
-    if len(coords_list) == 3:
-        coords3 = [coords_list[1][0], coords_list[2][1]]
-        if len(lvals) > 2:
-            # For 3D lattices, maintain the third coordinate
-            coords3.append(coords1[2])
-        coords_list.append(tuple(coords3))
-        sites_list.append(inverse_zig_zag(lvals, coords3))
+    D = len(lvals)
+    dims = "xyz"[:D]
+    # figure out which integer indices correspond to your two axes
+    ia = dims.index(axes[0])
+    ib = dims.index(axes[1])
+
+    # check you can step +1 along each axis
+    ca, cb = coords[ia], coords[ib]
+    if not (ca < lvals[ia] - 1 or (ca == lvals[ia] - 1 and not has_obc[ia])):
+        return None, None
+    if not (cb < lvals[ib] - 1 or (cb == lvals[ib] - 1 and not has_obc[ib])):
+        return None, None
+
+    coords_list = []
+    sites_list = []
+
+    # 0) the “origin” corner
+    base = list(coords)
+    coords_list.append(tuple(base))
+    sites_list.append(inverse_zig_zag(lvals, base))
+
+    # 1) step along axis a
+    c1 = copy(base)
+    c1[ia] = (c1[ia] + 1) % lvals[ia]
+    coords_list.append(tuple(c1))
+    sites_list.append(inverse_zig_zag(lvals, c1))
+
+    # 2) step along axis b
+    c2 = copy(base)
+    c2[ib] = (c2[ib] + 1) % lvals[ib]
+    coords_list.append(tuple(c2))
+    sites_list.append(inverse_zig_zag(lvals, c2))
+
+    # 3) diagonal: both +1
+    c3 = copy(base)
+    c3[ia] = (c3[ia] + 1) % lvals[ia]
+    c3[ib] = (c3[ib] + 1) % lvals[ib]
+    coords_list.append(tuple(c3))
+    sites_list.append(inverse_zig_zag(lvals, c3))
+
     return coords_list, sites_list
 
 
 def get_origin_surfaces(lvals):
     """
-    For a 3D lattice with dimensions lvals = [Lx, Ly, Lz], return the three
-    “origin” faces (planes passing through (0,0,0)) both as 3D coordinates
-    and as their 1D indices along the zig-zag curve.
+    For a 2D or 3D lattice of size lvals, return the “origin” links (in 2D)
+    or faces (in 3D), both as coordinate tuples and as 1D indices along the
+    zig-zag curve.
 
-    The three faces are:
-      • 'yz' plane at x=0  (vary y=0…Ly-1, z=0…Lz-1)
-      • 'xz' plane at y=0  (vary x=0…Lx-1, z=0…Lz-1)
-      • 'xy' plane at z=0  (vary x=0…Lx-1, y=0…Ly-1)
+    - If len(lvals)==2 (2D), returns two full edges through (0,0):
+        'x': all sites with y=0 and x=0..Lx-1
+        'y': all sites with x=0 and y=0..Ly-1
+
+    - If len(lvals)==3 (3D), returns the three coordinate-planes through (0,0,0):
+        'yz' at x=0, 'xz' at y=0, 'xy' at z=0
 
     Args:
-        lvals (list of int): [Lx, Ly, Lz]
+        lvals (list of int): [Lx, Ly] or [Lx, Ly, Lz]
 
     Returns:
-        dict: {
-          'yz': (coords_yz, sites_yz),
-          'xz': (coords_xz, sites_xz),
-          'xy': (coords_xy, sites_xy),
-        }
-        where each coords_* is a list of 3-tuples, and each sites_* is the
-        corresponding list of 1D int indices via inverse_zig_zag.
+        dict: mapping keys → (coords, sites), where
+              coords is a list of tuples and
+              sites  is a list of ints via inverse_zig_zag.
     """
-    if len(lvals) != 3 or not all(isinstance(d, int) for d in lvals):
-        raise ValueError("lvals must be a list of three ints [Lx, Ly, Lz].")
+    if not all(isinstance(d, int) and d > 0 for d in lvals):
+        raise ValueError("All dimensions in lvals must be positive ints")
+    # 2D: return the two full “edges” through the origin
+    if len(lvals) == 2:
+        Lx, Ly = lvals
+        if Lx < 2 or Ly < 2:
+            raise ValueError("lvals must be at least [2,2]")
 
-    Lx, Ly, Lz = lvals
-    surfaces = {}
+        surfaces = {}
+        # edge along x at y=0
+        coords_x = [(x, 0) for x in range(Lx)]
+        sites_x = [inverse_zig_zag(lvals, c) for c in coords_x]
+        surfaces["x"] = (coords_x, sites_x)
 
-    # yz-plane at x=0
-    coords_yz = [(0, y, z) for y in range(Ly) for z in range(Lz)]
-    sites_yz = [inverse_zig_zag(lvals, c) for c in coords_yz]
-    surfaces["yz"] = (coords_yz, sites_yz)
+        # edge along y at x=0
+        coords_y = [(0, y) for y in range(Ly)]
+        sites_y = [inverse_zig_zag(lvals, c) for c in coords_y]
+        surfaces["y"] = (coords_y, sites_y)
 
-    # xz-plane at y=0
-    coords_xz = [(x, 0, z) for x in range(Lx) for z in range(Lz)]
-    sites_xz = [inverse_zig_zag(lvals, c) for c in coords_xz]
-    surfaces["xz"] = (coords_xz, sites_xz)
+        return surfaces
 
-    # xy-plane at z=0
-    coords_xy = [(x, y, 0) for x in range(Lx) for y in range(Ly)]
-    sites_xy = [inverse_zig_zag(lvals, c) for c in coords_xy]
-    surfaces["xy"] = (coords_xy, sites_xy)
+    # 3D: return the three full surfaces through the origin
+    elif len(lvals) == 3:
+        Lx, Ly, Lz = lvals
+        surfaces = {}
 
-    return surfaces
+        coords_yz = [(0, y, z) for y in range(Ly) for z in range(Lz)]
+        sites_yz = [inverse_zig_zag(lvals, c) for c in coords_yz]
+        surfaces["yz"] = (coords_yz, sites_yz)
+
+        coords_xz = [(x, 0, z) for x in range(Lx) for z in range(Lz)]
+        sites_xz = [inverse_zig_zag(lvals, c) for c in coords_xz]
+        surfaces["xz"] = (coords_xz, sites_xz)
+
+        coords_xy = [(x, y, 0) for x in range(Lx) for y in range(Ly)]
+        sites_xy = [inverse_zig_zag(lvals, c) for c in coords_xy]
+        surfaces["xy"] = (coords_xy, sites_xy)
+
+        return surfaces
+
+    else:
+        raise ValueError("get_origin_surfaces only supports 2D or 3D lattices")
 
 
 def get_lattice_link_site_pairs(lvals, has_obc):

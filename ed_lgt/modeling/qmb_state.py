@@ -2,13 +2,9 @@ import numpy as np
 from numba import njit, prange
 from math import prod
 from scipy.linalg import eigh as array_eigh, svd
-from scipy.sparse import csr_matrix, isspmatrix, csr_array
-from ed_lgt.tools import validate_parameters, exclude_columns, filter_compatible_rows
-from ed_lgt.symmetries import (
-    config_to_index_binarysearch,
-    index_to_config,
-    config_to_index_linsearch,
-)
+from scipy.sparse import isspmatrix, csr_array
+from ed_lgt.tools import validate_parameters
+from ed_lgt.symmetries import index_to_config, config_to_index_linsearch
 import logging
 
 logger = logging.getLogger(__name__)
@@ -220,29 +216,49 @@ class QMB_state:
 
     def get_state_configurations(self, threshold=1e-2, sector_configs=None):
         """
-        This function expresses the main QMB state configurations associated with the
-        most relevant coefficients of the QMB state psi. Every state configuration
-        is expressed in terms of the single site local Hilber basis
+        List out |psi> configurations whose amplitudes exceed `threshold`.
+
+        If `sector_configs` is provided, it must be an (MxL) array of all
+        symmetry-sector configurations, and we simply look up rows from it.
+        Otherwise we reconstruct each configuration via `index_to_config`.
+
+        Args:
+            threshold (float): minimum absolute amplitude to keep
+            sector_configs (ndarray or None): if present, shape (M,L)
+                mapping each state-index → its L-site configuration.
+
+        Prints to the logger each surviving configuration in order of descending |amplitude|.
         """
         logger.info("----------------------------------------------------")
         logger.info("STATE CONFIGURATIONS")
-        psi = csr_array(self.truncate(threshold))
+        # 1) mask off small amplitudes
+        psi = self.psi
+        mask = np.abs(psi) > threshold
+        # 2) collect indices & values
+        idx = np.nonzero(mask)[0]  # shape (K,)
+        vals = psi[idx]  # shape (K,)
+        logger.info(f"{len(idx)} configurations above threshold {threshold}")
+        if idx.size == 0:
+            logger.info("[no configurations above threshold]")
+            return
+        # 3) sort by descending absolute value
+        order = np.argsort(-np.abs(vals))
+        idx = idx[order]
+        vals = vals[order]
+        # 4) pull out configs
         if sector_configs is not None:
-            psi_configs = sector_configs[psi.indices, :]
+            cfgs = sector_configs[idx, :]
         else:
-            psi_configs = np.array(
-                [index_to_config(i, self.loc_dims) for i in psi.indices], dtype=np.uint8
+            # reconstruct each via index_to_config
+            cfgs = np.array(
+                [index_to_config(i, self.loc_dims) for i in idx], dtype=np.uint8
             )
-        # Get the descending order of absolute values of psi_data
-        sorted_indices = get_sorted_indices(psi.data)
-        # Use sorted indices to reorder data and configurations
-        psi_data = psi.data[sorted_indices]
-        psi_configs = psi_configs[sorted_indices]
-        # Print sorted cofigs with its amplitude
-        for config, val in zip(psi_configs, psi_data):
-            logger.info(
-                f"[{' '.join(f'{s:2d}' for s in config)}]  {format(np.abs(val),'.4f')}  {format(val,'.4f')}"
-            )
+        # 5) print
+        for _, config, amp in zip(idx, cfgs, vals):
+            # rescale all the amplitudes to have the first one real and positive
+            amp *= np.exp(-1j * np.angle(vals[0]))
+            coords = " ".join(f"{c:2d}" for c in config)
+            logger.info(f"[{coords}] |psi|={abs(amp):.8f}")  # psi={amp:.8f}")
 
 
 def truncation(array, threshold=1e-14):

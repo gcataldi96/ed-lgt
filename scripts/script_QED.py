@@ -1,5 +1,4 @@
 import numpy as np
-from ed_lgt.modeling import get_entropy_partition
 from ed_lgt.models import QED_Model
 from simsio import run_sim
 from time import perf_counter
@@ -13,7 +12,7 @@ with run_sim() as sim:
     # MODEL HAMILTONIAN
     model = QED_Model(**sim.par["model"])
     m = sim.par["m"] if not model.pure_theory else None
-    model.build_Hamiltonian(sim.par["g"], m)
+    model.build_Hamiltonian(sim.par["g"], m, theta=sim.par["theta"])
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     n_eigs = sim.par["hamiltonian"]["n_eigs"]
@@ -28,8 +27,8 @@ with run_sim() as sim:
     for obs in local_obs:
         sim.res[obs] = np.zeros(n_eigs, dtype=float)
     # LIST OF TWOBODY CORRELATORS
-    twobody_obs = [[f"P_p{d}", f"P_m{d}"] for d in model.directions]
-    twobody_axes = [d for d in model.directions]
+    twobody_obs = []
+    twobody_axes = []
     # LIST OF PLAQUETTE OPERATORS
     if model.dim == 2:
         plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
@@ -40,14 +39,17 @@ with run_sim() as sim:
             ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
         ]
     else:
-        plaquette_obs = None
+        plaquette_obs = []
+    for obs_names_list in plaquette_obs:
+        obs = "_".join(obs_names_list)
+        sim.res[obs] = np.zeros(n_eigs, dtype=float)
     # DEFINE OBSERVABLES
     model.get_observables(
         local_obs, twobody_obs, plaquette_obs, twobody_axes=twobody_axes
     )
     # ENTROPY
     # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
-    partition_indices = [0, 1, 2, 3]
+    partition_indices = sim.par["observables"]["entropy_partition"]
     # Build the list of environment and subsystem sites configurations
     model.get_subsystem_environment_configs(keep_indices=partition_indices)
     sim.res["entropy"] = np.zeros(model.H.n_eigs, dtype=float)
@@ -57,7 +59,7 @@ with run_sim() as sim:
         if not model.momentum_basis:
             # -----------------------------------------------------------------------
             # ENTROPY
-            if sim.par["get_entropy"]:
+            if sim.par["observables"]["get_entropy"]:
                 sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
                     partition_indices,
                     model.subsystem_configs,
@@ -67,13 +69,16 @@ with run_sim() as sim:
                 )
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS
-            if sim.par["get_state_configs"]:
+            if sim.par["observables"]["get_state_configs"]:
                 model.H.Npsi[ii].get_state_configurations(1e-1, model.sector_configs)
         # ---------------------------------------------------------------------------
         # MEASURE OBSERVABLES
         model.measure_observables(ii)
         for obs in local_obs:
             sim.res[obs][ii] = np.mean(model.res[obs])
+        for obs_names_list in plaquette_obs:
+            obs = "_".join(obs_names_list)
+            sim.res[obs][ii] = model.res[obs]
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

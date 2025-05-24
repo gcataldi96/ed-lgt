@@ -34,7 +34,7 @@ def sitebased_sym_sector_configs(
         sector_dim *= dim
     # Len of each config
     num_dims = len(loc_dims)
-    configs = np.zeros((sector_dim, num_dims), dtype=np.uint8)
+    configs = np.zeros((sector_dim, num_dims), dtype=np.uint16)
     # Use an auxiliary array to mark valid configurations
     checks = np.zeros(sector_dim, dtype=np.bool_)
     # Iterate over all the possible configs
@@ -129,7 +129,6 @@ def get_symmetry_sector_generators(
                     op_diagonals[ii, jj, :loc_dim] = op_diag.diagonal()
                 else:
                     op_diagonals[ii, jj, :loc_dim] = op.diagonal()
-
     elif action == "link":
         # Generators of Link Abelian symmetry sector
         lattice_dim = len(op_list)
@@ -146,6 +145,11 @@ def get_symmetry_sector_generators(
                         op_diagonals[ii, jj, kk, :loc_dim] = op_list[ii][jj].diagonal()
     elif action == "nbody":
         op_diagonals = np.zeros((len(op_list), n_sites, max(loc_dims)), dtype=float)
+        for ii, op in enumerate(op_list):
+            for jj, loc_dim in enumerate(loc_dims):
+                if gauge_basis is not None:
+                    op_diag = project_on_basis(op, lattice_labels[jj], gauge_basis)
+                    op_diagonals[ii, jj, :loc_dim] = op_diag.diagonal()
     return op_diagonals
 
 
@@ -157,12 +161,12 @@ def check_link_sym_partial(config, sym_op_diags, sym_sectors, pair_list):
     a simpler implementation without redundancy management.
 
     Args:
-        config (np.array of np.uint8): Partial QMB configuration array.
+        config (np.array of np.uint16): Partial QMB configuration array.
         sym_op_diags (np.array of floats): 4D array with shape=(lattice_dim, 2, n_sites, max(loc_dims)).
             Each "lattice direction" contains 2 operators, and each operator
             is represented by its diagonal on each lattice site.
         sym_sectors (np.array of floats): 1D array with sector values for each lattice direction.
-        pair_list (list of np.array of np.uint8): List of 2D arrays specifying pairs of site indices
+        pair_list (list of np.array of np.uint16): List of 2D arrays specifying pairs of site indices
             along the corresponding lattice direction.
 
     Returns:
@@ -188,50 +192,49 @@ def check_link_sym_partial(config, sym_op_diags, sym_sectors, pair_list):
                 sum += op_diag[config[site_index]]
 
             # Check if the sum violates the symmetry sector
-            if not np.isclose(sum, sym_sectors[idx], atol=1e-10):
+            if not np.isclose(sum, sym_sectors[idx], atol=1e-13):
                 return False
 
     return True
 
 
 @njit(cache=True)
-def check_nbody_sym_partial(
-    config: np.ndarray,
-    sym_op_diags: np.ndarray,
-    sym_sectors: np.ndarray,
-    nsites_list: list[np.ndarray],
-):
+def check_nbody_sym_partial(config, sym_op_diags, sym_sectors, nsites_list):
     """
     Partial check of nbody symmetries for a configuration.
     NOTE: All the nbody symmetries are supposed to be of type U(1) and to involve the same number of sites.
 
     Args:
-        config (np.array of np.uint8): Partial QMB configuration array.
-        sym_op_diags (np.array of floats): 4D array with shape=(n_symmetries, n_ops, n_sites, max(loc_dims)).
-            Each symmetry applies n_ops operators to the same number of sites.
+        config (np.array of np.uint16): Partial QMB configuration array.
+        sym_op_diags (np.array of floats): 3D array with shape=(n_symmetries, n_sites, max(loc_dims)).
+            Each symmetry applies an operator to n_sites number of sites (the same operator on all the given sites).
             Each operator is represented by its diagonal on each lattice site.
         sym_sectors (np.array of floats): 1D array of shape=(n_symmetries) with the sector value of each symmetry.
-        nsites_list (list of np.array of np.uint8): List of 1D arrays.
+        nsites_list (list of np.array of np.uint16): List of 1D arrays.
             Each array specifies the sites on which the n_ops operators (of each symmetry) act.
 
     Returns:
         bool: True if the partial config satisfies the nbody symmetries, False otherwise.
     """
+    num_sites = config.shape[0]
     n_symmetries = sym_op_diags.shape[0]
-    n_ops = sym_op_diags.shape[1]
     # Iterate over all nbody symmetries
     for sym_idx in range(n_symmetries):
         site_indices = nsites_list[sym_idx]
+        nsites_per_symmetry = len(site_indices)
+        # Skip symmetries where one or more indices
+        # are out of the current configuration length
+        if np.any(site_indices >= num_sites):
+            continue
         # Compute the sum for the symmetry condition
         sum = 0.0
-        for op_idx in range(n_ops):
-            site_index = site_indices[op_idx]
-            op_diag = sym_op_diags[sym_idx, op_idx, site_index, :]
+        for ii in range(nsites_per_symmetry):
+            site_index = site_indices[ii]
+            op_diag = sym_op_diags[sym_idx, site_index, :]
             sum += op_diag[config[site_index]]
         # Check if the sum violates the symmetry sector
-        if not np.isclose(sum, sym_sectors[sym_idx], atol=1e-10):
+        if not np.isclose(sum, sym_sectors[sym_idx], atol=1e-13):
             return False
-
     return True
 
 
@@ -243,7 +246,7 @@ def check_glob_sym_partial(config, sym_op_diags, sym_sectors, sym_type_flag):
     For Z2 symmetry, the check is only performed for complete configurations.
 
     Args:
-        config (np.array of np.uint8): 1D array with the state of each lattice site.
+        config (np.array of np.uint16): 1D array with the state of each lattice site.
 
         sym_op_diags (np.array of floats): 3D array of shape=(num_operators, n_sites, max(loc_dims)).
             Each operator's diagonal is expressed in the proper basis of each lattice site.
@@ -269,11 +272,11 @@ def check_glob_sym_partial(config, sym_op_diags, sym_sectors, sym_type_flag):
                 operation_result += sym_op_diags[jj, kk, config[kk]]
             # Check if partial configuration is valid
             if num_sites < max_sites:
-                if operation_result - sym_sectors[jj] > 1e-10:
+                if operation_result - sym_sectors[jj] > 1e-13:
                     return False
             # Full configuration must match exactly
             else:
-                if not np.isclose(operation_result, sym_sectors[jj], atol=1e-10):
+                if not np.isclose(operation_result, sym_sectors[jj], atol=1e-13):
                     return False
         # Z2 case
         elif sym_type_flag == 1:
@@ -285,7 +288,7 @@ def check_glob_sym_partial(config, sym_op_diags, sym_sectors, sym_type_flag):
                 operation_result = 1
                 for kk in range(num_sites):
                     operation_result *= sym_op_diags[jj, kk, config[kk]]
-                if not np.isclose(operation_result, sym_sectors[jj], atol=1e-10):
+                if not np.isclose(operation_result, sym_sectors[jj], atol=1e-13):
                     return False
     return True
 
@@ -318,7 +321,7 @@ def iterative_sitebased_sym_sector_configs(
     """
     # Start with the first two sites
     num_sites = len(loc_dims)
-    configs_prev = np.zeros((loc_dims[0] * loc_dims[1], 2), dtype=np.uint8)
+    configs_prev = np.zeros((loc_dims[0] * loc_dims[1], 2), dtype=np.uint16)
     checks_prev = np.zeros(configs_prev.shape[0], dtype=np.bool_)
 
     # Initialize configurations for the first two sites
@@ -341,7 +344,7 @@ def iterative_sitebased_sym_sector_configs(
         loc_dim_next = loc_dims[site_idx]
         num_configs_next = num_configs_prev * loc_dim_next
         # Allocate new configurations and checks
-        configs_next = np.zeros((num_configs_next, site_idx + 1), dtype=np.uint8)
+        configs_next = np.zeros((num_configs_next, site_idx + 1), dtype=np.uint16)
         checks_next = np.zeros(num_configs_next, dtype=np.bool_)
 
         # Build new configurations
@@ -396,7 +399,7 @@ def iterative_sitebased_sym_sector_configs1(
     """
     # Start with the first two sites
     num_sites = len(loc_dims)
-    configs_prev = np.zeros((loc_dims[0] * loc_dims[1], 2), dtype=np.uint8)
+    configs_prev = np.zeros((loc_dims[0] * loc_dims[1], 2), dtype=np.uint16)
     checks_prev = np.zeros(configs_prev.shape[0], dtype=np.bool_)
 
     # Initialize configurations for the first two sites
@@ -425,7 +428,7 @@ def iterative_sitebased_sym_sector_configs1(
         loc_dim_next = loc_dims[site_idx]
         num_configs_next = num_configs_prev * loc_dim_next
         # Allocate new configurations and checks
-        configs_next = np.zeros((num_configs_next, site_idx + 1), dtype=np.uint8)
+        configs_next = np.zeros((num_configs_next, site_idx + 1), dtype=np.uint16)
         checks_next = np.zeros(num_configs_next, dtype=np.bool_)
 
         # Build new configurations
@@ -464,15 +467,17 @@ def get_link_sector_configs(
     pair_list,
     nbody_op_diags=None,
     nbody_sectors=None,
-    nsites_list=None,
+    nbody_sites_list=None,
 ):
+    logger.info("GETTING LINK SECTOR CONFIGURATIONS")
     if not isinstance(link_sectors, np.ndarray):
         link_sectors = np.array(link_sectors, dtype=float)
     # Acquire Sector dimension
     sector_dim = np.prod(loc_dims)
     logger.info(f"TOT DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
     if nbody_op_diags is not None:
-        logger.info("Nbody symmetries detected")
+        if not isinstance(nbody_sectors, np.ndarray):
+            nbody_sectors = np.array(nbody_sectors, dtype=float)
         sector_configs = iterative_link_sector_configs_plus(
             loc_dims,
             link_op_diags,
@@ -480,7 +485,7 @@ def get_link_sector_configs(
             pair_list,
             nbody_op_diags,
             nbody_sectors,
-            nsites_list,
+            nbody_sites_list,
         )
     else:
         sector_configs = iterative_link_sector_configs(
@@ -510,75 +515,7 @@ def iterative_link_sector_configs(loc_dims, link_op_diags, link_sectors, pair_li
     """
     # Start with the first two sites
     num_sites = len(loc_dims)
-    configs_prev = np.zeros((loc_dims[0] * loc_dims[1], 2), dtype=np.uint8)
-    checks_prev = np.zeros(configs_prev.shape[0], dtype=np.bool_)
-
-    # Initialize configurations for the first two sites
-    for i in prange(configs_prev.shape[0]):
-        configs_prev[i, 0] = i // loc_dims[1]  # First site index
-        configs_prev[i, 1] = i % loc_dims[1]  # Second site index
-        # Perform the checks for global and link symmetries
-        checks_prev[i] = check_link_sym_partial(
-            configs_prev[i], link_op_diags, link_sectors, pair_list
-        )
-    # Filter configurations for the first two sites
-    configs_prev = configs_prev[checks_prev]
-    num_configs_prev = configs_prev.shape[0]
-
-    # Iteratively add one site at a time
-    for site_idx in range(2, num_sites):
-        loc_dim_next = loc_dims[site_idx]
-        num_configs_next = num_configs_prev * loc_dim_next
-        # Allocate new configurations and checks
-        configs_next = np.zeros((num_configs_next, site_idx + 1), dtype=np.uint8)
-        checks_next = np.zeros(num_configs_next, dtype=np.bool_)
-
-        # Build new configurations
-        for i in prange(num_configs_next):
-            prev_config_idx = i // loc_dim_next
-            new_site_state = i % loc_dim_next
-
-            # Copy the previous configuration and add the new site's state
-            configs_next[i, :site_idx] = configs_prev[prev_config_idx]
-            configs_next[i, site_idx] = new_site_state
-
-            # Perform the checks for link symmetries
-            checks_next[i] = check_link_sym_partial(
-                configs_next[i], link_op_diags, link_sectors, pair_list
-            )
-        # Filter configurations for the current site
-        configs_prev = configs_next[checks_next]
-        num_configs_prev = configs_prev.shape[0]
-
-    return configs_prev
-
-
-@njit(parallel=True, cache=True)
-def iterative_link_sector_configs_plus(
-    loc_dims,
-    link_op_diags,
-    link_sectors,
-    pair_list,
-    nbody_op_diags: np.ndarray,
-    nbody_sectors: np.ndarray,
-    nsites_list: list[np.ndarray],
-):
-    """
-    Iteratively compute the configurations belonging to a symmetry sector,
-    refining the configurations one site at a time.
-
-    Args:
-        loc_dims (np.ndarray): 1D array of single-site local dimensions.
-        link_op_diags (np.ndarray): 3D array of diagonals of link symmetry operators.
-        link_sectors (np.ndarray): 1D array of link symmetry sector values.
-        pair_list (np.ndarray): List of site pairs for link symmetries.
-
-    Returns:
-        np.ndarray: Array of configurations belonging to the symmetry sector.
-    """
-    # Start with the first two sites
-    num_sites = len(loc_dims)
-    configs_prev = np.zeros((loc_dims[0] * loc_dims[1], 2), dtype=np.uint8)
+    configs_prev = np.zeros((loc_dims[0] * loc_dims[1], 2), dtype=np.uint16)
     checks_prev = np.zeros(configs_prev.shape[0], dtype=np.bool_)
 
     # Initialize configurations for the first two sites
@@ -598,7 +535,75 @@ def iterative_link_sector_configs_plus(
         loc_dim_next = loc_dims[site_idx]
         num_configs_next = num_configs_prev * loc_dim_next
         # Allocate new configurations and checks
-        configs_next = np.zeros((num_configs_next, site_idx + 1), dtype=np.uint8)
+        configs_next = np.zeros((num_configs_next, site_idx + 1), dtype=np.uint16)
+        checks_next = np.zeros(num_configs_next, dtype=np.bool_)
+
+        # Build new configurations
+        for ii in prange(num_configs_next):
+            prev_config_idx = ii // loc_dim_next
+            new_site_state = ii % loc_dim_next
+
+            # Copy the previous configuration and add the new site's state
+            configs_next[ii, :site_idx] = configs_prev[prev_config_idx]
+            configs_next[ii, site_idx] = new_site_state
+
+            # Perform the checks for link symmetries
+            checks_next[ii] = check_link_sym_partial(
+                configs_next[ii], link_op_diags, link_sectors, pair_list
+            )
+        # Filter configurations for the current site
+        configs_prev = configs_next[checks_next]
+        num_configs_prev = configs_prev.shape[0]
+
+    return configs_prev
+
+
+@njit(parallel=True, cache=True)
+def iterative_link_sector_configs_plus(
+    loc_dims,
+    link_op_diags,
+    link_sectors,
+    pair_list,
+    nbody_op_diags,
+    nbody_sectors,
+    nbody_sites_list,
+):
+    """
+    Iteratively compute the configurations belonging to a symmetry sector,
+    refining the configurations one site at a time.
+
+    Args:
+        loc_dims (np.ndarray): 1D array of single-site local dimensions.
+        link_op_diags (np.ndarray): 3D array of diagonals of link symmetry operators.
+        link_sectors (np.ndarray): 1D array of link symmetry sector values.
+        pair_list (np.ndarray): List of site pairs for link symmetries.
+
+    Returns:
+        np.ndarray: Array of configurations belonging to the symmetry sector.
+    """
+    # Start with the first two sites
+    num_sites = len(loc_dims)
+    configs_prev = np.zeros((loc_dims[0] * loc_dims[1], 2), dtype=np.uint16)
+    checks_prev = np.zeros(configs_prev.shape[0], dtype=np.bool_)
+
+    # Initialize configurations for the first two sites
+    for ii in prange(configs_prev.shape[0]):
+        configs_prev[ii, 0] = ii // loc_dims[1]  # First site index
+        configs_prev[ii, 1] = ii % loc_dims[1]  # Second site index
+        # Perform the checks for global and link symmetries
+        checks_prev[ii] = check_link_sym_partial(
+            configs_prev[ii], link_op_diags, link_sectors, pair_list
+        )
+    # Filter configurations for the first two sites
+    configs_prev = configs_prev[checks_prev]
+    num_configs_prev = configs_prev.shape[0]
+
+    # Iteratively add one site at a time
+    for site_idx in range(2, num_sites):
+        loc_dim_next = loc_dims[site_idx]
+        num_configs_next = num_configs_prev * loc_dim_next
+        # Allocate new configurations and checks
+        configs_next = np.zeros((num_configs_next, site_idx + 1), dtype=np.uint16)
         checks_next = np.zeros(num_configs_next, dtype=np.bool_)
 
         # Build new configurations
@@ -614,7 +619,7 @@ def iterative_link_sector_configs_plus(
             checks_next[ii] = check_link_sym_partial(
                 configs_next[ii], link_op_diags, link_sectors, pair_list
             ) and check_nbody_sym_partial(
-                configs_next[ii], nbody_op_diags, nbody_sectors, nsites_list
+                configs_next[ii], nbody_op_diags, nbody_sectors, nbody_sites_list
             )
         # Filter configurations for the current site
         configs_prev = configs_next[checks_next]
