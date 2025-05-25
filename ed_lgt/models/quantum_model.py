@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.sparse import csc_matrix
+from scipy.sparse import csc_matrix, isspmatrix, csr_matrix
 from scipy.sparse.linalg import expm
 from math import prod
 from ed_lgt.tools import stag_avg, exclude_columns
@@ -31,12 +31,13 @@ __all__ = ["QuantumModel"]
 class QuantumModel:
     def __init__(
         self,
-        lvals,
-        has_obc,
+        lvals: list[int],
+        has_obc: list[bool],
         ham_format="sparse",
-        momentum_basis=False,
-        logical_unit_size=1,
+        logical_unit_size: int = 1,
+        momentum_basis: bool = False,
         momentum_k=0,
+        basis_projector: np.ndarray = None,
     ):
         # Lattice parameters
         self.lvals = lvals
@@ -57,6 +58,10 @@ class QuantumModel:
         self.logical_unit_size = int(logical_unit_size)
         # Hamiltonian format
         self.ham_format = ham_format
+        # Efficient reduced basis projector
+        self.basis_projector = basis_projector
+        if basis_projector is not None:
+            logger.info(f"Efficient basis projector: {basis_projector.shape}")
         # Dictionary for results
         self.res = {}
 
@@ -85,75 +90,112 @@ class QuantumModel:
         self.def_params = {
             "lvals": self.lvals,
             "has_obc": self.has_obc,
-            "gauge_basis": self.gauge_basis,
             "sector_configs": self.sector_configs,
-            "staggered_basis": self.staggered_basis,
             "momentum_basis": self.B,
             "momentum_k": 0,
         }
         # Initialize the Hamiltonian
         self.H = QMB_hamiltonian(self.lvals, size=hamiltonian_size)
 
-    def get_local_site_dimensions(self):
+    def project_operators(self, ops_dict: dict[csr_matrix]):
+        """
+        Compute the local basis of each site and the corresponding lattice labels.
+        Project a dictionary of operators into a gauge-invariant or optimal subspace of each
+        lattice site.
+
+        Parameters:
+            ops_dict (dict): Dictionary of operators (each one a scipy.sparse.csr_matrix).
+
+        Returns:
+            dict: New dictionary of projected operators (np.ndarray) with shape (n_sites, max_loc_dim, max_loc_dim).
+            The keys are the same as the input dictionary and contains the effective matrix
+            for each site, accounting for the possibility of different local Hilbert spaces among the sites.
+        """
         if self.gauge_basis is not None:
             # Acquire local dimension and lattice label
             lattice_labels, loc_dims = lattice_base_configs(
                 self.gauge_basis, self.lvals, self.has_obc, self.staggered_basis
             )
-            self.loc_dims = loc_dims.transpose().reshape(self.n_sites)
+            loc_dims = loc_dims.transpose().reshape(self.n_sites)
             self.lattice_labels = lattice_labels.transpose().reshape(self.n_sites)
         else:
+            # Local dimension is the same for all sites
+            local_dim = ops_dict[list(ops_dict.keys())[0]].shape[0]
+            loc_dims = np.array([local_dim] * self.n_sites, dtype=int)
             self.lattice_labels = None
+        # Determine effective local dimension
+        # NOTE: we assume that the basis projector is the same for all sites
+        # This will be eventually generalized
+        if self.basis_projector is not None:
+            local_dim = self.basis_projector.shape[1]
+            self.loc_dims = np.array([local_dim] * self.n_sites, dtype=int)
+        else:
+            self.loc_dims = loc_dims
         logger.info(f"local dimensions: {self.loc_dims}")
+        # Determine the maximum local dimension
+        max_loc_dim = max(self.loc_dims)
+        # -----------------------------------------------------------------------------
+        # Initialize new dictionary with the projected operators
+        logger.debug(f"Projecting operators to the effective Hilbert space")
+        self.ops = {}
+        # Iterate over operators
+        for op, operator in ops_dict.items():
+            self.ops[op] = np.zeros(
+                (self.n_sites, max_loc_dim, max_loc_dim), dtype=ops_dict[op].dtype
+            )
+            # Run over the sites
+            for jj, loc_dim in enumerate(self.loc_dims):
+                # For Lattice Gauge Theories where sites have different Hilbert Bases
+                if self.gauge_basis is not None:
+                    # Get the label of the site
+                    site_label = self.lattice_labels[jj]
+                    # Get the projected operator
+                    eff_op = apply_projection(
+                        projector=self.gauge_basis[site_label],
+                        operator=operator,
+                    ).toarray()
+                # For Theories where all the sites have the same Hilber basis
+                else:
+                    eff_op = operator.toarray()
+                # If an extra projector is given (to reduce the local Hilbert space)
+                if self.basis_projector is not None:
+                    eff_op = apply_projection(
+                        projector=self.basis_projector, operator=eff_op
+                    )
+                # Save it inside the new list of operators
+                # NOTE: here we assume all the operators to be real
+                self.ops[op][jj, :loc_dim, :loc_dim] = np.real(eff_op)
 
     def get_abelian_symmetry_sector(
         self,
-        global_ops=None,
-        global_sectors=None,
-        global_sym_type="U",
-        link_ops=None,
-        link_sectors=None,
-        nbody_ops=None,
-        nbody_sectors=None,
+        global_ops: list[np.ndarray] = None,
+        global_sectors: list = None,
+        global_sym_type: str = "U",
+        link_ops: list[np.ndarray] = None,
+        link_sectors: list = None,
+        nbody_ops: list[np.ndarray] = None,
+        nbody_sectors: list = None,
         nbody_sites_list=None,
     ):
         # ================================================================================
         # GLOBAL ABELIAN SYMMETRIES
         if global_ops is not None:
-            logger.info("Global Symmetry operators")
-            global_ops = get_symmetry_sector_generators(
-                global_ops,
-                loc_dims=self.loc_dims,
-                action="global",
-                gauge_basis=self.gauge_basis,
-                lattice_labels=self.lattice_labels,
-            )
+            logger.debug("Global Symmetry operators")
+            global_ops = get_symmetry_sector_generators(global_ops, action="global")
         # ================================================================================
         # ABELIAN Z2 SYMMETRIES
         if link_ops is not None:
-            logger.info("Link Symmetry operators")
-            link_ops = get_symmetry_sector_generators(
-                link_ops,
-                loc_dims=self.loc_dims,
-                action="link",
-                gauge_basis=self.gauge_basis,
-                lattice_labels=self.lattice_labels,
-            )
+            logger.debug("Link Symmetry operators")
+            link_ops = get_symmetry_sector_generators(link_ops, action="link")
             pair_list = get_lattice_link_site_pairs(self.lvals, self.has_obc)
         # ================================================================================
         # nBODY ABELIAN SYMMETRIES
         if nbody_ops is not None:
-            logger.info("Nbody Symmetry operators")
-            nbody_ops = get_symmetry_sector_generators(
-                nbody_ops,
-                loc_dims=self.loc_dims,
-                action="nbody",
-                gauge_basis=self.gauge_basis,
-                lattice_labels=self.lattice_labels,
-            )
+            logger.debug("Nbody Symmetry operators")
+            nbody_ops = get_symmetry_sector_generators(nbody_ops, action="nbody")
         # ================================================================================
         if global_ops is not None and link_ops is not None:
-            logger.info("Global & Link symmetry sector")
+            logger.debug("Global & Link symmetry sector")
             self.sector_indices, self.sector_configs = symmetry_sector_configs(
                 loc_dims=self.loc_dims,
                 glob_op_diags=global_ops,
@@ -164,7 +206,7 @@ class QuantumModel:
                 pair_list=pair_list,
             )
         elif global_ops is not None:
-            logger.info("Global symmetry sector")
+            logger.debug("Global symmetry sector")
             self.sector_indices, self.sector_configs = global_abelian_sector(
                 loc_dims=self.loc_dims,
                 sym_op_diags=global_ops,
@@ -173,9 +215,9 @@ class QuantumModel:
             )
         elif link_ops is not None:
             if nbody_ops is not None:
-                logger.info("Link & Nbody symmetry sector")
+                logger.debug("Link & Nbody symmetry sector")
             else:
-                logger.info("Link symmetry sector")
+                logger.debug("Link symmetry sector")
             self.sector_indices, self.sector_configs = get_link_sector_configs(
                 loc_dims=self.loc_dims,
                 link_op_diags=link_ops,
@@ -233,7 +275,13 @@ class QuantumModel:
             state = self.B.transpose().dot(state)
         return state
 
-    def measure_fidelity(self, state, index, dynamics=False, print_value=False):
+    def measure_fidelity(
+        self,
+        state: np.ndarray,
+        index: int,
+        dynamics: bool = False,
+        print_value: bool = False,
+    ):
         if not isinstance(state, np.ndarray):
             raise TypeError(f"state must be np.array not {type(state)}")
         if len(state) != self.H.Ham.shape[0]:
@@ -567,3 +615,27 @@ class QuantumModel:
             logger.info(f"{obs}: {diag_avg[f'DE_{obs}']}")
         logger.info("----------------------------------------------------")
         return diag_avg
+
+
+def apply_projection(projector, operator):
+    """
+    Project an operator onto the subspace defined by a projector.
+
+    Given:
+      - projector (np.ndarray or csr_matrix): a (N, k) matrix
+      - operator (np.ndarray or csr_matrix): a (N, N) operator
+
+    Returns:
+      - O_eff: the effective operator $O_eff = P^{\dagger}\cdot O \cdot P$
+    """
+    # Check the shape of the projector
+    if projector.shape[0] != operator.shape[0]:
+        msg = f"Projector and operator have incompatible shapes {projector.shape} {operator.shape}"
+        raise ValueError(msg)
+    # Return the projected operator
+    if isinstance(operator, np.ndarray) and isinstance(projector, np.ndarray):
+        return np.dot(projector.conj().T, np.dot(operator, projector))
+    elif isspmatrix(operator) and isspmatrix(projector):
+        return projector.conj().transpose() @ operator @ projector
+    else:
+        logger.info(f"{type(operator)} {type(projector)}")

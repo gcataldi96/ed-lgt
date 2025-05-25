@@ -106,50 +106,37 @@ def symmetry_sector_configs(
     return sector_indices, sector_configs
 
 
-def get_symmetry_sector_generators(
-    op_list,
-    loc_dims: np.ndarray[int],
-    action: str = "global",
-    gauge_basis: dict = None,
-    lattice_labels=None,
-):
-    def project_on_basis(
-        op: csr_matrix, basis_label: str, gauge_basis: dict
-    ) -> csr_matrix:
-        return gauge_basis[basis_label].transpose() @ op @ gauge_basis[basis_label]
-
-    n_sites = len(loc_dims)
-    # Generators of Global Abelian Symmetry sector
+def get_symmetry_sector_generators(op_list: list[np.ndarray], action: str):
     if action == "global":
-        op_diagonals = np.zeros((len(op_list), n_sites, max(loc_dims)), dtype=float)
-        for ii, op in enumerate(op_list):
-            for jj, loc_dim in enumerate(loc_dims):
-                if gauge_basis is not None:
-                    op_diag = project_on_basis(op, lattice_labels[jj], gauge_basis)
-                    op_diagonals[ii, jj, :loc_dim] = op_diag.diagonal()
-                else:
-                    op_diagonals[ii, jj, :loc_dim] = op.diagonal()
+        # Generators of Global Abelian Symmetry sector
+        n_sites = op_list[0].shape[0]
+        max_loc_dim = op_list[0].shape[1]
+        logger.debug(f"GLOBAL: nsites: {n_sites}, max_loc_dim: {max_loc_dim}")
+        op_diagonals = np.zeros((len(op_list), n_sites, max_loc_dim), dtype=float)
+        for ii, operator in enumerate(op_list):
+            for jj in range(n_sites):
+                op_diagonals[ii, jj, :] = np.diagonal(operator[jj])
     elif action == "link":
         # Generators of Link Abelian symmetry sector
         lattice_dim = len(op_list)
-        op_diagonals = np.zeros((lattice_dim, 2, n_sites, max(loc_dims)), dtype=float)
+        n_sites = op_list[0][0].shape[0]
+        max_loc_dim = op_list[0][0].shape[1]
+        logger.debug(f"LINK: nsites: {n_sites}, max_loc_dim: {max_loc_dim}")
+        op_diagonals = np.zeros((lattice_dim, 2, n_sites, max_loc_dim), dtype=float)
         for ii in range(lattice_dim):
             for jj in range(2):
-                for kk, loc_dim in enumerate(loc_dims):
-                    if gauge_basis is not None:
-                        op_diag = project_on_basis(
-                            op_list[ii][jj], lattice_labels[kk], gauge_basis
-                        )
-                        op_diagonals[ii, jj, kk, :loc_dim] = op_diag.diagonal()
-                    else:
-                        op_diagonals[ii, jj, kk, :loc_dim] = op_list[ii][jj].diagonal()
+                for kk in range(n_sites):
+                    op_diagonals[ii, jj, kk, :] = np.diagonal(op_list[ii][jj][kk])
     elif action == "nbody":
-        op_diagonals = np.zeros((len(op_list), n_sites, max(loc_dims)), dtype=float)
-        for ii, op in enumerate(op_list):
-            for jj, loc_dim in enumerate(loc_dims):
-                if gauge_basis is not None:
-                    op_diag = project_on_basis(op, lattice_labels[jj], gauge_basis)
-                    op_diagonals[ii, jj, :loc_dim] = op_diag.diagonal()
+        # Generators of N-body Abelian symmetry sector
+        n_symmetries = len(op_list)
+        n_sites = op_list[0].shape[0]
+        max_loc_dim = op_list[0].shape[1]
+        logger.debug(f"nBODY: nsites: {n_sites}, max_loc_dim: {max_loc_dim}")
+        op_diagonals = np.zeros((n_symmetries, n_sites, max_loc_dim), dtype=float)
+        for ii, operator in enumerate(op_list):
+            for jj in range(n_sites):
+                op_diagonals[ii, jj, :] = np.diagonal(operator[jj])
     return op_diagonals
 
 
@@ -469,7 +456,7 @@ def get_link_sector_configs(
     nbody_sectors=None,
     nbody_sites_list=None,
 ):
-    logger.info("GETTING LINK SECTOR CONFIGURATIONS")
+    logger.debug("GETTING LINK SECTOR CONFIGURATIONS")
     if not isinstance(link_sectors, np.ndarray):
         link_sectors = np.array(link_sectors, dtype=float)
     # Acquire Sector dimension

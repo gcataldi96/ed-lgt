@@ -15,7 +15,6 @@ __all__ = [
     "nbody_term",
     "nbody_data",
     "nbody_data_par",
-    "get_operators_nbody_term",
     "nbody_data_momentum_basis",
     "nbody_data_momentum_basis_par",
     "process_batches_with_nbody",
@@ -601,28 +600,6 @@ def nbody_data_momentum_basis_par(
         col_list[np.nonzero(value_list)],
         value_list[np.nonzero(value_list)],
     )
-
-
-def get_operators_nbody_term(op_list, loc_dims, gauge_basis=None, lattice_labels=None):
-    def apply_basis_projection(op, basis_label, gauge_basis):
-        return (gauge_basis[basis_label].T @ op @ gauge_basis[basis_label]).toarray()
-
-    n_sites = len(loc_dims)
-    new_op_list = np.zeros(
-        (len(op_list), n_sites, max(loc_dims), max(loc_dims)), dtype=op_list[0].dtype
-    )
-    for ii, op in enumerate(op_list):
-        for jj, loc_dim in enumerate(loc_dims):
-            # For Lattice Gauge Theories where sites have different Hilbert Bases
-            if gauge_basis is not None:
-                # Get the projected operator
-                proj_op = apply_basis_projection(op, lattice_labels[jj], gauge_basis)
-            # For Theories where all the sites have the same Hilber basis
-            else:
-                proj_op = op.toarray()
-            # Save it inside the new list of operators
-            new_op_list[ii, jj, :loc_dim, :loc_dim] = proj_op
-    return new_op_list
 
 
 @njit(cache=True)

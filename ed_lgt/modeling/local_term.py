@@ -21,7 +21,7 @@ __all__ = ["LocalTerm", "check_link_symmetry"]
 
 
 class LocalTerm(QMBTerm):
-    def __init__(self, operator, op_name, **kwargs):
+    def __init__(self, operator: np.ndarray, op_name: str, **kwargs):
         """
         This function provides methods for computing local Hamiltonian terms in
         a d-dimensional lattice model.
@@ -40,6 +40,9 @@ class LocalTerm(QMBTerm):
         super().__init__(operator=operator, op_name=op_name, **kwargs)
         # Number of lattice sites
         self.n_sites = prod(self.lvals)
+        # Local dimensions of the operator
+        if self.sector_configs is not None:
+            self.max_loc_dim = self.op.shape[2]
 
     @get_time
     def get_Hamiltonian(self, strength, mask=None):
@@ -193,7 +196,7 @@ class LocalTerm(QMBTerm):
                 self.var[ii] -= self.obs[ii] ** 2
         else:
             # Compute the operator for the variance
-            shape = (1, self.n_sites, max(self.loc_dims), max(self.loc_dims))
+            shape = (1, self.n_sites, self.max_loc_dim, self.max_loc_dim)
             opvar = np.zeros(shape, dtype=float)
             for ii in range(self.n_sites):
                 opvar[0, ii] = np.dot(self.sym_ops[0, ii], self.sym_ops[0, ii])

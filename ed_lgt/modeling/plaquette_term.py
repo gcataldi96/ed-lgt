@@ -46,7 +46,7 @@ class PlaquetteTerm(QMBTerm):
         self.print_plaq = print_plaq
         # Number of lattice sites
         self.n_sites = prod(self.lvals)
-        logger.info(f"PlaqTerm: {op_names_list}")
+        logger.info(f"PlaqTerm {self.axes}: {op_names_list}")
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
         """
@@ -101,6 +101,7 @@ class PlaquetteTerm(QMBTerm):
             _, sites = get_plaquette_neighbors(
                 coords, self.lvals, self.axes, self.has_obc
             )
+            # logger.info(f"coords: {ii} {coords}, sites: {sites}")
             if sites is None or not self.get_mask_conditions(coords, mask):
                 continue
             # this gives three 1D arrays for this plaquette
@@ -122,7 +123,7 @@ class PlaquetteTerm(QMBTerm):
             # careful: we want original row before concat
             col = np.concatenate([col, row[: len(row) // 2]])
             val = np.concatenate([val, np.conjugate(val)])
-
+        # logger.info(f"{np.nonzero(val)} non-zero elements in the Hamiltonian")
         return row, col, val
 
     def get_expval(self, psi, get_imag=False, stag_label=None):

@@ -85,7 +85,7 @@ def QED_rishon_operators(spin, pure_theory, U):
     return ops
 
 
-def QED_dressed_site_operators(spin, pure_theory, U, lattice_dim):
+def QED_dressed_site_operators(spin, pure_theory, lattice_dim, U="ladder"):
     """
     This function generates the dressed-site operators of the QED Hamiltonian
     in d spatial dimensions for d=1,2,3 (pure or with matter fields)
@@ -97,9 +97,10 @@ def QED_dressed_site_operators(spin, pure_theory, U, lattice_dim):
 
         pure_theory (bool): If true, the dressed site includes matter fields
 
+        lattice_dim (int): number of lattice spatial dimensions
+
         U (str): which version of U you want to use to obtain rishons: 'ladder', 'spin', 'cyclic'
 
-        lattice_dim (int): number of lattice spatial dimensions
 
     Returns:
         dict: dictionary with all the operators of the QED (pure or full) Hamiltonian
@@ -235,7 +236,7 @@ def QED_dressed_site_operators(spin, pure_theory, U, lattice_dim):
     ops["E_square"] = 0
     for d in dimensions:
         for s in "mp":
-            ops["E_square"] += 0.5 * ops[f"E_square_{s}{d}"]
+            ops["E_square"] += 0.25 * ops[f"E_square_{s}{d}"]
     # Define Gauss Law operators of hard-core lattice sites
     if spin < 4 and lattice_dim < 3:
         # GAUSS LAW OPERATORS

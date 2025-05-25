@@ -289,7 +289,9 @@ def diagonalize_density_matrix(rho):
     return rho_eigvals, rho_eigvecs
 
 
-def get_projector_for_efficient_density_matrix(rho: np.ndarray, threshold: float):
+def get_projector_for_efficient_density_matrix(
+    rho_eigvals, rho_eigvecs, threshold: float
+):
     """
     Build a projector P from the single-site density matrix rho.
 
@@ -305,16 +307,11 @@ def get_projector_for_efficient_density_matrix(rho: np.ndarray, threshold: float
     Returns:
         np.ndarray: Projector matrix P of shape (N, k), where k is the number of selected eigenvectors.
     """
-    # Diagonalize the density matrix
-    rho_eigvals, rho_eigvecs = diagonalize_density_matrix(rho)
     # Sort eigenvalues and eigenvectors in descending order.
     # Note: np.argsort sorts in ascending order; we reverse to get descending order.
     sorted_indices = np.argsort(rho_eigvals)[::-1]
     rho_eigvals = rho_eigvals[sorted_indices]
     rho_eigvecs = rho_eigvecs[:, sorted_indices]
-    logger.info(f"DIAGONALIZED RHO eigvals")
-    for ii, eigval in enumerate(rho_eigvals):
-        logger.info(f"{ii}  {format(eigval, '.8f')}")
     # Determine how many eigenvectors have eigenvalues greater than the threshold.
     # (If too few are significant, relax the threshold until at least 2 are selected.)
     P_columns = np.sum(rho_eigvals > threshold)
@@ -322,14 +319,13 @@ def get_projector_for_efficient_density_matrix(rho: np.ndarray, threshold: float
         threshold /= 10
         P_columns = np.sum(rho_eigvals > threshold)
     logger.info(f"SIGNIFICANT EIGENVALUES {P_columns} with threshold {threshold}")
-
     # Build the projector matrix P from the selected eigenvectors.
     # Here we take the first P_columns eigenvectors
     # (which correspond to the largest eigenvalues).
-    proj = np.zeros((rho.shape[0], P_columns), dtype=complex)
+    proj = np.zeros((rho_eigvals.shape[0], P_columns), dtype=complex)
     for jj in range(P_columns):
         proj[:, jj] = rho_eigvecs[:, jj]
-    return proj, rho_eigvals, rho_eigvecs
+    return proj
 
 
 @njit(parallel=True, cache=True)

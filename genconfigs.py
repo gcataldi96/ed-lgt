@@ -130,3 +130,11 @@ gen_configs("template", params, f"Ising/Ising1D")
 params = {"m": np.logspace(-1, 1, 5), "g": np.logspace(-1, 1, 5)}
 gen_configs("template", params, f"scars/dynamics2Dgrid")
 # %%
+params = {"g": np.logspace(-1, 0.5, 30), "spin": np.arange(1, 10, 1)}
+gen_configs("template", params, f"LBO/qed_scan")
+
+# %%
+params = {"g": np.logspace(-1, 0.5, 30)}
+gen_configs("template", params, f"LBO/qed_error")
+
+# %%

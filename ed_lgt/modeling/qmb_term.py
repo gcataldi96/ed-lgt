@@ -1,8 +1,5 @@
 import numpy as np
-from math import prod
-from .lattice_geometry import lattice_base_configs
 from ed_lgt.tools import validate_parameters
-from ed_lgt.symmetries import get_operators_nbody_term
 import logging
 
 logger = logging.getLogger(__name__)
@@ -13,25 +10,18 @@ __all__ = ["QMBTerm"]
 class QMBTerm:
     def __init__(
         self,
-        lvals,
-        has_obc,
-        operator=None,
-        op_name=None,
-        op_list=None,
-        op_names_list=None,
-        staggered_basis=False,
-        gauge_basis=None,
-        sector_configs=None,
+        lvals: list[int],
+        has_obc: list[bool],
+        operator: np.ndarray = None,
+        op_name: str = None,
+        op_list: list[np.ndarray] = None,
+        op_names_list: list[str] = None,
+        sector_configs: np.ndarray = None,
         momentum_basis=None,
         momentum_k=None,
     ):
         # Validate type of parameters
-        validate_parameters(
-            lvals=lvals,
-            has_obc=has_obc,
-            staggered_basis=staggered_basis,
-            gauge_basis=gauge_basis,
-        )
+        validate_parameters(lvals=lvals, has_obc=has_obc)
         # Lattice Geometry
         self.lvals = lvals
         self.dimensions = "xyz"[: len(lvals)]
@@ -41,18 +31,10 @@ class QMBTerm:
         self.op_name = op_name
         self.op_list = op_list
         self.op_names_list = op_names_list
-        # Dressed site informations
-        self.staggered_basis = staggered_basis
-        self.gauge_basis = gauge_basis
         # Symmetry sector
         self.sector_configs = sector_configs
         # Get default parameters
-        self.def_params = {
-            "lvals": self.lvals,
-            "has_obc": self.has_obc,
-            "gauge_basis": self.gauge_basis,
-            "staggered_basis": self.staggered_basis,
-        }
+        self.def_params = {"lvals": self.lvals, "has_obc": self.has_obc}
         # Get Symmetry operator
         self.get_symmetry_operator()
         # Momentum basis
@@ -61,30 +43,9 @@ class QMBTerm:
 
     def get_symmetry_operator(self):
         if self.sector_configs is not None:
-            # If the basis of lattice sites depends on the site
-            if self.gauge_basis is not None:
-                # Get Label of each site and corresponding local dimension
-                lattice_labels, loc_dims = lattice_base_configs(**self.def_params)
-                self.loc_dims = loc_dims.transpose().reshape(prod(self.lvals))
-                self.lattice_labels = lattice_labels.transpose().reshape(
-                    prod(self.lvals)
-                )
-            else:
-                self.lattice_labels = None
-                # Acquire local dimension from operators
-                loc_dim = (
-                    self.op.shape[0]
-                    if self.op is not None
-                    else self.op_list[0].shape[0]
-                )
-                self.loc_dims = np.array(
-                    [loc_dim for _ in range(prod(self.lvals))], dtype=np.uint8
-                )
             # Construct the symmetry operators
             sym_op_list = [self.op] if self.op is not None else self.op_list
-            self.sym_ops = get_operators_nbody_term(
-                sym_op_list, self.loc_dims, self.gauge_basis, self.lattice_labels
-            )
+            self.sym_ops = np.array(sym_op_list)
 
     def get_staggered_conditions(self, coords, stag_label):
         # Compute the staggered factor

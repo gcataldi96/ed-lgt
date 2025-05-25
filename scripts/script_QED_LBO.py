@@ -1,93 +1,12 @@
 import numpy as np
-from numpy.linalg import norm
-from scipy.sparse import csr_matrix
 from ed_lgt.models import QED_Model
 from simsio import run_sim
 from time import perf_counter
-from ed_lgt.modeling import get_projector_for_efficient_density_matrix
+from ed_lgt.modeling import (
+    get_projector_for_efficient_density_matrix as project_RDM,
+    diagonalize_density_matrix,
+)
 import logging
-
-
-def apply_projection(projector: np.ndarray, operator: np.ndarray):
-    """
-    Project an operator onto the subspace defined by a projector.
-
-    Given:
-      - projector (np.ndarray): a (N, k) matrix
-      - operator (np.ndarray): a (N, N) operator
-
-    Returns:
-      - O_eff: the effective operator $O_eff = P^{\dagger}\cdot O \cdot P$
-    """
-    # Check the shape of the projector
-    if projector.shape[0] != operator.shape[0]:
-        msg = f"Projector and operator have incompatible shapes {projector.shape} {operator.shape}"
-        raise ValueError(msg)
-    # Return the projected operator
-    return np.dot(projector.conj().T, np.dot(operator, projector))
-
-
-def project_operators(
-    ops_dict: dict,
-    loc_dims: np.ndarray,
-    gauge_basis: dict = None,
-    lattice_labels=None,
-    extra_projector: np.ndarray = None,
-):
-    """
-    Project a dictionary of operators into a gauge-invariant or optimal subspace.
-
-    Parameters:
-        ops_dict (dict): Dictionary of operators (expected to be scipy.sparse.csr_matrix).
-        loc_dims (np.ndarray): Array containing local Hilbert space dimensions.
-        gauge_basis (dict, optional): Dictionary mapping lattice sites to their gauge-invariant basis projectors.
-        lattice_labels (list, optional): List of labels for each lattice site.
-        extra_projector (np.ndarray, optional): Additional projector to further reduce the local Hilbert space.
-
-    Returns:
-        dict: New dictionary of projected operators with shape (n_sites, max_loc_dim, max_loc_dim).
-        the keys are the same as the input dictionary.
-        For each operator, the value is a 3D array of shape (n_sites, max_loc_dim, max_loc_dim)
-        which contains the effective matrix for each site, accounting for the possibility of
-        different local Hilbert spaces among the sites.
-    """
-    # Set the number of sites
-    n_sites = len(loc_dims)
-    # Determine effective local dimensions
-    eff_loc_dims = (
-        np.array([extra_projector.shape[1]] * n_sites, dtype=loc_dims.dtype)
-        if extra_projector is not None
-        else np.copy(loc_dims)
-    )
-    max_loc_dim = max(eff_loc_dims)
-    # Initialize new dictionary
-    new_ops_dict = {
-        op: np.zeros((n_sites, max_loc_dim, max_loc_dim), dtype=ops_dict[op].dtype)
-        for op in ops_dict
-    }
-    # Iterate over operators
-    for op, operator in ops_dict.items():
-        # Run over the sites
-        for jj, loc_dim in enumerate(eff_loc_dims):
-            # For Lattice Gauge Theories where sites have different Hilbert Bases
-            if gauge_basis is not None:
-                # Get the label of the site
-                site_label = lattice_labels[jj]
-                # Get the projected operator
-                eff_op = apply_projection(
-                    projector=gauge_basis[site_label].toarray(),
-                    operator=operator.toarray(),
-                )
-            # For Theories where all the sites have the same Hilber basis
-            else:
-                eff_op = operator.toarray()
-            # If an extra projector is given (like the one to reduce the local Hilbert space)
-            if extra_projector is not None:
-                eff_op = apply_projection(projector=extra_projector, operator=eff_op)
-            # Save it inside the new list of operators
-            new_ops_dict[op][jj, :loc_dim, :loc_dim] = np.real(eff_op)
-    return new_ops_dict
-
 
 logger = logging.getLogger(__name__)
 with run_sim() as sim:
@@ -111,9 +30,7 @@ with run_sim() as sim:
         local_obs += ["N"]
     for obs in local_obs:
         sim.res[obs] = np.zeros(n_eigs, dtype=float)
-    # LIST OF TWOBODY CORRELATORS
-    twobody_obs = []
-    twobody_axes = []
+        sim.res[f"eff_{obs}"] = np.zeros(n_eigs, dtype=float)
     # LIST OF PLAQUETTE OPERATORS
     if model.dim == 2:
         plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
@@ -128,10 +45,9 @@ with run_sim() as sim:
     for obs_names_list in plaquette_obs:
         obs = "_".join(obs_names_list)
         sim.res[obs] = np.zeros(n_eigs, dtype=float)
+        sim.res[f"eff_{obs}"] = np.zeros(n_eigs, dtype=float)
     # DEFINE OBSERVABLES
-    model.get_observables(
-        local_obs, twobody_obs, plaquette_obs, twobody_axes=twobody_axes
-    )
+    model.get_observables(local_obs=local_obs, plaquette_obs=plaquette_obs)
     # ENTROPY
     # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
     partition_indices = sim.par["observables"]["entropy_partition"]
@@ -165,7 +81,8 @@ with run_sim() as sim:
             obs = "_".join(obs_names_list)
             sim.res[obs][ii] = model.res[obs]
     # -------------------------------------------------------------------------------
-    # LOCAL BASIS OPTIMIZATION
+    # EFFECTIVE MODEL OUT OF THE LOCAL BASIS OPTIMIZATION
+    # -------------------------------------------------------------------------------
     # Get the reduced density matrix of a single site in the ground state
     RDM = model.H.Npsi[0].reduced_density_matrix(
         partition_indices,
@@ -174,41 +91,60 @@ with run_sim() as sim:
         model.unique_subsys_configs,
         model.unique_env_configs,
     )
-    logger.info(f"{norm(RDM-np.diag(np.diag(RDM)), ord='nuc')}")
-    # Get the reduced and optimized operators of a single site in the ground state
-    proj, sim.res["eigvals"], sim.res["vecs"] = (
-        get_projector_for_efficient_density_matrix(RDM, 1e-3)
-    )
-    new_ops = {}
-    true_ops = {}
-    for op in model.ops.keys():
-        true_ops[op] = (
-            model.gauge_basis["site"].transpose()
-            @ model.ops[op]
-            @ model.gauge_basis["site"]
-        ).toarray()
-        if op in ["E_px"]:
-            logger.info(f"OPERATOR {op} {true_ops[op].shape}")
-            logger.info(f"{csr_matrix(true_ops[op])}")
-    # project the operators
-    for op in true_ops.keys():
-        new_ops[op] = (
-            csr_matrix(proj).transpose().conj() @ true_ops[op] @ csr_matrix(proj)
-        )
-        if op in ["E_px"]:
-            logger.info(f"{csr_matrix(new_ops[op])}")
-    sim.res["expvals"] = np.zeros(len(sim.res["eigvals"]), dtype=float)
-    for obs in ["E_px", "E_mx", "E_my", "E_py", "E_square"]:
-        sim.res[f"exp_{obs}"] = np.zeros(len(sim.res["eigvals"]), dtype=float)
-        for ii in range(len(sim.res["eigvals"])):
-            sim.res[f"exp_{obs}"][ii] = np.real(
-                np.dot(
-                    sim.res["vecs"][:, ii].conj(),
-                    np.dot(true_ops[obs], sim.res["vecs"][:, ii]),
-                )
-            )
-
-    # sim.res["E_old"] = model.gauge_basis["site"].transpose()model.ops["E_px"].data
+    rho_eigvals, rho_eigvecs = diagonalize_density_matrix(RDM)
+    # -------------------------------------------------------------------------------
+    # For each truncation value, we will build the effective model
+    truncation_values = [1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10]
+    n_trunc = len(truncation_values)
+    for obs in local_obs + ["entropy", "energy"]:
+        sim.res[f"eff_{obs}"] = np.zeros((n_trunc, n_eigs), dtype=float)
+    for obs_names_list in plaquette_obs:
+        obs = "_".join(obs_names_list)
+        sim.res[f"eff_{obs}"] = np.zeros((n_trunc, n_eigs), dtype=float)
+    # -------------------------------------------------------------------------------
+    for tt, truncation in enumerate(truncation_values):
+        # Get the reduced and optimized operators of a single site in the ground state
+        proj = project_RDM(rho_eigvals, rho_eigvecs, truncation)
+        if proj.shape[1] < max(model.loc_dims):
+            # build the effective model Hamiltonian
+            eff_model = QED_Model(**sim.par["model"], basis_projector=proj)
+            eff_model.build_Hamiltonian(sim.par["g"], m, theta=sim.par["theta"])
+            # diagonalize the effective Hamiltonian and save energy eigvals
+            eff_model.diagonalize_Hamiltonian(n_eigs, eff_model.ham_format)
+            sim.res[f"eff_energy"][tt] = eff_model.H.Nenergies
+            eff_model.get_observables(local_obs=local_obs, plaquette_obs=plaquette_obs)
+            # Build the list of environment and subsystem sites configurations
+            eff_model.get_subsystem_environment_configs(keep_indices=partition_indices)
+            # -------------------------------------------------------------------------------
+            for ii in range(eff_model.H.n_eigs):
+                eff_model.H.print_energy(ii)
+                if not eff_model.momentum_basis:
+                    # -----------------------------------------------------------------------
+                    # ENTROPY
+                    if sim.par["observables"]["get_entropy"]:
+                        sim.res["eff_entropy"][tt, ii] = eff_model.H.Npsi[
+                            ii
+                        ].entanglement_entropy(
+                            partition_indices,
+                            eff_model.subsystem_configs,
+                            eff_model.env_configs,
+                            eff_model.unique_subsys_configs,
+                            eff_model.unique_env_configs,
+                        )
+                    # -----------------------------------------------------------------------
+                    # STATE CONFIGURATIONS
+                    if sim.par["observables"]["get_state_configs"]:
+                        eff_model.H.Npsi[ii].get_state_configurations(
+                            1e-1, eff_model.sector_configs
+                        )
+                # ----------------------------------------------------------------------------+
+                # MEASURE OBSERVABLES
+                eff_model.measure_observables(ii)
+                for obs in local_obs:
+                    sim.res[f"eff_{obs}"][tt, ii] = np.mean(eff_model.res[obs])
+                for obs_names_list in plaquette_obs:
+                    obs = "_".join(obs_names_list)
+                    sim.res[f"eff_{obs}"][tt, ii] = eff_model.res[obs]
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

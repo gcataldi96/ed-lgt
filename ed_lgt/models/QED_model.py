@@ -18,18 +18,15 @@ class QED_Model(QuantumModel):
         self.pure_theory = pure_theory
         self.staggered_basis = False if self.pure_theory else True
         # -------------------------------------------------------------------------------
-        # Acquire operators
-        self.ops = QED_dressed_site_operators(
-            self.spin, self.pure_theory, U="ladder", lattice_dim=self.dim
-        )
-        # -------------------------------------------------------------------------------
         # Acquire gauge invariant basis and states
         self.gauge_basis, self.gauge_states = QED_gauge_invariant_states(
             self.spin, self.pure_theory, lattice_dim=self.dim
         )
         # -------------------------------------------------------------------------------
-        # Acquire local dimension and lattice label
-        self.get_local_site_dimensions()
+        # Acquire operators
+        ops = QED_dressed_site_operators(self.spin, self.pure_theory, self.dim)
+        # Initialize the operators, local dimension and lattice labels
+        self.project_operators(ops)
         # -------------------------------------------------------------------------------
         # GLOBAL SYMMETRIES
         if self.pure_theory:
@@ -255,7 +252,7 @@ class QED_Model(QuantumModel):
                 E = (g**2) / 2
                 B = -1 / (2 * (g**2))
             elif self.dim == 2:
-                E = (g**2) / 2
+                E = g**2  # /2
                 B = -1 / (2 * (g**2))
             else:
                 E = (g**2) / 2

@@ -182,7 +182,7 @@ def exclude_columns(data_matrix, exclude_indices):
     """
     num_rows = data_matrix.shape[0]
     num_cols_remaining = data_matrix.shape[1] - len(exclude_indices)
-    reduced_matrix = np.zeros((num_rows, num_cols_remaining), dtype=np.uint8)
+    reduced_matrix = np.zeros((num_rows, num_cols_remaining), dtype=np.uint16)
 
     # Parallel loop over rows (configurations)
     for row in prange(num_rows):

@@ -14,16 +14,13 @@ __all__ = ["SU2_Model"]
 
 
 class SU2_Model(QuantumModel):
-    def __init__(
-        self, spin, pure_theory, background, ham_format, sectors=None, **kwargs
-    ):
+    def __init__(self, spin, pure_theory, background, sectors=None, **kwargs):
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
         self.pure_theory = pure_theory
         self.background = background
-        self.ham_format = ham_format
-        if self.spin > 1:
+        if self.spin > 3:
             # Acquire operators
             self.ops = SU2_dressed_site_operators(
                 self.spin,

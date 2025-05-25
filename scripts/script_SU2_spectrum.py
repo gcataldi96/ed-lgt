@@ -103,7 +103,7 @@ with run_sim() as sim:
     # MODEL HAMILTONIAN
     model = SU2_Model(**sim.par["model"])
     m = sim.par["m"] if not model.pure_theory else None
-    if model.spin < 1:
+    if model.spin < 3:
         model.build_gen_Hamiltonian(sim.par["g"], m)
     else:
         model.build_Hamiltonian(sim.par["g"], m)
@@ -117,7 +117,7 @@ with run_sim() as sim:
     # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
     local_obs = [f"T2_{s}{d}" for d in model.directions for s in "mp"]
-    local_obs = ["E_square"]
+    local_obs += ["E_square"]
     if not model.pure_theory:
         local_obs += [f"N_{label}" for label in ["tot", "single", "pair"]]
     # LIST OF TWOBODY CORRELATORS
