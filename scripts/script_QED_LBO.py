@@ -96,6 +96,7 @@ with run_sim() as sim:
     # For each truncation value, we will build the effective model
     truncation_values = [1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10]
     n_trunc = len(truncation_values)
+    sim.res["eff_basis"] = np.zeros(n_trunc, dtype=float)
     for obs in local_obs + ["entropy", "energy"]:
         sim.res[f"eff_{obs}"] = np.zeros((n_trunc, n_eigs), dtype=float)
     for obs_names_list in plaquette_obs:
@@ -106,6 +107,7 @@ with run_sim() as sim:
         # Get the reduced and optimized operators of a single site in the ground state
         proj = project_RDM(rho_eigvals, rho_eigvecs, truncation)
         if proj.shape[1] < max(model.loc_dims):
+            sim.res["eff_basis"][tt] = proj.shape[1]
             # build the effective model Hamiltonian
             eff_model = QED_Model(**sim.par["model"], basis_projector=proj)
             eff_model.build_Hamiltonian(sim.par["g"], m, theta=sim.par["theta"])

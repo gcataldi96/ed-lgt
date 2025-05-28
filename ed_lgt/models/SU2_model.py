@@ -20,22 +20,7 @@ class SU2_Model(QuantumModel):
         self.spin = spin
         self.pure_theory = pure_theory
         self.background = background
-        if self.spin > 3:
-            # Acquire operators
-            self.ops = SU2_dressed_site_operators(
-                self.spin,
-                self.pure_theory,
-                lattice_dim=self.dim,
-                background=self.background,
-            )
-        else:
-            # Acquire operators
-            self.ops = SU2_gen_dressed_site_operators(
-                self.spin,
-                self.pure_theory,
-                lattice_dim=self.dim,
-                background=self.background,
-            )
+        # -------------------------------------------------------------------------------
         # Acquire gauge invariant basis and states
         self.gauge_basis, self.gauge_states = SU2_gauge_invariant_states(
             self.spin,
@@ -43,8 +28,26 @@ class SU2_Model(QuantumModel):
             lattice_dim=self.dim,
             background=self.background,
         )
-        # Acquire local dimension and lattice label
-        self.get_local_site_dimensions()
+        # -------------------------------------------------------------------------------
+        # Acquire operators
+        if self.spin < 3:
+            ops = SU2_dressed_site_operators(
+                self.spin,
+                self.pure_theory,
+                lattice_dim=self.dim,
+                background=self.background,
+            )
+        else:
+            # Acquire operators
+            ops = SU2_gen_dressed_site_operators(
+                self.spin,
+                self.pure_theory,
+                lattice_dim=self.dim,
+                background=self.background,
+            )
+        # Initialize the operators, local dimension and lattice labels
+        self.project_operators(ops)
+        # -------------------------------------------------------------------------------
         # GLOBAL SYMMETRIES
         if self.pure_theory:
             global_ops = None

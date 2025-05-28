@@ -249,14 +249,14 @@ class QED_Model(QuantumModel):
         """
         if not magnetic_basis:
             if self.dim == 1:
-                E = (g**2) / 2
-                B = -1 / (2 * (g**2))
+                E = g / 2
+                B = -1 / (2 * g)
             elif self.dim == 2:
-                E = g**2  # /2
-                B = -1 / (2 * (g**2))
+                E = g  # /2
+                B = -1 / (2 * g)
             else:
-                E = (g**2) / 2
-                B = -1 / (2 * (g**2))
+                E = g / 2
+                B = -1 / (2 * g)
             # DICTIONARY WITH MODEL COEFFICIENTS
             coeffs = {
                 "g": g,
@@ -280,7 +280,7 @@ class QED_Model(QuantumModel):
             # DICTIONARY WITH MODEL COEFFICIENTS
             coeffs = {
                 "g": g,
-                "E": -(g**2),
-                "B": -0.5 / (g**2),
+                "E": -g,
+                "B": -0.5 / g,
             }
         self.coeffs = coeffs

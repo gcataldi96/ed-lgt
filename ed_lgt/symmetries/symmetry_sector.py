@@ -1,7 +1,7 @@
 from ed_lgt.tools import get_time
+import math
 import numpy as np
 import logging
-from scipy.sparse import csr_matrix
 from numba import njit, prange
 from .global_abelian_sym import check_global_sym_sitebased, check_string_sym_sitebased
 from .link_abelian_sym import check_link_sym_sitebased
@@ -74,8 +74,9 @@ def symmetry_sector_configs(
     if not isinstance(glob_sectors, np.ndarray):
         glob_sectors = np.array(glob_sectors, dtype=float)
     # Acquire Sector dimension
-    sector_dim = np.prod(loc_dims)
-    logger.info(f"TOT DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
+    sector_dim = math.prod(int(d) for d in loc_dims)
+    bits = sum(math.log2(d) for d in loc_dims)
+    logger.info(f"TOT DIM: {sector_dim}, 2^{round(bits,3)}")
     if string_op_diags is not None:
         sector_configs = iterative_sitebased_sym_sector_configs1(
             loc_dims,
@@ -99,11 +100,10 @@ def symmetry_sector_configs(
             link_sectors,
             pair_list,
         )
-    sector_indices = np.ravel_multi_index(sector_configs.T, loc_dims)
     # Acquire dimension of the new sector
     sector_dim = len(sector_configs)
     logger.info(f"SEC DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
-    return sector_indices, sector_configs
+    return sector_configs
 
 
 def get_symmetry_sector_generators(op_list: list[np.ndarray], action: str):
@@ -460,8 +460,9 @@ def get_link_sector_configs(
     if not isinstance(link_sectors, np.ndarray):
         link_sectors = np.array(link_sectors, dtype=float)
     # Acquire Sector dimension
-    sector_dim = np.prod(loc_dims)
-    logger.info(f"TOT DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
+    sector_dim = math.prod(int(d) for d in loc_dims)
+    bits = sum(math.log2(d) for d in loc_dims)
+    logger.info(f"TOT DIM: {sector_dim}, 2^{round(bits,3)}")
     if nbody_op_diags is not None:
         if not isinstance(nbody_sectors, np.ndarray):
             nbody_sectors = np.array(nbody_sectors, dtype=float)
@@ -478,11 +479,10 @@ def get_link_sector_configs(
         sector_configs = iterative_link_sector_configs(
             loc_dims, link_op_diags, link_sectors, pair_list
         )
-    sector_indices = np.ravel_multi_index(sector_configs.T, loc_dims)
     # Acquire dimension of the new sector
     sector_dim = len(sector_configs)
     logger.info(f"SEC DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
-    return sector_indices, sector_configs
+    return sector_configs
 
 
 @njit(parallel=True, cache=True)

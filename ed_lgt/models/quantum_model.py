@@ -45,9 +45,8 @@ class QuantumModel:
         self.directions = "xyz"[: self.dim]
         self.n_sites = prod(self.lvals)
         self.has_obc = has_obc
-        # Symmetry sector indices
+        # Symmetry sector configurations
         self.sector_configs = None
-        self.sector_indices = None
         # Gauge Basis
         self.gauge_basis = None
         # Staggered Basis
@@ -196,7 +195,7 @@ class QuantumModel:
         # ================================================================================
         if global_ops is not None and link_ops is not None:
             logger.debug("Global & Link symmetry sector")
-            self.sector_indices, self.sector_configs = symmetry_sector_configs(
+            self.sector_configs = symmetry_sector_configs(
                 loc_dims=self.loc_dims,
                 glob_op_diags=global_ops,
                 glob_sectors=np.array(global_sectors, dtype=float),
@@ -207,7 +206,7 @@ class QuantumModel:
             )
         elif global_ops is not None:
             logger.debug("Global symmetry sector")
-            self.sector_indices, self.sector_configs = global_abelian_sector(
+            self.sector_configs = global_abelian_sector(
                 loc_dims=self.loc_dims,
                 sym_op_diags=global_ops,
                 sym_sectors=np.array(global_sectors, dtype=float),
@@ -218,7 +217,7 @@ class QuantumModel:
                 logger.debug("Link & Nbody symmetry sector")
             else:
                 logger.debug("Link symmetry sector")
-            self.sector_indices, self.sector_configs = get_link_sector_configs(
+            self.sector_configs = get_link_sector_configs(
                 loc_dims=self.loc_dims,
                 link_op_diags=link_ops,
                 link_sectors=link_sectors,

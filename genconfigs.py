@@ -138,3 +138,8 @@ params = {"g": np.logspace(-1, 0.5, 30)}
 gen_configs("template", params, f"LBO/qed_error")
 
 # %%
+# %%
+params = {"g": np.logspace(-1, 1, 10)}
+gen_configs("template", params, f"LBO/qed_plaq_svd")
+
+# %%

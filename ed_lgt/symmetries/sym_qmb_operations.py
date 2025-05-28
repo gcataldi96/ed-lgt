@@ -97,7 +97,7 @@ def process_batches_with_nbody(
     op_list: list[np.ndarray],
     op_sites_list: list[int],
     sector_configs: np.ndarray,
-    batch_size: int = int(2**18),
+    batch_size: int = int(2**17.5),
 ):
     """
     Process nbody_data_par in batches to handle large sector dimensions.

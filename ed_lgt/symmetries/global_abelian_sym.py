@@ -1,5 +1,6 @@
 import numpy as np
 import logging
+import math
 from numba import njit, prange
 from ed_lgt.tools import get_time, arrays_equal
 
@@ -171,16 +172,16 @@ def global_abelian_sector(loc_dims, sym_op_diags, sym_sectors, sym_type, configs
         )
     else:
         # Acquire Sector dimension
-        sector_dim = np.prod(loc_dims)
-        logger.info(f"TOT DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
+        sector_dim = math.prod(int(d) for d in loc_dims)
+        bits = sum(math.log2(d) for d in loc_dims)
+        logger.info(f"TOT DIM: {sector_dim}, 2^{round(np.log2(bits),3)}")
         sector_configs = global_sector_configs(
             loc_dims, sym_op_diags, sym_sectors, sym_type_flag
         )
-    sector_indices = np.ravel_multi_index(sector_configs.T, loc_dims)
     # Acquire dimension of the new sector
     sector_dim = len(sector_configs)
     logger.info(f"SEC DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
-    return sector_indices, sector_configs
+    return sector_configs
 
 
 @njit(parallel=True, cache=True)

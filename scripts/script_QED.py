@@ -2,6 +2,7 @@ import numpy as np
 from ed_lgt.models import QED_Model
 from simsio import run_sim
 from time import perf_counter
+from ed_lgt.modeling import diagonalize_density_matrix
 import logging
 
 logger = logging.getLogger(__name__)
@@ -70,7 +71,7 @@ with run_sim() as sim:
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS
             if sim.par["observables"]["get_state_configs"]:
-                model.H.Npsi[ii].get_state_configurations(1e-1, model.sector_configs)
+                model.H.Npsi[ii].get_state_configurations(1e-4, model.sector_configs)
         # ---------------------------------------------------------------------------
         # MEASURE OBSERVABLES
         model.measure_observables(ii)
@@ -79,6 +80,30 @@ with run_sim() as sim:
         for obs_names_list in plaquette_obs:
             obs = "_".join(obs_names_list)
             sim.res[obs][ii] = model.res[obs]
+    # Get the reduced density matrix of a partition in the ground state
+    RDM = model.H.Npsi[0].reduced_density_matrix(
+        partition_indices,
+        model.subsystem_configs,
+        model.env_configs,
+        model.unique_subsys_configs,
+        model.unique_env_configs,
+    )
+    rho_eigvals, rho_eigvecs = diagonalize_density_matrix(RDM)
+    # Sort eigenvalues and eigenvectors in descending order.
+    # Note: np.argsort sorts in ascending order; we reverse to get descending order.
+    sorted_indices = np.argsort(rho_eigvals)[::-1]
+    rho_eigvals = rho_eigvals[sorted_indices]
+    rho_eigvecs = rho_eigvecs[:, sorted_indices]
+    truncation_values = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10]
+    for tt, threshold in enumerate(truncation_values):
+        # Determine how many eigenvectors have eigenvalues greater than the threshold.
+        # (If too few are significant, relax the threshold until at least 2 are selected.)
+        P_columns = np.sum(rho_eigvals > threshold)
+        while P_columns < 2:
+            threshold /= 10
+            P_columns = np.sum(rho_eigvals > threshold)
+        logger.info(f"SIGNIFICANT EIGENVALUES {P_columns} with threshold {threshold}")
+    sim.res["eigvals"] = rho_eigvals
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")
