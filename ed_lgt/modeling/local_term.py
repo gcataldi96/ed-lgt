@@ -7,12 +7,7 @@ from .qmb_operations import local_op
 from .qmb_state import QMB_state, exp_val_data
 from .qmb_term import QMBTerm
 from ed_lgt.tools import validate_parameters, get_time
-from ed_lgt.symmetries import (
-    nbody_term,
-    nbody_data_momentum_basis_par,
-    process_batches_with_nbody,
-    localbody_data_par2,
-)
+from ed_lgt.symmetries import nbody_term, localbody_data_par, nbody_data_momentum_1site
 import logging
 
 logger = logging.getLogger(__name__)
@@ -85,7 +80,7 @@ class LocalTerm(QMBTerm):
                 coords = zig_zag(self.lvals, ii)
                 # CHECK MASK CONDITION ON THE SITE
                 if self.get_mask_conditions(coords, mask):
-                    if len(self.sector_configs) > 2**18:
+                    if len(self.sector_configs) > 2**19:
                         logger.info(f"Site {ii}")
                     # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
                     row_list, col_list, value_list = nbody_term(
@@ -93,7 +88,6 @@ class LocalTerm(QMBTerm):
                         np.array([ii]),
                         self.sector_configs,
                         self.momentum_basis,
-                        self.momentum_k,
                     )
                     all_row_list.append(row_list)
                     all_col_list.append(col_list)
@@ -151,7 +145,7 @@ class LocalTerm(QMBTerm):
             # is given by op[site]. The function localbody_data_par (modified to accept a vector
             # of sites) will compute for each valid site a contribution (a diagonal element)
             # and return three arrays (row indices, col indices, and values).
-            row_list, col_list, value_list = localbody_data_par2(
+            row_list, col_list, value_list = localbody_data_par(
                 self.sym_ops[0], np.array(valid_sites_list), self.sector_configs
             )
             # Multiply the nonzero values by the strength
@@ -290,8 +284,8 @@ def lattice_local_exp_val(psi, n_sites, sector_configs, sym_ops):
         end = min((chunk_idx + 1) * chunk_size, n_sites)
         # Process the current chunk in parallel
         for ii in prange(start, end):
-            row_list, col_list, value_list = process_batches_with_nbody(
-                sym_ops, np.array([ii]), sector_configs
+            row_list, col_list, value_list = localbody_data_par(
+                sym_ops[0], ii, sector_configs
             )
             obs[ii] = exp_val_data(psi, row_list, col_list, value_list)
             # var[ii] = exp_val_data(psi, row_list, col_list, value_list**2)
@@ -330,13 +324,13 @@ def lattice_local_exp_val_mom(
     # Loop over each lattice site in parallel using prange
     for ii in prange(n_sites):
         # Compute the n-body operator's non-zero elements for site 'ii'
-        row_list, col_list, value_list = nbody_data_momentum_basis_par(
+        row_list, col_list, value_list = nbody_data_momentum_1site(
             sym_ops, np.array([ii]), sector_configs, momentum_basis
         )
         # Compute the expectation value <O> for site 'ii'
         obs[ii] = exp_val_data(psi, row_list, col_list, value_list)
         # For local operators, the variance <O^2> - <O>^2 can be computed by squaring value_list
-        row_list1, col_list1, value_list1 = nbody_data_momentum_basis_par(
+        row_list1, col_list1, value_list1 = nbody_data_momentum_1site(
             opvar, np.array([ii]), sector_configs, momentum_basis
         )
         var[ii] = exp_val_data(psi, row_list1, col_list1, value_list1) - obs[ii] ** 2

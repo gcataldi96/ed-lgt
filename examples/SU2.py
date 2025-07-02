@@ -28,12 +28,7 @@ from ed_lgt.operators import QED_dressed_site_operators, QED_gauge_invariant_sta
 
 
 def QED_gauge_invariant_ops(spin, pure_theory, lattice_dim):
-    in_ops = QED_dressed_site_operators(
-        spin,
-        pure_theory,
-        "ladder",
-        lattice_dim,
-    )
+    in_ops = QED_dressed_site_operators(spin, pure_theory, lattice_dim)
     gauge_basis, _ = QED_gauge_invariant_states(spin, pure_theory, lattice_dim)
     ops = {}
     label = "site"
@@ -46,7 +41,7 @@ lattice_dim = 3
 spin = 1
 pure_theory = True
 in_ops = QED_dressed_site_operators(
-    spin=spin, pure_theory=pure_theory, U="ladder", lattice_dim=lattice_dim
+    spin=spin, pure_theory=pure_theory, lattice_dim=lattice_dim
 )
 ops = QED_gauge_invariant_ops(
     spin=spin, pure_theory=pure_theory, lattice_dim=lattice_dim
@@ -54,16 +49,85 @@ ops = QED_gauge_invariant_ops(
 s, b = QED_gauge_invariant_states(
     spin=spin, pure_theory=pure_theory, lattice_dim=lattice_dim
 )
-for op in ops.keys():
-    print(op)
-    print(ops[op])
+
+
+def print_semilinks(ops):
+    # ops is a dict mapping each direction to a diagonal matrix; we'll just
+    # extract the n-th diagonal element as before.  Here we hard-code n=0…6.
+    SIZE = 5
+    CENTER = SIZE // 2  # 2
+    indices = [107, 33, 89, 104, 33, 107, 59, 28]
+    directions = {
+        "px": (+1, 0),
+        "mx": (-1, 0),
+        "py": (+1, +1),
+        "my": (-1, -1),
+        "pz": (0, +1),
+        "mz": (0, -1),
+    }
+
+    for n in indices:
+        # 1) read & stringify each diagonal element
+        vals = {d: str(int(ops[f"E_{d}"].toarray()[n, n])) for d in directions}
+
+        # 2) figure how wide the widest string is
+        wid = max(len(s) for s in vals.values())
+
+        # 3) center each into width=wid
+        centered = {d: vals[d].center(wid) for d in vals}
+        origin = "o".center(wid)
+        empty = " " * wid
+
+        # 4) build blank 5×5
+        grid = [[empty for _ in range(SIZE)] for _ in range(SIZE)]
+
+        # 5) place each direction
+        for d, (dx, dy) in directions.items():
+            r = CENTER - dy
+            c = CENTER + dx
+            grid[r][c] = centered[d]
+
+        # place the origin
+        grid[CENTER][CENTER] = origin
+
+        # 6) print
+        print(f"--- state n = {n} ---")
+        for row in grid:
+            print(" ".join(row))
+        print()
+
+
+print_semilinks(ops)
 # %%
-for n in [15, 3, 3, 15]:
-    for op in ["E_px", "E_py", "E_mx", "E_my"]:
-        print(f"------- {op} ---------------")
-        print(ops[op].toarray()[n, n])
-        print("--------------------------")
-    print("++++++++")
+indices = [41, 63, 38, 26]
+for n in indices:
+    # read and stringify each diagonal element
+    vals = {
+        d: str(int(ops[f"E_{d}"].toarray()[n, n])) for d in ("px", "py", "mx", "my")
+    }
+
+    # figure out how wide the widest string is
+    wid = max(len(s) for s in vals.values())
+
+    # center each string in a field of width=wid
+    centered = {d: vals[d].center(wid) for d in vals}
+
+    # how many spaces to indent so that 'o' (in line 3) lines up under the vertical bars
+    indent = len(centered["mx"]) + 1
+    spacer = " " * indent
+
+    # a centered vertical bar in a field of width=wid
+    bar = "|".center(wid)
+
+    print(f"--- state n = {n} ---")
+    print(spacer + centered["py"])
+    print(spacer + bar)
+    print(f"{centered['mx']}=o= {centered['px']}")
+    print(spacer + bar)
+    print(spacer + centered["my"])
+    print()
+
+
 # %%
 
 
@@ -73,10 +137,13 @@ def SU2_gauge_invariant_ops(spin, pure_theory, lattice_dim, background):
         spin, pure_theory, lattice_dim, background
     )
     ops = {}
-    label = "site"
+    label = "site_px,py"
     for op in in_ops.keys():
         ops[op] = gauge_basis[label].transpose() @ in_ops[op] @ gauge_basis[label]
     return ops
+
+
+# %%
 
 
 def Z2Hubbard_gauge_invariant_ops(lattice_dim):
@@ -89,7 +156,6 @@ def Z2Hubbard_gauge_invariant_ops(lattice_dim):
     return ops
 
 
-# %%
 ops = Z2Hubbard_gauge_invariant_ops(lattice_dim=2)
 for op in ops.keys():
     print(op)
@@ -198,7 +264,13 @@ for s in sorted_states:
 singlets = get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None)
 
 # %%
-gauge_basis, gauge_states = SU2_gauge_invariant_states(5, False, lattice_dim=1)
+gauge_basis, gauge_states = SU2_gauge_invariant_states(
+    0.5, False, lattice_dim=2, background=False
+)
+for ii, singlet in enumerate(gauge_states["site_my"]):
+    logger.info(f" {ii} ")
+    singlet.display_singlets()
+    logger.info(f" ")
 # %%
 for ii, s in enumerate(gauge_states["site"]):
     logger.info(f"{ii}")
@@ -217,11 +289,10 @@ for ii, s in enumerate(gauge_states["site_px"]):
 in_ops = SU2_dressed_site_operators(spin=1 / 2, pure_theory=False, lattice_dim=1)
 # %%
 ops = SU2_gauge_invariant_ops(
-    spin=1 / 2, pure_theory=False, lattice_dim=1, background=False
+    spin=1 / 2, pure_theory=True, lattice_dim=2, background=True
 )
-for op in ops.keys():
-    print(op + "-----")
-    print(ops[op])
+
+print(ops["E_square"].shape)
 
 # print(8 * ops["E_square"] / 3)
 # %%

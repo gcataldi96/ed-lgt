@@ -1,3 +1,11 @@
+import os
+import sys
+
+# Ensure NUMBA_NUM_THREADS is set properly before importing anything else
+B = int(sys.argv[-1])
+# Read the B parameter from command-line arguments
+os.environ["NUMBA_NUM_THREADS"] = str(B)
+
 import numpy as np
 from ed_lgt.models import QED_Model
 from simsio import run_sim
@@ -22,7 +30,7 @@ with run_sim() as sim:
     n_eigs = sim.par["hamiltonian"]["n_eigs"]
     model.diagonalize_Hamiltonian(n_eigs, model.ham_format)
     sim.res["energy"] = model.H.Nenergies
-    # ---------------------------------------------------------------------
+    # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
     local_obs = ["E_square"]
     local_obs += [f"E_{s}{d}" for d in model.directions for s in "mp"]
@@ -48,11 +56,10 @@ with run_sim() as sim:
         sim.res[f"eff_{obs}"] = np.zeros(n_eigs, dtype=float)
     # DEFINE OBSERVABLES
     model.get_observables(local_obs=local_obs, plaquette_obs=plaquette_obs)
+    # -------------------------------------------------------------------------------
     # ENTROPY
     # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
     partition_indices = sim.par["observables"]["entropy_partition"]
-    # Build the list of environment and subsystem sites configurations
-    model.get_subsystem_environment_configs(keep_indices=partition_indices)
     sim.res["entropy"] = np.zeros(model.H.n_eigs, dtype=float)
     # -------------------------------------------------------------------------------
     for ii in range(model.H.n_eigs):
@@ -63,10 +70,7 @@ with run_sim() as sim:
             if sim.par["observables"]["get_entropy"]:
                 sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
                     partition_indices,
-                    model.subsystem_configs,
-                    model.env_configs,
-                    model.unique_subsys_configs,
-                    model.unique_env_configs,
+                    model.sector_configs,
                 )
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS
@@ -86,10 +90,7 @@ with run_sim() as sim:
     # Get the reduced density matrix of a single site in the ground state
     RDM = model.H.Npsi[0].reduced_density_matrix(
         partition_indices,
-        model.subsystem_configs,
-        model.env_configs,
-        model.unique_subsys_configs,
-        model.unique_env_configs,
+        model.sector_configs,
     )
     rho_eigvals, rho_eigvecs = diagonalize_density_matrix(RDM)
     # -------------------------------------------------------------------------------
@@ -128,10 +129,7 @@ with run_sim() as sim:
                             ii
                         ].entanglement_entropy(
                             partition_indices,
-                            eff_model.subsystem_configs,
-                            eff_model.env_configs,
-                            eff_model.unique_subsys_configs,
-                            eff_model.unique_env_configs,
+                            eff_model.sector_configs,
                         )
                     # -----------------------------------------------------------------------
                     # STATE CONFIGURATIONS

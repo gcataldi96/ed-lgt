@@ -192,7 +192,131 @@ def custom_average(arr, staggered=None, norm=None):
 local_obs = [f"T2_{s}{d}" for d in "x" for s in "mp"]
 local_obs += ["E_square"]
 local_obs += [f"N_{label}" for label in ["r", "g", "tot", "single", "pair"]]
+# %%
+# ===================================================================
+# STRING BREAKING PHASE DIAGRAM
+# ===================================================================
+res = {}
+config_filename = f"string_breaking/su2_phasediagram"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g", "m"])
 
+res = {
+    "entropy": np.zeros((len(vals["g"]), len(vals["m"]))),
+    "E_square": np.zeros((len(vals["g"]), len(vals["m"]))),
+    "N_single": np.zeros((len(vals["g"]), len(vals["m"]))),
+    "N_pair": np.zeros((len(vals["g"]), len(vals["m"]))),
+    "N_zero": np.zeros((len(vals["g"]), len(vals["m"]))),
+    "N_tot": np.zeros((len(vals["g"]), len(vals["m"]))),
+}
+
+for ii, g in enumerate(vals["g"]):
+    for kk, m in enumerate(vals["m"]):
+        res["entropy"][ii, kk] = get_sim(ugrid[ii][kk]).res["entropy"]
+        res["E_square"][ii, kk] = get_sim(ugrid[ii][kk]).res["E_square"]
+        res["N_single"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_single"]
+        res["N_pair"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_pair"]
+        res["N_zero"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_zero"]
+        res["N_tot"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_tot"]
+# %%
+obs = "N_tot"
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+
+X = np.transpose(res[obs] - res["N_single"])
+img = plt.imshow(X, cmap="magma", origin="lower", extent=[-2, 1, -2, 1])
+ax.set(ylabel=r"m", xlabel=r"g^{2}", xticks=[-2, -1, 0, 1], yticks=[-2, -1, 0, 1])
+ax.xaxis.set_major_formatter(fake_log)
+ax.yaxis.set_major_formatter(fake_log)
+cb = fig.colorbar(
+    img,
+    ax=ax,
+    aspect=20,
+    location="right",
+    orientation="vertical",
+    pad=0.01,
+    label=obs,
+)
+# %%
+res = {}
+config_filename = f"string_breaking/minimal_string"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g", "m"])
+
+res = {"time_steps": get_sim(ugrid[0][0]).res["time_steps"]}
+nsteps = len(res["time_steps"])
+
+obs_list = [
+    "entropy",
+    "E_square",
+    "N_single",
+    "N_pair",
+    "N_zero",
+    "N_tot",
+    "overlap0",
+    "overlap1",
+    "overlap2",
+    "overlap3",
+    "overlap4",
+]
+
+for obs in obs_list:
+    res[f"{obs}"] = np.zeros((len(vals["g"]), len(vals["m"]), nsteps))
+    res[f"tot_overlap"] = np.zeros((len(vals["g"]), len(vals["m"]), nsteps))
+    for ii, g in enumerate(vals["g"]):
+        for kk, m in enumerate(vals["m"]):
+            res[obs][ii, kk] = get_sim(ugrid[ii][kk]).res[obs]
+
+for ii in range(5):
+    res[f"tot_overlap"][0, 0] += res[f"overlap{ii}"][0, 0]
+# %%
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+ax.grid()
+for ii in range(5):
+    ax.plot(
+        res["time_steps"],
+        res[f"overlap{ii}"][0, 0],
+        "o-",
+        markersize=2,
+        markeredgewidth=0.2,
+        label=f"string {ii}",
+    )
+ax.plot(
+    res["time_steps"],
+    res["tot_overlap"][0, 0],
+    "o-",
+    markersize=2,
+    markeredgewidth=0.2,
+    label=f"sum strings",
+)
+fig.legend(
+    bbox_to_anchor=(0.91, 0.98),
+    ncol=1,
+    frameon=True,
+    labelspacing=0.1,
+    bbox_transform=fig.transFigure,
+)
+ax.set(xlabel=r"time $t$", ylabel=r"overlap $\psi_{i}$")  # yscale="log")
+
+
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+ax.grid()
+for obs in ["E_square", "N_single", "N_pair", "N_zero", "N_tot"]:
+    ax.plot(
+        res["time_steps"],
+        res[f"{obs}"][0, 0],
+        "o-",
+        markersize=2,
+        markeredgewidth=0.2,
+        label=f"{obs}",
+    )
+fig.legend(
+    bbox_to_anchor=(0.91, 0.98),
+    ncol=1,
+    frameon=True,
+    labelspacing=0.1,
+    bbox_transform=fig.transFigure,
+)
+ax.set(xlabel=r"time $t$", ylabel="observable")  # yscale="log")
 # %%
 res = {}
 config_filename = f"LBO/qed"

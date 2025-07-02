@@ -36,10 +36,8 @@ def config_to_index(config, loc_dims):
     The order of the sites must match the order of the dimensionality of the local basis
     Args:
         loc_states (list of ints): list of numbered state of the lattice sites
-
         loc_dims (list of ints, np.ndarray of ints, or int): list of lattice site dimensions
             (in the same order as they are stored in the loc_states!)
-
     Returns:
         int: QMB index
     """
@@ -99,15 +97,14 @@ def config_to_index_linsearch(config, unique_configs):
     return -1  # Configuration not found
 
 
-@njit
+@njit(cache=True)
 def config_to_index_binarysearch(config, unique_configs):
     low = 0
     high = len(unique_configs) - 1
     while low <= high:
         idx = (low + high) // 2
-        comp_result = compare_configs(
-            unique_configs[idx], config
-        )  # Custom comparison function
+        # Custom comparison function
+        comp_result = compare_configs(unique_configs[idx], config)
         if comp_result == 0:
             return idx
         elif comp_result < 0:
@@ -117,7 +114,7 @@ def config_to_index_binarysearch(config, unique_configs):
     return -1  # Configuration not found
 
 
-@njit
+@njit(cache=True)
 def compare_configs(config1, config2):
     # Custom function to compare configurations element-wise
     for i in range(len(config1)):

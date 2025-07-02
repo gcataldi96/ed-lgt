@@ -42,9 +42,9 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
     ops = {}
     if lattice_dim == 1:
         # T generators for electric term
-        for op in ["T2", "T4", "Tx", "Ty", "Tz", "P"]:
-            ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz"])
-            ops[f"{op}_px"] = qmb_op(in_ops, ["IDz", op])
+        for op in ["T2", "P"]:
+            ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz"])
+            ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", op])
         # Operator fot the Polyakov loop
         ops["U"] = 0
         for col in "rg":
@@ -61,7 +61,7 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
                     in_ops, [f"psi_{col}_dag_P", "P", f"Z{col}"]
                 )
                 ops["Qmx_dag"] += hop_rescaling_factor * qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", f"Z{col}", "IDz"]
+                    in_ops, [f"psi_{col}_dag_P", f"Z{col}", "Iz"]
                 )
             # add their dagger operators
             Qs = {}
@@ -71,19 +71,19 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
             ops |= Qs
     elif lattice_dim == 2:
         # T generators for electric term
-        for op in ["T2", "T4", "Tx", "Ty", "Tz", "P"]:
-            ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz", "IDz", "IDz"])
-            ops[f"{op}_my"] = qmb_op(in_ops, ["IDz", op, "IDz", "IDz"])
-            ops[f"{op}_px"] = qmb_op(in_ops, ["IDz", "IDz", op, "IDz"])
-            ops[f"{op}_py"] = qmb_op(in_ops, ["IDz", "IDz", "IDz", op])
+        for op in ["T2", "P"]:
+            ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz"])
+            ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz"])
+            ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz"])
+            ops[f"{op}_py"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", op])
         # Corner Operators
         for corner in ["px,py", "py,mx", "mx,my", "my,px"]:
             ops[f"C_{corner}"] = 0
         for col in ["r", "g"]:
-            ops["C_px,py"] += qmb_op(in_ops, ["IDz", "IDz", f"Z{col}_P", f"Z{col}_dag"])
+            ops["C_px,py"] += qmb_op(in_ops, ["Iz", "Iz", f"Z{col}_P", f"Z{col}_dag"])
             ops["C_py,mx"] += qmb_op(in_ops, [f"P_Z{col}_dag", "P", "P", f"Z{col}"])
-            ops["C_mx,my"] += qmb_op(in_ops, [f"Z{col}_P", f"Z{col}_dag", "IDz", "IDz"])
-            ops["C_my,px"] += qmb_op(in_ops, ["IDz", f"Z{col}_P", f"Z{col}_dag", "IDz"])
+            ops["C_mx,my"] += qmb_op(in_ops, [f"Z{col}_P", f"Z{col}_dag", "Iz", "Iz"])
+            ops["C_my,px"] += qmb_op(in_ops, ["Iz", f"Z{col}_P", f"Z{col}_dag", "Iz"])
         if not pure_theory:
             # Update Electric and Corner operators
             for op in ops.keys():
@@ -94,13 +94,13 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
                     ops[f"Q{side}{ax}_dag"] = 0
             for col in "rg":
                 ops["Qmx_dag"] += hop_rescaling_factor * qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", f"Z{col}", "IDz", "IDz", "IDz"]
+                    in_ops, [f"psi_{col}_dag_P", f"Z{col}", "Iz", "Iz", "Iz"]
                 )
                 ops["Qmy_dag"] += hop_rescaling_factor * qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", "P", f"Z{col}", "IDz", "IDz"]
+                    in_ops, [f"psi_{col}_dag_P", "P", f"Z{col}", "Iz", "Iz"]
                 )
                 ops["Qpx_dag"] += hop_rescaling_factor * qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", "P", "P", f"Z{col}", "IDz"]
+                    in_ops, [f"psi_{col}_dag_P", "P", "P", f"Z{col}", "Iz"]
                 )
                 ops["Qpy_dag"] += hop_rescaling_factor * qmb_op(
                     in_ops, [f"psi_{col}_dag_P", "P", "P", "P", f"Z{col}"]
@@ -113,13 +113,13 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
             ops |= Qs
     elif lattice_dim == 3:
         # T generators for electric term
-        for op in ["T2", "T4", "Tx", "Ty", "Tz", "P"]:
-            ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz", "IDz", "IDz", "IDz", "IDz"])
-            ops[f"{op}_my"] = qmb_op(in_ops, ["IDz", op, "IDz", "IDz", "IDz", "IDz"])
-            ops[f"{op}_mz"] = qmb_op(in_ops, ["IDz", "IDz", op, "IDz", "IDz", "IDz"])
-            ops[f"{op}_py"] = qmb_op(in_ops, ["IDz", "IDz", "IDz", op, "IDz", "IDz"])
-            ops[f"{op}_px"] = qmb_op(in_ops, ["IDz", "IDz", "IDz", "IDz", op, "IDz"])
-            ops[f"{op}_pz"] = qmb_op(in_ops, ["IDz", "IDz", "IDz", "IDz", "IDz", op])
+        for op in ["T2", "P"]:
+            ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz", "Iz", "Iz"])
+            ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz", "Iz", "Iz"])
+            ops[f"{op}_mz"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz", "Iz", "Iz"])
+            ops[f"{op}_py"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", op, "Iz", "Iz"])
+            ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz", op, "Iz"])
+            ops[f"{op}_pz"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz", "Iz", op])
         # Corner Operators
         corner_list = []
         for pdir in ["xy", "xz", "yz"]:
@@ -137,51 +137,45 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
             # XY Plane
             ops["C_px,py"] += qmb_op(
                 in_ops,
-                ["IDz", "IDz", "IDz", f"Z{col}_P", f"Z{col}_dag", "IDz"],
+                ["Iz", "Iz", "Iz", f"Z{col}_P", f"Z{col}_dag", "Iz"],
             )
             ops["C_py,mx"] += qmb_op(
-                in_ops, [f"P_Z{col}_dag", "P", "P", "P", f"Z{col}", "IDz"]
+                in_ops, [f"P_Z{col}_dag", "P", "P", "P", f"Z{col}", "Iz"]
             )
             ops["C_mx,my"] += qmb_op(
                 in_ops,
-                [f"Z{col}_P", f"Z{col}_dag", "IDz", "IDz", "IDz", "IDz"],
+                [f"Z{col}_P", f"Z{col}_dag", "Iz", "Iz", "Iz", "Iz"],
             )
             ops["C_my,px"] += qmb_op(
-                in_ops, ["IDz", f"Z{col}_P", "P", f"Z{col}_dag", "IDz", "IDz"]
+                in_ops, ["Iz", f"Z{col}_P", "P", f"Z{col}_dag", "Iz", "Iz"]
             )
             # --------------------------------------------------------------------------
             # XZ Plane
             ops["C_px,pz"] += qmb_op(
-                in_ops,
-                ["IDz", "IDz", "IDz", f"Z{col}_P", "P", f"Z{col}_dag"],
+                in_ops, ["Iz", "Iz", "Iz", f"Z{col}_P", "P", f"Z{col}_dag"]
             )
             ops["C_pz,mx"] += qmb_op(
                 in_ops, [f"P_Z{col}_dag", "P", "P", "P", "P", f"Z{col}"]
             )
             ops["C_mx,mz"] += qmb_op(
-                in_ops,
-                [f"Z{col}_P", "P", f"Z{col}_dag", "IDz", "IDz", "IDz"],
+                in_ops, [f"Z{col}_P", "P", f"Z{col}_dag", "Iz", "Iz", "Iz"]
             )
             ops["C_mz,px"] += qmb_op(
-                in_ops,
-                ["IDz", "IDz", f"Z{col}_P", f"Z{col}_dag", "IDz", "IDz"],
+                in_ops, ["Iz", "Iz", f"Z{col}_P", f"Z{col}_dag", "Iz", "Iz"]
             )
             # --------------------------------------------------------------------------
             # YZ Plane
             ops["C_py,pz"] += qmb_op(
-                in_ops,
-                ["IDz", "IDz", "IDz", "IDz", f"Z{col}_P", f"Z{col}_dag"],
+                in_ops, ["Iz", "Iz", "Iz", "Iz", f"Z{col}_P", f"Z{col}_dag"]
             )
             ops["C_pz,my"] += qmb_op(
-                in_ops, ["IDz", f"P_Z{col}_dag", "P", "P", "P", f"Z{col}"]
+                in_ops, ["Iz", f"P_Z{col}_dag", "P", "P", "P", f"Z{col}"]
             )
             ops["C_my,mz"] += qmb_op(
-                in_ops,
-                ["IDz", f"Z{col}_P", f"Z{col}_dag", "IDz", "IDz", "IDz"],
+                in_ops, ["Iz", f"Z{col}_P", f"Z{col}_dag", "Iz", "Iz", "Iz"]
             )
             ops["C_mz,py"] += qmb_op(
-                in_ops,
-                ["IDz", "IDz", f"Z{col}_P", "P", f"Z{col}_dag", "IDz"],
+                in_ops, ["Iz", "Iz", f"Z{col}_P", "P", f"Z{col}_dag", "Iz"]
             )
         if not pure_theory:
             # Update Electric and Corner operators
@@ -194,21 +188,21 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
             for col in "rg":
                 ops["Qmx_dag"] += hop_rescaling_factor * qmb_op(
                     in_ops,
-                    [f"psi_{col}_dag_P", f"Z{col}", "IDz", "IDz", "IDz", "IDz", "IDz"],
+                    [f"psi_{col}_dag_P", f"Z{col}", "Iz", "Iz", "Iz", "Iz", "Iz"],
                 )
                 ops["Qmy_dag"] += hop_rescaling_factor * qmb_op(
                     in_ops,
-                    [f"psi_{col}_dag_P", "P", f"Z{col}", "IDz", "IDz", "IDz", "IDz"],
+                    [f"psi_{col}_dag_P", "P", f"Z{col}", "Iz", "Iz", "Iz", "Iz"],
                 )
                 ops["Qmz_dag"] += hop_rescaling_factor * qmb_op(
                     in_ops,
-                    [f"psi_{col}_dag_P", "P", "P", f"Z{col}", "IDz", "IDz", "IDz"],
+                    [f"psi_{col}_dag_P", "P", "P", f"Z{col}", "Iz", "Iz", "Iz"],
                 )
                 ops["Qpx_dag"] += hop_rescaling_factor * qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", "P", "P", "P", f"Z{col}", "IDz", "IDz"]
+                    in_ops, [f"psi_{col}_dag_P", "P", "P", "P", f"Z{col}", "Iz", "Iz"]
                 )
                 ops["Qpy_dag"] += hop_rescaling_factor * qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", "P", "P", "P", "P", f"Z{col}", "IDz"]
+                    in_ops, [f"psi_{col}_dag_P", "P", "P", "P", "P", f"Z{col}", "Iz"]
                 )
                 ops["Qpz_dag"] += hop_rescaling_factor * qmb_op(
                     in_ops, [f"psi_{col}_dag_P", "P", "P", "P", "P", "P", f"Z{col}"]
@@ -225,36 +219,38 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
         # Psi NUMBER OPERATORS
         for label in ["r", "g", "tot", "single", "pair", "zero"]:
             ops[f"N_{label}"] = qmb_op(
-                in_ops, [f"N_{label}"] + ["IDz" for _ in range(2 * lattice_dim)]
+                in_ops, [f"N_{label}"] + ["Iz" for _ in range(2 * lattice_dim)]
             )
+    """
         # Psi CASIMIR OPERATORS
         ops["S2_matter"] = 0
         for Td in ["x", "y", "z"]:
             ops["S2_matter"] += csr_matrix(
-                qmb_op(in_ops, [f"S{Td}_psi"] + ["IDz" for i in range(2 * lattice_dim)])
+                qmb_op(in_ops, [f"S{Td}_psi"] + ["Iz" for i in range(2 * lattice_dim)])
                 ** 2,
                 dtype=float,
             )
+    """
     # CASIMIR/ELECTRIC OPERATOR
     ops[f"E_square"] = 0
     for s in "pm":
         for d in dimensions:
             ops[f"E_square"] += 0.5 * ops[f"T2_{s}{d}"]
-    # DRESSED SITE CASIMIR OPERATOR S^{2}
+    """# DRESSED SITE CASIMIR OPERATOR S^{2}
     ops[f"S2_tot"] = 0
     for Td in ["x", "y", "z"]:
         for side in "pm":
             for d in dimensions:
                 ops["S2_tot"] += csr_matrix(ops[f"T{Td}_{s}{d}"] ** 2, dtype=float)
     if not pure_theory:
-        ops["S2_tot"] += ops["S2_matter"]
+        ops["S2_tot"] += ops["S2_matter"]"""
     if background:
         for op in ops.keys():
             ops[op] = kron(identity(3), ops[op])
         if pure_theory:
-            id_list = ["IDz" for _ in range(2 * lattice_dim)]
+            id_list = ["Iz" for _ in range(2 * lattice_dim)]
         else:
-            id_list = ["ID_psi"] + ["IDz" for _ in range(2 * lattice_dim)]
+            id_list = ["ID_psi"] + ["Iz" for _ in range(2 * lattice_dim)]
         ops["bg"] = qmb_op(in_ops, ["T2"] + id_list) / 0.75
     return ops
 
@@ -375,23 +371,23 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
     if lattice_dim == 1:
         # T generators for electric term
         for op in ["T2", "P"]:
-            ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz"])
-            ops[f"{op}_px"] = qmb_op(in_ops, ["IDz", op])
+            ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz"])
+            ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", op])
         if not pure_theory:
             # Update Electric operators
             for op in ops.keys():
                 ops[op] = kron(in_ops["ID_psi"], ops[op])
             # Add Hopping operators
             # ------------------------------------------------------------------
-            ops["Q1_mx_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "Zg_dag", "IDz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "Zr_dag", "IDz"])
+            ops["Q1_mx_dag"] = qmb_op(in_ops, ["psi_r_dag_P", "Zg_dag", "Iz"]) - qmb_op(
+                in_ops, ["psi_g_dag_P", "Zr_dag", "Iz"]
+            )
             ops["Q1_px_dag"] = qmb_op(in_ops, ["psi_r_dag_P", "P", "Zg_dag"]) - qmb_op(
                 in_ops, ["psi_g_dag_P", "P", "Zr_dag"]
             )
             # ------------------------------------------------------------------
-            ops["Q2_mx_dag"] = qmb_op(in_ops, ["psi_r_dag_P", "Zr", "IDz"]) + qmb_op(
-                in_ops, ["psi_g_dag_P", "Zg", "IDz"]
+            ops["Q2_mx_dag"] = qmb_op(in_ops, ["psi_r_dag_P", "Zr", "Iz"]) + qmb_op(
+                in_ops, ["psi_g_dag_P", "Zg", "Iz"]
             )
             ops["Q2_px_dag"] = qmb_op(in_ops, ["psi_r_dag_P", "P", "Zr"]) + qmb_op(
                 in_ops, ["psi_g_dag_P", "P", "Zg"]
@@ -405,26 +401,26 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
     elif lattice_dim == 2:
         # T generators for electric term
         for op in ["T2", "P"]:
-            ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz", "IDz", "IDz"])
-            ops[f"{op}_my"] = qmb_op(in_ops, ["IDz", op, "IDz", "IDz"])
-            ops[f"{op}_px"] = qmb_op(in_ops, ["IDz", "IDz", op, "IDz"])
-            ops[f"{op}_py"] = qmb_op(in_ops, ["IDz", "IDz", "IDz", op])
+            ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz"])
+            ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz"])
+            ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz"])
+            ops[f"{op}_py"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", op])
         # Corner Operators
         for l1, l2 in product(["A", "B"], repeat=2):
             for corner in ["px,py", "py,mx", "mx,my", "my,px"]:
                 ops[f"C{l1}{l2}_{corner}"] = 0
             for s in ["r", "g"]:
                 ops[f"C{l1}{l2}_px,py"] += qmb_op(
-                    in_ops, ["IDz", "IDz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag"]
+                    in_ops, ["Iz", "Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag"]
                 )
                 ops[f"C{l1}{l2}_py,mx"] += qmb_op(
                     in_ops, [f"P_Z{l2}_{s}_dag", "P", "P", f"Z{l1}_{s}"]
                 )
                 ops[f"C{l1}{l2}_mx,my"] += qmb_op(
-                    in_ops, [f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "IDz", "IDz"]
+                    in_ops, [f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz", "Iz"]
                 )
                 ops[f"C{l1}{l2}_my,px"] += qmb_op(
-                    in_ops, ["IDz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "IDz"]
+                    in_ops, ["Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz"]
                 )
         if not pure_theory:
             # Update Electric and Corner operators
@@ -433,27 +429,27 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
             # Add Hopping operators
             # ------------------------------------------------------------------
             ops["Q1_mx_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "Zg_dag", "IDz", "IDz", "IDz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "Zr_dag", "IDz", "IDz", "IDz"])
+                in_ops, ["psi_r_dag_P", "Zg_dag", "Iz", "Iz", "Iz"]
+            ) - qmb_op(in_ops, ["psi_g_dag_P", "Zr_dag", "Iz", "Iz", "Iz"])
             ops["Q1_my_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "Zg_dag", "IDz", "IDz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "Zr_dag", "IDz", "IDz"])
+                in_ops, ["psi_r_dag_P", "P", "Zg_dag", "Iz", "Iz"]
+            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "Zr_dag", "Iz", "Iz"])
             ops["Q1_px_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "Zg_dag", "IDz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "Zr_dag", "IDz"])
+                in_ops, ["psi_r_dag_P", "P", "P", "Zg_dag", "Iz"]
+            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "Zr_dag", "Iz"])
             ops["Q1_py_dag"] = qmb_op(
                 in_ops, ["psi_r_dag_P", "P", "P", "P", "Zg_dag"]
             ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "Zr_dag"])
             # ------------------------------------------------------------------
             ops["Q2_mx_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "Zr", "IDz", "IDz", "IDz"]
-            ) + qmb_op(in_ops, ["psi_g_dag_P", "Zg", "IDz", "IDz", "IDz"])
+                in_ops, ["psi_r_dag_P", "Zr", "Iz", "Iz", "Iz"]
+            ) + qmb_op(in_ops, ["psi_g_dag_P", "Zg", "Iz", "Iz", "Iz"])
             ops["Q2_my_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "Zr", "IDz", "IDz"]
-            ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "Zg", "IDz", "IDz"])
+                in_ops, ["psi_r_dag_P", "P", "Zr", "Iz", "Iz"]
+            ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "Zg", "Iz", "Iz"])
             ops["Q2_px_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "Zr", "IDz"]
-            ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "Zg", "IDz"])
+                in_ops, ["psi_r_dag_P", "P", "P", "Zr", "Iz"]
+            ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "Zg", "Iz"])
             ops["Q2_py_dag"] = qmb_op(
                 in_ops, ["psi_r_dag_P", "P", "P", "P", "Zr"]
             ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "Zg"])
@@ -466,12 +462,12 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
     elif lattice_dim == 3:
         # T generators for electric term
         for op in ["T2", "P"]:
-            ops[f"{op}_mx"] = qmb_op(in_ops, [op, "IDz", "IDz", "IDz", "IDz", "IDz"])
-            ops[f"{op}_my"] = qmb_op(in_ops, ["IDz", op, "IDz", "IDz", "IDz", "IDz"])
-            ops[f"{op}_mz"] = qmb_op(in_ops, ["IDz", "IDz", op, "IDz", "IDz", "IDz"])
-            ops[f"{op}_py"] = qmb_op(in_ops, ["IDz", "IDz", "IDz", op, "IDz", "IDz"])
-            ops[f"{op}_px"] = qmb_op(in_ops, ["IDz", "IDz", "IDz", "IDz", op, "IDz"])
-            ops[f"{op}_pz"] = qmb_op(in_ops, ["IDz", "IDz", "IDz", "IDz", "IDz", op])
+            ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz", "Iz", "Iz"])
+            ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz", "Iz", "Iz"])
+            ops[f"{op}_mz"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz", "Iz", "Iz"])
+            ops[f"{op}_py"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", op, "Iz", "Iz"])
+            ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz", op, "Iz"])
+            ops[f"{op}_pz"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz", "Iz", op])
         # Corner Operators
         corner_list = []
         for pdir in ["xy", "xz", "yz"]:
@@ -489,49 +485,49 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
                 # XY Plane
                 ops[f"C{l1}{l2}_px,py"] += qmb_op(
                     in_ops,
-                    ["IDz", "IDz", "IDz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "IDz"],
+                    ["Iz", "Iz", "Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz"],
                 )
                 ops[f"C{l1}{l2}_py,mx"] += qmb_op(
-                    in_ops, [f"P_Z{l2}_{s}_dag", "P", "P", "P", f"Z{l1}_{s}", "IDz"]
+                    in_ops, [f"P_Z{l2}_{s}_dag", "P", "P", "P", f"Z{l1}_{s}", "Iz"]
                 )
                 ops[f"C{l1}{l2}_mx,my"] += qmb_op(
                     in_ops,
-                    [f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "IDz", "IDz", "IDz", "IDz"],
+                    [f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz", "Iz", "Iz", "Iz"],
                 )
                 ops[f"C{l1}{l2}_my,px"] += qmb_op(
-                    in_ops, ["IDz", f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag", "IDz", "IDz"]
+                    in_ops, ["Iz", f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag", "Iz", "Iz"]
                 )
                 # XZ Plane
                 ops[f"C{l1}{l2}_px,pz"] += qmb_op(
                     in_ops,
-                    ["IDz", "IDz", "IDz", f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag"],
+                    ["Iz", "Iz", "Iz", f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag"],
                 )
                 ops[f"C{l1}{l2}_pz,mx"] += qmb_op(
                     in_ops, [f"P_Z{l2}_{s}_dag", "P", "P", "P", "P", f"Z{l1}_{s}"]
                 )
                 ops[f"C{l1}{l2}_mx,mz"] += qmb_op(
                     in_ops,
-                    [f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag", "IDz", "IDz", "IDz"],
+                    [f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag", "Iz", "Iz", "Iz"],
                 )
                 ops[f"C{l1}{l2}_mz,px"] += qmb_op(
                     in_ops,
-                    ["IDz", "IDz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "IDz", "IDz"],
+                    ["Iz", "Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz", "Iz"],
                 )
                 # YZ Plane
                 ops[f"C{l1}{l2}_py,pz"] += qmb_op(
                     in_ops,
-                    ["IDz", "IDz", "IDz", "IDz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag"],
+                    ["Iz", "Iz", "Iz", "Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag"],
                 )
                 ops[f"C{l1}{l2}_pz,my"] += qmb_op(
-                    in_ops, ["IDz", f"P_Z{l2}_{s}_dag", "P", "P", "P", f"Z{l1}_{s}"]
+                    in_ops, ["Iz", f"P_Z{l2}_{s}_dag", "P", "P", "P", f"Z{l1}_{s}"]
                 )
                 ops[f"C{l1}{l2}_my,mz"] += qmb_op(
                     in_ops,
-                    ["IDz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "IDz", "IDz", "IDz"],
+                    ["Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz", "Iz", "Iz"],
                 )
                 ops[f"C{l1}{l2}_mz,py"] += qmb_op(
                     in_ops,
-                    ["IDz", "IDz", f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag", "IDz"],
+                    ["Iz", "Iz", f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag", "Iz"],
                 )
         if not pure_theory:
             # Update Electric and Corner operators
@@ -539,53 +535,49 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
                 ops[op] = kron(in_ops["ID_psi"], ops[op])
             # Add Hopping operators
             ops["Q1_mx_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "Zg_dag", "IDz", "IDz", "IDz", "IDz", "IDz"]
-            ) - qmb_op(
-                in_ops, ["psi_g_dag_P", "Zr_dag", "IDz", "IDz", "IDz", "IDz", "IDz"]
-            )
+                in_ops, ["psi_r_dag_P", "Zg_dag", "Iz", "Iz", "Iz", "Iz", "Iz"]
+            ) - qmb_op(in_ops, ["psi_g_dag_P", "Zr_dag", "Iz", "Iz", "Iz", "Iz", "Iz"])
             ops["Q1_my_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "Zg_dag", "IDz", "IDz", "IDz", "IDz"]
-            ) - qmb_op(
-                in_ops, ["psi_g_dag_P", "P", "Zr_dag", "IDz", "IDz", "IDz", "IDz"]
-            )
+                in_ops, ["psi_r_dag_P", "P", "Zg_dag", "Iz", "Iz", "Iz", "Iz"]
+            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "Zr_dag", "Iz", "Iz", "Iz", "Iz"])
             ops["Q1_mz_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "Zg_dag", "IDz", "IDz", "IDz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "Zr_dag", "IDz", "IDz", "IDz"])
+                in_ops, ["psi_r_dag_P", "P", "P", "Zg_dag", "Iz", "Iz", "Iz"]
+            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "Zr_dag", "Iz", "Iz", "Iz"])
             ops["Q1_px_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "P", "Zg_dag", "IDz", "IDz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "Zr_dag", "IDz", "IDz"])
+                in_ops, ["psi_r_dag_P", "P", "P", "P", "Zg_dag", "Iz", "Iz"]
+            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "Zr_dag", "Iz", "Iz"])
             ops["Q1_py_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "P", "P", "Zg_dag", "IDz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "P", "Zr_dag", "IDz"])
+                in_ops, ["psi_r_dag_P", "P", "P", "P", "P", "Zg_dag", "Iz"]
+            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "P", "Zr_dag", "Iz"])
             ops["Q1_pz_dag"] = qmb_op(
                 in_ops, ["psi_r_dag_P", "P", "P", "P", "P", "P", "Zg_dag"]
             ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "P", "P", "Zr_dag"])
             # --------------------------------------------------------------------------
             ops["Q2_mx_dag"] = qmb_op(
                 in_ops,
-                ["psi_r_dag_P", "Zr", "IDz", "IDz", "IDz", "IDz", "IDz"],
+                ["psi_r_dag_P", "Zr", "Iz", "Iz", "Iz", "Iz", "Iz"],
             ) + qmb_op(
                 in_ops,
-                ["psi_g_dag_P", "Zg", "IDz", "IDz", "IDz", "IDz", "IDz"],
+                ["psi_g_dag_P", "Zg", "Iz", "Iz", "Iz", "Iz", "Iz"],
             )
             ops["Q2_my_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "Zr", "IDz", "IDz", "IDz", "IDz"]
+                in_ops, ["psi_r_dag_P", "P", "Zr", "Iz", "Iz", "Iz", "Iz"]
             ) + qmb_op(
                 in_ops,
-                ["psi_g_dag_P", "P", "Zg", "IDz", "IDz", "IDz", "IDz"],
+                ["psi_g_dag_P", "P", "Zg", "Iz", "Iz", "Iz", "Iz"],
             )
             ops["Q2_mz_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "Zr", "IDz", "IDz", "IDz"]
+                in_ops, ["psi_r_dag_P", "P", "P", "Zr", "Iz", "Iz", "Iz"]
             ) + qmb_op(
                 in_ops,
-                ["psi_g_dag_P", "P", "P", "Zg", "IDz", "IDz", "IDz"],
+                ["psi_g_dag_P", "P", "P", "Zg", "Iz", "Iz", "Iz"],
             )
             ops["Q2_px_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "P", "Zr", "IDz", "IDz"]
-            ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "Zg", "IDz", "IDz"])
+                in_ops, ["psi_r_dag_P", "P", "P", "P", "Zr", "Iz", "Iz"]
+            ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "Zg", "Iz", "Iz"])
             ops["Q2_py_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "P", "P", "Zr", "IDz"]
-            ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "P", "Zg", "IDz"])
+                in_ops, ["psi_r_dag_P", "P", "P", "P", "P", "Zr", "Iz"]
+            ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "P", "Zg", "Iz"])
             ops["Q2_pz_dag"] = qmb_op(
                 in_ops, ["psi_r_dag_P", "P", "P", "P", "P", "P", "Zr"]
             ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "P", "P", "Zg"])
@@ -600,14 +592,14 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
         # Psi NUMBER OPERATORS
         for label in ["r", "g", "tot", "single", "pair", "zero"]:
             ops[f"N_{label}"] = qmb_op(
-                in_ops, [f"N_{label}"] + ["IDz" for i in range(2 * lattice_dim)]
+                in_ops, [f"N_{label}"] + ["Iz" for i in range(2 * lattice_dim)]
             )
         """
         # Psi CASIMIR OPERATORS
         ops["S2_matter"] = 0
         for Td in ["x", "y", "z"]:
             ops["S2_matter"] += csr_matrix(
-                qmb_op(in_ops, [f"S{Td}_psi"] + ["IDz" for i in range(2 * lattice_dim)])
+                qmb_op(in_ops, [f"S{Td}_psi"] + ["Iz" for i in range(2 * lattice_dim)])
                 ** 2,
                 dtype=float,
             )
@@ -631,8 +623,8 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
         for op in ops.keys():
             ops[op] = kron(identity(3), ops[op])
         if pure_theory:
-            id_list = ["IDz" for _ in range(2 * lattice_dim)]
+            id_list = ["Iz" for _ in range(2 * lattice_dim)]
         else:
-            id_list = ["ID_psi"] + ["IDz" for _ in range(2 * lattice_dim)]
+            id_list = ["ID_psi"] + ["Iz" for _ in range(2 * lattice_dim)]
         ops["bg"] = qmb_op(in_ops, ["T2"] + id_list) / 0.75
     return ops

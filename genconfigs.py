@@ -66,12 +66,10 @@ gen_configs("template", params, f"QED/convergence")
 # QED DM MATRIX eigenvalue scaling
 params = {"g": np.logspace(-2, -1, 10)}
 gen_configs("template", params, f"QED/DM_scaling_PBC")
-
 # %%
 # QED ENTANGLEMENT vs spin REP
 params = {"spin": np.arange(1, 6, 1), "g": np.logspace(-2, 0, 15)}
 gen_configs("template", params, f"QED/entanglement")
-
 # %%
 params = {
     "spin": np.arange(1, 31, 1),
@@ -136,10 +134,43 @@ gen_configs("template", params, f"LBO/qed_scan")
 # %%
 params = {"g": np.logspace(-1, 0.5, 30)}
 gen_configs("template", params, f"LBO/qed_error")
-
-# %%
 # %%
 params = {"g": np.logspace(-1, 1, 10)}
 gen_configs("template", params, f"LBO/qed_plaq_svd")
+# %%
+params = {"g": np.logspace(-1, 2, 20)}
+gen_configs("template", params, f"theta_term/qed_notheta")
+# %%
+beta = np.array([0.75, 0.5, 0.3, 0.1, 0.05, 0.01, 0.005])
+g = 1 / beta
+params = {"g": g, "theta": np.linspace(-0.5, 0.5, 20)}
+gen_configs("template", params, f"theta_term/qed_theta2")
+# %%
+params = {"g": np.logspace(-2, 3, 40), "m": np.logspace(-3, 1, 40)}
+gen_configs("template", params, f"string_breaking/phasediagram_nobg")
+# %%
+from scipy.stats import norm
 
+# Parameters
+n_points = 14  # Number of points per side
+theta_center = 0.4  # Peak of the Gaussian
+theta_width = 0.05  # Standard deviation
+theta_range = (0.3, 0.6)  # Interval for each Gaussian
+
+# Generate percentiles between 0 and 1 (excluding 0 and 1 to avoid infinities)
+percentiles = np.linspace(0.001, 0.999, n_points)
+# Inverse CDF (quantile function) for standard normal
+z_vals = norm.ppf(percentiles)
+# Rescale to desired width and shift to center
+theta_plus = theta_center + theta_width * z_vals
+# Keep only those in the interval [0.3, 0.5]
+theta_plus = theta_plus[(theta_plus >= theta_range[0]) & (theta_plus <= theta_range[1])]
+# Mirror to get negative side (centered at -0.4)
+theta_minus = -theta_plus[::-1]
+# Combine and sort
+theta = np.linspace(-0.6, 0.6, 15)
+theta_focused = np.sort(np.concatenate([theta_minus, theta_plus, theta]))
+g = np.linspace(0.95, 2.5, 10)
+params = {"g": g, "theta": theta_focused[20:]}
+gen_configs("template", params, f"theta_term/qed_theta_eigvals")
 # %%

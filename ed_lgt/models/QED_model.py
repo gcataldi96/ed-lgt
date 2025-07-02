@@ -54,6 +54,7 @@ class QED_Model(QuantumModel):
             for 'Ey' → the x-axis at y=0
         """
         if self.pure_theory and not any(self.has_obc):
+            logger.info("fixing surface electric fluxes")
             # one flux‐constraint per cartesian direction
             nbody_sectors = np.zeros(self.dim, dtype=float)
             nbody_ops = []
@@ -72,7 +73,7 @@ class QED_Model(QuantumModel):
                 for dir in self.directions:
                     sites = np.array(surfaces[face_of[dir]][1], dtype=np.uint8)
                     nbody_sites_list.append(sites)
-                    logger.info(f"{dir} sites: {sites} {surfaces[face_of[dir]][0]}")
+                    logger.debug(f"{dir} sites: {sites} {surfaces[face_of[dir]][0]}")
                     nbody_ops.append(self.ops[f"E_p{dir}"])
         else:
             # no electric‐flux constraint in 1D, or in OBC or with matter
@@ -173,7 +174,7 @@ class QED_Model(QuantumModel):
             )
             self.H.add_term(
                 h_terms["Ey_Bxz"].get_Hamiltonian(
-                    strength=self.coeffs["theta"], add_dagger=True
+                    strength=-self.coeffs["theta"], add_dagger=True
                 )
             )
             # YZ Plane
@@ -252,7 +253,7 @@ class QED_Model(QuantumModel):
                 E = g / 2
                 B = -1 / (2 * g)
             elif self.dim == 2:
-                E = g  # /2
+                E = g / 2
                 B = -1 / (2 * g)
             else:
                 E = g / 2
@@ -262,7 +263,7 @@ class QED_Model(QuantumModel):
                 "g": g,
                 "E": E,  # ELECTRIC FIELD coupling
                 "B": B,  # MAGNETIC FIELD coupling
-                "theta": complex(0, theta),  # THETA TERM coupling
+                "theta": -complex(0, theta * g),  # THETA TERM coupling
             }
             if m is not None:
                 coeffs |= {

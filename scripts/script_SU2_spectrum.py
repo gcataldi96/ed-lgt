@@ -8,6 +8,7 @@ os.environ["NUMBA_NUM_THREADS"] = str(B)
 
 import numpy as np
 from ed_lgt.models import SU2_Model
+from ed_lgt.tools import stag_avg
 from simsio import run_sim
 from time import perf_counter
 import logging
@@ -33,10 +34,7 @@ with run_sim() as sim:
     local_obs = [f"T2_{s}{d}" for d in model.directions for s in "mp"]
     local_obs += ["E_square"]
     if not model.pure_theory:
-        local_obs += [f"N_{label}" for label in ["tot", "single", "pair"]]
-    # LIST OF TWOBODY CORRELATORS
-    twobody_obs = []
-    twobody_axes = []
+        local_obs += [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
     # LIST OF PLAQUETTE OPERATORS
     plaquette_obs = []
     # DEFINE OBSERVABLES
@@ -53,9 +51,7 @@ with run_sim() as sim:
     # -------------------------------------------------------------------------------
     # ENTROPY
     # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
-    partition_indices = [0, 1, 2, 3]
-    # Build the list of environment and subsystem sites configurations
-    model.get_subsystem_environment_configs(keep_indices=partition_indices)
+    partition_indices = sim.par["observables"]["entropy_partition"]
     sim.res["entropy"] = np.zeros(model.H.n_eigs, dtype=float)
     # -------------------------------------------------------------------------------
     for ii in range(model.H.n_eigs):
@@ -66,10 +62,7 @@ with run_sim() as sim:
             if sim.par["observables"]["get_entropy"]:
                 sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
                     partition_indices,
-                    model.subsystem_configs,
-                    model.env_configs,
-                    model.unique_subsys_configs,
-                    model.unique_env_configs,
+                    model.sector_configs,
                 )
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS
@@ -79,8 +72,12 @@ with run_sim() as sim:
         # MEASURE OBSERVABLES
         if sim.par["observables"]["measure_obs"]:
             model.measure_observables(ii)
-            for obs in local_obs:
-                sim.res[obs][ii] = np.mean(model.res[obs])
+            sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
+            sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_pair"], "even")
+            sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_zero"], "odd")
+            sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_zero"], "even")
+            sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_pair"], "odd")
+            sim.res["N_tot"][ii] = sim.res["N_single"][ii] + 2 * sim.res["N_pair"][ii]
         # ---------------------------------------------------------------------------
         # OVERLAPS with the INITIAL STATE
         if sim.par["observables"]["get_overlap"]:

@@ -35,9 +35,9 @@ class SU2_Rishon:
         # Define SU2 Parity and Identity
         P_diag = []
         for s_size in range(self.largest_s_size):
-            P_diag += [((-1) ** s_size)] * (s_size + 1)
+            P_diag += [(-1) ** s_size] * (s_size + 1)
         self.ops["P"] = diags(P_diag, 0, self.shape)
-        self.ops["IDz"] = identity(self.size, dtype=float)
+        self.ops["Iz"] = identity(self.size, dtype=float)
         # In the special case of s=1/2, the shape of rishon is simpler
         if self.s == 1 / 2:
             self.ops["Zr"] = csr_matrix(([1, 1], ([0, 2], [1, 0])), shape=(3, 3))
@@ -98,9 +98,9 @@ class SU2_Rishon_gen:
         # Define SU2 Parity and Identity
         P_diag = []
         for s_size in range(self.largest_s_size):
-            P_diag += [((-1) ** s_size)] * (s_size + 1)
+            P_diag += [(-1) ** s_size] * (s_size + 1)
         self.ops["P"] = diags(P_diag, 0, self.shape)
-        self.ops["IDz"] = identity(self.size, dtype=float)
+        self.ops["Iz"] = identity(self.size, dtype=float)
         # ---------------------------------------------------------------------
         # Starting diagonals of the s=0 case for the red and green rishon
         initial_diags = [1, 2]

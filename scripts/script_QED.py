@@ -1,3 +1,11 @@
+import os
+import sys
+
+# Ensure NUMBA_NUM_THREADS is set properly before importing anything else
+B = int(sys.argv[-1])
+# Read the B parameter from command-line arguments
+os.environ["NUMBA_NUM_THREADS"] = str(B)
+
 import numpy as np
 from ed_lgt.models import QED_Model
 from simsio import run_sim
@@ -19,10 +27,13 @@ with run_sim() as sim:
     n_eigs = sim.par["hamiltonian"]["n_eigs"]
     model.diagonalize_Hamiltonian(n_eigs, model.ham_format)
     sim.res["energy"] = model.H.Nenergies
-    # ---------------------------------------------------------------------
+    # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
     local_obs = ["E_square"]
     local_obs += [f"E_{s}{d}" for d in model.directions for s in "mp"]
+    # local_obs += [f"Ep1_{s}{d}" for d in model.directions for s in "mp"]
+    # local_obs += [f"E0_{s}{d}" for d in model.directions for s in "mp"]
+    # local_obs += [f"Em1_{s}{d}" for d in model.directions for s in "mp"]
     if not model.pure_theory:
         local_obs += ["N"]
     for obs in local_obs:
@@ -48,11 +59,10 @@ with run_sim() as sim:
     model.get_observables(
         local_obs, twobody_obs, plaquette_obs, twobody_axes=twobody_axes
     )
+    # -------------------------------------------------------------------------------
     # ENTROPY
     # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
     partition_indices = sim.par["observables"]["entropy_partition"]
-    # Build the list of environment and subsystem sites configurations
-    model.get_subsystem_environment_configs(keep_indices=partition_indices)
     sim.res["entropy"] = np.zeros(model.H.n_eigs, dtype=float)
     # -------------------------------------------------------------------------------
     for ii in range(model.H.n_eigs):
@@ -63,15 +73,12 @@ with run_sim() as sim:
             if sim.par["observables"]["get_entropy"]:
                 sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
                     partition_indices,
-                    model.subsystem_configs,
-                    model.env_configs,
-                    model.unique_subsys_configs,
-                    model.unique_env_configs,
+                    model.sector_configs,
                 )
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS
             if sim.par["observables"]["get_state_configs"]:
-                model.H.Npsi[ii].get_state_configurations(1e-4, model.sector_configs)
+                model.H.Npsi[ii].get_state_configurations(1e-2, model.sector_configs)
         # ---------------------------------------------------------------------------
         # MEASURE OBSERVABLES
         model.measure_observables(ii)
@@ -80,30 +87,31 @@ with run_sim() as sim:
         for obs_names_list in plaquette_obs:
             obs = "_".join(obs_names_list)
             sim.res[obs][ii] = model.res[obs]
-    # Get the reduced density matrix of a partition in the ground state
-    RDM = model.H.Npsi[0].reduced_density_matrix(
-        partition_indices,
-        model.subsystem_configs,
-        model.env_configs,
-        model.unique_subsys_configs,
-        model.unique_env_configs,
-    )
-    rho_eigvals, rho_eigvecs = diagonalize_density_matrix(RDM)
-    # Sort eigenvalues and eigenvectors in descending order.
-    # Note: np.argsort sorts in ascending order; we reverse to get descending order.
-    sorted_indices = np.argsort(rho_eigvals)[::-1]
-    rho_eigvals = rho_eigvals[sorted_indices]
-    rho_eigvecs = rho_eigvecs[:, sorted_indices]
-    truncation_values = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10]
-    for tt, threshold in enumerate(truncation_values):
-        # Determine how many eigenvectors have eigenvalues greater than the threshold.
-        # (If too few are significant, relax the threshold until at least 2 are selected.)
-        P_columns = np.sum(rho_eigvals > threshold)
-        while P_columns < 2:
-            threshold /= 10
+    # -------------------------------------------------------------------------------
+    if sim.par["observables"]["get_RDM"]:
+        # Get the reduced density matrix of a partition in the ground state
+        RDM = model.H.Npsi[0].reduced_density_matrix(
+            partition_indices,
+            model.sector_configs,
+        )
+        logger.info(f"RDM shape {RDM.shape}")
+        rho_eigvals, rho_eigvecs = diagonalize_density_matrix(RDM)
+        # Sort eigenvalues and eigenvectors in descending order.
+        # Note: np.argsort sorts in ascending order; we reverse to get descending order.
+        sorted_indices = np.argsort(rho_eigvals)[::-1]
+        rho_eigvals = rho_eigvals[sorted_indices]
+        sim.res["eigvals"] = rho_eigvals
+        rho_eigvecs = rho_eigvecs[:, sorted_indices]
+        # Set a list of truncation values to reduce the RDM
+        truncation_values = [1e-1, 1e-2, 1e-3, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8]
+        for tt, threshold in enumerate(truncation_values):
+            # Determine how many eigenvectors have eigenvalues > the threshold.
+            # If too few are significant, relax the threshold until at least 2 are selected.
             P_columns = np.sum(rho_eigvals > threshold)
-        logger.info(f"SIGNIFICANT EIGENVALUES {P_columns} with threshold {threshold}")
-    sim.res["eigvals"] = rho_eigvals
+            while P_columns < 2:
+                threshold /= 10
+                P_columns = np.sum(rho_eigvals > threshold)
+            logger.info(f"SIGNIFICANT EIGENVALUES {P_columns} > {threshold}")
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

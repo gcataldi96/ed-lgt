@@ -18,7 +18,6 @@ class QMBTerm:
         op_names_list: list[str] = None,
         sector_configs: np.ndarray = None,
         momentum_basis=None,
-        momentum_k=None,
     ):
         # Validate type of parameters
         validate_parameters(lvals=lvals, has_obc=has_obc)
@@ -39,7 +38,6 @@ class QMBTerm:
         self.get_symmetry_operator()
         # Momentum basis
         self.momentum_basis = momentum_basis
-        self.momentum_k = momentum_k
 
     def get_symmetry_operator(self):
         if self.sector_configs is not None:

@@ -30,7 +30,7 @@ class SU2_Model(QuantumModel):
         )
         # -------------------------------------------------------------------------------
         # Acquire operators
-        if self.spin < 3:
+        if self.spin < 1:
             ops = SU2_dressed_site_operators(
                 self.spin,
                 self.pure_theory,
@@ -55,11 +55,13 @@ class SU2_Model(QuantumModel):
         else:
             global_ops = [self.ops["N_tot"]]
             global_sectors = sectors
+        # -------------------------------------------------------------------------------
         # LINK SYMMETRIES
         link_ops = [
             [self.ops[f"T2_p{d}"], -self.ops[f"T2_m{d}"]] for d in self.directions
         ]
         link_sectors = [0 for _ in self.directions]
+        # -------------------------------------------------------------------------------
         # GET SYMMETRY SECTOR
         self.get_abelian_symmetry_sector(
             global_ops=global_ops,
@@ -76,10 +78,9 @@ class SU2_Model(QuantumModel):
         h_terms = {}
         # ---------------------------------------------------------------------------
         # ELECTRIC ENERGY
-        h_terms["E_square"] = LocalTerm(
-            self.ops["E_square"], "E_square", **self.def_params
-        )
-        self.H.add_term(h_terms["E_square"].get_Hamiltonian(strength=self.coeffs["E"]))
+        op_name = "E_square"
+        h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
+        self.H.add_term(h_terms[op_name].get_Hamiltonian(strength=self.coeffs["E"]))
         # ---------------------------------------------------------------------------
         # PLAQUETTE TERM: MAGNETIC INTERACTION
         if self.dim > 1:
@@ -90,7 +91,7 @@ class SU2_Model(QuantumModel):
             )
             self.H.add_term(
                 h_terms["plaq_xy"].get_Hamiltonian(
-                    strength=-self.coeffs["B"], add_dagger=True
+                    strength=self.coeffs["B"], add_dagger=True
                 )
             )
         if self.dim == 3:
@@ -102,7 +103,7 @@ class SU2_Model(QuantumModel):
             )
             self.H.add_term(
                 h_terms["plaq_xz"].get_Hamiltonian(
-                    strength=-self.coeffs["B"], add_dagger=True
+                    strength=self.coeffs["B"], add_dagger=True
                 )
             )
             # YZ Plane
@@ -113,7 +114,7 @@ class SU2_Model(QuantumModel):
             )
             self.H.add_term(
                 h_terms["plaq_yz"].get_Hamiltonian(
-                    strength=-self.coeffs["B"], add_dagger=True
+                    strength=self.coeffs["B"], add_dagger=True
                 )
             )
         # ---------------------------------------------------------------------------
@@ -240,7 +241,7 @@ class SU2_Model(QuantumModel):
                     # ADD THE HAMILTONIAN TERM
                     self.H.add_term(
                         h_terms[plaq_name].get_Hamiltonian(
-                            strength=-self.coeffs["B"], add_dagger=True
+                            strength=self.coeffs["B"], add_dagger=True
                         )
                     )
                     # ADD THE PLAQUETTE TO THE LIST OF OBSERVABLES
@@ -338,13 +339,17 @@ class SU2_Model(QuantumModel):
         - the electric by 8/3 (the original was g_{0}^{2}/2) --> 8g^{2}/3, g^{2}=(3/2np.sqrt(2))*g_{0}^{2}
         - the magnetic by 3 ()
         - the other convention here is g is intended to be g^{2}
+        NOTE: for the DFL project use
+        E = 8 * g / 3
+        B = -3 / g
+        t = 2 * np.sqrt(2)
         """
         if self.dim == 1:
-            E = 8 * g / 3  # The correct one is g**2 / 2
+            E = g / 2
             B = 0
         else:
-            E = 8 * g / 3  # The correct one is g**2 / 2
-            B = -3 / g  # The correct one is -1/2*g**2
+            E = g / 2
+            B = -1 / (2 * g)
         # Dictionary with Hamiltonian COEFFICIENTS
         self.coeffs = {
             "g": g,
@@ -353,7 +358,7 @@ class SU2_Model(QuantumModel):
         }
         if not self.pure_theory:
             # The correct hopping in original units should be 1/2
-            t = 2 * np.sqrt(2)
+            t = 1 / 2
             self.coeffs |= {
                 "tx_even": -complex(0, t),  # x HOPPING (EVEN SITES)
                 "tx_odd": -complex(0, t),  # x HOPPING (ODD SITES)

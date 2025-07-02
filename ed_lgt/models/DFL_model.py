@@ -19,13 +19,7 @@ class DFL_Model(QuantumModel):
         self.background = background
         self.staggered_basis = False
         self.ham_format = ham_format
-        # Acquire operators
-        self.ops = SU2_dressed_site_operators(
-            self.spin,
-            self.pure_theory,
-            lattice_dim=self.dim,
-            background=self.background,
-        )
+        # -------------------------------------------------------------------------------
         # Acquire gauge invariant basis and states
         self.gauge_basis, self.gauge_states = SU2_gauge_invariant_states(
             self.spin,
@@ -33,8 +27,16 @@ class DFL_Model(QuantumModel):
             lattice_dim=self.dim,
             background=self.background,
         )
-        # Acquire local dimension and lattice label
-        self.get_local_site_dimensions()
+        # -------------------------------------------------------------------------------
+        # Acquire operators
+        ops = SU2_dressed_site_operators(
+            self.spin,
+            self.pure_theory,
+            lattice_dim=self.dim,
+            background=self.background,
+        )
+        # Initialize the operators, local dimension and lattice labels
+        self.project_operators(ops)
         # Rather than for SU2, here we do not select the symmetry sector
 
     def build_Hamiltonian(self, g, m=None):
@@ -59,7 +61,7 @@ class DFL_Model(QuantumModel):
             if not np.isclose(self.coeffs["B"], 1e-10):
                 self.H.add_term(
                     h_terms["plaq_xy"].get_Hamiltonian(
-                        strength=-self.coeffs["B"], add_dagger=True
+                        strength=self.coeffs["B"], add_dagger=True
                     )
                 )
         if self.dim == 3:
@@ -72,7 +74,7 @@ class DFL_Model(QuantumModel):
             if not np.isclose(self.coeffs["B"], 1e-10):
                 self.H.add_term(
                     h_terms["plaq_xz"].get_Hamiltonian(
-                        strength=-self.coeffs["B"], add_dagger=True
+                        strength=self.coeffs["B"], add_dagger=True
                     )
                 )
             # YZ Plane
@@ -84,7 +86,7 @@ class DFL_Model(QuantumModel):
             if not np.isclose(self.coeffs["B"], 1e-10):
                 self.H.add_term(
                     h_terms["plaq_yz"].get_Hamiltonian(
-                        strength=-self.coeffs["B"], add_dagger=True
+                        strength=self.coeffs["B"], add_dagger=True
                     )
                 )
         # -------------------------------------------------------------------------
@@ -143,13 +145,18 @@ class DFL_Model(QuantumModel):
         - the electric by 8/3 (the original was g_{0}^{2}/2) --> 8g^{2}/3, g^{2}=(3/2np.sqrt(2))*g_{0}^{2}
         - the magnetic by 3 ()
         - the other convention here is g is intended to be g^{2}
+
+        NOTE: for the DFL project use
+        E = 8 * g / 3
+        B = -3 / g
+        t = 2 * np.sqrt(2)
         """
         if self.dim == 1:
-            E = 8 * g / 3  # The correct one is g**2 / 2
+            E = g / 2
             B = 0
         else:
-            E = 8 * g / 3  # The correct one is g**2 / 2
-            B = -3 / g  # The correct one is -1/2*g**2
+            E = g / 2
+            B = -1 / (2 * g)
         # Dictionary with Hamiltonian COEFFICIENTS
         self.coeffs = {
             "g": g,
@@ -157,8 +164,7 @@ class DFL_Model(QuantumModel):
             "B": B,  # MAGNETIC FIELD coupling
         }
         if not self.pure_theory:
-            # The correct hopping in original units should be 1/2
-            t = 2 * np.sqrt(2)
+            t = 1 / 2
             self.coeffs |= {
                 "tx_even": -complex(0, t),  # x HOPPING (EVEN SITES)
                 "tx_odd": -complex(0, t),  # x HOPPING (ODD SITES)

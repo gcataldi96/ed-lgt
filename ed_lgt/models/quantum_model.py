@@ -2,7 +2,7 @@ import numpy as np
 from scipy.sparse import csc_matrix, isspmatrix, csr_matrix
 from scipy.sparse.linalg import expm
 from math import prod
-from ed_lgt.tools import stag_avg, exclude_columns
+from ed_lgt.tools import stag_avg
 from ed_lgt.modeling import (
     LocalTerm,
     TwoBodyTerm,
@@ -17,8 +17,9 @@ from ed_lgt.symmetries import (
     get_symmetry_sector_generators,
     get_link_sector_configs,
     global_abelian_sector,
-    momentum_basis_k0_par,
+    get_momentum_basis,
     symmetry_sector_configs,
+    config_to_index_binarysearch,
 )
 import logging
 
@@ -68,16 +69,10 @@ class QuantumModel:
         if self.momentum_basis:
             if self.has_obc[0]:
                 raise ValueError(f"Momentum is not conserved in OBC")
-            logger.info(f"Momentum {self.momentum_k} basis")
-            if self.momentum_k == 0:
-                self.B = momentum_basis_k0_par(
-                    self.sector_configs, self.logical_unit_size
-                )
-            else:
-                self.B = momentum_basis_k0_par(
-                    self.sector_configs, self.logical_unit_size
-                )
-            logger.info(f"Momentum basis shape {self.B.shape}")
+            self.B = get_momentum_basis(
+                self.sector_configs, self.logical_unit_size, self.momentum_k
+            )
+            logger.info(f"Momentum basis {self.momentum_k} shape {self.B.shape}")
             hamiltonian_size = self.B.shape[1]
         elif self.sector_configs is not None:
             self.B = None
@@ -91,7 +86,6 @@ class QuantumModel:
             "has_obc": self.has_obc,
             "sector_configs": self.sector_configs,
             "momentum_basis": self.B,
-            "momentum_k": 0,
         }
         # Initialize the Hamiltonian
         self.H = QMB_hamiltonian(self.lvals, size=hamiltonian_size)
@@ -227,19 +221,6 @@ class QuantumModel:
                 nbody_sites_list=nbody_sites_list,
             )
 
-    def get_subsystem_environment_configs(self, keep_indices: np.ndarray):
-        # Indices for the environment
-        env_indices = [ii for ii in range(self.n_sites) if ii not in keep_indices]
-        # Separate subsystem and environment configurations
-        self.subsystem_configs = exclude_columns(
-            self.sector_configs, np.array(env_indices)
-        )
-        self.env_configs = exclude_columns(self.sector_configs, np.array(keep_indices))
-        # Find unique subsystem and environment configurations
-        self.unique_subsys_configs = np.unique(self.subsystem_configs, axis=0)
-        # Initialize the RDM with shape = number of unique subsys configs
-        self.unique_env_configs = np.unique(self.env_configs, axis=0)
-
     def diagonalize_Hamiltonian(self, n_eigs, format):
         # DIAGONALIZE THE HAMILTONIAN
         self.H.diagonalize(n_eigs, format, self.loc_dims)
@@ -261,17 +242,18 @@ class QuantumModel:
         state = np.zeros(len(self.sector_configs), dtype=float)
         # Get the corresponding QMB index of each config
         for config in configs:
-            if not np.any(np.all(self.sector_configs == config, axis=1)):
-                logger.info(config)
+            index = config_to_index_binarysearch(config, self.sector_configs)
+            if index < 0:
+                logger.info(f"{config}")
                 raise ValueError(f"config not compatible with the symmetry sector")
-            else:
-                index = np.where((self.sector_configs == config).all(axis=1))[0]
-                state[index] = 1
+            logger.info(f"{config} in state {index}")
+            state[index] = 1
         # Normalize the state
         state /= np.sqrt(len(configs))
         if self.momentum_basis:
             # Project the state in the momentum sector
             state = self.B.transpose().dot(state)
+        logger.info("----------------------------------------------------")
         return state
 
     def measure_fidelity(

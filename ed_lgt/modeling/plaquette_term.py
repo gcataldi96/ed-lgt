@@ -46,7 +46,8 @@ class PlaquetteTerm(QMBTerm):
         self.print_plaq = print_plaq
         # Number of lattice sites
         self.n_sites = prod(self.lvals)
-        logger.info(f"PlaqTerm {self.axes}: {op_names_list}")
+        axes_name = "".join(self.axes)
+        logger.info(f"PlaqTerm {axes_name}: {' '.join(op_names_list)}")
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
         """
@@ -104,14 +105,14 @@ class PlaquetteTerm(QMBTerm):
             # logger.info(f"coords: {ii} {coords}, sites: {sites}")
             if sites is None or not self.get_mask_conditions(coords, mask):
                 continue
+            if len(self.sector_configs) > 2**19:
+                logger.info(f"Sites {sites}")
             # this gives three 1D arrays for this plaquette
-            r, c, v = nbody_term(
-                self.sym_ops, np.array(sites, dtype=np.int32), self.sector_configs
-            )
+            sites_array = np.array(sites, dtype=np.int32)
+            r, c, v = nbody_term(self.sym_ops, sites_array, self.sector_configs)
             all_r.append(r)
             all_c.append(c)
             all_v.append(v)
-
         # merge them
         row = np.concatenate(all_r)
         col = np.concatenate(all_c)
@@ -123,7 +124,6 @@ class PlaquetteTerm(QMBTerm):
             # careful: we want original row before concat
             col = np.concatenate([col, row[: len(row) // 2]])
             val = np.concatenate([val, np.conjugate(val)])
-        # logger.info(f"{np.nonzero(val)} non-zero elements in the Hamiltonian")
         return row, col, val
 
     def get_expval(self, psi, get_imag=False, stag_label=None):
@@ -149,9 +149,9 @@ class PlaquetteTerm(QMBTerm):
         if self.print_plaq:
             logger.info(f"----------------------------------------------------")
             if stag_label is None:
-                logger.info(f"PLAQUETTE: {'_'.join(self.op_names_list)}")
+                logger.info(f"PLAQUETTE: {' '.join(self.op_names_list)}")
             else:
-                logger.info(f"PLAQUETTE: {'_'.join(self.op_names_list)}")
+                logger.info(f"PLAQUETTE: {' '.join(self.op_names_list)}")
             logger.info(f"----------------------------------------------------")
         # MEASURE NUMBER OF PLAQUETTES:
         list_of_plaq_sites = []

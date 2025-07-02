@@ -8,7 +8,7 @@ from .qmb_operations import two_body_op
 from .qmb_state import QMB_state, exp_val_data
 from .qmb_term import QMBTerm
 from ed_lgt.tools import validate_parameters
-from ed_lgt.symmetries import nbody_term, nbody_data_par
+from ed_lgt.symmetries import nbody_term, nbody_data_2sites
 import logging
 
 logger = logging.getLogger(__name__)
@@ -106,7 +106,7 @@ class TwoBodyTerm(QMBTerm):
                     continue
                 # CHECK MASK CONDITION ON THE SITE
                 if self.get_mask_conditions(coords, mask):
-                    if len(self.sector_configs) > 2**18:
+                    if len(self.sector_configs) > 2**19:
                         logger.info(f"Sites {sites_list}")
                     # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
                     row_list, col_list, value_list = nbody_term(
@@ -114,7 +114,6 @@ class TwoBodyTerm(QMBTerm):
                         op_sites_list=np.array(sites_list),
                         sector_configs=self.sector_configs,
                         momentum_basis=self.momentum_basis,
-                        k=self.momentum_k,
                     )
                     all_row_list.append(row_list)
                     all_col_list.append(col_list)
@@ -212,7 +211,7 @@ def lattice_twobody_exp_val(psi, n_sites, sector_configs, sym_ops):
     for ii in prange(n_sites):
         for jj in range(ii + 1, n_sites):
             # Compute the n-body operator's non-zero elements for the pair (ii, jj)
-            row_list, col_list, value_list = nbody_data_par(
+            row_list, col_list, value_list = nbody_data_2sites(
                 sym_ops, np.array([ii, jj]), sector_configs
             )
             # Compute the expectation value <O> for the pair (ii, jj)

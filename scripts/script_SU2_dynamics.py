@@ -51,15 +51,14 @@ with run_sim() as sim:
     plaquette_obs = []
     # DEFINE OBSERVABLES
     model.get_observables(local_obs)
-    # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
-    partition_indices = get_entropy_partition(model.lvals)
-    # Build the list of environment and subsystem sites configurations
-    model.get_subsystem_environment_configs(keep_indices=partition_indices)
-    sim.res["entropy"] = np.zeros(n_steps, dtype=float)
-    sim.res["overlap"] = np.zeros(n_steps, dtype=float)
-    sim.res["delta"] = np.zeros(n_steps, dtype=float)
     for obs in local_obs:
         sim.res[obs] = np.zeros(n_steps, dtype=float)
+    sim.res["delta"] = np.zeros(n_steps, dtype=float)
+    # -------------------------------------------------------------------------------
+    # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
+    partition_indices = get_entropy_partition(model.lvals)
+    sim.res["entropy"] = np.zeros(n_steps, dtype=float)
+    sim.res["overlap"] = np.zeros(n_steps, dtype=float)
     # -------------------------------------------------------------------------------
     # ENSEMBLE BEHAVIORS
     get_micro_avg = sim.par["ensemble"]["microcanonical"]["average"]
@@ -127,10 +126,7 @@ with run_sim() as sim:
                 if sim.par["get_entropy"]:
                     sim.res["entropy"][ii] = model.H.psi_time[ii].entanglement_entropy(
                         partition_indices,
-                        model.subsystem_configs,
-                        model.env_configs,
-                        model.unique_subsys_configs,
-                        model.unique_env_configs,
+                        model.sector_configs,
                     )
                 # -----------------------------------------------------------------------
                 # STATE CONFIGURATIONS

@@ -81,6 +81,9 @@ def QED_rishon_operators(spin, pure_theory, U):
     # ELECTRIC FIELD OPERATORS
     ops["n"] = diags(np.arange(size), 0, shape)
     ops["E"] = ops["n"] - 0.5 * (size - 1) * identity(size)
+    # ops["Ep1"] = diags(np.array([1, 0, 0]), 0, shape)
+    # ops["E0"] = diags(np.array([0, 1, 0]), 0, shape)
+    # ops["Em1"] = diags(np.array([0, 0, 1]), 0, shape)
     ops["E_square"] = ops["E"] ** 2
     return ops
 
@@ -180,12 +183,12 @@ def QED_dressed_site_operators(spin, pure_theory, lattice_dim, U="ladder"):
             ops["N"] = qmb_op(in_ops, ["N", "Iz", "Iz", "Iz", "Iz"])
     elif lattice_dim == 3:
         # Rishon Electric operators
-        for op in ["E", "E_square", "n", "P"]:
+        for op in ["E", "E_square", "n", "P"]:  # , "Ep1", "E0", "Em1"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz", "Iz", "Iz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz", "Iz", "Iz"])
             ops[f"{op}_mz"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz", "Iz", "Iz"])
-            ops[f"{op}_py"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", op, "Iz", "Iz"])
-            ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz", op, "Iz"])
+            ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", op, "Iz", "Iz"])
+            ops[f"{op}_py"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz", op, "Iz"])
             ops[f"{op}_pz"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz", "Iz", op])
             # Corner Operators
             # X-Y Plane
@@ -203,6 +206,10 @@ def QED_dressed_site_operators(spin, pure_theory, lattice_dim, U="ladder"):
             ops["C_pz,my"] = qmb_op(in_ops, ["Iz", "P_Zm_dag", "P", "P", "P", "Zp"])
             ops["C_my,mz"] = qmb_op(in_ops, ["Iz", "Zm_P", "Zm_dag", "Iz", "Iz", "Iz"])
             ops["C_mz,py"] = qmb_op(in_ops, ["Iz", "Iz", "Zm_P", "P", "Zp_dag", "Iz"])
+            # Theta term corners
+            ops["EzC_px,py"] = (ops["E_pz"] + ops["E_mz"]) @ ops["C_px,py"]
+            ops["EyC_px,pz"] = (ops["E_py"] + ops["E_my"]) @ ops["C_px,pz"]
+            ops["ExC_py,pz"] = (ops["E_px"] + ops["E_mx"]) @ ops["C_py,pz"]
         if not pure_theory:
             # Update Electric and Corner operators
             for op in ops.keys():
@@ -236,7 +243,7 @@ def QED_dressed_site_operators(spin, pure_theory, lattice_dim, U="ladder"):
     ops["E_square"] = 0
     for d in dimensions:
         for s in "mp":
-            ops["E_square"] += 0.25 * ops[f"E_square_{s}{d}"]
+            ops["E_square"] += 0.5 * ops[f"E_square_{s}{d}"]
     # Define Gauss Law operators of hard-core lattice sites
     if spin < 4 and lattice_dim < 3:
         # GAUSS LAW OPERATORS
