@@ -117,8 +117,8 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz", "Iz", "Iz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz", "Iz", "Iz"])
             ops[f"{op}_mz"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz", "Iz", "Iz"])
-            ops[f"{op}_py"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", op, "Iz", "Iz"])
-            ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz", op, "Iz"])
+            ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", op, "Iz", "Iz"])
+            ops[f"{op}_py"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz", op, "Iz"])
             ops[f"{op}_pz"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz", "Iz", op])
         # Corner Operators
         corner_list = []
@@ -465,8 +465,8 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz", "Iz", "Iz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz", "Iz", "Iz"])
             ops[f"{op}_mz"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz", "Iz", "Iz"])
-            ops[f"{op}_py"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", op, "Iz", "Iz"])
-            ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz", op, "Iz"])
+            ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", op, "Iz", "Iz"])
+            ops[f"{op}_py"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz", op, "Iz"])
             ops[f"{op}_pz"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz", "Iz", op])
         # Corner Operators
         corner_list = []

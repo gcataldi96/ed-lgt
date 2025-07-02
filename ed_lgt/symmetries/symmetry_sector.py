@@ -226,6 +226,46 @@ def check_nbody_sym_partial(config, sym_op_diags, sym_sectors, nsites_list):
 
 
 @njit(cache=True)
+def check_Z2_nbody_sym_partial(config, sym_op_diags, sym_sectors, nsites_list):
+    """
+    Partial check of Z2 nbody symmetries for a configuration.
+    NOTE: All the nbody symmetries are supposed to be of type U(1) and to involve the same number of sites.
+
+    Args:
+        config (np.array of np.uint16): Partial QMB configuration array.
+        sym_op_diags (np.array of floats): 3D array with shape=(n_symmetries, n_sites, max(loc_dims)).
+            Each symmetry applies an operator to n_sites number of sites (the same operator on all the given sites).
+            Each operator is represented by its diagonal on each lattice site.
+        sym_sectors (np.array of floats): 1D array of shape=(n_symmetries) with the sector value of each symmetry.
+        nsites_list (list of np.array of np.uint16): List of 1D arrays.
+            Each array specifies the sites on which the n_ops operators (of each symmetry) act.
+
+    Returns:
+        bool: True if the partial config satisfies the nbody symmetries, False otherwise.
+    """
+    num_sites = config.shape[0]
+    n_symmetries = sym_op_diags.shape[0]
+    # Iterate over all nbody symmetries
+    for sym_idx in range(n_symmetries):
+        site_indices = nsites_list[sym_idx]
+        nsites_per_symmetry = len(site_indices)
+        # Skip symmetries where one or more indices
+        # are out of the current configuration length
+        if np.any(site_indices >= num_sites):
+            continue
+        # Compute the sum for the symmetry condition
+        sum = 1.0
+        for ii in range(nsites_per_symmetry):
+            site_index = site_indices[ii]
+            op_diag = sym_op_diags[sym_idx, site_index, :]
+            sum *= op_diag[config[site_index]]
+        # Check if the sum violates the symmetry sector
+        if not np.isclose(sum, sym_sectors[sym_idx], atol=1e-13):
+            return False
+    return True
+
+
+@njit(cache=True)
 def check_glob_sym_partial(config, sym_op_diags, sym_sectors, sym_type_flag):
     """
     Check if a (partial or complete) QMB state configuration belongs to a global abelian symmetry sector.
@@ -455,6 +495,7 @@ def get_link_sector_configs(
     nbody_op_diags=None,
     nbody_sectors=None,
     nbody_sites_list=None,
+    nbody_sym_type: str = "U",
 ):
     logger.debug("GETTING LINK SECTOR CONFIGURATIONS")
     if not isinstance(link_sectors, np.ndarray):
@@ -466,6 +507,7 @@ def get_link_sector_configs(
     if nbody_op_diags is not None:
         if not isinstance(nbody_sectors, np.ndarray):
             nbody_sectors = np.array(nbody_sectors, dtype=float)
+        nbody_sym_value = 0 if nbody_sym_type == "U" else 1
         sector_configs = iterative_link_sector_configs_plus(
             loc_dims,
             link_op_diags,
@@ -474,6 +516,7 @@ def get_link_sector_configs(
             nbody_op_diags,
             nbody_sectors,
             nbody_sites_list,
+            nbody_sym_value,
         )
     else:
         sector_configs = iterative_link_sector_configs(
@@ -554,6 +597,7 @@ def iterative_link_sector_configs_plus(
     nbody_op_diags,
     nbody_sectors,
     nbody_sites_list,
+    nbody_sym_value,
 ):
     """
     Iteratively compute the configurations belonging to a symmetry sector,
@@ -601,13 +645,20 @@ def iterative_link_sector_configs_plus(
             # Copy the previous configuration and add the new site's state
             configs_next[ii, :site_idx] = configs_prev[prev_config_idx]
             configs_next[ii, site_idx] = new_site_state
-
-            # Perform the checks for link symmetries
-            checks_next[ii] = check_link_sym_partial(
-                configs_next[ii], link_op_diags, link_sectors, pair_list
-            ) and check_nbody_sym_partial(
-                configs_next[ii], nbody_op_diags, nbody_sectors, nbody_sites_list
-            )
+            if nbody_sym_value == 0:
+                # Perform the checks for link symmetries
+                checks_next[ii] = check_link_sym_partial(
+                    configs_next[ii], link_op_diags, link_sectors, pair_list
+                ) and check_nbody_sym_partial(
+                    configs_next[ii], nbody_op_diags, nbody_sectors, nbody_sites_list
+                )
+            else:
+                # Perform the checks for link symmetries
+                checks_next[ii] = check_link_sym_partial(
+                    configs_next[ii], link_op_diags, link_sectors, pair_list
+                ) and check_Z2_nbody_sym_partial(
+                    configs_next[ii], nbody_op_diags, nbody_sectors, nbody_sites_list
+                )
         # Filter configurations for the current site
         configs_prev = configs_next[checks_next]
         num_configs_prev = configs_prev.shape[0]

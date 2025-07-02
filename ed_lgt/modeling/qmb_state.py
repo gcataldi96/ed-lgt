@@ -318,8 +318,8 @@ class QMB_state:
         # 5) print
         for _, config, amp in zip(idx, cfgs, vals):
             # rescale all the amplitudes to have the first one real and positive
-            rescaled_amp = round(amp * np.exp(-1j * np.angle(vals[0])), 6)
-            square_amp = round(np.abs(amp) ** 2, 6)
+            rescaled_amp = round(amp * np.exp(-1j * np.angle(vals[0])), 8)
+            square_amp = round(np.abs(amp) ** 2, 8)
             coords = " ".join(f"{c:2d}" for c in config)
             logger.info(f"[{coords}] psi={rescaled_amp} |psi|^2={square_amp}")
 

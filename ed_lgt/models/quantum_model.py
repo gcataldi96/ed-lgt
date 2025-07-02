@@ -169,6 +169,7 @@ class QuantumModel:
         nbody_ops: list[np.ndarray] = None,
         nbody_sectors: list = None,
         nbody_sites_list=None,
+        nbody_sym_type: str = None,
     ):
         # ================================================================================
         # GLOBAL ABELIAN SYMMETRIES
@@ -219,6 +220,7 @@ class QuantumModel:
                 nbody_op_diags=nbody_ops,
                 nbody_sectors=nbody_sectors,
                 nbody_sites_list=nbody_sites_list,
+                nbody_sym_type=nbody_sym_type,
             )
 
     def diagonalize_Hamiltonian(self, n_eigs, format):

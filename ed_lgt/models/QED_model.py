@@ -60,6 +60,7 @@ class QED_Model(QuantumModel):
             nbody_ops = []
             nbody_sites_list = typed.List()
             surfaces = get_origin_surfaces(self.lvals)
+            nbody_sym_type = "U"
             if self.dim == 2:
                 # in 2D we have two lines through (0,0):
                 line_of = {"x": "y", "y": "x"}
@@ -80,6 +81,7 @@ class QED_Model(QuantumModel):
             nbody_sectors = None
             nbody_ops = None
             nbody_sites_list = None
+            nbody_sym_type = None
         # GET SYMMETRY SECTOR
         self.get_abelian_symmetry_sector(
             global_ops=global_ops,
@@ -89,6 +91,7 @@ class QED_Model(QuantumModel):
             nbody_ops=nbody_ops,
             nbody_sectors=nbody_sectors,
             nbody_sites_list=nbody_sites_list,
+            nbody_sym_type=nbody_sym_type,
         )
         # DEFAULT PARAMS
         self.default_params()

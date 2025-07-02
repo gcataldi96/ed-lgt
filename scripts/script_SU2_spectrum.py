@@ -35,12 +35,29 @@ with run_sim() as sim:
     local_obs += ["E_square"]
     if not model.pure_theory:
         local_obs += [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
-    # LIST OF PLAQUETTE OPERATORS
-    plaquette_obs = []
-    # DEFINE OBSERVABLES
-    model.get_observables(local_obs)
     for obs in local_obs:
-        sim.res[obs] = np.zeros(model.H.n_eigs, dtype=float)
+        sim.res[obs] = np.zeros(n_eigs, dtype=float)
+    # LIST OF TWOBODY CORRELATORS
+    twobody_obs = []
+    twobody_axes = []
+    # LIST OF PLAQUETTE OPERATORS
+    if model.dim == 2:
+        plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
+    elif model.dim == 3:
+        plaquette_obs = [
+            ["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"],
+            ["C_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
+            ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
+        ]
+    else:
+        plaquette_obs = []
+    for obs_names_list in plaquette_obs:
+        obs = "_".join(obs_names_list)
+        sim.res[obs] = np.zeros(n_eigs, dtype=float)
+    # DEFINE OBSERVABLES
+    model.get_observables(
+        local_obs, twobody_obs, plaquette_obs, twobody_axes=twobody_axes
+    )
     # QUENCH STATE FOR OVERLAP
     if sim.par["observables"]["get_overlap"]:
         name = sim.par["hamiltonian"]["state"]
@@ -72,12 +89,15 @@ with run_sim() as sim:
         # MEASURE OBSERVABLES
         if sim.par["observables"]["measure_obs"]:
             model.measure_observables(ii)
-            sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
-            sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_pair"], "even")
-            sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_zero"], "odd")
-            sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_zero"], "even")
-            sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_pair"], "odd")
-            sim.res["N_tot"][ii] = sim.res["N_single"][ii] + 2 * sim.res["N_pair"][ii]
+            if not model.pure_theory:
+                sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
+                sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_pair"], "even")
+                sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_zero"], "odd")
+                sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_zero"], "even")
+                sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_pair"], "odd")
+                sim.res["N_tot"][ii] = (
+                    sim.res["N_single"][ii] + 2 * sim.res["N_pair"][ii]
+                )
         # ---------------------------------------------------------------------------
         # OVERLAPS with the INITIAL STATE
         if sim.par["observables"]["get_overlap"]:

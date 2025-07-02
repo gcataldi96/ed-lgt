@@ -1,7 +1,8 @@
 import numpy as np
+from numba import typed
 from .quantum_model import QuantumModel
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm
-from ed_lgt.modeling import check_link_symmetry, staggered_mask
+from ed_lgt.modeling import check_link_symmetry, staggered_mask, get_origin_surfaces
 from ed_lgt.operators import (
     SU2_dressed_site_operators,
     SU2_gauge_invariant_states,
@@ -62,12 +63,56 @@ class SU2_Model(QuantumModel):
         ]
         link_sectors = [0 for _ in self.directions]
         # -------------------------------------------------------------------------------
+        # SU2 ELECTRIC-FLUX “NBODY” SYMMETRIES
+        # only in the pure (no-matter) theory, more than 1D, *and* PBC
+        # Constrain, for each cartesian direction, the parity of the face/line through the origin:
+        # 3D:
+        #    for 'Ex' → the yz-face at x=0
+        #    for 'Ey' → the xz-face at y=0
+        #    for 'Ez' → the xy-face at z=0
+        # 2D:
+        #    for 'Ex' → the y-axis at x=0
+        #    for 'Ey' → the x-axis at y=0
+        if self.pure_theory and not any(self.has_obc):
+            logger.info("fixing surface parity fluxes")
+            # one flux‐constraint per cartesian direction
+            nbody_sectors = np.ones(self.dim, dtype=float)
+            nbody_ops = []
+            nbody_sites_list = typed.List()
+            surfaces = get_origin_surfaces(self.lvals)
+            nbody_sym_type = "Z"
+            if self.dim == 2:
+                # in 2D we have two lines through (0,0):
+                line_of = {"x": "y", "y": "x"}
+                for dir in self.directions:
+                    sites = np.array(surfaces[line_of[dir]][1], dtype=np.uint8)
+                    nbody_sites_list.append(sites)
+                    nbody_ops.append(self.ops[f"P_p{dir}"])
+            elif self.dim == 3:
+                # in 3D we have three faces through (0,0,0):
+                face_of = {"x": "yz", "y": "xz", "z": "xy"}
+                for dir in self.directions:
+                    sites = np.array(surfaces[face_of[dir]][1], dtype=np.uint8)
+                    nbody_sites_list.append(sites)
+                    logger.debug(f"{dir} sites: {sites} {surfaces[face_of[dir]][0]}")
+                    nbody_ops.append(self.ops[f"P_p{dir}"])
+        else:
+            # no electric‐flux constraint in 1D, or in OBC or with matter
+            nbody_sectors = None
+            nbody_ops = None
+            nbody_sites_list = None
+            nbody_sym_type = None
+        # -------------------------------------------------------------------------------
         # GET SYMMETRY SECTOR
         self.get_abelian_symmetry_sector(
             global_ops=global_ops,
             global_sectors=global_sectors,
             link_ops=link_ops,
             link_sectors=link_sectors,
+            nbody_ops=nbody_ops,
+            nbody_sectors=nbody_sectors,
+            nbody_sites_list=nbody_sites_list,
+            nbody_sym_type=nbody_sym_type,
         )
         self.default_params()
 
