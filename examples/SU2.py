@@ -23,6 +23,14 @@ from ed_lgt.operators import (
 import logging
 
 logger = logging.getLogger(__name__)
+
+gauge_basis, gauge_states = SU2_gauge_invariant_states(
+    0.5, False, lattice_dim=2, background=False
+)
+for ii, singlet in enumerate(gauge_states["site_my"]):
+    logger.info(f" {ii} ")
+    singlet.display_singlets()
+    logger.info(f" ")
 # %%
 from ed_lgt.operators import QED_dressed_site_operators, QED_gauge_invariant_states
 
@@ -263,14 +271,6 @@ for s in sorted_states:
 
 singlets = get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None)
 
-# %%
-gauge_basis, gauge_states = SU2_gauge_invariant_states(
-    0.5, False, lattice_dim=2, background=False
-)
-for ii, singlet in enumerate(gauge_states["site_my"]):
-    logger.info(f" {ii} ")
-    singlet.display_singlets()
-    logger.info(f" ")
 # %%
 for ii, s in enumerate(gauge_states["site"]):
     logger.info(f"{ii}")

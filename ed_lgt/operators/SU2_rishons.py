@@ -39,9 +39,10 @@ class SU2_Rishon:
         self.ops["P"] = diags(P_diag, 0, self.shape)
         self.ops["Iz"] = identity(self.size, dtype=float)
         # In the special case of s=1/2, the shape of rishon is simpler
+        cf = 1 / (2 ** (0.25))
         if self.s == 1 / 2:
-            self.ops["Zr"] = csr_matrix(([1, 1], ([0, 2], [1, 0])), shape=(3, 3))
-            self.ops["Zg"] = csr_matrix(([1, -1], ([0, 1], [2, 0])), shape=(3, 3))
+            self.ops["Zr"] = cf * csr_matrix(([1, 1], ([0, 2], [1, 0])), shape=(3, 3))
+            self.ops["Zg"] = cf * csr_matrix(([1, -1], ([0, 1], [2, 0])), shape=(3, 3))
             for color in "rg":
                 self.ops[f"Z{color}_dag"] = self.ops[f"Z{color}"].transpose()
                 # Useful operators for corner operators
@@ -165,16 +166,6 @@ class SU2_Rishon_gen:
             # CHECK RISHON MODES TO BEHAVE LIKE FERMIONS (anticommute with parity)
             if norm(anti_comm(self.ops[f"Z{color}"], self.ops["P"])) > 1e-15:
                 raise ValueError(f"Z{color} is a Fermion and must anticommute with P")
-            """
-            # CHECK THE ACTION OF THE RISHONS ON THE CASIMIR OPERATOR
-            if check_m(
-                2 * comm(self.ops["T2_root"], self.ops[f"Z{color}"]),
-                self.ops[f"Z{color}"],
-            ):
-                raise ValueError(
-                    f"Z{color} has a wrong action onto the Casimir operator"
-                )
-            """
         logger.info("SU2 RISHON ALGEBRA SATISFIED")
 
     @staticmethod

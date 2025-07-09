@@ -197,7 +197,7 @@ local_obs += [f"N_{label}" for label in ["r", "g", "tot", "single", "pair"]]
 # STRING BREAKING PHASE DIAGRAM
 # ===================================================================
 res = {}
-config_filename = f"string_breaking/su2_phasediagram"
+config_filename = f"string_breaking/phasediagram_nobg"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g", "m"])
 
@@ -219,12 +219,17 @@ for ii, g in enumerate(vals["g"]):
         res["N_zero"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_zero"]
         res["N_tot"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_tot"]
 # %%
-obs = "N_tot"
+obs = "N_single"
 fig, ax = plt.subplots(1, 1, constrained_layout=True)
 
-X = np.transpose(res[obs] - res["N_single"])
-img = plt.imshow(X, cmap="magma", origin="lower", extent=[-2, 1, -2, 1])
-ax.set(ylabel=r"m", xlabel=r"g^{2}", xticks=[-2, -1, 0, 1], yticks=[-2, -1, 0, 1])
+X = np.transpose(res[obs])
+img = plt.imshow(X, cmap="magma", origin="lower", extent=[-3, 3, -3, 3])
+ax.set(
+    ylabel=r"m",
+    xlabel=r"g^{2}",
+    xticks=[-3, -2, -1, 0, +1, +2, +3],
+    yticks=[-3, -2, -1, 0, +1, +2, +3],
+)
 ax.xaxis.set_major_formatter(fake_log)
 ax.yaxis.set_major_formatter(fake_log)
 cb = fig.colorbar(
@@ -237,12 +242,17 @@ cb = fig.colorbar(
     label=obs,
 )
 # %%
+"""
+0ae870a25cab11f096f4fa163ee812fb:
+  <<<: common
+  m: 37.5
+"""
 res = {}
 config_filename = f"string_breaking/minimal_string"
 match = SimsQuery(group_glob=config_filename)
-ugrid, vals = uids_grid(match.uids, ["g", "m"])
+ugrid, vals = uids_grid(match.uids, ["m"])
 
-res = {"time_steps": get_sim(ugrid[0][0]).res["time_steps"]}
+res = {"time_steps": get_sim(ugrid[0]).res["time_steps"]}
 nsteps = len(res["time_steps"])
 
 obs_list = [
@@ -260,63 +270,88 @@ obs_list = [
 ]
 
 for obs in obs_list:
-    res[f"{obs}"] = np.zeros((len(vals["g"]), len(vals["m"]), nsteps))
-    res[f"tot_overlap"] = np.zeros((len(vals["g"]), len(vals["m"]), nsteps))
-    for ii, g in enumerate(vals["g"]):
-        for kk, m in enumerate(vals["m"]):
-            res[obs][ii, kk] = get_sim(ugrid[ii][kk]).res[obs]
-
-for ii in range(5):
-    res[f"tot_overlap"][0, 0] += res[f"overlap{ii}"][0, 0]
+    res[f"{obs}"] = np.zeros((len(vals["m"]), nsteps))
+    res[f"tot_overlap"] = np.zeros((len(vals["m"]), nsteps))
+    for kk, m in enumerate(vals["m"]):
+        res[obs][kk] = get_sim(ugrid[kk]).res[obs]
+for kk, m in enumerate(vals["m"]):
+    for ii in range(5):
+        res[f"tot_overlap"][kk] += res[f"overlap{ii}"][kk]
+save_dictionary(res, f"sb.pkl")
 # %%
-fig, ax = plt.subplots(1, 1, constrained_layout=True)
-ax.grid()
-for ii in range(5):
-    ax.plot(
+obs_color = ["darkblue", "darkred", "orange", "darkgreen"]
+obs_names = [r"$E^{2}$", r"$N_{\rm{quarks}}$", r"$N_{\rm{baryon}}$", r"$N_{\rm{tot}}$"]
+obs_size = [1, 1.5, 1.4, 1]
+overlap_names = [
+    r"$\rm{MS}_{1}$",
+    r"$\rm{MS}_{2}$",
+    r"$\rm{MS}_{3}$",
+    r"$\rm{MS}_{4}$",
+    r"$\rm{MS}_{5}$",
+]
+fig, ax = plt.subplots(3, 3, constrained_layout=True, sharex=True, sharey="row")
+ax[0, 0].set(ylabel=r"$\rm{Ov}_{i}=|\langle \psi_{0}|\rm{MS}_{i}\rangle|^{2}$")
+ax[1, 0].set(ylabel=r"observables")
+ax[2, 0].set(ylabel=r"entropy $S$")
+ax[2, 0].set(xlabel=r"time $t$ ($m=9.375$)")
+ax[2, 1].set(xlabel=r"time $t$ ($m=18.75$)")
+ax[2, 2].set(xlabel=r"time $t$ ($m=50$)")
+
+for kk, m in enumerate(vals["m"]):
+    for ii in range(5):
+        ax[0, kk].plot(
+            res["time_steps"],
+            res[f"overlap{ii}"][kk],
+            "o-",
+            markersize=1.5,
+            markeredgewidth=0.2,
+            label=overlap_names[ii],
+            linewidth=0.8,
+        )
+    ax[0, kk].plot(
         res["time_steps"],
-        res[f"overlap{ii}"][0, 0],
+        res["tot_overlap"][kk],
         "o-",
         markersize=2,
         markeredgewidth=0.2,
-        label=f"string {ii}",
+        linewidth=0.8,
+        label=r"$\sum\rm{Ov}_{i}$",
     )
-ax.plot(
-    res["time_steps"],
-    res["tot_overlap"][0, 0],
-    "o-",
-    markersize=2,
-    markeredgewidth=0.2,
-    label=f"sum strings",
-)
-fig.legend(
-    bbox_to_anchor=(0.91, 0.98),
-    ncol=1,
-    frameon=True,
-    labelspacing=0.1,
-    bbox_transform=fig.transFigure,
-)
-ax.set(xlabel=r"time $t$", ylabel=r"overlap $\psi_{i}$")  # yscale="log")
 
+    for jj, obs in enumerate(["E_square", "N_single", "N_pair", "N_tot"]):
+        ax[1, kk].plot(
+            res["time_steps"],
+            res[f"{obs}"][kk],
+            "o-",
+            c=obs_color[jj],
+            markersize=obs_size[jj],
+            markeredgewidth=0.2,
+            label=f"{obs_names[jj]}",
+            linewidth=0.8,
+        )
 
-fig, ax = plt.subplots(1, 1, constrained_layout=True)
-ax.grid()
-for obs in ["E_square", "N_single", "N_pair", "N_zero", "N_tot"]:
-    ax.plot(
+    ax[2, kk].plot(
         res["time_steps"],
-        res[f"{obs}"][0, 0],
+        res["entropy"][kk],
         "o-",
         markersize=2,
         markeredgewidth=0.2,
-        label=f"{obs}",
+        linewidth=0.8,
     )
-fig.legend(
-    bbox_to_anchor=(0.91, 0.98),
+
+ax[0, 1].legend(
+    bbox_to_anchor=(0.4, 0.35),
     ncol=1,
     frameon=True,
     labelspacing=0.1,
-    bbox_transform=fig.transFigure,
 )
-ax.set(xlabel=r"time $t$", ylabel="observable")  # yscale="log")
+ax[1, 0].legend(
+    bbox_to_anchor=(0.6, 0.98),
+    ncol=1,
+    frameon=True,
+    labelspacing=0.1,
+)
+plt.savefig(f"minimal_string_breaking.pdf")
 # %%
 res = {}
 config_filename = f"LBO/qed"
@@ -2730,289 +2765,3 @@ for state_name in ["V", "PV"]:
     plt.savefig(f"dynamics_{state_name}.pdf")
 save_dictionary(res, "dynamics_ED.pkl")
 # ==========================================================================
-# %%
-# %%
-# ========================================================================
-# SU(2) SIMULATIONS PURE FLUCTUATIONS
-# ========================================================================
-config_filename = "SU2/pure/fluctuations"
-match = SimsQuery(group_glob=config_filename)
-ugrid, vals = uids_grid(match.uids, ["g"])
-obs_list = LGT_obs_list(model="SU2", pure=True, has_obc=True)
-res = {"g": vals["g"]}
-for obs in obs_list:
-    res[obs] = []
-    for ii in range(len(res["g"])):
-        res[obs].append(get_sim(ugrid[ii]).res[obs])
-    res[obs] = np.asarray(res[obs])
-
-fig, ax = plt.subplots()
-ax.plot(res["g"], res["E_square"], "-o", label=f"E2")
-ax.plot(res["g"], res["delta_E_square"], "-o", label=f"Delta")
-ax.set(xscale="log")
-ax2 = ax.twinx()
-ax2.plot(res["g"], -res["plaq"] + max(res["plaq"]), "-^", label=f"B2")
-ax2.plot(res["g"], res["delta_plaq"], "-*", label=f"DeltaB")
-ax.legend()
-ax2.legend()
-ax.grid()
-save_dictionary(res, "saved_dicts/SU2_pure_fluctuations.pkl")
-# %%
-# ========================================================================
-# SU(2) SIMULATIONS PURE TOPOLOGY
-# ========================================================================
-config_filename = "SU2/pure/topology"
-match = SimsQuery(group_glob=config_filename)
-ugrid, vals = uids_grid(match.uids, ["g"])
-obs_list = LGT_obs_list(model="SU2", pure=True, has_obc=False)
-res = {"g": vals["g"]}
-
-for obs in ["energy", "py_sector", "px_sector"]:
-    res[obs] = np.zeros((vals["g"].shape[0], 5))
-    for ii in range(len(res["g"])):
-        for n in range(5):
-            res[obs][ii][n] = get_sim(ugrid[ii]).res[obs][n]
-fig = plt.figure()
-for n in range(1, 5):
-    plt.plot(
-        vals["g"],
-        res["energy"][:, n] - res["energy"][:, 0],
-        "-o",
-        label=f"{format(res['px_sector'][0, n],'.5f')}",
-    )
-plt.xscale("log")
-plt.yscale("log")
-plt.legend()
-plt.ylabel("energy")
-save_dictionary(res, "saved_dicts/SU2_pure_topology.pkl")
-# %%
-# ========================================================================
-# SU(2) FULL TOPOLOGY 1
-# ========================================================================
-config_filename = "SU2/full/topology1"
-match = SimsQuery(group_glob=config_filename)
-ugrid, vals = uids_grid(match.uids, ["g", "m"])
-obs_list = LGT_obs_list(model="SU2", pure=False, has_obc=True)
-res = {"g": vals["g"], "m": vals["m"]}
-for obs in ["energy", "py_sector", "px_sector"]:
-    res[obs] = np.zeros((res["g"].shape[0], res["m"].shape[0]))
-    for ii, g in enumerate(res["g"]):
-        for jj, m in enumerate(res["m"]):
-            res[obs][ii][jj] = get_sim(ugrid[ii][jj]).res[obs]
-fig = plt.figure()
-for jj, m in enumerate(res["m"]):
-    plt.plot(vals["g"], 1 - res["py_sector"][:, jj], "-o", label=f"m={format(m,'.3f')}")
-    plt.xscale("log")
-    plt.yscale("log")
-    plt.legend()
-    plt.ylabel("1-py_sector")
-save_dictionary(res, "saved_dicts/SU2_full_topology1.pkl")
-# %%
-# ========================================================================
-# SU(2) FULL TOPOLOGY 2
-# ========================================================================
-config_filename = "SU2/full/topology2"
-match = SimsQuery(group_glob=config_filename)
-ugrid, vals = uids_grid(match.uids, ["g", "m"])
-obs_list = LGT_obs_list(model="SU2", pure=False, has_obc=True)
-res = {"g": vals["g"], "m": vals["m"]}
-for obs in ["energy", "py_sector", "px_sector"]:
-    res[obs] = np.zeros((res["g"].shape[0], res["m"].shape[0]))
-    for ii, g in enumerate(res["g"]):
-        for jj, m in enumerate(res["m"]):
-            res[obs][ii][jj] = get_sim(ugrid[ii][jj]).res[obs]
-fig = plt.figure()
-for ii, g in enumerate(res["g"]):
-    plt.plot(vals["m"], 1 - res["py_sector"][ii, :], "-o", label=f"g={format(g,'.3f')}")
-    plt.xscale("log")
-    plt.yscale("log")
-    plt.legend()
-    plt.ylabel("1-py_sector")
-save_dictionary(res, "saved_dicts/SU2_full_topology2.pkl")
-# %%
-# ========================================================================
-# SU(2) PHASE DIAGRAM
-# ========================================================================
-config_filename = "SU2/full/phase_diagram"
-match = SimsQuery(group_glob=config_filename)
-ugrid, vals = uids_grid(match.uids, ["g", "m"])
-obs_list = LGT_obs_list(model="SU2", pure=False, has_obc=False)
-res = {"g": vals["g"], "m": vals["m"]}
-for obs in obs_list:
-    res[obs] = np.zeros((res["g"].shape[0], res["m"].shape[0]))
-    for ii, g in enumerate(res["g"]):
-        for jj, m in enumerate(res["m"]):
-            res[obs][ii][jj] = get_sim(ugrid[ii][jj]).res[obs]
-
-fig, axs = plt.subplots(
-    3,
-    1,
-    sharex=True,
-    sharey=True,
-    constrained_layout=True,
-)
-obs = ["E_square", "rho", "spin"]
-for ii, ax in enumerate(axs.flat):
-    # IMSHOW
-    img = ax.imshow(
-        np.transpose(res[obs[ii]]),
-        origin="lower",
-        cmap="magma",
-        extent=[-2, 2, -3, 1],
-    )
-    ax.set_ylabel(r"m")
-    axs[2].set_xlabel(r"g2")
-    ax.set(xticks=[-2, -1, 0, 1, 2], yticks=[-3, -2, -1, 0, 1])
-    ax.xaxis.set_major_formatter(fake_log)
-    ax.yaxis.set_major_formatter(fake_log)
-
-    cb = fig.colorbar(
-        img,
-        ax=ax,
-        aspect=20,
-        location="right",
-        orientation="vertical",
-        pad=0.01,
-        label=obs[ii],
-    )
-save_dictionary(res, "saved_dicts/SU2_full_phase_diagram.pkl")
-# %%
-# ========================================================================
-# SU(2) FULL THEORY CHARGE vs DENSITY
-# ========================================================================
-config_filename = "SU2/full/charge_vs_density"
-match = SimsQuery(group_glob=config_filename)
-ugrid, vals = uids_grid(match.uids, ["g", "m"])
-obs_list = LGT_obs_list(model="SU2", pure=False, has_obc=True)
-res = {"g": vals["g"], "m": vals["m"]}
-for obs in ["n_tot_even", "n_tot_odd"]:
-    res[obs] = np.zeros((res["g"].shape[0], res["m"].shape[0]))
-    for ii, g in enumerate(res["g"]):
-        for jj, m in enumerate(res["m"]):
-            res[obs][ii][jj] = get_sim(ugrid[ii][jj]).res[obs]
-fig = plt.figure()
-for ii, m in enumerate(res["m"]):
-    plt.plot(
-        vals["g"],
-        2 + res["n_tot_even"][:, ii] - res["n_tot_odd"][:, ii],
-        "-o",
-        label=f"g={format(m,'.3f')}",
-    )
-plt.xscale("log")
-plt.legend()
-plt.ylabel("rho")
-save_dictionary(res, "saved_dicts/charge_vs_density.pkl")
-# %%
-# ========================================================================
-# SU(2) FULL THEORY TTN COMPARISON
-# ========================================================================
-config_filename = "SU2/full/TTN_comparison"
-match = SimsQuery(group_glob=config_filename)
-ugrid, vals = uids_grid(match.uids, ["g"])
-obs_list = LGT_obs_list(model="SU2", pure=False, has_obc=True)
-res = {"g": vals["g"]}
-for obs in ["energy", "n_tot_even", "n_tot_odd", "E_square"]:
-    res[obs] = np.zeros(res["g"].shape[0])
-    for ii, g in enumerate(res["g"]):
-        res[obs][ii] = get_sim(ugrid[ii]).res[obs]
-fig = plt.figure()
-plt.plot(vals["g"], 2 + res["n_tot_even"][:] - res["n_tot_odd"][:], "-o")
-plt.xscale("log")
-plt.legend()
-plt.ylabel("rho")
-save_dictionary(res, "saved_dicts/TTN_comparison.pkl")
-# %%
-# ========================================================================
-# SU(2) FULL THEORY ENERGY GAPS
-# ========================================================================
-config_filename = "SU2/full/energy_gaps"
-match = SimsQuery(group_glob=config_filename)
-ugrid, vals = uids_grid(match.uids, ["DeltaN", "g", "k"])
-obs_list = LGT_obs_list(model="SU2", pure=False, has_obc=True)
-res = {"DeltaN": vals["DeltaN"], "g": vals["g"], "k": vals["k"]}
-res_shape = (res["DeltaN"].shape[0], res["g"].shape[0], res["k"].shape[0])
-res["energy"] = np.zeros(res_shape)
-res["m"] = np.zeros(res_shape)
-for ii, DeltaN in enumerate(res["DeltaN"]):
-    for jj, g in enumerate(res["g"]):
-        for kk, k in enumerate(res["k"]):
-            res["m"][ii, jj, kk] = get_sim(ugrid[ii, jj, kk]).res["m"]
-            res["energy"][ii, jj, kk] = get_sim(ugrid[ii, jj, kk]).res["energy"][0]
-
-fig = plt.figure()
-for kk, k in enumerate(res["k"]):
-    plt.plot(
-        vals["g"] ** 2,
-        res["energy"][1, :, kk] - res["energy"][0, :, kk],
-        "--o",
-        label=f"k={k}, TOT",
-    )
-
-
-plt.xscale("log")
-plt.yscale("log")
-plt.xlabel("g2")
-plt.legend()
-plt.ylabel("DEltaE")
-
-fig = plt.figure()
-for kk, k in enumerate(res["k"]):
-    plt.plot(
-        vals["g"] ** 2,
-        res["energy"][1, :, kk] - res["energy"][0, :, kk] - 0.5 * res["m"][1, :, kk],
-        "-^",
-        label=f"k={k} RES",
-    )
-plt.xscale("log")
-plt.yscale("log")
-plt.xlabel("g2")
-plt.legend()
-plt.ylabel("DEltaE_res")
-save_dictionary(res, "saved_dicts/SU2_energy_gap.pkl")
-
-# %%
-# ========================================================================
-# SU(2) FULL THEORY ENERGY GAPS
-# ========================================================================
-config_filename = "SU2/full/energy_gaps"
-match = SimsQuery(group_glob=config_filename)
-ugrid, vals = uids_grid(match.uids, ["DeltaN", "m", "k"])
-obs_list = LGT_obs_list(model="SU2", pure=False, has_obc=False)
-res = {"DeltaN": vals["DeltaN"], "m": vals["m"], "k": vals["k"]}
-res_shape = (res["DeltaN"].shape[0], res["m"].shape[0], res["k"].shape[0])
-res["energy"] = np.zeros(res_shape)
-res["g"] = np.zeros(res_shape)
-for ii, DeltaN in enumerate(res["DeltaN"]):
-    for jj, m in enumerate(res["m"]):
-        for kk, k in enumerate(res["k"]):
-            res["g"][ii, jj, kk] = get_sim(ugrid[ii, jj, kk]).res["g"]
-            res["energy"][ii, jj, kk] = get_sim(ugrid[ii, jj, kk]).res["energy"][0]
-
-fig = plt.figure()
-for kk, k in enumerate(res["k"]):
-    plt.plot(
-        res["m"],
-        res["energy"][1, :, kk] - res["energy"][0, :, kk],
-        "--o",
-        label=f"k={k}",
-    )
-plt.xscale("log")
-plt.yscale("log")
-plt.xlabel("m")
-plt.legend()
-plt.ylabel("DEltaE")
-
-fig = plt.figure()
-for kk, k in enumerate(res["k"]):
-    plt.plot(
-        vals["m"],
-        res["energy"][1, :, kk] - res["energy"][0, :, kk] - 0.5 * res["m"],
-        "-^",
-        label=f"k={k} RES",
-    )
-plt.xscale("log")
-plt.yscale("log")
-plt.xlabel("g2")
-plt.legend()
-plt.ylabel("DEltaE_res")
-save_dictionary(res, "SU2_energy_gap_new.pkl")

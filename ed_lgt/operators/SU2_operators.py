@@ -27,7 +27,6 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
     validate_parameters(
         spin_list=[spin], pure_theory=pure_theory, lattice_dim=lattice_dim
     )
-    hop_rescaling_factor = 1 / (2 ** (0.25))
     # Lattice directions
     dimensions = "xyz"[:lattice_dim]
     # Get SU2 rishon operators
@@ -57,12 +56,8 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
             for side in "pm":
                 ops[f"Q{side}x_dag"] = 0
             for col in "rg":
-                ops["Qpx_dag"] += hop_rescaling_factor * qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", "P", f"Z{col}"]
-                )
-                ops["Qmx_dag"] += hop_rescaling_factor * qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", f"Z{col}", "Iz"]
-                )
+                ops["Qpx_dag"] += qmb_op(in_ops, [f"psi_{col}_dag_P", "P", f"Z{col}"])
+                ops["Qmx_dag"] += qmb_op(in_ops, [f"psi_{col}_dag_P", f"Z{col}", "Iz"])
             # add their dagger operators
             Qs = {}
             for op in ops:
@@ -93,16 +88,16 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
                 for ax in dimensions:
                     ops[f"Q{side}{ax}_dag"] = 0
             for col in "rg":
-                ops["Qmx_dag"] += hop_rescaling_factor * qmb_op(
+                ops["Qmx_dag"] += qmb_op(
                     in_ops, [f"psi_{col}_dag_P", f"Z{col}", "Iz", "Iz", "Iz"]
                 )
-                ops["Qmy_dag"] += hop_rescaling_factor * qmb_op(
+                ops["Qmy_dag"] += qmb_op(
                     in_ops, [f"psi_{col}_dag_P", "P", f"Z{col}", "Iz", "Iz"]
                 )
-                ops["Qpx_dag"] += hop_rescaling_factor * qmb_op(
+                ops["Qpx_dag"] += qmb_op(
                     in_ops, [f"psi_{col}_dag_P", "P", "P", f"Z{col}", "Iz"]
                 )
-                ops["Qpy_dag"] += hop_rescaling_factor * qmb_op(
+                ops["Qpy_dag"] += qmb_op(
                     in_ops, [f"psi_{col}_dag_P", "P", "P", "P", f"Z{col}"]
                 )
             # add their dagger operators
@@ -186,25 +181,25 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
                 for ax in dimensions:
                     ops[f"Q{side}{ax}_dag"] = 0
             for col in "rg":
-                ops["Qmx_dag"] += hop_rescaling_factor * qmb_op(
+                ops["Qmx_dag"] += qmb_op(
                     in_ops,
                     [f"psi_{col}_dag_P", f"Z{col}", "Iz", "Iz", "Iz", "Iz", "Iz"],
                 )
-                ops["Qmy_dag"] += hop_rescaling_factor * qmb_op(
+                ops["Qmy_dag"] += qmb_op(
                     in_ops,
                     [f"psi_{col}_dag_P", "P", f"Z{col}", "Iz", "Iz", "Iz", "Iz"],
                 )
-                ops["Qmz_dag"] += hop_rescaling_factor * qmb_op(
+                ops["Qmz_dag"] += qmb_op(
                     in_ops,
                     [f"psi_{col}_dag_P", "P", "P", f"Z{col}", "Iz", "Iz", "Iz"],
                 )
-                ops["Qpx_dag"] += hop_rescaling_factor * qmb_op(
+                ops["Qpx_dag"] += qmb_op(
                     in_ops, [f"psi_{col}_dag_P", "P", "P", "P", f"Z{col}", "Iz", "Iz"]
                 )
-                ops["Qpy_dag"] += hop_rescaling_factor * qmb_op(
+                ops["Qpy_dag"] += qmb_op(
                     in_ops, [f"psi_{col}_dag_P", "P", "P", "P", "P", f"Z{col}", "Iz"]
                 )
-                ops["Qpz_dag"] += hop_rescaling_factor * qmb_op(
+                ops["Qpz_dag"] += qmb_op(
                     in_ops, [f"psi_{col}_dag_P", "P", "P", "P", "P", "P", f"Z{col}"]
                 )
             # --------------------------------------------------------------------------
@@ -221,29 +216,11 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
             ops[f"N_{label}"] = qmb_op(
                 in_ops, [f"N_{label}"] + ["Iz" for _ in range(2 * lattice_dim)]
             )
-    """
-        # Psi CASIMIR OPERATORS
-        ops["S2_matter"] = 0
-        for Td in ["x", "y", "z"]:
-            ops["S2_matter"] += csr_matrix(
-                qmb_op(in_ops, [f"S{Td}_psi"] + ["Iz" for i in range(2 * lattice_dim)])
-                ** 2,
-                dtype=float,
-            )
-    """
     # CASIMIR/ELECTRIC OPERATOR
     ops[f"E_square"] = 0
     for s in "pm":
         for d in dimensions:
             ops[f"E_square"] += 0.5 * ops[f"T2_{s}{d}"]
-    """# DRESSED SITE CASIMIR OPERATOR S^{2}
-    ops[f"S2_tot"] = 0
-    for Td in ["x", "y", "z"]:
-        for side in "pm":
-            for d in dimensions:
-                ops["S2_tot"] += csr_matrix(ops[f"T{Td}_{s}{d}"] ** 2, dtype=float)
-    if not pure_theory:
-        ops["S2_tot"] += ops["S2_matter"]"""
     if background:
         for op in ops.keys():
             ops[op] = kron(identity(3), ops[op])
@@ -594,31 +571,11 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
             ops[f"N_{label}"] = qmb_op(
                 in_ops, [f"N_{label}"] + ["Iz" for i in range(2 * lattice_dim)]
             )
-        """
-        # Psi CASIMIR OPERATORS
-        ops["S2_matter"] = 0
-        for Td in ["x", "y", "z"]:
-            ops["S2_matter"] += csr_matrix(
-                qmb_op(in_ops, [f"S{Td}_psi"] + ["Iz" for i in range(2 * lattice_dim)])
-                ** 2,
-                dtype=float,
-            )
-        """
     # CASIMIR/ELECTRIC OPERATOR
     ops[f"E_square"] = 0
     for s in "pm":
         for d in dimensions:
             ops[f"E_square"] += 0.5 * ops[f"T2_{s}{d}"]
-    """
-    # DRESSED SITE CASIMIR OPERATOR S^{2}
-    ops[f"S2_tot"] = 0
-    for Td in ["x", "y", "z"]:
-        for s in "pm":
-            for d in dimensions:
-                ops["S2_tot"] += csr_matrix(ops[f"T{Td}_{s}{d}"] ** 2, dtype=float)
-    if not pure_theory:
-        ops["S2_tot"] += ops["S2_matter"]
-    """
     if background:
         for op in ops.keys():
             ops[op] = kron(identity(3), ops[op])

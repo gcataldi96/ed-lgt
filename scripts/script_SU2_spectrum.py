@@ -89,15 +89,17 @@ with run_sim() as sim:
         # MEASURE OBSERVABLES
         if sim.par["observables"]["measure_obs"]:
             model.measure_observables(ii)
+            sim.res["E_square"][ii] = model.link_avg(
+                model.res["T2_px"], model.res["T2_py"]
+            )
             if not model.pure_theory:
                 sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
                 sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_pair"], "even")
                 sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_zero"], "odd")
                 sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_zero"], "even")
                 sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_pair"], "odd")
-                sim.res["N_tot"][ii] = (
-                    sim.res["N_single"][ii] + 2 * sim.res["N_pair"][ii]
-                )
+                sim.res["N_tot"][ii] += sim.res["N_single"][ii]
+                sim.res["N_tot"][ii] += 2 * sim.res["N_pair"][ii]
         # ---------------------------------------------------------------------------
         # OVERLAPS with the INITIAL STATE
         if sim.par["observables"]["get_overlap"]:

@@ -295,7 +295,7 @@ class QMB_state:
         logger.info("STATE CONFIGURATIONS")
         # 1) mask off small amplitudes
         psi = self.psi
-        mask = np.abs(psi) > threshold
+        mask = np.abs(psi) ** 2 > threshold
         # 2) collect indices & values
         idx = np.nonzero(mask)[0]  # shape (K,)
         vals = psi[idx]  # shape (K,)

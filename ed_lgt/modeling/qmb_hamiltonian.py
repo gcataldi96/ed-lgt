@@ -3,8 +3,8 @@ from numba import njit, prange
 from scipy.linalg import eigh as array_eigh
 from scipy.sparse.linalg import eigsh as sparse_eigh, expm_multiply, expm
 from scipy.sparse.linalg import LinearOperator
-from scipy.sparse import csc_matrix, csr_matrix, isspmatrix, coo_matrix
-from ed_lgt.tools import validate_parameters, check_hermitian
+from scipy.sparse import csc_matrix, isspmatrix, coo_matrix
+from ed_lgt.tools import validate_parameters
 from .qmb_state import QMB_state
 import logging
 
@@ -70,13 +70,12 @@ class QMB_hamiltonian:
         Args:
             format (str): Target type ('dense', 'sparse', or 'linear').
         """
+        logger.info(f"Construct {format} Hamiltonian")
 
         # ==========================================================================
         def matvec(psi):
             """Function to compute H @ v."""
-            result = hamiltonian_vector_product(
-                psi, self.row_list, self.col_list, self.value_list
-            )
+            result = csr_spmv(self.indptr, self.indices, self.data, psi)
             if result is None:
                 raise ValueError("matvec returned None.")
             if not isinstance(result, np.ndarray):
@@ -86,14 +85,7 @@ class QMB_hamiltonian:
         # ==========================================================================
         def matmat(psis):
             """Function to compute H @ matrix (batch of vectors)."""
-            result = np.column_stack(
-                [
-                    hamiltonian_vector_product(
-                        psi, self.row_list, self.col_list, self.value_list
-                    )
-                    for psi in psis.T
-                ]
-            )
+            result = csr_matmat(self.indptr, self.indices, self.data, psis)
             if result is None:
                 raise ValueError("matmat returned None.")
             if not isinstance(result, np.ndarray):
@@ -105,12 +97,12 @@ class QMB_hamiltonian:
             self.Ham = csc_matrix(
                 (self.value_list, (self.row_list, self.col_list)), shape=self.shape
             )
-            # Check if the matrix is Hermitian
-            check_hermitian(self.Ham)
-            # Measure sparsity
-            self.get_sparsity(self.Ham)
         # ==========================================================================
         elif format == "linear":
+            N = self.shape[0]
+            self.indptr, self.indices, self.data = build_csr_numba(
+                N, self.row_list, self.col_list, self.value_list
+            )
             self.Ham = LinearOperator(shape=self.shape, matvec=matvec, matmat=matmat)
         # ==========================================================================
         elif format == "dense":
@@ -118,6 +110,8 @@ class QMB_hamiltonian:
                 (self.value_list, (self.row_list, self.col_list)), shape=self.shape
             )
             self.Ham = self.Ham.toarray()
+        # Measure sparsity
+        self.get_sparsity()
         self.Ham_type = format
 
     def convert_hamiltonian(self, format):
@@ -158,13 +152,13 @@ class QMB_hamiltonian:
         # Determine number of eigenvalues to compute
         if isinstance(n_eigs, int):
             if n_eigs > self.shape[0]:
-                msg = f"n_eigs must be smaller than H.shape[0]={self.shape[0]}, got {n_eigs}"
+                msg = f"n_eigs must be < H.shape[0]={self.shape[0]}, got {n_eigs}"
                 raise ValueError(msg)
             self.n_eigs = n_eigs
         elif isinstance(n_eigs, str) and n_eigs == "full":
             self.n_eigs = self.shape[0]
         else:
-            raise ValueError(f"n_eigs must be an integer or 'full', not {n_eigs}.")
+            raise ValueError(f"n_eigs must be int or 'full', not {n_eigs}.")
         # Select diagonalization format
         if self.Ham_type == "dense" or self.n_eigs == "full":
             logger.info("DIAGONALIZE (dense) HAMILTONIAN")
@@ -203,39 +197,22 @@ class QMB_hamiltonian:
         self.loc_dims = loc_dims
         # Compute the time spacing and the time line
         delta_t = time_line[1] - time_line[0]
-        msg = f"------------- TIME EVOLUTION: DELTA {round(delta_t,2)} ------------"
+        msg = f"------------ TIME EVOLUTION: DELTA {round(delta_t,4)} ------------"
         logger.info(msg)
         # Check Hamiltonian type and compute the time evolution
         if self.Ham_type == "dense":
             # Check if Hamiltonian is already diagonalized
             if not hasattr(self, "Nenergies") or not hasattr(self, "Npsi"):
                 self.diagonalize(n_eigs="full", format="dense", loc_dims=loc_dims)
-            # Run the time evolution with numba
-            psi_time, self.Deff = time_evolve_numba(
+            # Run the exact time evolution
+            psi_time = exact_time_evolution(
                 time_line,
                 self.Nenergies,
                 np.array([A.psi for A in self.Npsi]).T,
                 initial_state.astype(np.complex128),
             )
-            self.Deff
-            logger.info(f"Eff. Hilbert Space dim: {self.Deff}")
-        # Compute the trace if Ham is a LinearOperator
-        elif self.Ham_type in ["linear", "sparse"]:
-            if self.Ham_type == "linear":
-                logger.warning("Falling back to 'sparse' format for time evolution.")
-                self.convert_hamiltonian("sparse")
-                """
-                self.Ham = scalar_multiply_linear_operator(-1j, self.Ham)
-                # Identify diagonal elements
-                diagonal_mask = self.row_list == self.col_list
-                # Sum the diagonal elements
-                traceA = np.sum(-1j * self.value_list[diagonal_mask])
-                A = self.Ham
-                """
-            # Sparse matrices have their trace natively
-            traceA = None
+        elif self.Ham_type == "sparse":
             A = complex(0, -1) * self.Ham
-            # Compute the evolved psi at each time step
             psi_time = expm_multiply(
                 A=A,
                 B=initial_state,
@@ -243,7 +220,10 @@ class QMB_hamiltonian:
                 stop=time_line[-1],
                 num=len(time_line),
                 endpoint=True,
-                traceA=traceA,
+            )
+        elif self.Ham_type == "linear":
+            psi_time = runge_kutta4_time_evolution(
+                initial_state, self.indptr, self.indices, self.data, time_line
             )
         # Save them as QMB_states
         self.psi_time = [
@@ -405,15 +385,9 @@ class QMB_hamiltonian:
         logger.info("====================================================")
         logger.info(f"{en_state} ENERGY: {round(self.Nenergies[en_state],9)}")
 
-    @staticmethod
-    def get_sparsity(array: csr_matrix):
-        # MEASURE SPARSITY
-        num_nonzero = array.nnz
-        # Total number of elements
-        total_elements = array.shape[0] * array.shape[1]
-        # Calculate sparsity
-        sparsity = 1 - (num_nonzero / total_elements)
-        logger.info(f"SPARSITY: {round(sparsity*100,5)}%")
+    def get_sparsity(self):
+        sparsity = len(self.row_list) / (self.shape[0] ** 2)
+        logger.info(f"SPARSITY: {round(sparsity,16)}")
 
 
 def is_sorted(array1D):
@@ -442,63 +416,93 @@ def get_entropy_partition(lvals, option="half"):
 
 
 @njit(cache=True)
-def hamiltonian_vector_product(psi, row_list, col_list, value_list):
-    """
-    Compute the Hamiltonian-vector product H @ psi directly from the nonzero elements
-    of the Hamiltonian without constructing the full matrix.
+def build_csr_numba(N, row_list, col_list, data_list):
+    nnz = row_list.shape[0]
+    indptr = np.zeros(N + 1, np.int32)
+    # 1) count nonzeros per row
+    for idx in range(nnz):
+        indptr[row_list[idx] + 1] += 1
+    # 2) prefix-sum
+    for ii in range(1, N + 1):
+        indptr[ii] += indptr[ii - 1]
+    # 3) scatter into CSR
+    indices = np.empty(nnz, np.int32)
+    data = np.empty(nnz, data_list.dtype)
+    nextpos = indptr[:-1].copy()
+    for idx in range(nnz):
+        r = row_list[idx]
+        p = nextpos[r]
+        indices[p] = col_list[idx]
+        data[p] = data_list[idx]
+        nextpos[r] += 1
 
-    Args:
-        psi (np.ndarray): The vector to multiply with the Hamiltonian.
-        row_list (np.ndarray): Row indices of nonzero elements in the operator.
-        col_list (np.ndarray): Column indices of nonzero elements in the operator.
-        value_list (np.ndarray): Nonzero values of the operator.
+    return indptr, indices, data
 
-    Returns:
-        np.ndarray: The resulting vector H @ psi.
-    """
-    Hpsi = np.zeros(len(psi), dtype=np.complex128)
-    for idx in range(len(value_list)):
-        row = row_list[idx]
-        col = col_list[idx]
-        value = value_list[idx]
-        Hpsi[row] += value * psi[col]
+
+@njit(cache=True, parallel=True)
+def csr_spmv(
+    indptr: np.ndarray, indices: np.ndarray, data: np.ndarray, x: np.ndarray
+) -> np.ndarray:
+    N = indptr.shape[0] - 1
+    Hpsi = np.zeros(N, dtype=np.complex128)
+    for ii in prange(N):
+        value = 0.0 + 0j
+        for pp in range(indptr[ii], indptr[ii + 1]):
+            value += data[pp] * x[indices[pp]]
+        Hpsi[ii] = value
     return Hpsi
 
 
-def scalar_multiply_linear_operator(scalar, linear_operator: LinearOperator):
+@njit(cache=True, parallel=True)
+def csr_matmat(
+    indptr: np.ndarray, indices: np.ndarray, data: np.ndarray, X: np.ndarray
+) -> np.ndarray:
     """
-    Multiply a LinearOperator by a scalar.
+    Compute Y = H @ X where H is in CSR form (indptr, indices, data)
+    and X is (N, nvec).  Returns Y of shape (N, nvec).
 
-    Args:
-        scalar (complex): The scalar to multiply.
-        linear_operator (LinearOperator): The operator to multiply.
-
-    Returns:
-        LinearOperator: The scaled operator.
+    Parallel over rows of H (and therefore rows of Y).
     """
+    N = indptr.shape[0] - 1
+    nvec = X.shape[1]
+    Y = np.zeros((N, nvec), dtype=np.complex128)
 
-    def matvec(psi):
-        return scalar * linear_operator.matvec(psi)
+    # outer loop parallelized over the N rows
+    for ii in prange(N):
+        # for each nonzero in row i
+        for pp in range(indptr[ii], indptr[ii + 1]):
+            jj = indices[pp]  # column index
+            value = data[pp]  # value H[i,j]
+            # accumulate v * X[j, :] into Y[i, :]
+            for kk in range(nvec):
+                Y[ii, kk] += value * X[jj, kk]
+    return Y
 
-    def matmat(psis):
-        return scalar * linear_operator.matmat(psis)
 
-    return LinearOperator(
-        shape=linear_operator.shape,
-        matvec=matvec,
-        matmat=matmat,
-    )
+@njit(cache=True)
+def compute_trace_iH(
+    row_list: np.ndarray, col_list: np.ndarray, data_list: np.ndarray
+) -> complex:
+    """
+    Sum data_list[ii] whenever row_list[ii] == col_list[ii].
+    """
+    tr = 0.0 + 0.0j
+    nnz = row_list.shape[0]
+    for idx in range(nnz):
+        if row_list[idx] == col_list[idx]:
+            tr += -1j * data_list[idx]
+    return tr
 
 
 @njit(parallel=True, cache=True)
-def time_evolve_numba(
+def exact_time_evolution(
     tline: np.ndarray,
     eigenvalues: np.ndarray,
     eigenvectors: np.ndarray,
     initial_state: np.ndarray,
 ):
     """
-    Perform time evolution of a quantum state using Numba for optimization.
+    Perform time evolution of a quantum state assuming the knowledge of the whole energy spectrum
 
     Args:
         tline (ndarray): set of time steps where to measure the time evolution
@@ -510,22 +514,154 @@ def time_evolve_numba(
         ndarray: Array of time-evolved states with shape (n_steps, len(initial_state)).
     """
     psi_dim = len(initial_state)
+    n_eigs = len(eigenvalues)
     # To store time-evolved states
     n_steps = len(tline)
-    psi_time = np.zeros((n_steps, psi_dim), dtype=np.complex128)
-    # Precompute overlaps <E_i|psi(0)>
-    overlaps = np.dot(eigenvectors.T.conj(), initial_state)
+    psi_time = psi_time = np.empty((n_steps, psi_dim), np.complex128)
+    # Precompute overlaps <E_i|psi(0)> for all i
+    overlaps = compute_overlap_with_eigenstates(eigenvectors, initial_state)
     # Loop over time steps in parallel
     for t_idx in prange(n_steps):
         t = tline[t_idx]
         evolved_state = np.zeros(psi_dim, dtype=np.complex128)
         # Loop over eigenstates
-        for ii in range(len(eigenvalues)):
+        for ii in range(n_eigs):
             # Compute phase factor
             phase = np.exp(-1j * eigenvalues[ii] * t)
             # Accumulate contributions
             evolved_state += phase * overlaps[ii] * eigenvectors[:, ii]
         psi_time[t_idx, :] = evolved_state
-    # Measure the effective Hilbert space dimension
-    Deff = np.sum(np.abs(overlaps) ** 4)
-    return psi_time, Deff
+    return psi_time
+
+
+@njit(cache=True, parallel=True)
+def compute_overlap_with_eigenstates(eigenvectors: np.ndarray, state: np.ndarray):
+    """
+    overlaps[i] = <E_i | psi(0)> = sum_j conj(evecs[j,i]) * initial_state[j]
+    Parallelized over i.
+    """
+    psi_dim = eigenvectors.shape[0]
+    n_eigs = eigenvectors.shape[1]
+    overlaps = np.empty(n_eigs, np.complex128)
+    for ii in prange(n_eigs):
+        acc = 0.0 + 0.0j
+        for jj in range(psi_dim):
+            acc += np.conj(eigenvectors[jj, ii]) * state[jj]
+        overlaps[ii] = acc
+    return overlaps
+
+
+@njit(parallel=True)
+def csr_spmv_lin(
+    indptr: np.ndarray,
+    indices: np.ndarray,
+    data: np.ndarray,
+    x: np.ndarray,
+    out: np.ndarray,
+):
+    """
+    Parallel CSR sparse-matrix-vector multiply for A = -i * H.
+    indptr, indices, data define the CSR structure of H.
+    The result out = -1j * H @ x.
+    """
+    N = indptr.shape[0] - 1
+    for ii in prange(N):
+        value = 0.0 + 0.0j
+        for pp in range(indptr[ii], indptr[ii + 1]):
+            value += data[pp] * x[indices[pp]]
+        out[ii] = -1j * value
+
+
+@njit(parallel=True, cache=True)
+def runge_kutta4_time_evolution(
+    initial_state: np.ndarray,
+    indptr: np.ndarray,
+    indices: np.ndarray,
+    data: np.ndarray,
+    time_line: np.ndarray,
+) -> np.ndarray:
+    """
+    Fully-parallel RK4 integrator for dpsi/dt = -i H psi.
+    Uses csr_spmv_lin to compute -i*H@psi in parallel.
+    Returns array of shape (len(time_line), N) containing psi at each time.
+    """
+    N = initial_state.shape[0]
+    steps = len(time_line)
+    dt = time_line[1] - time_line[0]
+    # allocate output and temporaries
+    out = np.empty((steps, N), np.complex128)
+    # ——— ensure psi is complex128 ———
+    psi = np.empty(N, np.complex128)
+    for ii in prange(N):
+        psi[ii] = initial_state[ii]  # copies and *converts* into a complex slot
+        out[0, ii] = initial_state[ii]
+    k1 = np.empty(N, np.complex128)
+    k2 = np.empty(N, np.complex128)
+    k3 = np.empty(N, np.complex128)
+    k4 = np.empty(N, np.complex128)
+    tmp = np.empty(N, np.complex128)
+    for s in range(1, steps):
+        # k1 = -i H @ psi
+        csr_spmv_lin(indptr, indices, data, psi, k1)
+        # k2 = -i H @ (psi + dt/2*k1)
+        for ii in prange(N):
+            tmp[ii] = psi[ii] + 0.5 * dt * k1[ii]
+        csr_spmv_lin(indptr, indices, data, tmp, k2)
+        # k3 = -i H @ (psi + dt/2*k2)
+        for ii in prange(N):
+            tmp[ii] = psi[ii] + 0.5 * dt * k2[ii]
+        csr_spmv_lin(indptr, indices, data, tmp, k3)
+        # k4 = -i H @ (psi + dt*k3)
+        for ii in prange(N):
+            tmp[ii] = psi[ii] + dt * k3[ii]
+        csr_spmv_lin(indptr, indices, data, tmp, k4)
+        # combine to advance psi
+        for ii in prange(N):
+            psi[ii] += dt * (k1[ii] + 2 * k2[ii] + 2 * k3[ii] + k4[ii]) / 6.0
+        # renormalize to unit norm
+        nrm = norm2(psi)
+        for ii in prange(N):
+            psi[ii] /= nrm
+        out[s] = psi
+    return out
+
+
+@njit(cache=True)
+def norm2(psi: np.ndarray):
+    psi_norm = 0.0
+    for ii in range(psi.shape[0]):
+        psi_norm += psi[ii].real * psi[ii].real + psi[ii].imag * psi[ii].imag
+    return np.sqrt(psi_norm)
+
+
+"""
+def matvec_lin(psi):
+    return -1j * self.Ham.matvec(psi)
+
+def matmat_lin(psis):
+    return -1j * self.Ham.matmat(psis)
+
+def rmatvec_lin(psi):
+    return +1j * self.Ham.matvec(psi)
+
+def rmatmat_lin(psis):
+    return +1j * self.Ham.matmat(psis)
+
+A_lin = LinearOperator(
+    shape=self.shape,
+    matvec=matvec_lin,
+    matmat=matmat_lin,
+    rmatvec=rmatvec_lin,
+    rmatmat=rmatmat_lin,
+    dtype=np.complex128,
+)
+traceA = compute_trace_iH(self.row_list, self.col_list, self.value_list)
+psi_time = expm_multiply(
+    A=A_lin,
+    B=initial_state,
+    start=time_line[0],
+    stop=time_line[-1],
+    num=len(time_line),
+    endpoint=True,
+    traceA=traceA,
+)"""

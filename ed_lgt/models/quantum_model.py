@@ -12,6 +12,8 @@ from ed_lgt.modeling import (
     QMB_state,
     get_lattice_link_site_pairs,
     lattice_base_configs,
+    get_neighbor_sites,
+    zig_zag,
 )
 from ed_lgt.symmetries import (
     get_symmetry_sector_generators,
@@ -241,7 +243,7 @@ class QuantumModel:
 
     def get_qmb_state_from_configs(self, configs):
         # INITIALIZE the STATE
-        state = np.zeros(len(self.sector_configs), dtype=float)
+        state = np.zeros(len(self.sector_configs), dtype=np.complex128)
         # Get the corresponding QMB index of each config
         for config in configs:
             index = config_to_index_binarysearch(config, self.sector_configs)
@@ -249,9 +251,7 @@ class QuantumModel:
                 logger.info(f"{config}")
                 raise ValueError(f"config not compatible with the symmetry sector")
             logger.info(f"{config} in state {index}")
-            state[index] = 1
-        # Normalize the state
-        state /= np.sqrt(len(configs))
+            state[index] = complex(1 / np.sqrt(len(configs)), 0)
         if self.momentum_basis:
             # Project the state in the momentum sector
             state = self.B.transpose().dot(state)
@@ -432,6 +432,25 @@ class QuantumModel:
             obs = "_".join(op_names_list)
             self.obs_list[obs].get_expval(state)
             self.res[obs] = self.obs_list[obs].obs
+
+    def link_avg(self, obs_px, obs_py):
+        avg = 0
+        tmp = 0
+        for ii in range(prod(self.lvals)):
+            # Compute the corresponding coords
+            coords = zig_zag(self.lvals, ii)
+            # Check if it admits a x twobody term according to the lattice geometry
+            _, sites_list = get_neighbor_sites(coords, self.lvals, "x", self.has_obc)
+            if sites_list is not None:
+                avg += obs_px[ii]
+                tmp += 1
+            # Check if it admits a y twobody term according to the lattice geometry
+            _, sites_list = get_neighbor_sites(coords, self.lvals, "y", self.has_obc)
+            if sites_list is not None:
+                avg += obs_py[ii]
+                tmp += 1
+        logger.info(f"{tmp} effective links")
+        return avg / tmp
 
     def microcanonical_avg1(
         self,

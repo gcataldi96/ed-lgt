@@ -72,7 +72,7 @@ with run_sim() as sim:
     # ===========================================================================
     # OBSERVABLES
     matter_obs = [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
-    extra_obs = ["bg", "E_square"]
+    extra_obs = ["bg", "E_square", "T2_px", "T2_py"]
     local_obs = matter_obs + extra_obs
     for obs in local_obs:
         sim.res[obs] = np.zeros(n_steps, dtype=float)
@@ -83,8 +83,10 @@ with run_sim() as sim:
     # ---------------------------------------------------------------------------
     # DYNAMICS: INITIAL STATE PREPARATION
     # ---------------------------------------------------------------------------
-    logger.info(f"Minimal string configurations")
+    logger.info("----------------------------------------------------")
+    logger.info(f"Minimal string configs")
     strings_dic = {
+        "cfg_snake": np.array([6, 10, 2, 10, 1, 5, 3, 10, 3, 11], dtype=int),
         "cfg0": np.array([7, 12, 3, 12, 1, 4, 0, 9, 0, 11], dtype=int),
         "cfg1": np.array([7, 12, 3, 11, 0, 4, 0, 9, 1, 12], dtype=int),
         "cfg2": np.array([7, 12, 2, 9, 0, 4, 0, 10, 2, 12], dtype=int),
@@ -92,16 +94,20 @@ with run_sim() as sim:
         "cfg4": np.array([6, 9, 0, 9, 0, 5, 2, 11, 2, 12], dtype=int),
     }
     for ii in range(5):
-        logger.info(f"String {ii}")
         strings_dic[f"state{ii}"] = model.get_qmb_state_from_configs(
             [strings_dic[f"cfg{ii}"]]
         )
         sim.res[f"overlap{ii}"] = np.zeros(n_steps, dtype=float)
+    logger.info(f"Maximal string config")
+    strings_dic[f"state_snake"] = model.get_qmb_state_from_configs(
+        [strings_dic["cfg_snake"]]
+    )
+    sim.res[f"overlap_snake"] = np.zeros(n_steps, dtype=float)
     if sim.par["dynamics"]["time_evolution"]:
-        model.time_evolution_Hamiltonian(strings_dic["state0"], time_line)
+        model.time_evolution_Hamiltonian(strings_dic["state_snake"], time_line)
         # -----------------------------------------------------------------------
         for ii, tstep in enumerate(time_line):
-            msg_tstep = f"TIME {round(tstep, 2)}"
+            msg_tstep = f"TIME {round(tstep, 4)}"
             msg = f"================= {msg_tstep} ========================="
             logger.info(msg)
             if not model.momentum_basis:
@@ -121,14 +127,20 @@ with run_sim() as sim:
             # -----------------------------------------------------------------------
             # MEASURE OBSERVABLES
             model.measure_observables(ii, dynamics=True)
-            sim.res["E_square"][ii] = np.mean(model.res["E_square"])
+            sim.res["E_square"][ii] = model.link_avg(
+                model.res["T2_px"], model.res["T2_py"]
+            )
             sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
             sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_pair"], "even")
             sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_zero"], "odd")
             sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_zero"], "even")
             sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_pair"], "odd")
             sim.res["N_tot"][ii] = sim.res["N_single"][ii] + 2 * sim.res["N_pair"][ii]
-            # OVERLAPS with the INITIAL STATE
+            # -----------------------------------------------------------------------
+            # OVERLAPS with the INITIAL STATE & OTHER CONFIGURATIONS
+            sim.res[f"overlap_snake"][ii] = model.measure_fidelity(
+                strings_dic[f"state_snake"], ii, dynamics=True, print_value=True
+            )
             for kk in range(5):
                 sim.res[f"overlap{kk}"][ii] = model.measure_fidelity(
                     strings_dic[f"state{kk}"], ii, dynamics=True, print_value=True

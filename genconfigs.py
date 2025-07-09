@@ -174,3 +174,8 @@ g = np.linspace(0.95, 2.5, 10)
 params = {"g": g, "theta": theta_focused[20:]}
 gen_configs("template", params, f"theta_term/qed_theta_eigvals")
 # %%
+# SU2 FULL THEORY PHASE DIAGRAM
+params = {"g": np.logspace(-3, 3, 30), "m": np.logspace(-3, 3, 30)}
+gen_configs("template", params, f"string_breaking/phasediagram_bg")
+gen_configs("template", params, f"string_breaking/phasediagram_nobg")
+# %%
