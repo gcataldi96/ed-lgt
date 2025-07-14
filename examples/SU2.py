@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 gauge_basis, gauge_states = SU2_gauge_invariant_states(
     0.5, False, lattice_dim=2, background=False
 )
-for ii, singlet in enumerate(gauge_states["site_my"]):
+for ii, singlet in enumerate(gauge_states["site"]):
     logger.info(f" {ii} ")
     singlet.display_singlets()
     logger.info(f" ")

@@ -10,25 +10,7 @@ __all__ = [
     "get_density",
     "analyze_correlator",
     "r_values",
-    "stag_avg",
 ]
-
-
-def stag_avg(arr, staggered_avg=None):
-    indices = np.arange(arr.shape[0])
-    if staggered_avg is not None:
-        if staggered_avg == "even":
-            # Determine indices to consider based on the staggered parameter
-            good_indices = indices[indices % 2 == 0]  # Select even indices
-        elif staggered_avg == "odd":
-            good_indices = indices[indices % 2 != 0]  # Select odd indices
-        else:
-            raise ValueError(
-                f"staggered_avg can be only 'even' or 'odd': got {staggered_avg}"
-            )
-        return np.mean(arr[good_indices])
-    else:
-        return np.mean(arr)
 
 
 def r_values(energy):

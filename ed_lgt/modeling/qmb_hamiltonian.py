@@ -5,7 +5,7 @@ from scipy.sparse.linalg import eigsh as sparse_eigh, expm_multiply, expm
 from scipy.sparse.linalg import LinearOperator
 from scipy.sparse import csc_matrix, isspmatrix, coo_matrix
 from ed_lgt.tools import validate_parameters
-from .qmb_state import QMB_state
+from .qmb_state import QMB_state, get_norm
 import logging
 
 logger = logging.getLogger(__name__)
@@ -222,9 +222,38 @@ class QMB_hamiltonian:
                 endpoint=True,
             )
         elif self.Ham_type == "linear":
-            psi_time = runge_kutta4_time_evolution(
-                initial_state, self.indptr, self.indices, self.data, time_line
+
+            def matvec_lin(psi):
+                return -1j * self.Ham.matvec(psi)
+
+            def matmat_lin(psis):
+                return -1j * self.Ham.matmat(psis)
+
+            def rmatvec_lin(psi):
+                return +1j * self.Ham.matvec(psi)
+
+            def rmatmat_lin(psis):
+                return +1j * self.Ham.matmat(psis)
+
+            A_lin = LinearOperator(
+                shape=self.shape,
+                matvec=matvec_lin,
+                matmat=matmat_lin,
+                rmatvec=rmatvec_lin,
+                rmatmat=rmatmat_lin,
+                dtype=np.complex128,
             )
+            traceA = compute_trace_iH(self.row_list, self.col_list, self.value_list)
+            psi_time = expm_multiply(
+                A=A_lin,
+                B=initial_state,
+                start=time_line[0],
+                stop=time_line[-1],
+                num=len(time_line),
+                endpoint=True,
+                traceA=traceA,
+            )
+        logger.info("Saving states")
         # Save them as QMB_states
         self.psi_time = [
             QMB_state(psi_time[ii, :], self.lvals, self.loc_dims)
@@ -619,49 +648,8 @@ def runge_kutta4_time_evolution(
         for ii in prange(N):
             psi[ii] += dt * (k1[ii] + 2 * k2[ii] + 2 * k3[ii] + k4[ii]) / 6.0
         # renormalize to unit norm
-        nrm = norm2(psi)
+        nrm = get_norm(psi)
         for ii in prange(N):
             psi[ii] /= nrm
         out[s] = psi
     return out
-
-
-@njit(cache=True)
-def norm2(psi: np.ndarray):
-    psi_norm = 0.0
-    for ii in range(psi.shape[0]):
-        psi_norm += psi[ii].real * psi[ii].real + psi[ii].imag * psi[ii].imag
-    return np.sqrt(psi_norm)
-
-
-"""
-def matvec_lin(psi):
-    return -1j * self.Ham.matvec(psi)
-
-def matmat_lin(psis):
-    return -1j * self.Ham.matmat(psis)
-
-def rmatvec_lin(psi):
-    return +1j * self.Ham.matvec(psi)
-
-def rmatmat_lin(psis):
-    return +1j * self.Ham.matmat(psis)
-
-A_lin = LinearOperator(
-    shape=self.shape,
-    matvec=matvec_lin,
-    matmat=matmat_lin,
-    rmatvec=rmatvec_lin,
-    rmatmat=rmatmat_lin,
-    dtype=np.complex128,
-)
-traceA = compute_trace_iH(self.row_list, self.col_list, self.value_list)
-psi_time = expm_multiply(
-    A=A_lin,
-    B=initial_state,
-    start=time_line[0],
-    stop=time_line[-1],
-    num=len(time_line),
-    endpoint=True,
-    traceA=traceA,
-)"""

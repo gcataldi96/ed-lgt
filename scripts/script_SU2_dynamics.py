@@ -34,16 +34,17 @@ with run_sim() as sim:
         in_state = model.get_qmb_state_from_configs([config])
     # -------------------------------------------------------------------------------
     # STAGGERED BASIS
-    logical_stag_basis = sim.par["dynamics"]["logical_stag_basis"]
+    """logical_stag_basis = sim.par["dynamics"]["logical_stag_basis"]
     num_blocks = model.n_sites // (2 * logical_stag_basis)
     stag_array = np.array(
         [-1] * logical_stag_basis + [1] * logical_stag_basis, dtype=int
     )
     norm_scalar_product = np.tile(stag_array, num_blocks)
-    logger.info(f"norm scalar product {norm_scalar_product}")
+    logger.info(f"norm scalar product {norm_scalar_product}")"""
     # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
     local_obs = [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
+    local_obs += ["E_square"]
     # LIST OF TWOBODY CORRELATORS
     twobody_obs = [[f"P_p{d}", f"P_m{d}"] for d in model.directions]
     twobody_axes = [d for d in model.directions]
@@ -53,12 +54,13 @@ with run_sim() as sim:
     model.get_observables(local_obs)
     for obs in local_obs:
         sim.res[obs] = np.zeros(n_steps, dtype=float)
-    sim.res["delta"] = np.zeros(n_steps, dtype=float)
+    # sim.res["delta"] = np.zeros(n_steps, dtype=float)
     # -------------------------------------------------------------------------------
     # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
     partition_indices = get_entropy_partition(model.lvals)
     sim.res["entropy"] = np.zeros(n_steps, dtype=float)
-    sim.res["overlap"] = np.zeros(n_steps, dtype=float)
+    if sim.par["observables"]["get_overlap"]:
+        sim.res["overlap"] = np.zeros(n_steps, dtype=float)
     # -------------------------------------------------------------------------------
     # ENSEMBLE BEHAVIORS
     get_micro_avg = sim.par["ensemble"]["microcanonical"]["average"]
@@ -123,40 +125,39 @@ with run_sim() as sim:
             if not model.momentum_basis:
                 # -----------------------------------------------------------------------
                 # ENTROPY
-                if sim.par["get_entropy"]:
+                if sim.par["observables"]["get_entropy"]:
                     sim.res["entropy"][ii] = model.H.psi_time[ii].entanglement_entropy(
                         partition_indices,
                         model.sector_configs,
                     )
                 # -----------------------------------------------------------------------
                 # STATE CONFIGURATIONS
-                if sim.par["get_state_configs"]:
+                if sim.par["observables"]["get_state_configs"]:
                     model.H.psi_time[ii].get_state_configurations(
-                        1e-1, model.sector_configs
+                        1e-2, model.sector_configs
                     )
             # -----------------------------------------------------------------------
             # MEASURE OBSERVABLES
-            if sim.par["measure_obs"]:
+            if sim.par["observables"]["measure_obs"]:
                 model.measure_observables(ii, dynamics=True)
+                sim.res["E_square"][ii] = np.mean(model.res["E_square"])
                 sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
-                sim.res["N_pair"][ii] = (
-                    stag_avg(model.res["N_pair"], "even")
-                    + stag_avg(model.res["N_zero"], "odd")
-                ) / 2
-                sim.res["N_zero"][ii] = (
-                    stag_avg(model.res["N_zero"], "even")
-                    + stag_avg(model.res["N_pair"], "odd")
-                ) / 2
-                sim.res["delta"][ii] = (
+                sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_pair"], "even")
+                sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_zero"], "odd")
+                sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_zero"], "even")
+                sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_pair"], "odd")
+                sim.res["N_tot"][ii] += sim.res["N_single"][ii]
+                sim.res["N_tot"][ii] += 2 * sim.res["N_pair"][ii]
+                """sim.res["delta"][ii] = (
                     np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
-                )
-                logger.info(f"delta {sim.res['delta'][ii]}")
+                )"""
+                # logger.info(f"delta {sim.res['delta'][ii]}")
                 logger.info(f"N_single {sim.res['N_single'][ii]}")
                 logger.info(f"N_pair {sim.res['N_pair'][ii]}")
                 logger.info(f"N_zero {sim.res['N_zero'][ii]}")
             # ---------------------------------------------------------------------------
             # OVERLAPS with the INITIAL STATE
-            if sim.par["get_overlap"]:
+            if sim.par["observables"]["get_overlap"]:
                 sim.res["overlap"][ii] = model.measure_fidelity(
                     in_state, ii, True, True
                 )

@@ -105,7 +105,7 @@ class PlaquetteTerm(QMBTerm):
             # logger.info(f"coords: {ii} {coords}, sites: {sites}")
             if sites is None or not self.get_mask_conditions(coords, mask):
                 continue
-            if len(self.sector_configs) > 2**19:
+            if len(self.sector_configs) > 2**24.5:
                 logger.info(f"Sites {sites}")
             # this gives three 1D arrays for this plaquette
             sites_array = np.array(sites, dtype=np.int32)

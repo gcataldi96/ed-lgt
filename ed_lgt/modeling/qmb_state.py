@@ -329,10 +329,12 @@ def truncation(array, threshold=1e-14):
     return np.where(np.abs(array) > threshold, array, 0)
 
 
-def get_norm(psi):
-    validate_parameters(psi=psi)
-    norm = np.linalg.norm(psi)
-    return norm
+@njit(cache=True)
+def get_norm(psi: np.ndarray):
+    psi_norm = 0.0
+    for ii in range(psi.shape[0]):
+        psi_norm += psi[ii].real * psi[ii].real + psi[ii].imag * psi[ii].imag
+    return np.sqrt(psi_norm)
 
 
 def get_sorted_indices(data):

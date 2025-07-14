@@ -2,7 +2,6 @@ import numpy as np
 from scipy.sparse import csc_matrix, isspmatrix, csr_matrix
 from scipy.sparse.linalg import expm
 from math import prod
-from ed_lgt.tools import stag_avg
 from ed_lgt.modeling import (
     LocalTerm,
     TwoBodyTerm,
@@ -14,6 +13,7 @@ from ed_lgt.modeling import (
     lattice_base_configs,
     get_neighbor_sites,
     zig_zag,
+    staggered_mask,
 )
 from ed_lgt.symmetries import (
     get_symmetry_sector_generators,
@@ -449,7 +449,7 @@ class QuantumModel:
             if sites_list is not None:
                 avg += obs_py[ii]
                 tmp += 1
-        logger.info(f"{tmp} effective links")
+        logger.debug(f"{tmp} effective links")
         return avg / tmp
 
     def microcanonical_avg1(
@@ -526,7 +526,7 @@ class QuantumModel:
                             np.dot(local_ops[op].obs, special_norm[op]) / self.n_sites
                         )
                     else:
-                        micro_avg[f"ME_{op}"] += stag_avg(
+                        micro_avg[f"ME_{op}"] += self.stag_avg(
                             local_ops[op].obs, staggered_avg[op]
                         )
 
@@ -605,7 +605,7 @@ class QuantumModel:
                         np.dot(local_ops[obs].obs, special_norms[obs]) / self.n_sites
                     )
                 elif staggered_avg[obs] is not None:
-                    exp_val = stag_avg(local_ops[obs].obs, staggered_avg[obs])
+                    exp_val = self.stag_avg(local_ops[obs].obs, staggered_avg[obs])
                 else:
                     # Default: use the average over all sites.
                     exp_val = np.mean(local_ops[obs].obs)
@@ -617,6 +617,34 @@ class QuantumModel:
             logger.info(f"{obs}: {diag_avg[f'DE_{obs}']}")
         logger.info("----------------------------------------------------")
         return diag_avg
+
+    def stag_avg(self, arr_flat: np.ndarray, staggered_avg=None):
+        """
+        Compute the average of arr_flat over either all sites, or only the "even"
+        or "odd" checkerboard sites, *using* your custom zig-zag flattening.
+
+        Parameters
+        ----------
+        arr_flat : 1D np.ndarray, length = prod(lvals)
+            Your data, flattened in zig-zag order.
+        lvals : tuple of ints, e.g. (Nx, Ny)
+            The original lattice shape.
+        staggered_avg : None, "even", or "odd"
+            Which checkerboard parity to average over.  None => average everything.
+        """
+        if staggered_avg is None:
+            return np.mean(arr_flat)
+        # 1) build the true 2D checkerboard mask:
+        mask2d = staggered_mask(self.lvals, staggered_avg)
+        # 2) allocate a 1D mask of the same length as arr_flat:
+        N = arr_flat.size
+        mask1d = np.zeros(N, dtype=bool)
+        # 3) for each flattened index d, map back to coords, then lookup mask2d:
+        for d in range(N):
+            coords = zig_zag(self.lvals, d)
+            mask1d[d] = mask2d[coords]
+        # 4) select and average:
+        return np.mean(arr_flat[mask1d])
 
 
 def apply_projection(projector, operator):

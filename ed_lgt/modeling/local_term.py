@@ -80,7 +80,7 @@ class LocalTerm(QMBTerm):
                 coords = zig_zag(self.lvals, ii)
                 # CHECK MASK CONDITION ON THE SITE
                 if self.get_mask_conditions(coords, mask):
-                    if len(self.sector_configs) > 2**19:
+                    if len(self.sector_configs) > 2**24.5:
                         logger.info(f"Site {ii}")
                     # GET ONLY THE SYMMETRY SECTOR of THE HAMILTONIAN TERM
                     row_list, col_list, value_list = nbody_term(

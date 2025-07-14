@@ -388,6 +388,10 @@ class SU2_Model(QuantumModel):
         E = 8 * g / 3
         B = -3 / g
         t = 2 * np.sqrt(2)
+        NOTE: for string breaking
+        E=g
+        B=-1
+        t=1
         """
         if self.dim == 1:
             E = g / 2

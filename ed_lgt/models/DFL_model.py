@@ -155,8 +155,8 @@ class DFL_Model(QuantumModel):
             E = g / 2
             B = 0
         else:
-            E = g / 2
-            B = -1 / (2 * g)
+            E = g
+            B = -1  # -1/ (2 * g)
         # Dictionary with Hamiltonian COEFFICIENTS
         self.coeffs = {
             "g": g,
@@ -164,7 +164,7 @@ class DFL_Model(QuantumModel):
             "B": B,  # MAGNETIC FIELD coupling
         }
         if not self.pure_theory:
-            t = 1 / 2
+            t = 1
             self.coeffs |= {
                 "tx_even": -complex(0, t),  # x HOPPING (EVEN SITES)
                 "tx_odd": -complex(0, t),  # x HOPPING (ODD SITES)
@@ -245,3 +245,59 @@ class DFL_Model(QuantumModel):
             A = A[mask]
             BG = BG[mask]
         return A, BG
+
+    def get_string_breaking_configs(self):
+        if self.lvals == [5, 2]:
+            self.n_min_strings = 5
+            self.n_max_strings = 1
+            self.string_cfgs = {
+                "max0": np.array([6, 10, 2, 10, 1, 5, 3, 10, 3, 11], dtype=int),
+                "min0": np.array([7, 12, 3, 12, 1, 4, 0, 9, 0, 11], dtype=int),
+                "min1": np.array([7, 12, 3, 11, 0, 4, 0, 9, 1, 12], dtype=int),
+                "min2": np.array([7, 12, 2, 9, 0, 4, 0, 10, 2, 12], dtype=int),
+                "min3": np.array([7, 11, 0, 9, 0, 4, 1, 11, 2, 12], dtype=int),
+                "min4": np.array([6, 9, 0, 9, 0, 5, 2, 11, 2, 12], dtype=int),
+            }
+        elif self.lvals == [4, 3]:
+            self.n_min_strings = 10
+            self.n_max_strings = 24
+            self.string_cfgs = {
+                "min0": np.array([7, 12, 3, 5, 9, 0, 21, 1, 0, 9, 0, 11], dtype=int),
+                "min1": np.array([7, 12, 2, 4, 9, 0, 24, 2, 0, 9, 0, 11], dtype=int),
+                "min2": np.array([7, 12, 2, 4, 9, 0, 23, 0, 0, 9, 1, 12], dtype=int),
+                "min3": np.array([7, 11, 0, 4, 9, 3, 26, 2, 0, 9, 0, 11], dtype=int),
+                "min4": np.array([7, 11, 0, 4, 9, 3, 25, 0, 0, 9, 1, 12], dtype=int),
+                "min5": np.array([7, 11, 0, 4, 9, 2, 21, 0, 0, 10, 2, 12], dtype=int),
+                "min6": np.array([6, 9, 0, 4, 12, 5, 26, 2, 0, 9, 0, 11], dtype=int),
+                "min7": np.array([6, 9, 0, 4, 12, 5, 25, 0, 0, 9, 1, 12], dtype=int),
+                "min8": np.array([6, 9, 0, 4, 12, 4, 21, 0, 0, 10, 2, 12], dtype=int),
+                "min9": np.array([6, 9, 0, 4, 11, 0, 21, 0, 1, 11, 2, 12], dtype=int),
+                # --------------------------------------------------------------------
+                "max0": np.array([7, 12, 3, 5, 10, 5, 26, 3, 1, 11, 2, 12], dtype=int),
+                "max1": np.array([6, 10, 3, 5, 11, 3, 26, 3, 1, 11, 2, 12], dtype=int),
+                "max2": np.array([7, 11, 1, 5, 10, 6, 24, 3, 1, 11, 2, 12], dtype=int),
+                "max3": np.array([7, 12, 3, 5, 10, 4, 22, 3, 1, 12, 1, 12], dtype=int),
+                "max4": np.array([7, 12, 3, 5, 10, 5, 25, 1, 1, 11, 3, 11], dtype=int),
+                "max5": np.array([6, 10, 3, 5, 12, 7, 26, 3, 0, 10, 2, 12], dtype=int),
+                "max6": np.array([6, 10, 3, 5, 12, 8, 26, 3, 0, 10, 2, 12], dtype=int),
+                "max7": np.array([6, 10, 3, 5, 11, 2, 22, 3, 1, 12, 1, 12], dtype=int),
+                "max8": np.array([6, 10, 3, 5, 11, 3, 25, 1, 1, 11, 3, 11], dtype=int),
+                "max9": np.array([7, 11, 1, 5, 10, 6, 23, 1, 1, 11, 3, 11], dtype=int),
+                "max10": np.array([7, 12, 2, 4, 10, 5, 28, 2, 1, 11, 3, 11], dtype=int),
+                "max11": np.array([7, 12, 2, 4, 10, 5, 29, 2, 1, 11, 3, 11], dtype=int),
+                "max12": np.array([6, 10, 3, 5, 12, 7, 25, 1, 0, 10, 3, 11], dtype=int),
+                "max13": np.array([6, 10, 3, 5, 12, 8, 25, 1, 0, 10, 3, 11], dtype=int),
+                "max14": np.array([6, 9, 1, 5, 11, 1, 28, 3, 1, 12, 1, 12], dtype=int),
+                "max15": np.array([6, 9, 1, 5, 11, 1, 29, 3, 1, 12, 1, 12], dtype=int),
+                "max16": np.array([6, 10, 2, 4, 11, 3, 28, 2, 1, 11, 3, 11], dtype=int),
+                "max17": np.array([6, 10, 2, 4, 11, 3, 29, 2, 1, 11, 3, 11], dtype=int),
+                "max18": np.array([7, 11, 1, 5, 10, 7, 27, 1, 1, 12, 0, 11], dtype=int),
+                "max19": np.array([7, 11, 1, 5, 10, 8, 27, 1, 1, 12, 0, 11], dtype=int),
+                "max20": np.array([6, 10, 2, 4, 12, 7, 28, 2, 0, 10, 3, 11], dtype=int),
+                "max21": np.array([6, 10, 2, 4, 12, 8, 28, 2, 0, 10, 3, 11], dtype=int),
+                "max22": np.array([6, 10, 2, 4, 12, 7, 29, 2, 0, 10, 3, 11], dtype=int),
+                "max23": np.array([6, 10, 2, 4, 12, 8, 29, 2, 0, 10, 3, 11], dtype=int),
+            }
+        else:
+            msg = "String breaking in ED considered only for lvals=[5,2] or [4,3]"
+            raise ValueError(msg)

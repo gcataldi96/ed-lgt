@@ -277,8 +277,8 @@ for obs in obs_list:
 for kk, m in enumerate(vals["m"]):
     for ii in range(5):
         res[f"tot_overlap"][kk] += res[f"overlap{ii}"][kk]
-save_dictionary(res, f"sb.pkl")
-# %%
+save_dictionary(res, f"minimal_string.pkl")
+
 obs_color = ["darkblue", "darkred", "orange", "darkgreen"]
 obs_names = [r"$E^{2}$", r"$N_{\rm{quarks}}$", r"$N_{\rm{baryon}}$", r"$N_{\rm{tot}}$"]
 obs_size = [1, 1.5, 1.4, 1]
@@ -351,7 +351,149 @@ ax[1, 0].legend(
     frameon=True,
     labelspacing=0.1,
 )
-plt.savefig(f"minimal_string_breaking.pdf")
+# %%
+res = {}
+config_filename = f"string_breaking/snake"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["m"])
+
+res = {"time_steps": get_sim(ugrid[0]).res["time_steps"]}
+nsteps = len(res["time_steps"])
+
+obs_list = [
+    "entropy",
+    "E_square",
+    "N_single",
+    "N_pair",
+    "N_zero",
+    "N_tot",
+    "overlap_snake",
+]
+
+for obs in obs_list:
+    res[f"{obs}"] = np.zeros((len(vals["m"]), nsteps))
+    for kk, m in enumerate(vals["m"]):
+        res[obs][kk] = get_sim(ugrid[kk]).res[obs]
+save_dictionary(res, f"snake.pkl")
+obs_color = ["darkblue", "darkred", "orange", "darkgreen"]
+obs_names = [r"$E^{2}$", r"$N_{\rm{quarks}}$", r"$N_{\rm{baryon}}$", r"$N_{\rm{tot}}$"]
+obs_size = [1, 1.5, 1.4, 1]
+
+fig, ax = plt.subplots(3, 2, constrained_layout=True, sharex=True, sharey="row")
+ax[0, 0].set(ylabel=r"fidelity $F=|\langle \psi_{0}|\psi(t)\rangle|^{2}$")
+ax[1, 0].set(ylabel=r"observables")
+ax[2, 0].set(ylabel=r"entropy $S$")
+ax[2, 0].set(xlabel=r"time $t$ ($m=9.375$)")
+ax[2, 1].set(xlabel=r"time $t$ ($m=18.75$)")
+
+for kk, m in enumerate(vals["m"]):
+    ax[0, kk].plot(
+        res["time_steps"],
+        res[f"overlap_snake"][kk],
+        "o-",
+        markersize=1.5,
+        markeredgewidth=0.2,
+        linewidth=0.8,
+    )
+
+    for jj, obs in enumerate(["E_square", "N_single", "N_pair", "N_tot"]):
+        ax[1, kk].plot(
+            res["time_steps"],
+            res[f"{obs}"][kk],
+            "o-",
+            c=obs_color[jj],
+            markersize=obs_size[jj],
+            markeredgewidth=0.2,
+            label=f"{obs_names[jj]}",
+            linewidth=0.8,
+        )
+
+    ax[2, kk].plot(
+        res["time_steps"],
+        res["entropy"][kk],
+        "o-",
+        markersize=2,
+        markeredgewidth=0.2,
+        linewidth=0.8,
+    )
+ax[1, 0].legend(
+    bbox_to_anchor=(0.6, 0.368),
+    ncol=1,
+    frameon=True,
+    labelspacing=0.1,
+)
+
+
+# %%
+res = {}
+config_filename = f"string_breaking/test"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["m"])
+
+res = {"time_steps": get_sim(ugrid[0]).res["time_steps"]}
+nsteps = len(res["time_steps"])
+
+obs_list = [
+    "entropy",
+    "E2",
+    "N_single",
+    "N_pair",
+    "N_zero",
+    "N_tot",
+]
+
+
+for obs in obs_list:
+    res[f"{obs}"] = np.zeros((len(vals["m"]), nsteps))
+    for kk, m in enumerate(vals["m"]):
+        res[obs][kk] = get_sim(ugrid[kk]).res[obs]
+obs_color = ["darkblue", "darkred", "orange", "darkgreen"]
+obs_names = [r"$E^{2}$", r"$N_{\rm{quarks}}$", r"$N_{\rm{baryon}}$", r"$N_{\rm{tot}}$"]
+obs_size = [1, 1.5, 1.4, 1]
+
+fig, ax = plt.subplots(3, 2, constrained_layout=True, sharex=True, sharey="row")
+ax[0, 0].set(ylabel=r"fidelity $F=|\langle \psi_{0}|\psi(t)\rangle|^{2}$")
+ax[1, 0].set(ylabel=r"observables")
+ax[2, 0].set(ylabel=r"entropy $S$")
+ax[2, 0].set(xlabel=r"time $t$ ($m=9.375$)")
+ax[2, 1].set(xlabel=r"time $t$ ($m=18.75$)")
+
+for kk, m in enumerate(vals["m"]):
+    """ax[0, kk].plot(
+        res["time_steps"],
+        res[f"overlap_snake"][kk],
+        "o-",
+        markersize=1.5,
+        markeredgewidth=0.2,
+        linewidth=0.8,
+    )"""
+
+    for jj, obs in enumerate(["E2", "N_single", "N_pair", "N_tot"]):
+        ax[1, kk].plot(
+            res["time_steps"],
+            res[f"{obs}"][kk],
+            "o-",
+            c=obs_color[jj],
+            markersize=obs_size[jj],
+            markeredgewidth=0.2,
+            label=f"{obs_names[jj]}",
+            linewidth=0.8,
+        )
+
+    """ax[2, kk].plot(
+        res["time_steps"],
+        res["entropy"][kk],
+        "o-",
+        markersize=2,
+        markeredgewidth=0.2,
+        linewidth=0.8,
+    )"""
+ax[1, 0].legend(
+    bbox_to_anchor=(0.6, 0.368),
+    ncol=1,
+    frameon=True,
+    labelspacing=0.1,
+)
 # %%
 res = {}
 config_filename = f"LBO/qed"
