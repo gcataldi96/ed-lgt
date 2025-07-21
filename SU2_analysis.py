@@ -248,7 +248,7 @@ cb = fig.colorbar(
   m: 37.5
 """
 res = {}
-config_filename = f"string_breaking/minimal_string"
+config_filename = f"string_breaking/5x2/min_string"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["m"])
 
@@ -353,7 +353,7 @@ ax[1, 0].legend(
 )
 # %%
 res = {}
-config_filename = f"string_breaking/snake"
+config_filename = f"string_breaking/5x2/max_string"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["m"])
 
@@ -433,62 +433,130 @@ ugrid, vals = uids_grid(match.uids, ["m"])
 res = {"time_steps": get_sim(ugrid[0]).res["time_steps"]}
 nsteps = len(res["time_steps"])
 
-obs_list = [
-    "entropy",
-    "E2",
-    "N_single",
-    "N_pair",
-    "N_zero",
-    "N_tot",
-]
+obs_list = ["entropy", "E2", "N_single", "N_pair", "N_zero", "N_tot", "tot_ov_max"]
+for ii in range(24):
+    obs_list.append(f"ov_max{ii}")
 
+res["self_cross"] = np.zeros((len(vals["m"]), nsteps))
 
 for obs in obs_list:
     res[f"{obs}"] = np.zeros((len(vals["m"]), nsteps))
     for kk, m in enumerate(vals["m"]):
         res[obs][kk] = get_sim(ugrid[kk]).res[obs]
+
+res["self_cross"] = np.zeros((len(vals["m"]), nsteps))
+for ii in [5, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]:
+    res["self_cross"][0] += res[f"ov_max{ii}"][0]
+
+res["self_cross1"] = np.zeros((len(vals["m"]), nsteps))
+for ii in [5, 10, 12, 14, 16, 18, 20]:
+    res["self_cross1"][0] += res[f"ov_max{ii}"][0]
+
+res["self_cross2"] = np.zeros((len(vals["m"]), nsteps))
+for ii in [6, 11, 13, 15, 17, 19, 21, 22]:
+    res["self_cross2"][0] += res[f"ov_max{ii}"][0]
+
 obs_color = ["darkblue", "darkred", "orange", "darkgreen"]
 obs_names = [r"$E^{2}$", r"$N_{\rm{quarks}}$", r"$N_{\rm{baryon}}$", r"$N_{\rm{tot}}$"]
 obs_size = [1, 1.5, 1.4, 1]
+save_dictionary(res, f"4x3.pkl")
+fig, ax = plt.subplots(2, 1, constrained_layout=True, sharex=True, sharey="row")
+ax[0].set(ylabel=r"fidelity $F=|\langle \psi_{0}|\psi(t)\rangle|^{2}$")
+ax[1].set(ylabel=r"observables")
+ax[1].set(xlabel=r"time $t$ ($m=25$)")
 
-fig, ax = plt.subplots(3, 2, constrained_layout=True, sharex=True, sharey="row")
-ax[0, 0].set(ylabel=r"fidelity $F=|\langle \psi_{0}|\psi(t)\rangle|^{2}$")
-ax[1, 0].set(ylabel=r"observables")
-ax[2, 0].set(ylabel=r"entropy $S$")
-ax[2, 0].set(xlabel=r"time $t$ ($m=9.375$)")
-ax[2, 1].set(xlabel=r"time $t$ ($m=18.75$)")
 
-for kk, m in enumerate(vals["m"]):
-    """ax[0, kk].plot(
+ax[0].plot(
+    res["time_steps"],
+    res[f"ov_max0"][0],
+    "o-",
+    markersize=1.5,
+    markeredgewidth=0.2,
+    label="snake",
+    linewidth=0.8,
+)
+ax[0].plot(
+    res["time_steps"],
+    res[f"tot_ov_max"][0],
+    "o-",
+    markersize=1.5,
+    markeredgewidth=0.2,
+    label="tot",
+    linewidth=0.8,
+)
+ax[0].plot(
+    res["time_steps"],
+    res[f"ov_max23"][0],
+    "o-",
+    markersize=1.5,
+    markeredgewidth=0.2,
+    label="11",
+    linewidth=0.8,
+)
+ax[0].plot(
+    res["time_steps"],
+    res[f"self_cross"][0],
+    "o-",
+    markersize=1.5,
+    markeredgewidth=0.2,
+    label="self-crossing",
+    linewidth=0.8,
+)
+ax[0].plot(
+    res["time_steps"],
+    res[f"self_cross1"][0],
+    "o-",
+    markersize=1.5,
+    markeredgewidth=0.2,
+    label="self-cross1",
+    linewidth=0.8,
+)
+ax[0].plot(
+    res["time_steps"],
+    res[f"self_cross2"][0],
+    "o-",
+    markersize=1.5,
+    markeredgewidth=0.2,
+    label="self-cross2",
+    linewidth=0.8,
+)
+ax[0].plot(
+    res["time_steps"],
+    res[f"ov_max1"][0] + res[f"ov_max4"][0],
+    "o-",
+    markersize=1.5,
+    markeredgewidth=0.2,
+    label="loops2",
+    linewidth=0.8,
+)
+ax[0].plot(
+    res["time_steps"],
+    res[f"ov_max2"][0] + res[f"ov_max3"][0],
+    "o-",
+    markersize=1.5,
+    markeredgewidth=0.2,
+    label="loops1",
+    linewidth=0.8,
+)
+
+ax[0].legend(
+    bbox_to_anchor=(0.6, 0.368),
+    ncol=1,
+    frameon=True,
+    labelspacing=0.1,
+)
+for jj, obs in enumerate(["E2", "N_single", "N_pair", "N_tot"]):
+    ax[1].plot(
         res["time_steps"],
-        res[f"overlap_snake"][kk],
+        res[f"{obs}"][0],
         "o-",
-        markersize=1.5,
+        c=obs_color[jj],
+        markersize=obs_size[jj],
         markeredgewidth=0.2,
+        label=f"{obs_names[jj]}",
         linewidth=0.8,
-    )"""
-
-    for jj, obs in enumerate(["E2", "N_single", "N_pair", "N_tot"]):
-        ax[1, kk].plot(
-            res["time_steps"],
-            res[f"{obs}"][kk],
-            "o-",
-            c=obs_color[jj],
-            markersize=obs_size[jj],
-            markeredgewidth=0.2,
-            label=f"{obs_names[jj]}",
-            linewidth=0.8,
-        )
-
-    """ax[2, kk].plot(
-        res["time_steps"],
-        res["entropy"][kk],
-        "o-",
-        markersize=2,
-        markeredgewidth=0.2,
-        linewidth=0.8,
-    )"""
-ax[1, 0].legend(
+    )
+ax[1].legend(
     bbox_to_anchor=(0.6, 0.368),
     ncol=1,
     frameon=True,

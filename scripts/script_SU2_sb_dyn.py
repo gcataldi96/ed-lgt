@@ -88,6 +88,7 @@ with run_sim() as sim:
     # ---------------------------------------------------------------------------
     model.get_string_breaking_configs()
     states_dic = {}
+    """
     logger.info(f"Minimal string configs")
     sim.res[f"tot_ov_min"] = np.zeros(n_steps, dtype=float)
     for ii in range(model.n_min_strings):
@@ -97,14 +98,14 @@ with run_sim() as sim:
         sim.res[f"ov_min{ii}"] = np.zeros(n_steps, dtype=float)
     """
     logger.info(f"Maximal string configs")
+    sim.res[f"tot_ov_max"] = np.zeros(n_steps, dtype=float)
     for ii in range(model.n_max_strings):
         states_dic[f"max{ii}"] = model.get_qmb_state_from_configs(
             [model.string_cfgs[f"max{ii}"]]
         )
         sim.res[f"ov_max{ii}"] = np.zeros(n_steps, dtype=float)
-    """
     if sim.par["dynamics"]["time_evolution"]:
-        model.time_evolution_Hamiltonian(states_dic["min0"], time_line)
+        model.time_evolution_Hamiltonian(states_dic["max0"], time_line)
         # -----------------------------------------------------------------------
         for ii, tstep in enumerate(time_line):
             msg_tstep = f"TIME {round(tstep, 4)}"
@@ -137,6 +138,7 @@ with run_sim() as sim:
             logger.info(f"{sim.res['N_pair'][ii]} {sim.res['N_tot'][ii]}")
             # -----------------------------------------------------------------------
             # OVERLAPS with the INITIAL STATE & OTHER CONFIGURATIONS
+            """
             for kk in range(model.n_min_strings):
                 sim.res[f"ov_min{kk}"][ii] = model.measure_fidelity(
                     states_dic[f"min{kk}"], ii, dynamics=True, print_value=True
@@ -148,7 +150,8 @@ with run_sim() as sim:
                 sim.res[f"ov_max{kk}"][ii] = model.measure_fidelity(
                     states_dic[f"max{kk}"], ii, dynamics=True, print_value=True
                 )
-            """
+                sim.res[f"tot_ov_max"][ii] += sim.res[f"ov_max{kk}"][ii]
+            logger.info(f"tot fidelity {sim.res['tot_ov_max'][ii]}")
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

@@ -41,7 +41,7 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
     ops = {}
     if lattice_dim == 1:
         # T generators for electric term
-        for op in ["T2", "P"]:
+        for op in ["T2", "P", "Tx", "Ty", "Tz"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz"])
             ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", op])
         # Operator fot the Polyakov loop
@@ -66,7 +66,7 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
             ops |= Qs
     elif lattice_dim == 2:
         # T generators for electric term
-        for op in ["T2", "P"]:
+        for op in ["T2", "P", "Tx", "Ty", "Tz"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz"])
             ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz"])
@@ -108,7 +108,7 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
             ops |= Qs
     elif lattice_dim == 3:
         # T generators for electric term
-        for op in ["T2", "P"]:
+        for op in ["T2", "P", "Tx", "Ty", "Tz"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz", "Iz", "Iz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz", "Iz", "Iz"])
             ops[f"{op}_mz"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz", "Iz", "Iz"])
@@ -172,6 +172,24 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
             ops["C_mz,py"] += qmb_op(
                 in_ops, ["Iz", "Iz", f"Z{col}_P", "P", f"Z{col}_dag", "Iz"]
             )
+        # THETA TERM
+        ops["Ctheta_px,py"] = 0
+        ops["Ctheta_py,pz"] = 0
+        ops["Ctheta_px,pz"] = 0
+        sigma_factors = []
+        for nu in "xyz":
+            for c1 in "rg":
+                for c2 in "rg":
+                    ops["Ctheta_px,py"] += qmb_op(
+                        in_ops,
+                        ["Iz", "Iz", "Iz", f"Z{c1}_P", f"Z{c2}_dag", "Iz"],
+                    ) @ (ops[f"T{nu}_pz"] + ops[f"T{nu}_mz"])
+                    ops["Ctheta_px,pz"] += qmb_op(
+                        in_ops, ["Iz", "Iz", "Iz", f"Z{c1}_P", "P", f"Z{c2}_dag"]
+                    ) @ (ops[f"T{nu}_py"] + ops[f"T{nu}_my"])
+                    ops["Ctheta_py,pz"] += qmb_op(
+                        in_ops, ["Iz", "Iz", "Iz", "Iz", f"Z{c1}_P", f"Z{c2}_dag"]
+                    ) @ (ops[f"T{nu}_pz"] + ops[f"T{nu}_mz"])
         if not pure_theory:
             # Update Electric and Corner operators
             for op in ops.keys():
