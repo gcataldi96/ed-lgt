@@ -7,7 +7,7 @@ from scipy.sparse.linalg import norm
 from ed_lgt.modeling import qmb_operator as qmb_op
 from ed_lgt.modeling import get_lattice_borders_labels, LGT_border_configs
 from .SU2_singlets import get_SU2_singlets, SU2_singlet_canonical_vector
-from .spin_operators import spin_space, SU2_generators
+from .spin_operators import spin_space, SU2_generators, get_spin_operators, m_values
 from .SU2_rishons import SU2_Rishon, SU2_Rishon_gen
 from .bose_fermi_operators import fermi_operators as SU2_matter_operators
 from ed_lgt.tools import validate_parameters
@@ -173,23 +173,27 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
                 in_ops, ["Iz", "Iz", f"Z{col}_P", "P", f"Z{col}_dag", "Iz"]
             )
         # THETA TERM
-        ops["Ctheta_px,py"] = 0
-        ops["Ctheta_py,pz"] = 0
-        ops["Ctheta_px,pz"] = 0
-        sigma_factors = []
+        ops["EzC_px,py"] = 0
+        ops["ExC_py,pz"] = 0
+        ops["EyC_px,pz"] = 0
+        sigma_ops = get_spin_operators(0.5)
         for nu in "xyz":
-            for c1 in "rg":
-                for c2 in "rg":
-                    ops["Ctheta_px,py"] += qmb_op(
+            Ez = ops[f"T{nu}_pz"] + ops[f"T{nu}_mz"]
+            Ey = ops[f"T{nu}_py"] + ops[f"T{nu}_my"]
+            Ex = ops[f"T{nu}_px"] + ops[f"T{nu}_mx"]
+            for ii, c1 in enumerate("rg"):
+                for jj, c2 in enumerate("rg"):
+                    factor = sigma_ops[f"S{nu}"].todense()[ii, jj]
+                    ops["EzC_px,py"] += qmb_op(
                         in_ops,
                         ["Iz", "Iz", "Iz", f"Z{c1}_P", f"Z{c2}_dag", "Iz"],
-                    ) @ (ops[f"T{nu}_pz"] + ops[f"T{nu}_mz"])
-                    ops["Ctheta_px,pz"] += qmb_op(
+                    ) @ (factor * Ez)
+                    ops["EyC_px,pz"] += qmb_op(
                         in_ops, ["Iz", "Iz", "Iz", f"Z{c1}_P", "P", f"Z{c2}_dag"]
-                    ) @ (ops[f"T{nu}_py"] + ops[f"T{nu}_my"])
-                    ops["Ctheta_py,pz"] += qmb_op(
+                    ) @ (factor * Ey)
+                    ops["ExC_py,pz"] += qmb_op(
                         in_ops, ["Iz", "Iz", "Iz", "Iz", f"Z{c1}_P", f"Z{c2}_dag"]
-                    ) @ (ops[f"T{nu}_pz"] + ops[f"T{nu}_mz"])
+                    ) @ (factor * Ex)
         if not pure_theory:
             # Update Electric and Corner operators
             for op in ops.keys():
@@ -239,111 +243,19 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
     for s in "pm":
         for d in dimensions:
             ops[f"E_square"] += 0.5 * ops[f"T2_{s}{d}"]
-    if background:
+    if background > 0:
+        bg_len = 0
+        j_bg_set = np.arange(0, spin_space(background), 1) / 2
+        for irrep in j_bg_set:
+            bg_len += len(m_values(irrep))
         for op in ops.keys():
-            ops[op] = kron(identity(3), ops[op])
+            ops[op] = kron(identity(bg_len), ops[op])
         if pure_theory:
             id_list = ["Iz" for _ in range(2 * lattice_dim)]
         else:
             id_list = ["ID_psi"] + ["Iz" for _ in range(2 * lattice_dim)]
-        ops["bg"] = qmb_op(in_ops, ["T2"] + id_list) / 0.75
+        ops["bg"] = qmb_op(in_ops, ["T2"] + id_list)
     return ops
-
-
-def SU2_gauge_invariant_states(s_max, pure_theory, lattice_dim, background=False):
-    validate_parameters(
-        spin_list=[s_max], pure_theory=pure_theory, lattice_dim=lattice_dim
-    )
-    spin_list = [S(s_max) for i in range(2 * lattice_dim)]
-    spins = []
-    # For each single spin particle in the list,
-    # consider all the spin irrep up to the max one
-    for s in spin_list:
-        tmp = np.arange(S(0), spin_space(s), 1)
-        spins.append(tmp / 2)
-    if not pure_theory:
-        spins.insert(0, np.asarray([S(0), S(1) / 2, S(0)]))
-    if background:
-        spins.insert(0, np.asarray([S(0), S(1) / 2]))
-    vind = 0 if not background else 1
-    # Set rows and col counters list for the basis
-    gauge_states = {"site": []}
-    gauge_basis = {"site": []}
-    # List of borders/corners of the lattice
-    borders = get_lattice_borders_labels(lattice_dim)
-    for label in borders:
-        gauge_states[f"site_{label}"] = []
-        gauge_basis[f"site_{label}"] = []
-    for ii, spins_config in enumerate(product(*spins)):
-        spins_config = list(spins_config)
-        if not pure_theory:
-            # Check the matter spin (0 (vacuum), 1/2, 0 (up & down))
-            matter_sector = (ii // np.prod([len(l) for l in spins[vind + 1 :]])) % 3
-            if matter_sector == 0:
-                psi_vacuum = True
-            elif matter_sector == 2:
-                psi_vacuum = False
-            else:
-                psi_vacuum = None
-        else:
-            psi_vacuum = None
-        # Check the existence of a SU2 singlet state
-        singlets = get_SU2_singlets(spins_config, pure_theory, psi_vacuum, background)
-        if singlets is not None:
-            for s in singlets:
-                # Save the singlet state
-                gauge_states["site"].append(s)
-                # Save the singlet state written in the canonical basis
-                singlet_state = SU2_singlet_canonical_vector(spin_list, s, background)
-                gauge_basis["site"].append(singlet_state)
-                # GET THE CONFIG LABEL
-                spin_sizes = [spin_space(ss) for ss in spins_config[vind:]]
-                label = LGT_border_configs(
-                    config=spin_sizes, offset=1, pure_theory=pure_theory
-                )
-                if label:
-                    # Save the config state also in the specific subset of borders
-                    for ll in label:
-                        gauge_states[f"site_{ll}"].append(s)
-                        gauge_basis[f"site_{ll}"].append(singlet_state)
-    # Build the basis combining the states into a matrix
-    for label in list(gauge_basis.keys()):
-        gauge_basis[label] = csr_matrix(np.column_stack(tuple(gauge_basis[label])))
-    return gauge_basis, gauge_states
-
-
-def SU2_check_gauss_law(
-    gauge_basis: csr_matrix, gauss_law_op: csr_matrix, threshold=1e-14
-):
-    if not isspmatrix(gauge_basis):
-        raise TypeError(f"gauge_basis should be csr_matrix, not {type(gauge_basis)}")
-    if not isspmatrix(gauss_law_op):
-        raise TypeError(f"gauss_law_op shoul be csr_matrix, not {type(gauss_law_op)}")
-    # This functions performs some checks on the SU2 gauge invariant basis
-    logger.info("CHECK GAUSS LAW")
-    # True and the Effective dimensions of the gauge invariant dressed site
-    site_dim = gauge_basis.shape[0]
-    eff_site_dim = gauge_basis.shape[1]
-    # Check that the Matrix Basis behave like an isometry
-    norm_isometry = norm(gauge_basis.transpose() * gauge_basis - identity(eff_site_dim))
-    if norm_isometry > threshold:
-        raise ValueError(f"Basis must be Isometry: B^T*B=1; got norm {norm_isometry}")
-    # Check that B*B^T is a Projector
-    Proj = gauge_basis * gauge_basis.transpose()
-    norm_Proj = norm(Proj - Proj**2)
-    if norm_Proj > threshold:
-        raise ValueError(f"P=B*B^T: expected P-P**2=0: obtained norm {norm_Proj}")
-    # Check that the basis is the one with ALL the states satisfying Gauss law
-    norma_kernel = norm(gauss_law_op * gauge_basis)
-    if norma_kernel > threshold:
-        raise ValueError(f"Gauss Law Kernel with norm {norma_kernel}; expected 0")
-    GL_rank = matrix_rank(gauss_law_op.todense())
-    if site_dim - GL_rank != eff_site_dim:
-        logger.info(f"Large dimension {site_dim}")
-        logger.info(f"Effective dimension {eff_site_dim}")
-        logger.info(GL_rank)
-        logger.info(f"Some gauge basis states are missing")
-    logger.info("GAUSS LAW SATISFIED")
 
 
 def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=False):
@@ -594,12 +506,122 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
     for s in "pm":
         for d in dimensions:
             ops[f"E_square"] += 0.5 * ops[f"T2_{s}{d}"]
-    if background:
+    if background > 0:
+        bg_len = 0
+        j_bg_set = np.arange(0, spin_space(background), 1) / 2
+        for irrep in j_bg_set:
+            bg_len += len(m_values(irrep))
         for op in ops.keys():
-            ops[op] = kron(identity(3), ops[op])
+            ops[op] = kron(identity(bg_len), ops[op])
         if pure_theory:
             id_list = ["Iz" for _ in range(2 * lattice_dim)]
         else:
             id_list = ["ID_psi"] + ["Iz" for _ in range(2 * lattice_dim)]
-        ops["bg"] = qmb_op(in_ops, ["T2"] + id_list) / 0.75
+        ops["bg"] = qmb_op(in_ops, ["T2"] + id_list)
     return ops
+
+
+def SU2_gauge_invariant_states(s_max, pure_theory, lattice_dim, background=0):
+    validate_parameters(
+        spin_list=[s_max], pure_theory=pure_theory, lattice_dim=lattice_dim
+    )
+    spin_list = [S(s_max) for i in range(2 * lattice_dim)]
+    spins = []
+    # For each single spin particle in the list,
+    # consider all the spin irrep up to the max one
+    for s in spin_list:
+        tmp = np.arange(S(0), spin_space(s), 1)
+        spins.append(tmp / 2)
+    if not pure_theory:
+        spins.insert(0, np.asarray([S(0), S(1) / 2, S(0)]))
+    if background != 0:
+        bg_tmp = np.arange(S(0), spin_space(background), 1)
+        spins.insert(0, bg_tmp / 2)
+    vind = 0 if not background else 1
+    # Set rows and col counters list for the basis
+    gauge_states = {"site": []}
+    gauge_basis = {"site": []}
+    # List of borders/corners of the lattice
+    borders = get_lattice_borders_labels(lattice_dim)
+    for label in borders:
+        gauge_states[f"site_{label}"] = []
+        gauge_basis[f"site_{label}"] = []
+    for ii, spins_config in enumerate(product(*spins)):
+        spins_config = list(spins_config)
+        j2 = [int(2 * dd) for dd in spins_config]
+        total = sum(j2)
+        # 2) parity
+        if total & 1:
+            continue
+        # 3) single‐largest test
+        max_j2 = max(j2)
+        if max_j2 > total - max_j2:
+            continue
+        if not pure_theory:
+            # Check the matter spin (0 (vacuum), 1/2, 0 (up & down))
+            matter_sector = (ii // np.prod([len(l) for l in spins[vind + 1 :]])) % 3
+            if matter_sector == 0:
+                psi_vacuum = True
+            elif matter_sector == 2:
+                psi_vacuum = False
+            else:
+                psi_vacuum = None
+        else:
+            psi_vacuum = None
+        # Check the existence of a SU2 singlet state
+        singlets = get_SU2_singlets(spins_config, pure_theory, psi_vacuum, background)
+        if singlets is not None:
+            for s in singlets:
+                # Save the singlet state
+                gauge_states["site"].append(s)
+                # Save the singlet state written in the canonical basis
+                singlet_state = SU2_singlet_canonical_vector(spin_list, s, background)
+                gauge_basis["site"].append(singlet_state)
+                # GET THE CONFIG LABEL
+                spin_sizes = [spin_space(ss) for ss in spins_config[vind:]]
+                label = LGT_border_configs(
+                    config=spin_sizes, offset=1, pure_theory=pure_theory
+                )
+                if label:
+                    # Save the config state also in the specific subset of borders
+                    for ll in label:
+                        gauge_states[f"site_{ll}"].append(s)
+                        gauge_basis[f"site_{ll}"].append(singlet_state)
+    # Build the basis combining the states into a matrix
+    for label in list(gauge_basis.keys()):
+        gauge_basis[label] = csr_matrix(np.column_stack(tuple(gauge_basis[label])))
+    return gauge_basis, gauge_states
+
+
+def SU2_check_gauss_law(
+    gauge_basis: csr_matrix, gauss_law_op: csr_matrix, threshold=1e-14
+):
+    if not isspmatrix(gauge_basis):
+        raise TypeError(f"gauge_basis should be csr_matrix, not {type(gauge_basis)}")
+    if not isspmatrix(gauss_law_op):
+        raise TypeError(f"gauss_law_op shoul be csr_matrix, not {type(gauss_law_op)}")
+    # This functions performs some checks on the SU2 gauge invariant basis
+    logger.info("CHECK GAUSS LAW")
+    # True and the Effective dimensions of the gauge invariant dressed site
+    site_dim = gauge_basis.shape[0]
+    eff_site_dim = gauge_basis.shape[1]
+    # Check that the Matrix Basis behave like an isometry
+    norm_isometry = norm(gauge_basis.transpose() * gauge_basis - identity(eff_site_dim))
+    if norm_isometry > threshold:
+        raise ValueError(f"Basis must be Isometry: B^T*B=1; got norm {norm_isometry}")
+    # Check that B*B^T is a Projector
+    Proj = gauge_basis * gauge_basis.transpose()
+    norm_Proj = norm(Proj - Proj**2)
+    if norm_Proj > threshold:
+        raise ValueError(f"P=B*B^T: expected P-P**2=0: obtained norm {norm_Proj}")
+    # Check that the basis is the one with ALL the states satisfying Gauss law
+    norma_kernel = norm(gauss_law_op * gauge_basis)
+    if norma_kernel > threshold:
+        raise ValueError(f"Gauss Law Kernel with norm {norma_kernel}; expected 0")
+    GL_rank = matrix_rank(gauss_law_op.todense())
+    if site_dim - GL_rank != eff_site_dim:
+        logger.info(f"Large dimension {site_dim}")
+        logger.info(f"Effective dimension {eff_site_dim}")
+        logger.info(GL_rank)
+        logger.info(f"Some gauge basis states are missing")
+    logger.info("GAUSS LAW SATISFIED")

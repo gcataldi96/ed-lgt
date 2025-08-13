@@ -75,7 +75,7 @@ class SU2_singlet:
         CG_values,
         pure_theory=True,
         psi_vacuum=None,
-        background=False,
+        background=0,
     ):
         """
         This class collects a configuration of a set of angular momenta Js
@@ -144,7 +144,7 @@ class SU2_singlet:
         self.pure_theory = pure_theory
         self.psi_vacuum = psi_vacuum
         # If not pure_theory, make a difference between vacuum=0 and pair=up&down singlets
-        matter_ind = 0 if not background else 1
+        matter_ind = 0 if background == 0 else 1
         if not self.pure_theory:
             if self.psi_vacuum is True:
                 self.J_config[matter_ind] = "V"
@@ -178,7 +178,7 @@ class SU2_singlet:
 
 
 @get_time
-def get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None, background=False):
+def get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None, background=0):
     """
     This function aims to identify all possible SU(2) singlet states that can be
     formed from a given set (list) of spin representations.
@@ -261,7 +261,7 @@ def add_new_spin(previous_configs, new_spin, get_singlet):
 
 @get_time
 def group_sorted_spin_configs(
-    spin_configs, spin_list, pure_theory, psi_vacuum, background=False
+    spin_configs, spin_list, pure_theory, psi_vacuum, background=0
 ):
     """
     Groups and sorts spin-configurations based on their total spin and individual spin z-components.
@@ -338,7 +338,7 @@ def group_sorted_spin_configs(
 
 
 @get_time
-def get_spin_Hilbert_spaces(max_spin_irrep_list, pure_theory, background=False):
+def get_spin_Hilbert_spaces(max_spin_irrep_list, pure_theory, background=0):
     """
     This function generates the Hilbert spaces for quantum systems characterized
     by their spin degrees of freedom.
@@ -408,10 +408,17 @@ def get_spin_Hilbert_spaces(max_spin_irrep_list, pure_theory, background=False):
         # add the Hilbert space of 2 fermionic spin 1/2 particles (see docs)
         j_list.insert(0, ["V", S(1) / 2, S(1) / 2, "P"])
         m_list.insert(0, [S(0), S(1) / 2, -S(1) / 2, S(0)])
-    if background:
+    if background != 0:
+        m_set_bg = []
+        j_set_bg = []
+        for irrep in np.arange(S(0), spin_space(background), 1) / 2:
+            # save the values of z-component of the irrep
+            m_set_bg += list(m_values(irrep))
+            # save the irrep for each z-component
+            j_set_bg += [irrep for i in m_values(irrep)]
         # add the Hilbert space of the background charge
-        j_list.insert(0, [S(0), S(1) / 2, S(1) / 2])
-        m_list.insert(0, [S(0), S(1) / 2, -S(1) / 2])
+        j_list.insert(0, j_set_bg)
+        m_list.insert(0, m_set_bg)
     return j_list, m_list
 
 

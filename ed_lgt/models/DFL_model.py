@@ -2,7 +2,11 @@ import numpy as np
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm
 from ed_lgt.modeling import check_link_symmetry, staggered_mask
 from .quantum_model import QuantumModel
-from ed_lgt.operators import SU2_dressed_site_operators, SU2_gauge_invariant_states
+from ed_lgt.operators import (
+    SU2_dressed_site_operators,
+    SU2_gauge_invariant_states,
+    SU2_gen_dressed_site_operators,
+)
 from ed_lgt.symmetries import get_state_configs
 import logging
 
@@ -29,12 +33,21 @@ class DFL_Model(QuantumModel):
         )
         # -------------------------------------------------------------------------------
         # Acquire operators
-        ops = SU2_dressed_site_operators(
-            self.spin,
-            self.pure_theory,
-            lattice_dim=self.dim,
-            background=self.background,
-        )
+        if self.spin < 1:
+            ops = SU2_dressed_site_operators(
+                self.spin,
+                self.pure_theory,
+                lattice_dim=self.dim,
+                background=self.background,
+            )
+        else:
+            # Acquire operators
+            ops = SU2_gen_dressed_site_operators(
+                self.spin,
+                self.pure_theory,
+                lattice_dim=self.dim,
+                background=self.background,
+            )
         # Initialize the operators, local dimension and lattice labels
         self.project_operators(ops)
         # Rather than for SU2, here we do not select the symmetry sector
@@ -121,6 +134,104 @@ class DFL_Model(QuantumModel):
                         )
                     )
         self.H.build(format=self.ham_format)
+
+    def build_gen_Hamiltonian(self, g, m=None):
+        logger.info("BUILDING generalized HAMILTONIAN")
+        # Hamiltonian Coefficients
+        self.DFL_Hamiltonian_couplings(g, m)
+        h_terms = {}
+        # ---------------------------------------------------------------------------
+        # ELECTRIC ENERGY
+        op_name = "E_square"
+        h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
+        self.H.add_term(h_terms[op_name].get_Hamiltonian(strength=self.coeffs["E"]))
+        # ---------------------------------------------------------------------------
+        if not self.pure_theory:
+            # -----------------------------------------------------------------------
+            # STAGGERED MASS TERM
+            for site in ["even", "odd"]:
+                h_terms[f"N_{site}"] = LocalTerm(
+                    self.ops["N_tot"], "N_tot", **self.def_params
+                )
+                self.H.add_term(
+                    h_terms[f"N_{site}"].get_Hamiltonian(
+                        self.coeffs[f"m_{site}"], staggered_mask(self.lvals, site)
+                    )
+                )
+            # --------------------------------------------------------------------
+            # Generalized HOPPING
+            for d in self.directions:
+                for site in ["even", "odd"]:
+                    hopping_terms = [
+                        [f"Q1_p{d}_dag", f"Q2_m{d}"],
+                        [f"Q2_p{d}_dag", f"Q1_m{d}"],
+                    ]
+                    for ii, op_names_list in enumerate(hopping_terms):
+                        op_list = [self.ops[op] for op in op_names_list]
+                        # Define the Hamiltonian term
+                        h_terms[f"{d}{ii}_hop_{site}"] = TwoBodyTerm(
+                            d, op_list, op_names_list, **self.def_params
+                        )
+                        mask = staggered_mask(self.lvals, site)
+                        self.H.add_term(
+                            h_terms[f"{d}{ii}_hop_{site}"].get_Hamiltonian(
+                                strength=self.coeffs[f"t{d}_{site}"],
+                                add_dagger=True,
+                                mask=mask,
+                            )
+                        )
+        # -------------------------------------------------------------------------------
+        # PLAQUETTE TERM: MAGNETIC INTERACTION
+        plaq_list = []
+        plaquette_directions = ["xy", "xz", "yz"]
+        plaquette_set = [
+            ["AB", "AB", "AB", "AB"],
+            ["AA", "AB", "BB", "AB"],
+            ["AB", "AB", "AA", "BB"],
+            ["AA", "AB", "BA", "BB"],
+            ["AB", "BB", "AB", "AA"],
+            ["AA", "BB", "BB", "AA"],
+            ["AB", "BB", "AA", "BA"],
+            ["AA", "BB", "BA", "BA"],
+            ["BB", "AA", "AB", "AB"],
+            ["BA", "AA", "BB", "AB"],
+            ["BB", "AA", "AA", "BB"],
+            ["BA", "AA", "BA", "BB"],
+            ["BB", "BA", "AB", "AA"],
+            ["BA", "BA", "BB", "AA"],
+            ["BB", "BA", "AA", "BA"],
+            ["BA", "BA", "BA", "BA"],
+        ]
+        for ii, pdir in enumerate(plaquette_directions):
+            if (self.dim > 1 and ii == 0) or self.dim == 3:
+                for p_set in plaquette_set:
+                    # DEFINE THE LIST OF CORNER OPERATORS
+                    op_names_list = [
+                        f"C{p_set[0]}_p{pdir[0]},p{pdir[1]}",
+                        f"C{p_set[1]}_p{pdir[1]},m{pdir[0]}",
+                        f"C{p_set[2]}_m{pdir[1]},p{pdir[0]}",
+                        f"C{p_set[3]}_m{pdir[0]},m{pdir[1]}",
+                    ]
+                    # CORRESPONDING LIST OF OPERATORS
+                    op_list = [self.ops[op] for op in op_names_list]
+                    # DEFINE THE PLAQUETTE CLASS
+                    plaq_name = f"P{pdir}_" + "".join(p_set)
+                    h_terms[plaq_name] = PlaquetteTerm(
+                        [pdir[0], pdir[1]],
+                        op_list,
+                        op_names_list,
+                        print_plaq=False,
+                        **self.def_params,
+                    )
+                    # ADD THE HAMILTONIAN TERM
+                    self.H.add_term(
+                        h_terms[plaq_name].get_Hamiltonian(
+                            strength=self.coeffs["B"], add_dagger=True
+                        )
+                    )
+                    # ADD THE PLAQUETTE TO THE LIST OF OBSERVABLES
+                    plaq_list.append(plaq_name)
+        self.H.build(self.ham_format)
 
     def DFL_Hamiltonian_couplings(self, g, m=None):
         """
@@ -246,18 +357,44 @@ class DFL_Model(QuantumModel):
             BG = BG[mask]
         return A, BG
 
-    def get_string_breaking_configs(self):
+    def get_string_breaking_configs(self, finite_density=0):
+        logger.info(f"finite density {finite_density}")
         if self.lvals == [5, 2]:
             self.n_min_strings = 5
             self.n_max_strings = 1
-            self.string_cfgs = {
-                "max0": np.array([6, 10, 2, 10, 1, 5, 3, 10, 3, 11], dtype=int),
-                "min0": np.array([7, 12, 3, 12, 1, 4, 0, 9, 0, 11], dtype=int),
-                "min1": np.array([7, 12, 3, 11, 0, 4, 0, 9, 1, 12], dtype=int),
-                "min2": np.array([7, 12, 2, 9, 0, 4, 0, 10, 2, 12], dtype=int),
-                "min3": np.array([7, 11, 0, 9, 0, 4, 1, 11, 2, 12], dtype=int),
-                "min4": np.array([6, 9, 0, 9, 0, 5, 2, 11, 2, 12], dtype=int),
-            }
+            if finite_density == 0:
+                self.string_cfgs = {
+                    "max0": np.array([6, 10, 2, 10, 1, 5, 3, 10, 3, 11], dtype=int),
+                    "min0": np.array([7, 12, 3, 12, 1, 4, 0, 9, 0, 11], dtype=int),
+                    "min1": np.array([7, 12, 3, 11, 0, 4, 0, 9, 1, 12], dtype=int),
+                    "min2": np.array([7, 12, 2, 9, 0, 4, 0, 10, 2, 12], dtype=int),
+                    "min3": np.array([7, 11, 0, 9, 0, 4, 1, 11, 2, 12], dtype=int),
+                    "min4": np.array([6, 9, 0, 9, 0, 5, 2, 11, 2, 12], dtype=int),
+                }
+            elif finite_density == 2:
+                self.string_cfgs = {
+                    "min0": np.array([7, 12, 12, 12, 1, 4, 0, 9, 0, 11], dtype=int),
+                    "min1": np.array([7, 12, 12, 11, 0, 4, 0, 9, 1, 12], dtype=int),
+                    "min2": np.array([7, 12, 11, 9, 0, 4, 0, 10, 2, 12], dtype=int),
+                    "min3": np.array([7, 11, 9, 9, 0, 4, 1, 11, 2, 12], dtype=int),
+                    "min4": np.array([6, 9, 9, 9, 0, 5, 2, 11, 2, 12], dtype=int),
+                }
+            elif finite_density == 4:
+                self.string_cfgs = {
+                    "min0": np.array([7, 12, 12, 12, 5, 4, 0, 9, 0, 11], dtype=int),
+                    "min1": np.array([7, 12, 12, 11, 4, 4, 0, 9, 1, 12], dtype=int),
+                    "min2": np.array([7, 12, 11, 9, 4, 4, 0, 10, 2, 12], dtype=int),
+                    "min3": np.array([7, 11, 9, 9, 4, 4, 1, 11, 2, 12], dtype=int),
+                    "min4": np.array([6, 9, 9, 9, 4, 5, 2, 11, 2, 12], dtype=int),
+                }
+            elif finite_density == 6:
+                self.string_cfgs = {
+                    "min0": np.array([12, 12, 12, 12, 5, 4, 0, 9, 0, 11], dtype=int),
+                    "min1": np.array([12, 12, 12, 11, 4, 4, 0, 9, 1, 12], dtype=int),
+                    "min2": np.array([12, 12, 11, 9, 4, 4, 0, 10, 2, 12], dtype=int),
+                    "min3": np.array([12, 11, 9, 9, 4, 4, 1, 11, 2, 12], dtype=int),
+                    "min4": np.array([11, 9, 9, 9, 4, 5, 2, 11, 2, 12], dtype=int),
+                }
         elif self.lvals == [4, 3]:
             self.n_min_strings = 10
             self.n_max_strings = 24
@@ -298,6 +435,13 @@ class DFL_Model(QuantumModel):
                 "max22": np.array([6, 10, 2, 4, 12, 7, 29, 2, 0, 10, 3, 11], dtype=int),
                 "max23": np.array([6, 10, 2, 4, 12, 8, 29, 2, 0, 10, 3, 11], dtype=int),
             }
+        elif self.lvals == [3, 2]:
+            self.n_min_strings = 1
+            self.n_max_strings = 1
+            self.string_cfgs = {
+                "max0": np.array([25, 30, 2, 9, 9, 35], dtype=int),
+                "min0": np.array([27, 37, 2, 7, 0, 35], dtype=int),
+            }
         else:
-            msg = "String breaking in ED considered only for lvals=[5,2] or [4,3]"
+            msg = "String breaking in ED considered only for lvals=[5,2] or [4,3] or [3,2]"
             raise ValueError(msg)

@@ -193,6 +193,43 @@ class SU2_Model(QuantumModel):
                             mask=mask,
                         )
                     )
+        # -------------------------------------------------------------------------------
+        # TOPOLOGICAL TERM
+        if self.dim == 3 and np.abs(self.coeffs["theta"]) > 10e-10:
+            logger.info("Adding topological term")
+            # XY Plane
+            op_names_list = ["EzC_px,py", "C_py,mx", "C_my,px", "C_mx,my"]
+            op_list = [self.ops[op] for op in op_names_list]
+            h_terms["Ez_Bxy"] = PlaquetteTerm(
+                ["x", "y"], op_list, op_names_list, **self.def_params
+            )
+            self.H.add_term(
+                h_terms["Ez_Bxy"].get_Hamiltonian(
+                    strength=self.coeffs["theta"], add_dagger=True
+                )
+            )
+            # XZ Plane
+            op_names_list = ["EyC_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"]
+            op_list = [self.ops[op] for op in op_names_list]
+            h_terms["Ey_Bxz"] = PlaquetteTerm(
+                ["x", "z"], op_list, op_names_list, **self.def_params
+            )
+            self.H.add_term(
+                h_terms["Ey_Bxz"].get_Hamiltonian(
+                    strength=-self.coeffs["theta"], add_dagger=True
+                )
+            )
+            # YZ Plane
+            op_names_list = ["ExC_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"]
+            op_list = [self.ops[op] for op in op_names_list]
+            h_terms["Ex_Byz"] = PlaquetteTerm(
+                ["y", "z"], op_list, op_names_list, **self.def_params
+            )
+            self.H.add_term(
+                h_terms["Ex_Byz"].get_Hamiltonian(
+                    strength=self.coeffs["theta"], add_dagger=True
+                )
+            )
         self.H.build(self.ham_format)
 
     def build_gen_Hamiltonian(self, g, m=None):
@@ -361,7 +398,7 @@ class SU2_Model(QuantumModel):
         config_state = config_state
         return np.array(config_state)
 
-    def SU2_Hamiltonian_couplings(self, g, m=None):
+    def SU2_Hamiltonian_couplings(self, g, m=None, theta=0):
         """
         This function provides the couplings of the SU2 Yang-Mills Hamiltonian
         starting from the gauge coupling g and the bare mass parameter m
@@ -404,6 +441,7 @@ class SU2_Model(QuantumModel):
             "g": g,
             "E": E,  # ELECTRIC FIELD coupling
             "B": B,  # MAGNETIC FIELD coupling
+            "theta": -complex(0, theta * g),  # THETA TERM coupling
         }
         if not self.pure_theory:
             # The correct hopping in original units should be 1/2

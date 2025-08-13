@@ -97,12 +97,18 @@ def SU2_generators(spin, matter=False):
     largest_spin_size = int(2 * spin + 1)
     matrices = {"Tz": [0], "Tp": [0], "T2": [0]}
     if not matter:
+        tot_shape = 0
         for spin_size in range(1, largest_spin_size):
+            tot_shape += spin_size
             j_spin = spin_size / 2
             spin_ops = get_spin_operators(j_spin)
             for op in ["z", "p", "2"]:
                 matrices[f"T{op}"].append(spin_ops[f"S{op}"])
+        tot_shape += largest_spin_size
+        matrices["T0"] = np.zeros((tot_shape, tot_shape), dtype=np.float64)
+        matrices["T0"][0, 0] = 1.0
         SU2_gen = {}
+        SU2_gen["T0"] = csr_matrix(matrices["T0"])
         for op in ["Tz", "Tp", "T2"]:
             SU2_gen[op] = block_diag(tuple(matrices[op]), format="csr")
         SU2_gen["Tm"] = SU2_gen["Tp"].transpose()

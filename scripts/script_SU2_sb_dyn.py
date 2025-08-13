@@ -22,10 +22,14 @@ with run_sim() as sim:
     # ==============================================================================
     # MODEL
     model = DFL_Model(**sim.par["model"])
+    if model.background < 1:
+        bg = 0.75
+    else:
+        bg = 2
     # ==============================================================================
     # GLOBAL SYMMETRIES
     global_ops = [model.ops["N_tot"]]
-    global_sectors = [model.n_sites]
+    global_sectors = [sim.par["sector"]]
     # GLOBAL OPERATORS
     global_ops = get_symmetry_sector_generators(global_ops, action="global")
     # ==============================================================================
@@ -40,9 +44,11 @@ with run_sim() as sim:
     # ==============================================================================
     # SELECT THE BACKGROUND SYMMETRY SECTOR CONFIGURATION
     if model.lvals == [5, 2]:
-        bg_sector = [1, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+        bg_sector = [bg, 0, 0, 0, 0, 0, 0, 0, 0, bg]
     elif model.lvals == [4, 3]:
-        bg_sector = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+        bg_sector = [bg, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bg]
+    elif model.lvals == [3, 2]:
+        bg_sector = [bg, 0, 0, 0, 0, bg]
     logger.info(f"bg sector configs {bg_sector}")
     # BACKGROUND OPERATOR
     bg_global_ops = get_symmetry_sector_generators([model.ops["bg"]], action="global")
@@ -62,7 +68,10 @@ with run_sim() as sim:
     )
     # DEFINE SETTINGS, OBSERVABLES, and BUILD HAMILTONIAN
     model.default_params()
-    model.build_Hamiltonian(sim.par["g"], sim.par["m"])
+    if sim.par["model"]["spin"] < 1:
+        model.build_Hamiltonian(sim.par["g"], sim.par["m"])
+    else:
+        model.build_gen_Hamiltonian(sim.par["g"], sim.par["m"])
     # ===========================================================================
     # DYNAMICS PARAMETERS
     start = sim.par["dynamics"]["start"]
@@ -86,26 +95,24 @@ with run_sim() as sim:
     # ---------------------------------------------------------------------------
     # DYNAMICS: INITIAL STATE PREPARATION
     # ---------------------------------------------------------------------------
-    model.get_string_breaking_configs()
+    finite_density = int(sim.par["sector"] - model.n_sites)
+    model.get_string_breaking_configs(finite_density)
     states_dic = {}
-    """
-    logger.info(f"Minimal string configs")
-    sim.res[f"tot_ov_min"] = np.zeros(n_steps, dtype=float)
-    for ii in range(model.n_min_strings):
-        states_dic[f"min{ii}"] = model.get_qmb_state_from_configs(
-            [model.string_cfgs[f"min{ii}"]]
+    if sim.par["dynamics"]["initial_state"] == "min0":
+        str_type = "min"
+        n_strings = model.n_min_strings
+    else:
+        str_type = "max"
+        n_strings = model.n_max_strings
+    logger.info(f"{str_type} string configs")
+    sim.res[f"tot_ov_{str_type}"] = np.zeros(n_steps, dtype=float)
+    for ii in range(n_strings):
+        states_dic[f"{str_type}{ii}"] = model.get_qmb_state_from_configs(
+            [model.string_cfgs[f"{str_type}{ii}"]]
         )
-        sim.res[f"ov_min{ii}"] = np.zeros(n_steps, dtype=float)
-    """
-    logger.info(f"Maximal string configs")
-    sim.res[f"tot_ov_max"] = np.zeros(n_steps, dtype=float)
-    for ii in range(model.n_max_strings):
-        states_dic[f"max{ii}"] = model.get_qmb_state_from_configs(
-            [model.string_cfgs[f"max{ii}"]]
-        )
-        sim.res[f"ov_max{ii}"] = np.zeros(n_steps, dtype=float)
+        sim.res[f"ov_{str_type}{ii}"] = np.zeros(n_steps, dtype=float)
     if sim.par["dynamics"]["time_evolution"]:
-        model.time_evolution_Hamiltonian(states_dic["max0"], time_line)
+        model.time_evolution_Hamiltonian(states_dic[f"{str_type}0"], time_line)
         # -----------------------------------------------------------------------
         for ii, tstep in enumerate(time_line):
             msg_tstep = f"TIME {round(tstep, 4)}"
@@ -135,23 +142,21 @@ with run_sim() as sim:
             sim.res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "even")
             sim.res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "odd")
             sim.res["N_tot"][ii] = sim.res["N_single"][ii] + 2 * sim.res["N_pair"][ii]
-            logger.info(f"{sim.res['N_pair'][ii]} {sim.res['N_tot'][ii]}")
+            logger.info(f"Nsingle {sim.res['N_single'][ii]}")
+            logger.info(f"Npair {sim.res['N_pair'][ii]}")
+            logger.info(f"Ntot {sim.res['N_tot'][ii]}")
+            logger.info(f"E2 {sim.res['E2'][ii]}")
             # -----------------------------------------------------------------------
             # OVERLAPS with the INITIAL STATE & OTHER CONFIGURATIONS
-            """
-            for kk in range(model.n_min_strings):
-                sim.res[f"ov_min{kk}"][ii] = model.measure_fidelity(
-                    states_dic[f"min{kk}"], ii, dynamics=True, print_value=True
+            for kk in range(n_strings):
+                sim.res[f"ov_{str_type}{kk}"][ii] = model.measure_fidelity(
+                    states_dic[f"{str_type}{kk}"],
+                    ii,
+                    dynamics=True,
+                    print_value=True,
                 )
-                sim.res[f"tot_ov_min"][ii] += sim.res[f"ov_min{kk}"][ii]
-            logger.info(f"tot fidelity {sim.res['tot_ov_min'][ii]}")
-            """
-            for kk in range(model.n_max_strings):
-                sim.res[f"ov_max{kk}"][ii] = model.measure_fidelity(
-                    states_dic[f"max{kk}"], ii, dynamics=True, print_value=True
-                )
-                sim.res[f"tot_ov_max"][ii] += sim.res[f"ov_max{kk}"][ii]
-            logger.info(f"tot fidelity {sim.res['tot_ov_max'][ii]}")
+                sim.res[f"tot_ov_{str_type}"][ii] += sim.res[f"ov_{str_type}{kk}"][ii]
+            logger.info(f"Tot fidelity {sim.res[f'tot_ov_{str_type}'][ii]}")
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

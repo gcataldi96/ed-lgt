@@ -21,13 +21,88 @@ from ed_lgt.operators import (
 )
 
 import logging
+from numba import njit
+from ed_lgt.tools import get_time
+
 
 logger = logging.getLogger(__name__)
 
+
+@get_time
+@njit
+def make_factorial_array_numba(spin_list):
+    """
+    Build an array fact where fact[n] == n! for n = 0..N_max,
+    with N_max = floor(3/2 * sum(2*s_i)) + 1 in twice-units.
+
+    Parameters
+    ----------
+    spin_list : 1D array of float64
+        The spins on one site (e.g. [s_max, s_max, ..., matter_j, bg_j]).
+
+    Returns
+    -------
+    fact : 1D array of float64
+        fact[n] = n! up to the maximal needed n.
+    """
+    # 1) Compute j2_max = sum of 2*s over all spins
+    j2_acc = 0.0
+    for s in spin_list:
+        j2_acc += 2.0 * s
+    # cast to integer (should be exactly integer in well-formed input)
+    j2_max = int(j2_acc + 1e-8)
+
+    # 2) Worst-case factorial index: (3/2) j2_max + 1
+    N_max = (3 * j2_max) // 2 + 1
+
+    # 3) Allocate and fill the factorial table
+    fact = np.empty(N_max + 1, dtype=np.float64)
+    fact[0] = 1.0
+    for n in range(1, N_max + 1):
+        fact[n] = fact[n - 1] * n
+    return fact
+
+
+spin_list = np.array([1 / 2, 1 / 2, 1 / 2, 1 / 2], dtype=np.float64)
+a = make_factorial_array_numba(spin_list)
+
+# %%
 gauge_basis, gauge_states = SU2_gauge_invariant_states(
-    0.5, False, lattice_dim=2, background=False
+    1 / 2, False, lattice_dim=2, background=1 / 2
 )
+# %%
 for ii, singlet in enumerate(gauge_states["site"]):
+    logger.info(f" {ii} ")
+    singlet.display_singlets()
+    logger.info(f" ")
+
+# %%
+for ii, singlet in enumerate(gauge_states["site_mx_my"]):
+    logger.info(f" {ii} ")
+    singlet.display_singlets()
+    logger.info(f" ")
+# %%
+for ii, singlet in enumerate(gauge_states["site_px_py"]):
+    logger.info(f" {ii} ")
+    singlet.display_singlets()
+    logger.info(f" ")
+# %%
+for ii, singlet in enumerate(gauge_states["site_mx_py"]):
+    logger.info(f" {ii} ")
+    singlet.display_singlets()
+    logger.info(f" ")
+# %%
+for ii, singlet in enumerate(gauge_states["site_px_my"]):
+    logger.info(f" {ii} ")
+    singlet.display_singlets()
+    logger.info(f" ")
+# %%
+for ii, singlet in enumerate(gauge_states["site_my"]):
+    logger.info(f" {ii} ")
+    singlet.display_singlets()
+    logger.info(f" ")
+# %%
+for ii, singlet in enumerate(gauge_states["site_py"]):
     logger.info(f" {ii} ")
     singlet.display_singlets()
     logger.info(f" ")

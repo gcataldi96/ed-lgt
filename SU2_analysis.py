@@ -218,7 +218,6 @@ for ii, g in enumerate(vals["g"]):
         res["N_pair"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_pair"]
         res["N_zero"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_zero"]
         res["N_tot"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_tot"]
-# %%
 obs = "N_single"
 fig, ax = plt.subplots(1, 1, constrained_layout=True)
 
@@ -280,17 +279,17 @@ for kk, m in enumerate(vals["m"]):
 save_dictionary(res, f"minimal_string.pkl")
 
 obs_color = ["darkblue", "darkred", "orange", "darkgreen"]
-obs_names = [r"$E^{2}$", r"$N_{\rm{quarks}}$", r"$N_{\rm{baryon}}$", r"$N_{\rm{tot}}$"]
+obs_names = [r"$E^{2}$", r"$N_{\rm{mes}}$", r"$N_{\rm{bar}}$", r"$N_{\rm{tot}}$"]
 obs_size = [1, 1.5, 1.4, 1]
 overlap_names = [
-    r"$\rm{MS}_{1}$",
-    r"$\rm{MS}_{2}$",
-    r"$\rm{MS}_{3}$",
-    r"$\rm{MS}_{4}$",
-    r"$\rm{MS}_{5}$",
+    r"$\rm{minS}_{1}$",
+    r"$\rm{minS}_{2}$",
+    r"$\rm{minS}_{3}$",
+    r"$\rm{minS}_{4}$",
+    r"$\rm{minS}_{5}$",
 ]
 fig, ax = plt.subplots(3, 3, constrained_layout=True, sharex=True, sharey="row")
-ax[0, 0].set(ylabel=r"$\rm{Ov}_{i}=|\langle \psi_{0}|\rm{MS}_{i}\rangle|^{2}$")
+ax[0, 0].set(ylabel=r"$\rm{Ov}_{i}=|\langle \psi_{0}|\rm{minS}_{i}\rangle|^{2}$")
 ax[1, 0].set(ylabel=r"observables")
 ax[2, 0].set(ylabel=r"entropy $S$")
 ax[2, 0].set(xlabel=r"time $t$ ($m=9.375$)")
@@ -340,17 +339,131 @@ for kk, m in enumerate(vals["m"]):
     )
 
 ax[0, 1].legend(
-    bbox_to_anchor=(0.4, 0.35),
-    ncol=1,
+    bbox_to_anchor=(0.2, 0.45),
+    ncol=2,
+    handlelength=1,
+    handletextpad=0.1,
+    borderpad=0.1,
+    framealpha=1.0,
     frameon=True,
-    labelspacing=0.1,
+    labelspacing=0.01,
 )
 ax[1, 0].legend(
-    bbox_to_anchor=(0.6, 0.98),
-    ncol=1,
+    bbox_to_anchor=(0.98, 0.98),
+    ncol=2,
+    handlelength=1,
+    handletextpad=0.1,
+    borderpad=0.1,
+    framealpha=1.0,
     frameon=True,
-    labelspacing=0.1,
+    labelspacing=0.01,
 )
+plt.savefig(f"zerodensity.pdf")
+# %%
+res = {}
+config_filename = f"string_breaking/3x2"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["m"])
+
+res = {"time_steps": get_sim(ugrid[0]).res["time_steps"]}
+nsteps = len(res["time_steps"])
+
+obs_list = [
+    "entropy",
+    "E2",
+    "N_single",
+    "N_pair",
+    "N_zero",
+    "N_tot",
+    "ov_max0",
+]
+
+for obs in obs_list:
+    res[f"{obs}"] = np.zeros((len(vals["m"]), nsteps))
+    res[f"tot_ov_max"] = np.zeros((len(vals["m"]), nsteps))
+    for kk, m in enumerate(vals["m"]):
+        res[obs][kk] = get_sim(ugrid[kk]).res[obs]
+for kk, m in enumerate(vals["m"]):
+    for ii in range(1):
+        res[f"tot_ov_max"][kk] += res[f"ov_max{ii}"][kk]
+
+obs_color = ["darkblue", "darkred", "orange", "darkgreen"]
+obs_names = [r"$E^{2}$", r"$N_{\rm{mes}}$", r"$N_{\rm{bar}}$", r"$N_{\rm{tot}}$"]
+obs_size = [1, 1.5, 1.4, 1]
+overlap_names = [
+    r"$\rm{minS}_{1}$",
+    r"$\rm{minS}_{2}$",
+    r"$\rm{minS}_{3}$",
+    r"$\rm{minS}_{4}$",
+    r"$\rm{minS}_{5}$",
+]
+fig, ax = plt.subplots(3, 1, constrained_layout=True, sharex=True, sharey="row")
+ax[0].set(ylabel=r"$\mathcal{F}=|\langle \psi_{0}|\psi_{0}\rangle|^{2}$")
+ax[1].set(ylabel=r"observables")
+ax[2].set(ylabel=r"entropy $S$")
+ax[2].set(xlabel=r"time $t$ ($m=31.5$ $g=50$)")
+
+kk = 0
+t = np.asarray(res["time_steps"], dtype=float)
+e2 = np.asarray(res["E2"][kk], dtype=float)
+
+# be robust to NaNs/Infs
+mask = np.isfinite(t) & np.isfinite(e2)
+idx_min = np.nanargmin(e2[mask])
+t_min = t[mask][idx_min]
+
+# pick a color (use the same as E2 if you like)
+vline_color = "k"
+
+for a in ax:
+    a.axvline(
+        t_min, linestyle="--", linewidth=1.0, color=vline_color, alpha=0.8, zorder=10
+    )
+
+
+for ii in range(1):
+    ax[0].plot(
+        res["time_steps"],
+        res[f"ov_max{ii}"][kk],
+        "o-",
+        markersize=1.5,
+        markeredgewidth=0.2,
+        label=overlap_names[ii],
+        linewidth=0.8,
+    )
+
+for jj, obs in enumerate(["E2", "N_single", "N_pair", "N_tot"]):
+    ax[1].plot(
+        res["time_steps"],
+        res[f"{obs}"][kk],
+        "o-",
+        c=obs_color[jj],
+        markersize=obs_size[jj],
+        markeredgewidth=0.2,
+        label=f"{obs_names[jj]}",
+        linewidth=0.8,
+    )
+
+ax[2].plot(
+    res["time_steps"],
+    res["entropy"][kk],
+    "o-",
+    markersize=2,
+    markeredgewidth=0.2,
+    linewidth=0.8,
+)
+
+ax[1].legend(
+    bbox_to_anchor=(0.7, 0.68),
+    ncol=2,
+    handlelength=1,
+    handletextpad=0.1,
+    borderpad=0.1,
+    framealpha=1.0,
+    frameon=True,
+    labelspacing=0.01,
+)
+plt.savefig(f"spin1.pdf")
 # %%
 res = {}
 config_filename = f"string_breaking/5x2/max_string"
@@ -562,6 +675,278 @@ ax[1].legend(
     frameon=True,
     labelspacing=0.1,
 )
+# %%
+res = {}
+config_filename = f"string_breaking/5x2/sb_finite_density"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["sector"])
+
+res = {"time_steps": get_sim(ugrid[0]).res["time_steps"]}
+nsteps = len(res["time_steps"])
+
+obs_list = [
+    "entropy",
+    "E2",
+    "N_single",
+    "N_pair",
+    "N_zero",
+    "N_tot",
+    "ov_min0",
+    "ov_min1",
+    "ov_min2",
+    "ov_min3",
+    "ov_min4",
+]
+
+for obs in obs_list:
+    res[f"{obs}"] = np.zeros((len(vals["sector"]), nsteps))
+    res[f"tot_ov_min"] = np.zeros((len(vals["sector"]), nsteps))
+    for kk, m in enumerate(vals["sector"]):
+        res[obs][kk] = get_sim(ugrid[kk]).res[obs]
+for kk, sec in enumerate(vals["sector"]):
+    for ii in range(5):
+        res[f"tot_ov_min"][kk] += res[f"ov_min{ii}"][kk]
+
+obs_color = ["darkblue", "darkred", "orange", "darkgreen"]
+obs_names = [r"$E^{2}$", r"$N_{\rm{quarks}}$", r"$N_{\rm{baryon}}$", r"$N_{\rm{tot}}$"]
+obs_size = [1, 1.5, 1.4, 1]
+overlap_names = [
+    r"$\rm{minS}_{1}$",
+    r"$\rm{minS}_{2}$",
+    r"$\rm{minS}_{3}$",
+    r"$\rm{minS}_{4}$",
+    r"$\rm{minS}_{5}$",
+]
+fig, ax = plt.subplots(
+    3,
+    4,
+    figsize=set_size(textwidth_pt, subplots=(4, 3)),
+    constrained_layout=True,
+    sharex=True,
+    sharey="row",
+)
+ax[0, 0].set(ylabel=r"$\rm{Ov}_{i}=|\langle \psi_{0}|\rm{minS}_{i}\rangle|^{2}$")
+ax[1, 0].set(ylabel=r"observables")
+ax[2, 0].set(ylabel=r"entropy $S$")
+ax[2, 0].set(xlabel=r"time $t$")
+ax[2, 1].set(xlabel=r"time $t$")
+ax[2, 2].set(xlabel=r"time $t$")
+ax[2, 3].set(xlabel=r"time $t$")
+
+kk = 1
+
+
+for kk, m in enumerate(vals["sector"]):
+    t = np.asarray(res["time_steps"][:100], dtype=float)
+    e2 = np.asarray(res["E2"][kk, :100], dtype=float)
+    # be robust to NaNs/Infs
+    mask = np.isfinite(t) & np.isfinite(e2)
+    idx_min = np.nanargmin(e2[mask])
+    t_min = t[mask][idx_min]
+    for ii in range(3):
+        ax[ii, kk].set(xlim=[-0.1, 5])
+        ax[ii, kk].axvline(
+            t_min, linestyle="--", linewidth=1.0, color="k", alpha=0.8, zorder=10
+        )
+    for ii in range(5):
+        ax[0, kk].plot(
+            res["time_steps"],
+            res[f"ov_min{ii}"][kk],
+            "o-",
+            markersize=1,
+            markeredgewidth=0.2,
+            label=overlap_names[ii],
+            linewidth=0.8,
+        )
+    ax[0, kk].plot(
+        res["time_steps"],
+        res["tot_ov_min"][kk],
+        "o-",
+        markersize=2,
+        markeredgewidth=0.2,
+        linewidth=0.8,
+        label=r"sum $\rm{Ov}_{i}$",
+    )
+
+    for jj, obs in enumerate(["E2", "N_single", "N_pair"]):  # , "N_tot"]):
+        ax[1, kk].plot(
+            res["time_steps"],
+            res[f"{obs}"][kk],
+            "o-",
+            c=obs_color[jj],
+            markersize=obs_size[jj],
+            markeredgewidth=0.2,
+            label=f"{obs_names[jj]}",
+            linewidth=0.8,
+        )
+
+    ax[2, kk].plot(
+        res["time_steps"],
+        res["entropy"][kk],
+        "o-",
+        markersize=1,
+        markeredgewidth=0.2,
+        linewidth=0.8,
+    )
+for ii in range(4):
+    ax[0, ii].text(
+        0.5,
+        0.88,  # 5% in from left, 95% up from bottom
+        f"N={ii} bar",  # e.g. "(a)", "(b)", …
+        transform=ax[0, ii].transAxes,  # interpret coords relative to the axes
+        ha="left",
+        va="top",  # align text box
+        fontsize=9,  # tweak if you like
+        bbox=dict(facecolor="white", alpha=0.2, edgecolor="black"),
+    )
+plt.savefig(f"finite_density.pdf")
+# %%
+"""ax[0, 1].legend(
+    bbox_to_anchor=(0.3, 0.45),
+    ncol=2,
+    handlelength=1,
+    handletextpad=0.1,
+    borderpad=0.1,
+    framealpha=1.0,
+    frameon=True,
+    labelspacing=0.01,
+)
+ax[1, 0].legend(
+    bbox_to_anchor=(0.9, 0.98),
+    ncol=2,
+    handlelength=1,
+    handletextpad=0.1,
+    borderpad=0.1,
+    framealpha=1.0,
+    frameon=True,
+    labelspacing=0.01,
+)"""
+
+# %%
+res = {}
+config_filename = f"string_breaking/5x2/test_zerodensity"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["m"])
+
+res = {"time_steps": get_sim(ugrid[0]).res["time_steps"]}
+nsteps = len(res["time_steps"])
+
+obs_list = [
+    "entropy",
+    "E2",
+    "N_single",
+    "N_pair",
+    "N_zero",
+    "N_tot",
+    "ov_min0",
+    "ov_min1",
+    "ov_min2",
+    "ov_min3",
+    "ov_min4",
+]
+
+for obs in obs_list:
+    res[f"{obs}"] = np.zeros((len(vals["m"]), nsteps))
+    res[f"tot_ov_min"] = np.zeros((len(vals["m"]), nsteps))
+    for kk, m in enumerate(vals["m"]):
+        res[obs][kk] = get_sim(ugrid[kk]).res[obs]
+for kk, m in enumerate(vals["m"]):
+    for ii in range(5):
+        res[f"tot_ov_min"][kk] += res[f"ov_min{ii}"][kk]
+save_dictionary(res, f"minimal_string.pkl")
+
+obs_color = ["darkblue", "darkred", "orange", "darkgreen"]
+obs_names = [r"$E^{2}$", r"$N_{\rm{quarks}}$", r"$N_{\rm{baryon}}$", r"$N_{\rm{tot}}$"]
+obs_size = [1, 1.5, 1.4, 1]
+overlap_names = [
+    r"$\rm{minS}_{1}$",
+    r"$\rm{minS}_{2}$",
+    r"$\rm{minS}_{3}$",
+    r"$\rm{minS}_{4}$",
+    r"$\rm{minS}_{5}$",
+]
+fig, ax = plt.subplots(3, 2, constrained_layout=True, sharex=True, sharey="row")
+ax[0, 0].set(ylabel=r"$\rm{Ov}_{i}=|\langle \psi_{0}|\rm{minS}_{i}\rangle|^{2}$")
+ax[1, 0].set(ylabel=r"observables")
+ax[2, 0].set(ylabel=r"entropy $S$")
+ax[2, 0].set(xlabel=r"time $t$ ($m=9.375,\, g=50$)")
+ax[2, 1].set(xlabel=r"time $t$ ($m=18.75,\, g=50$)")
+
+kk = 1
+t = np.asarray(res["time_steps"], dtype=float)
+e2 = np.asarray(res["E2"][kk], dtype=float)
+# be robust to NaNs/Infs
+mask = np.isfinite(t) & np.isfinite(e2)
+idx_min = np.nanargmin(e2[mask])
+t_min = t[mask][idx_min]
+for ii in range(3):
+    ax[ii, 1].axvline(
+        t_min, linestyle="--", linewidth=1.0, color="k", alpha=0.8, zorder=10
+    )
+
+for kk, m in enumerate(vals["m"]):
+    for ii in range(5):
+        ax[0, kk].plot(
+            res["time_steps"],
+            res[f"ov_min{ii}"][kk],
+            "o-",
+            markersize=1.5,
+            markeredgewidth=0.2,
+            label=overlap_names[ii],
+            linewidth=0.8,
+        )
+    ax[0, kk].plot(
+        res["time_steps"],
+        res["tot_ov_min"][kk],
+        "o-",
+        markersize=2,
+        markeredgewidth=0.2,
+        linewidth=0.8,
+        label=r"$\rm{sum}\rm{Ov}_{i}$",
+    )
+
+    for jj, obs in enumerate(["E2", "N_single", "N_pair", "N_tot"]):
+        ax[1, kk].plot(
+            res["time_steps"],
+            res[f"{obs}"][kk],
+            "o-",
+            c=obs_color[jj],
+            markersize=obs_size[jj],
+            markeredgewidth=0.2,
+            label=f"{obs_names[jj]}",
+            linewidth=0.8,
+        )
+
+    ax[2, kk].plot(
+        res["time_steps"],
+        res["entropy"][kk],
+        "o-",
+        markersize=2,
+        markeredgewidth=0.2,
+        linewidth=0.8,
+    )
+
+ax[0, 1].legend(
+    bbox_to_anchor=(0.3, 0.35),
+    ncol=2,
+    handlelength=1,
+    handletextpad=0.1,
+    borderpad=0.1,
+    framealpha=1.0,
+    frameon=True,
+    labelspacing=0.01,
+)
+ax[1, 0].legend(
+    bbox_to_anchor=(0.9, 0.98),
+    ncol=2,
+    handlelength=1,
+    handletextpad=0.1,
+    borderpad=0.1,
+    framealpha=1.0,
+    frameon=True,
+    labelspacing=0.01,
+)
+plt.savefig(f"zerodensity.pdf")
 # %%
 res = {}
 config_filename = f"LBO/qed"
