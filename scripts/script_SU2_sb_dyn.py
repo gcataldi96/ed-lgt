@@ -45,7 +45,7 @@ with run_sim() as sim:
     # SELECT THE BACKGROUND SYMMETRY SECTOR CONFIGURATION
     if model.lvals == [5, 2]:
         bg_sector = [bg, 0, 0, 0, 0, 0, 0, 0, 0, bg]
-    elif model.lvals == [4, 3]:
+    elif model.lvals == [4, 3] or model.lvals == [6, 2]:
         bg_sector = [bg, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bg]
     elif model.lvals == [3, 2]:
         bg_sector = [bg, 0, 0, 0, 0, bg]
@@ -82,11 +82,11 @@ with run_sim() as sim:
     n_steps = len(sim.res["time_steps"])
     # ===========================================================================
     # OBSERVABLES
-    matter_obs = [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
-    extra_obs = ["bg", "T2_px", "T2_py"]
+    matter_obs = [f"N_{label}" for label in ["single", "pair", "zero"]]
+    extra_obs = ["T2_px", "T2_py"]
     local_obs = matter_obs + extra_obs
     sim.res["E2"] = np.zeros(n_steps, dtype=float)
-    for obs in local_obs:
+    for obs in local_obs + ["N_tot"]:
         sim.res[obs] = np.zeros(n_steps, dtype=float)
     model.get_observables(local_obs)
     # ENTROPY

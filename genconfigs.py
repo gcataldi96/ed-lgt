@@ -20,8 +20,12 @@ params = {"g": np.logspace(-1, 1, 5), "m": np.logspace(-2, 4, 7)}
 gen_configs("template", params, f"SU2/full/topology2")
 # %%
 # SU2 FULL THEORY PHASE DIAGRAM
-params = {"g": np.logspace(-1, 1, 30), "m": np.logspace(-3, 1, 30)}
-gen_configs("template", params, f"SU2/full/phase_diagram")
+params = {"g": np.logspace(-2, 1, 25), "m": np.logspace(-2, 1, 25)}
+gen_configs("template", params, f"LBO/su2_phase_diagram")
+# %%
+# SU2 FULL THEORY PHASE DIAGRAM
+params = {"m": np.logspace(-2, 1, 25)}
+gen_configs("template", params, f"LBO/su2_effectivebasis")
 # %%
 # SU2 FULL THEORY SUPERCONDUCTING ORDER PARAMETER
 params = {"g": np.logspace(-1, 1, 10)}

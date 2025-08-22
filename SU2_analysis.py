@@ -197,6 +197,220 @@ local_obs += [f"N_{label}" for label in ["r", "g", "tot", "single", "pair"]]
 # STRING BREAKING PHASE DIAGRAM
 # ===================================================================
 res = {}
+config_filename = f"LBO/su2_phase_diagram"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g", "m"])
+
+res = {
+    "entropy": np.zeros((len(vals["g"]), len(vals["m"]))),
+    "E_square": np.zeros((len(vals["g"]), len(vals["m"]))),
+    "N_single": np.zeros((len(vals["g"]), len(vals["m"]))),
+    "N_pair": np.zeros((len(vals["g"]), len(vals["m"]))),
+    "N_tot": np.zeros((len(vals["g"]), len(vals["m"]))),
+}
+
+for ii, g in enumerate(vals["g"]):
+    for kk, m in enumerate(vals["m"]):
+        res["entropy"][ii, kk] = get_sim(ugrid[ii][kk]).res["entropy"]
+        res["E_square"][ii, kk] = get_sim(ugrid[ii][kk]).res["E_square"]
+        res["N_single"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_single"]
+        res["N_pair"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_pair"]
+        res["N_tot"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_tot"]
+
+# %%
+obs = "N_tot"
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+
+X = np.transpose(res[obs])
+img = plt.imshow(X, cmap="magma", origin="lower", extent=[-2, 1, -2, 1])
+ax.set(
+    ylabel=r"m",
+    xlabel=r"g^{2}",
+    xticks=[-2, -1, 0, +1],
+    yticks=[-2, -1, 0, +1],
+)
+ax.xaxis.set_major_formatter(fake_log)
+ax.yaxis.set_major_formatter(fake_log)
+cb = fig.colorbar(
+    img,
+    ax=ax,
+    aspect=20,
+    location="right",
+    orientation="vertical",
+    pad=0.01,
+    label=obs,
+)
+# %%
+eff_res = {}
+config_filename = f"LBO/su2_effectivebasis"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["m"])
+truncation_values = [
+    1e-2,
+    1e-3,
+    1e-4,
+    1e-5,
+    1e-6,
+    1e-7,
+    1e-8,
+    1e-9,
+    1e-10,
+    1e-11,
+    1e-12,
+    1e-13,
+    1e-14,
+]
+n_trunc = len(truncation_values)
+eff_res = {
+    "energy": np.zeros((len(vals["m"]), n_trunc)),
+    "E_square": np.zeros((len(vals["m"]), n_trunc)),
+    "N_single": np.zeros((len(vals["m"]), n_trunc)),
+    "N_pair": np.zeros((len(vals["m"]), n_trunc)),
+    "N_tot": np.zeros((len(vals["m"]), n_trunc)),
+    "eff_basis": np.zeros((len(vals["m"]), n_trunc)),
+}
+true_res = {
+    "energy": np.zeros(len(vals["m"])),
+    "E_square": np.zeros(len(vals["m"])),
+    "N_single": np.zeros(len(vals["m"])),
+    "N_pair": np.zeros(len(vals["m"])),
+    "N_tot": np.zeros(len(vals["m"])),
+}
+
+for ii, m in enumerate(vals["m"]):
+    eff_res["eff_basis"][ii] = get_sim(ugrid[ii]).res["eff_basis"][:]
+    eff_res["energy"][ii] = get_sim(ugrid[ii]).res["eff_energy"][:, 0]
+    eff_res["E_square"][ii] = get_sim(ugrid[ii]).res["eff_E_square"][:, 0]
+    eff_res["N_single"][ii] = get_sim(ugrid[ii]).res["eff_N_single"][:, 0]
+    eff_res["N_pair"][ii] = get_sim(ugrid[ii]).res["eff_N_pair"][:, 0]
+    eff_res["N_tot"][ii] = get_sim(ugrid[ii]).res["eff_N_tot"][:, 0]
+    true_res["energy"][ii] = get_sim(ugrid[ii]).res["energy"][0]
+    true_res["E_square"][ii] = get_sim(ugrid[ii]).res["E_square"][0]
+    true_res["N_single"][ii] = get_sim(ugrid[ii]).res["N_single"][0]
+    true_res["N_pair"][ii] = get_sim(ugrid[ii]).res["N_pair"][0]
+    true_res["N_tot"][ii] = get_sim(ugrid[ii]).res["N_tot"][0]
+
+# %%
+from ed_lgt.operators import spin_space
+
+irrep_res = {}
+config_filename = f"LBO/su2_irrepbasis"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["m"])
+spin_list = np.arange(0, spin_space(4.5), 1)[1:] / 2
+n_spins = len(spin_list)
+irrep_basis = np.array([6, 10, 14, 18, 22, 26, 30, 34, 38])
+irrep_res = {
+    "energy": np.zeros((len(vals["m"]), n_spins)),
+    "E_square": np.zeros((len(vals["m"]), n_spins)),
+    "N_single": np.zeros((len(vals["m"]), n_spins)),
+    "N_pair": np.zeros((len(vals["m"]), n_spins)),
+    "N_tot": np.zeros((len(vals["m"]), n_spins)),
+}
+
+for ii, m in enumerate(vals["m"]):
+    irrep_res["energy"][ii] = get_sim(ugrid[ii]).res["energy"][:, 0]
+    irrep_res["E_square"][ii] = get_sim(ugrid[ii]).res["E_square"][:, 0]
+    irrep_res["N_single"][ii] = get_sim(ugrid[ii]).res["N_single"][:, 0]
+    irrep_res["N_pair"][ii] = get_sim(ugrid[ii]).res["N_pair"][:, 0]
+    irrep_res["N_tot"][ii] = get_sim(ugrid[ii]).res["N_tot"][:, 0]
+
+# %%
+for ii, m in enumerate(vals["m"]):
+    print(f"-{ii}------{m}----------------------")
+    print(true_res["energy"][ii])
+    print(np.abs(irrep_res["energy"][ii] - true_res["energy"][ii]))
+    print("-----------------------------")
+
+# %%
+fig, ax = plt.subplots(1, 1, constrained_layout=True, sharex=True, sharey="row")
+sm = cm.ScalarMappable(
+    cmap="magma", norm=LogNorm(vmin=vals["m"].min(), vmax=vals["m"].max())
+)
+palette = sm.to_rgba(vals["m"])
+
+ax.grid()
+ax.set(
+    yscale="log",
+    ylim=[1e-17, 1e-1],
+    ylabel=r"$\Delta E = |E_{j} - E_{5}|$",
+    xlabel=r"local dim $d(j)$",
+)
+for ii, m in enumerate(vals["m"]):
+    ax.plot(
+        irrep_basis,
+        np.abs(irrep_res["energy"][ii] - true_res["energy"][ii]),
+        "o-",
+        label=f"m={m}",
+        c=palette[ii],
+        markersize=2,
+        markeredgecolor=palette[ii],
+        markerfacecolor="black",
+        markeredgewidth=1,
+    )
+cb = fig.colorbar(
+    sm, ax=ax, aspect=80, location="top", orientation="horizontal", pad=0.02
+)
+cb.set_label(label=r"$m$", labelpad=-22, x=-0.02, y=0)
+
+
+# %%
+def trim_from_first_nonzero(a, tol=0.0):
+    """
+    Return (a_trimmed, start_idx) where a_trimmed = a[start_idx:],
+    and start_idx is the index of the first entry with |a[i]| > tol.
+    If no such entry exists, returns (empty_array, len(a)).
+    """
+    a = np.asarray(a)
+    if a.ndim != 1:
+        raise ValueError("Input must be a 1D array.")
+    mask = np.abs(a) > tol
+    nz = np.flatnonzero(mask)
+    start = int(nz[0]) if nz.size else len(a)
+    return a[start:], start
+
+
+for ii, m in enumerate(vals["m"]):
+    eff_energy, index = trim_from_first_nonzero(eff_res["energy"][ii], tol=1e-10)
+    print(f"-------- {ii}-------")
+    fig, ax = plt.subplots(1, 1, constrained_layout=True, sharex=True, sharey="row")
+    ax.grid()
+    ax.set(yscale="log")
+    ax.plot(
+        irrep_basis,
+        np.abs(irrep_res["energy"][ii] - true_res["energy"][ii]),
+        "o-",
+        linewidth=1,
+        label=f"irrep",
+        markersize=6,
+        markerfacecolor="black",
+        markeredgewidth=2,
+    )
+    ax.plot(
+        eff_res["eff_basis"][ii, index:],
+        np.abs(eff_energy - true_res["energy"][ii]),
+        "o-",
+        label=f"eff",
+        linewidth=1,
+        markersize=3,
+        markerfacecolor="white",
+        markeredgewidth=0.5,
+    )
+    ax.text(
+        0.5,
+        0.88,  # 5% in from left, 95% up from bottom
+        rf"$m={round(m,4)}$",  # e.g. "(a)", "(b)", …
+        transform=ax.transAxes,  # interpret coords relative to the axes
+        ha="left",
+        va="top",  # align text box
+        fontsize=12,  # tweak if you like
+        bbox=dict(facecolor="white", alpha=0.2, edgecolor="black"),
+    )
+# %%
+# ===================================================================
+# STRING BREAKING PHASE DIAGRAM
+# ===================================================================
+res = {}
 config_filename = f"string_breaking/phasediagram_nobg"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g", "m"])
@@ -463,6 +677,7 @@ ax[1].legend(
     frameon=True,
     labelspacing=0.01,
 )
+save_dictionary(res, f"spin1.pkl")
 plt.savefig(f"spin1.pdf")
 # %%
 res = {}
@@ -734,8 +949,6 @@ ax[2, 2].set(xlabel=r"time $t$")
 ax[2, 3].set(xlabel=r"time $t$")
 
 kk = 1
-
-
 for kk, m in enumerate(vals["sector"]):
     t = np.asarray(res["time_steps"][:100], dtype=float)
     e2 = np.asarray(res["E2"][kk, :100], dtype=float)
@@ -792,13 +1005,14 @@ for ii in range(4):
     ax[0, ii].text(
         0.5,
         0.88,  # 5% in from left, 95% up from bottom
-        f"N={ii} bar",  # e.g. "(a)", "(b)", …
+        rf"$N_b={ii}$",  # e.g. "(a)", "(b)", …
         transform=ax[0, ii].transAxes,  # interpret coords relative to the axes
         ha="left",
         va="top",  # align text box
         fontsize=9,  # tweak if you like
         bbox=dict(facecolor="white", alpha=0.2, edgecolor="black"),
     )
+save_dictionary(res, f"finite_density.pkl")
 plt.savefig(f"finite_density.pdf")
 # %%
 """ax[0, 1].legend(

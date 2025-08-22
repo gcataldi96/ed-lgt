@@ -31,24 +31,27 @@ with run_sim() as sim:
     sim.res["energy"] = model.H.Nenergies
     # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
-    local_obs = [f"T2_{s}{d}" for d in model.directions for s in "mp"]
-    local_obs += ["E_square"]
+    local_obs = [f"T2_p{d}" for d in model.directions]
     if not model.pure_theory:
         local_obs += [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
+    sim.res["E2"] = np.zeros(n_eigs, dtype=float)
     for obs in local_obs:
         sim.res[obs] = np.zeros(n_eigs, dtype=float)
     # LIST OF TWOBODY CORRELATORS
     twobody_obs = []
     twobody_axes = []
     # LIST OF PLAQUETTE OPERATORS
-    if model.dim == 2:
-        plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
-    elif model.dim == 3:
-        plaquette_obs = [
-            ["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"],
-            ["C_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
-            ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
-        ]
+    if model.spin < 1:
+        if model.dim == 2:
+            plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
+        elif model.dim == 3:
+            plaquette_obs = [
+                ["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"],
+                ["C_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
+                ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
+            ]
+        else:
+            plaquette_obs = []
     else:
         plaquette_obs = []
     for obs_names_list in plaquette_obs:
@@ -93,13 +96,22 @@ with run_sim() as sim:
                 model.res["T2_px"], model.res["T2_py"]
             )
             if not model.pure_theory:
-                sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
-                sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_pair"], "even")
-                sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_zero"], "odd")
-                sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_zero"], "even")
-                sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_pair"], "odd")
-                sim.res["N_tot"][ii] += sim.res["N_single"][ii]
-                sim.res["N_tot"][ii] += 2 * sim.res["N_pair"][ii]
+                sim.res["N_single"][ii] = model.stag_avg(model.res["N_single"])
+                sim.res["N_pair"][ii] += 0.5 * model.stag_avg(
+                    model.res["N_pair"], "even"
+                )
+                sim.res["N_pair"][ii] += 0.5 * model.stag_avg(
+                    model.res["N_zero"], "odd"
+                )
+                sim.res["N_zero"][ii] += 0.5 * model.stag_avg(
+                    model.res["N_zero"], "even"
+                )
+                sim.res["N_zero"][ii] += 0.5 * model.stag_avg(
+                    model.res["N_pair"], "odd"
+                )
+                sim.res["N_tot"][ii] = (
+                    sim.res["N_single"][ii] + 2 * sim.res["N_pair"][ii]
+                )
         # ---------------------------------------------------------------------------
         # OVERLAPS with the INITIAL STATE
         if sim.par["observables"]["get_overlap"]:

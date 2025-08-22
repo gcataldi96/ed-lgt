@@ -442,6 +442,106 @@ class DFL_Model(QuantumModel):
                 "max0": np.array([25, 30, 2, 9, 9, 35], dtype=int),
                 "min0": np.array([27, 37, 2, 7, 0, 35], dtype=int),
             }
+        elif self.lvals == [6, 2]:
+            self.n_min_strings = 6
+            self.n_max_strings = 0
+            if finite_density == 0:
+                self.string_cfgs = {
+                    "min0": np.array([7, 12, 3, 12, 3, 5, 4, 0, 9, 0, 9, 6], dtype=int),
+                    "min1": np.array(
+                        [7, 12, 3, 12, 2, 4, 4, 0, 9, 0, 10, 7], dtype=int
+                    ),
+                    "min2": np.array(
+                        [7, 12, 3, 11, 0, 4, 4, 0, 9, 1, 11, 7], dtype=int
+                    ),
+                    "min3": np.array(
+                        [7, 12, 2, 9, 0, 4, 4, 0, 10, 2, 11, 7], dtype=int
+                    ),
+                    "min4": np.array(
+                        [7, 11, 0, 9, 0, 4, 4, 1, 11, 2, 11, 7], dtype=int
+                    ),
+                    "min5": np.array([6, 9, 0, 9, 0, 4, 5, 2, 11, 2, 11, 7], dtype=int),
+                }
+            if finite_density == 2:
+                self.string_cfgs = {
+                    "min0": np.array(
+                        [7, 12, 12, 12, 3, 5, 4, 0, 9, 0, 9, 6], dtype=int
+                    ),
+                    "min1": np.array(
+                        [7, 12, 12, 12, 2, 4, 4, 0, 9, 0, 10, 7], dtype=int
+                    ),
+                    "min2": np.array(
+                        [7, 12, 12, 11, 0, 4, 4, 0, 9, 1, 11, 7], dtype=int
+                    ),
+                    "min3": np.array(
+                        [7, 12, 11, 9, 0, 4, 4, 0, 10, 2, 11, 7], dtype=int
+                    ),
+                    "min4": np.array(
+                        [7, 11, 9, 9, 0, 4, 4, 1, 11, 2, 11, 7], dtype=int
+                    ),
+                    "min5": np.array([6, 9, 9, 9, 0, 4, 5, 2, 11, 2, 11, 7], dtype=int),
+                }
+            if finite_density == 4:
+                self.string_cfgs = {
+                    "min0": np.array(
+                        [7, 12, 12, 12, 12, 5, 4, 0, 9, 0, 9, 6], dtype=int
+                    ),
+                    "min1": np.array(
+                        [7, 12, 12, 12, 11, 4, 4, 0, 9, 0, 10, 7], dtype=int
+                    ),
+                    "min2": np.array(
+                        [7, 12, 12, 11, 9, 4, 4, 0, 9, 1, 11, 7], dtype=int
+                    ),
+                    "min3": np.array(
+                        [7, 12, 11, 9, 9, 4, 4, 0, 10, 2, 11, 7], dtype=int
+                    ),
+                    "min4": np.array(
+                        [7, 11, 9, 9, 9, 4, 4, 1, 11, 2, 11, 7], dtype=int
+                    ),
+                    "min5": np.array([6, 9, 9, 9, 9, 4, 5, 2, 11, 2, 11, 7], dtype=int),
+                }
+            if finite_density == 6:
+                self.string_cfgs = {
+                    "min0": np.array(
+                        [7, 12, 12, 12, 12, 5, 4, 0, 9, 0, 9, 11], dtype=int
+                    ),
+                    "min1": np.array(
+                        [7, 12, 12, 12, 11, 4, 4, 0, 9, 0, 10, 12], dtype=int
+                    ),
+                    "min2": np.array(
+                        [7, 12, 12, 11, 9, 4, 4, 0, 9, 1, 11, 12], dtype=int
+                    ),
+                    "min3": np.array(
+                        [7, 12, 11, 9, 9, 4, 4, 0, 10, 2, 11, 12], dtype=int
+                    ),
+                    "min4": np.array(
+                        [7, 11, 9, 9, 9, 4, 4, 1, 11, 2, 11, 12], dtype=int
+                    ),
+                    "min5": np.array(
+                        [6, 9, 9, 9, 9, 4, 5, 2, 11, 2, 11, 12], dtype=int
+                    ),
+                }
+            if finite_density == 8:
+                self.string_cfgs = {
+                    "min0": np.array(
+                        [12, 12, 12, 12, 12, 5, 4, 0, 9, 0, 9, 11], dtype=int
+                    ),
+                    "min1": np.array(
+                        [12, 12, 12, 12, 11, 4, 4, 0, 9, 0, 10, 12], dtype=int
+                    ),
+                    "min2": np.array(
+                        [12, 12, 12, 11, 9, 4, 4, 0, 9, 1, 11, 12], dtype=int
+                    ),
+                    "min3": np.array(
+                        [12, 12, 11, 9, 9, 4, 4, 0, 10, 2, 11, 12], dtype=int
+                    ),
+                    "min4": np.array(
+                        [12, 11, 9, 9, 9, 4, 4, 1, 11, 2, 11, 12], dtype=int
+                    ),
+                    "min5": np.array(
+                        [11, 9, 9, 9, 9, 4, 5, 2, 11, 2, 11, 12], dtype=int
+                    ),
+                }
         else:
             msg = "String breaking in ED considered only for lvals=[5,2] or [4,3] or [3,2]"
             raise ValueError(msg)
