@@ -150,7 +150,7 @@ with run_sim() as sim:
                             eff_model.H.Npsi[ii].get_state_configurations(
                                 1.5e-3, eff_model.sector_configs
                             )
-                    # ----------------------------------------------------------------------------+
+                    # ----------------------------------------------------------------------------
                     # MEASURE OBSERVABLES
                     eff_model.measure_observables(ii)
                     for obs in local_obs:
@@ -158,6 +158,7 @@ with run_sim() as sim:
                     for obs_names_list in plaquette_obs:
                         obs = "_".join(obs_names_list)
                         sim.res[f"eff_{obs}"][tt, ii] = eff_model.res[obs]
+        logger.info(f"sim.res['eff_basis']: {sim.res['eff_basis']}")
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

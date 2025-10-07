@@ -33,7 +33,7 @@ def check_orthogonality(basis: np.ndarray):
 
 # ─────────────────────────────────────────────────────────────────────────────
 @njit(cache=True, parallel=True)
-def build_all_translations(sector_configs: np.ndarray, logical_unit_size: int):
+def build_all_translations(sector_configs: np.ndarray, logical_unit_size: np.int32):
     """
     For each of the N configurations, roll it by multiples of logical_unit_size
     and record the index within sector_configs of each translation.
@@ -57,11 +57,12 @@ def build_all_translations(sector_configs: np.ndarray, logical_unit_size: int):
 
 # ─────────────────────────────────────────────────────────────────────────────
 @njit(cache=True)
-def select_references(T: np.ndarray):
+def select_references(T: np.ndarray, k: np.int32 = np.int32(0)):
     """
-    Given T[i,0..R-1] the translation-orbit of config i,
+    Given T[i,0..R-1] the translation-orbit of config i, for i=0..N-1,
     pick one reference per orbit: the first i that isn't in any previous orbit.
     Also compute norm[i] = number of unique translations for that reference.
+    If but only keep those reference-orbits j whose length p_j satisfies (k * norm[i]) % R == 0.
     Returns:
       ref_list (length N, with the first N_ref entries filled),
       N_ref (int),
@@ -86,11 +87,9 @@ def select_references(T: np.ndarray):
             if not is_ref:
                 break
         if is_ref:
-            # accept i as new reference
-            ref_list[N_ref] = i
             # count unique translations
             # simple O(R^2) small loop (R <= n_sites)
-            unique_count = 0
+            orbit_len = 0
             for t in range(R):
                 x = orbit[t]
                 seen = False
@@ -99,10 +98,16 @@ def select_references(T: np.ndarray):
                         seen = True
                         break
                 if not seen:
-                    unique_count += 1
-            norm[i] = unique_count
+                    orbit_len += 1
+            # MOMENTUM FILTER: only keep if (k * orbit_len) % R == 0
+            if (k * orbit_len) % R != 0:
+                continue
+            # accept i as new reference
+            ref_list[N_ref] = i
+            norm[i] = orbit_len
             N_ref += 1
-    return ref_list, N_ref, norm
+
+    return ref_list[:N_ref], N_ref, norm[:N_ref]
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -119,10 +124,10 @@ def momentum_basis_zero_k(
     k_basis = np.zeros((N, N_ref), np.float64)
     for rr in prange(N_ref):
         i_ref = ref_list[rr]
-        R = norm[i_ref]
-        for t in range(R):
+        orbit_len = norm[i_ref]
+        for t in range(orbit_len):
             i = translations_array[i_ref, t]
-            k_basis[i, rr] = 1 / np.sqrt(R)
+            k_basis[i, rr] = 1 / np.sqrt(orbit_len)
     return k_basis
 
 
@@ -134,17 +139,18 @@ def momentum_basis_finite_k(
     N = sector_configs.shape[0]
     # 1) compute T[i,t] table of all translations
     translations_array = build_all_translations(sector_configs, logical_unit_size)
+    n_max_trans = translations_array.shape[1]
     # 2) pick one reference per orbit & compute each orbit’s size
-    ref_list, N_ref, norm = select_references(translations_array)
+    ref_list, N_refs, norm = select_references(translations_array, k)
     # 3) build the N×N_ref basis matrix with the right phase for k
-    k_basis = np.zeros((N, N_ref), np.complex128)
-    for r in prange(N_ref):
+    k_basis = np.zeros((N, N_refs), np.complex128)
+    for r in prange(N_refs):
         i_ref = ref_list[r]
-        R = norm[i_ref]
-        for t in range(R):
+        orbit_len = norm[i_ref]
+        for t in range(orbit_len):
             i = translations_array[i_ref, t]
-            phase = np.exp(-1j * 2.0 * np.pi * k * t / R)
-            k_basis[i, r] = phase / np.sqrt(R)
+            phase = np.exp(-1j * 2.0 * np.pi * k * t / n_max_trans)
+            k_basis[i, r] = phase / np.sqrt(orbit_len)
     return k_basis
 
 
@@ -204,7 +210,7 @@ def nbody_data_momentum_4sites(
 ):
     """
     We want to isolate the nonzero entries r,c,v of
-    v=H^(K)_[r,c] = \sum_{i1,i2} B^{*,T}_[r,i1] x H_[i1,i2] x B_[i2,c]
+    v=H^(K)_[r,c] = sum_{i1,i2} B^{*,T}_[r,i1] x H_[i1,i2] x B_[i2,c]
     """
     n_sites = sector_configs.shape[1]
     Bdim = momentum_basis.shape[1]
@@ -363,7 +369,7 @@ def nbody_data_momentum_2sites(
 ):
     """
     We want to isolate the nonzero entries r,c,v of
-    v=H^(K)_[r,c] = \sum_{i1,i2} B^{*,T}_[r,i1] x H_[i1,i2] x B_[i2,c]
+    v=H^(K)_[r,c] = sum_{i1,i2} B^{*,T}_[r,i1] x H_[i1,i2] x B_[i2,c]
     """
     n_sites = sector_configs.shape[1]
     Bdim = momentum_basis.shape[1]
@@ -505,7 +511,7 @@ def nbody_data_momentum_1site(
 ):
     """
     We want to isolate the nonzero entries r,c,v of
-    v=H^(K)_[r,c] = \sum_{i1,i2} B^{*,T}_[r,i1] x H_[i1,i2] x B_[i2,c]
+    v=H^(K)_[r,c] = sum_{i1,i2} B^{*,T}_[r,i1] x H_[i1,i2] x B_[i2,c]
     """
     n_sites = sector_configs.shape[1]
     Bdim = momentum_basis.shape[1]

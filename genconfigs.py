@@ -153,6 +153,14 @@ gen_configs("template", params, f"theta_term/qed_theta2")
 params = {"g": np.logspace(-2, 3, 40), "m": np.logspace(-3, 1, 40)}
 gen_configs("template", params, f"string_breaking/phasediagram_nobg")
 # %%
+params = {
+    "g": [0.1, 1, 3, 5, 10],
+    "m": [0.1, 1, 3, 5, 10],
+    "sector": [6, 8, 10, 12, 14],
+    "momentum_k": [0, 1, 2, 3, 4, 5],
+}
+gen_configs("template", params, f"scattering/test")
+# %%
 from scipy.stats import norm
 
 # Parameters

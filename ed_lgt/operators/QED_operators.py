@@ -295,7 +295,9 @@ def QED_check_gauss_law(spin, pure_theory, lattice_dim, gauss_law_ops, threshold
     if not isinstance(gauss_law_ops, dict):
         raise TypeError(f"pure_theory should be a DICT, not a {type(gauss_law_ops)}")
     # This functions performs some checks on the QED gauge invariant basis
-    M, _ = QED_gauge_invariant_states(spin, pure_theory, lattice_dim)
+    M, _ = QED_gauge_invariant_states(
+        spin, pure_theory, lattice_dim, get_only_bulk=True
+    )
     if pure_theory:
         site_list = ["site"]
     else:
@@ -327,7 +329,7 @@ def QED_check_gauss_law(spin, pure_theory, lattice_dim, gauss_law_ops, threshold
     logger.info("QED GAUSS LAW SATISFIED")
 
 
-def QED_gauge_invariant_states(spin, pure_theory, lattice_dim):
+def QED_gauge_invariant_states(spin, pure_theory, lattice_dim, get_only_bulk=False):
     """
     This function generates the gauge invariant basis of a QED LGT
     in a d-dimensional lattice where gauge (and matter) degrees of
@@ -352,14 +354,15 @@ def QED_gauge_invariant_states(spin, pure_theory, lattice_dim):
     Returns:
         (dict, dict): dictionaries with the basis and the states
     """
-    if not np.isscalar(spin) or not isinstance(spin, int):
-        raise TypeError(f"spin must be SCALAR & INTEGER, not {type(spin)}")
     if not isinstance(pure_theory, bool):
         raise TypeError(f"pure_theory should be a BOOL, not a {type(pure_theory)}")
     if not np.isscalar(lattice_dim) or not isinstance(lattice_dim, int):
         raise TypeError(
             f"lattice_dim must be SCALAR & INTEGER, not {type(lattice_dim)}"
         )
+    if not get_only_bulk:
+        if not np.isscalar(spin) or not isinstance(spin, int):
+            raise TypeError(f"spin must be SCALAR & INTEGER, not {type(spin)}")
     rishon_size = int(2 * spin + 1)
     single_rishon_configs = np.arange(rishon_size)
     # List of borders/corners of the lattice
@@ -402,7 +405,7 @@ def QED_gauge_invariant_states(spin, pure_theory, lattice_dim):
                 # Save the gauge invariant state
                 gauge_states[main_label].append(config)
                 # Get the config labels
-                label = LGT_border_configs(config, spin, pure_theory)
+                label = LGT_border_configs(config, spin, pure_theory, get_only_bulk)
                 if label:
                     # save the config state also in the specific subset for the specif border
                     for ll in label:

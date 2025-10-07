@@ -68,7 +68,7 @@ a = make_factorial_array_numba(spin_list)
 
 # %%
 gauge_basis, gauge_states = SU2_gauge_invariant_states(
-    1 / 2, False, lattice_dim=2, background=1 / 2
+    0.5, False, lattice_dim=2, background=0.5
 )
 # %%
 for ii, singlet in enumerate(gauge_states["site"]):
@@ -110,28 +110,46 @@ for ii, singlet in enumerate(gauge_states["site_py"]):
 from ed_lgt.operators import QED_dressed_site_operators, QED_gauge_invariant_states
 
 
-def QED_gauge_invariant_ops(spin, pure_theory, lattice_dim):
+def QED_gauge_invariant_ops(spin, pure_theory, lattice_dim, get_only_bulk):
     in_ops = QED_dressed_site_operators(spin, pure_theory, lattice_dim)
-    gauge_basis, _ = QED_gauge_invariant_states(spin, pure_theory, lattice_dim)
+    gauge_basis, _ = QED_gauge_invariant_states(
+        spin, pure_theory, lattice_dim, get_only_bulk
+    )
     ops = {}
-    label = "site"
-    for op in in_ops.keys():
-        ops[op] = gauge_basis[label].transpose() @ in_ops[op] @ gauge_basis[label]
+    if pure_theory:
+        labels = ["site"]
+    else:
+        labels = ["even", "odd"]
+    for label in labels:
+        for op in in_ops.keys():
+            ops[(label, op)] = (
+                gauge_basis[label].transpose() @ in_ops[op] @ gauge_basis[label]
+            )
     return ops
 
 
-lattice_dim = 3
-spin = 1
-pure_theory = True
+# %%
+lattice_dim = 2
+spin = 0.5
+pure_theory = False
+get_only_bulk = True
 in_ops = QED_dressed_site_operators(
     spin=spin, pure_theory=pure_theory, lattice_dim=lattice_dim
 )
-ops = QED_gauge_invariant_ops(
-    spin=spin, pure_theory=pure_theory, lattice_dim=lattice_dim
-)
+# %%
 s, b = QED_gauge_invariant_states(
-    spin=spin, pure_theory=pure_theory, lattice_dim=lattice_dim
+    spin=spin,
+    pure_theory=pure_theory,
+    lattice_dim=lattice_dim,
+    get_only_bulk=get_only_bulk,
 )
+ops = QED_gauge_invariant_ops(
+    spin=spin,
+    pure_theory=pure_theory,
+    lattice_dim=lattice_dim,
+    get_only_bulk=get_only_bulk,
+)
+# %%
 
 
 def print_semilinks(ops):

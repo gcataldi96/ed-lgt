@@ -240,7 +240,9 @@ class QMB_state:
             RDM = RDM.reshape((subsys_dim, subsys_dim))
             return RDM
 
-    def entanglement_entropy(self, keep_indices, sector_configs: np.ndarray = None):
+    def entanglement_entropy(
+        self, keep_indices, sector_configs: np.ndarray | None = None
+    ):
         """
         This function computes the bipartite entanglement entropy of a portion of a QMB state psi
         related to a lattice model with dimension lvals where single sites

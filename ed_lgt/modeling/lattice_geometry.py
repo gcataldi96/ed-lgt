@@ -342,7 +342,7 @@ def get_lattice_borders_labels(lattice_dim):
         ]
 
 
-def LGT_border_configs(config, offset, pure_theory):
+def LGT_border_configs(config, offset, pure_theory, get_only_bulk=False):
     """
     This function fixes the value of the electric field on
     lattices with open boundary conditions (has_obc=True).
@@ -365,90 +365,125 @@ def LGT_border_configs(config, offset, pure_theory):
     """
     if not isinstance(config, list) and not isinstance(config, tuple):
         raise TypeError(f"config should be a LIST, not a {type(config)}")
-    if not np.isscalar(offset) or not isinstance(offset, int):
-        raise TypeError(f"offset must be SCALAR & INTEGER, not {type(offset)}")
     if not isinstance(pure_theory, bool):
         raise TypeError(f"pure_theory should be a BOOL, not a {type(pure_theory)}")
     # Look at the configuration
     label = []
-    if not pure_theory:
-        config = config[1:]
-    lattice_dim = len(config) // 2
-    if lattice_dim == 1:
-        if config[0] == offset:
-            label.append("mx")
-        if config[1] == offset:
-            label.append("px")
-    elif lattice_dim == 2:
-        if config[0] == offset:
-            label.append("mx")
-        if config[1] == offset:
-            label.append("my")
-        if config[2] == offset:
-            label.append("px")
-        if config[3] == offset:
-            label.append("py")
-        if (config[0] == offset) and (config[1] == offset):
-            label.append("mx_my")
-        if (config[0] == offset) and (config[3] == offset):
-            label.append("mx_py")
-        if (config[1] == offset) and (config[2] == offset):
-            label.append("px_my")
-        if (config[2] == offset) and (config[3] == offset):
-            label.append("px_py")
-    elif lattice_dim == 3:
-        if config[0] == offset:
-            label.append("mx")
-        if config[1] == offset:
-            label.append("my")
-        if config[2] == offset:
-            label.append("mz")
-        if config[3] == offset:
-            label.append("px")
-        if config[4] == offset:
-            label.append("py")
-        if config[5] == offset:
-            label.append("pz")
-        if (config[0] == offset) and (config[1] == offset):
-            label.append("mx_my")
-        if (config[0] == offset) and (config[2] == offset):
-            label.append("mx_mz")
-        if (config[0] == offset) and (config[4] == offset):
-            label.append("mx_py")
-        if (config[0] == offset) and (config[5] == offset):
-            label.append("mx_pz")
-        if (config[3] == offset) and (config[1] == offset):
-            label.append("px_my")
-        if (config[3] == offset) and (config[2] == offset):
-            label.append("px_mz")
-        if (config[3] == offset) and (config[4] == offset):
-            label.append("px_py")
-        if (config[3] == offset) and (config[5] == offset):
-            label.append("px_pz")
-        if (config[1] == offset) and (config[2] == offset):
-            label.append("my_mz")
-        if (config[1] == offset) and (config[5] == offset):
-            label.append("my_pz")
-        if (config[4] == offset) and (config[2] == offset):
-            label.append("py_mz")
-        if (config[4] == offset) and (config[5] == offset):
-            label.append("py_pz")
-        if (config[0] == offset) and (config[1] == offset) and (config[2] == offset):
-            label.append("mx_my_mz")
-        if (config[0] == offset) and (config[1] == offset) and (config[5] == offset):
-            label.append("mx_my_pz")
-        if (config[0] == offset) and (config[4] == offset) and (config[2] == offset):
-            label.append("mx_py_mz")
-        if (config[0] == offset) and (config[4] == offset) and (config[5] == offset):
-            label.append("mx_py_pz")
-        if (config[3] == offset) and (config[1] == offset) and (config[2] == offset):
-            label.append("px_my_mz")
-        if (config[3] == offset) and (config[1] == offset) and (config[5] == offset):
-            label.append("px_my_pz")
-        if (config[3] == offset) and (config[4] == offset) and (config[2] == offset):
-            label.append("px_py_mz")
-        if (config[3] == offset) and (config[4] == offset) and (config[5] == offset):
-            label.append("px_py_pz")
+    if get_only_bulk:
+        return label
+    else:
+        if not np.isscalar(offset) or not isinstance(offset, int):
+            raise TypeError(f"offset must be SCALAR & INTEGER, not {type(offset)}")
+        if not pure_theory:
+            config = config[1:]
+        lattice_dim = len(config) // 2
+        if lattice_dim == 1:
+            if config[0] == offset:
+                label.append("mx")
+            if config[1] == offset:
+                label.append("px")
+        elif lattice_dim == 2:
+            if config[0] == offset:
+                label.append("mx")
+            if config[1] == offset:
+                label.append("my")
+            if config[2] == offset:
+                label.append("px")
+            if config[3] == offset:
+                label.append("py")
+            if (config[0] == offset) and (config[1] == offset):
+                label.append("mx_my")
+            if (config[0] == offset) and (config[3] == offset):
+                label.append("mx_py")
+            if (config[1] == offset) and (config[2] == offset):
+                label.append("px_my")
+            if (config[2] == offset) and (config[3] == offset):
+                label.append("px_py")
+        elif lattice_dim == 3:
+            if config[0] == offset:
+                label.append("mx")
+            if config[1] == offset:
+                label.append("my")
+            if config[2] == offset:
+                label.append("mz")
+            if config[3] == offset:
+                label.append("px")
+            if config[4] == offset:
+                label.append("py")
+            if config[5] == offset:
+                label.append("pz")
+            if (config[0] == offset) and (config[1] == offset):
+                label.append("mx_my")
+            if (config[0] == offset) and (config[2] == offset):
+                label.append("mx_mz")
+            if (config[0] == offset) and (config[4] == offset):
+                label.append("mx_py")
+            if (config[0] == offset) and (config[5] == offset):
+                label.append("mx_pz")
+            if (config[3] == offset) and (config[1] == offset):
+                label.append("px_my")
+            if (config[3] == offset) and (config[2] == offset):
+                label.append("px_mz")
+            if (config[3] == offset) and (config[4] == offset):
+                label.append("px_py")
+            if (config[3] == offset) and (config[5] == offset):
+                label.append("px_pz")
+            if (config[1] == offset) and (config[2] == offset):
+                label.append("my_mz")
+            if (config[1] == offset) and (config[5] == offset):
+                label.append("my_pz")
+            if (config[4] == offset) and (config[2] == offset):
+                label.append("py_mz")
+            if (config[4] == offset) and (config[5] == offset):
+                label.append("py_pz")
+            if (
+                (config[0] == offset)
+                and (config[1] == offset)
+                and (config[2] == offset)
+            ):
+                label.append("mx_my_mz")
+            if (
+                (config[0] == offset)
+                and (config[1] == offset)
+                and (config[5] == offset)
+            ):
+                label.append("mx_my_pz")
+            if (
+                (config[0] == offset)
+                and (config[4] == offset)
+                and (config[2] == offset)
+            ):
+                label.append("mx_py_mz")
+            if (
+                (config[0] == offset)
+                and (config[4] == offset)
+                and (config[5] == offset)
+            ):
+                label.append("mx_py_pz")
+            if (
+                (config[3] == offset)
+                and (config[1] == offset)
+                and (config[2] == offset)
+            ):
+                label.append("px_my_mz")
+            if (
+                (config[3] == offset)
+                and (config[1] == offset)
+                and (config[5] == offset)
+            ):
+                label.append("px_my_pz")
+            if (
+                (config[3] == offset)
+                and (config[4] == offset)
+                and (config[2] == offset)
+            ):
+                label.append("px_py_mz")
+            if (
+                (config[3] == offset)
+                and (config[4] == offset)
+                and (config[5] == offset)
+            ):
+                label.append("px_py_pz")
     return label
 
 

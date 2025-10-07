@@ -135,7 +135,7 @@ with run_sim() as sim:
             # -----------------------------------------------------------------------
             # MEASURE OBSERVABLES
             model.measure_observables(ii, dynamics=True)
-            sim.res["E2"][ii] = model.link_avg(model.res["T2_px"], model.res["T2_py"])
+            sim.res["E2"][ii] = model.link_avg(obs_name="T2")
             sim.res["N_single"][ii] = model.stag_avg(model.res["N_single"])
             sim.res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "even")
             sim.res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "odd")

@@ -236,7 +236,7 @@ class QED_Model(QuantumModel):
                 sign=1,
             )
 
-    def QED_Hamiltonian_couplings(self, g, m=None, theta=0, magnetic_basis=False):
+    def QED_Hamiltonian_couplings(self, g, m=None, theta=0.0, magnetic_basis=False):
         """
         This function provides the QED Hamiltonian coefficients
         starting from the gauge coupling g and the bare mass parameter m

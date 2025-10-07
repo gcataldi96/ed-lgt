@@ -8,7 +8,6 @@ os.environ["NUMBA_NUM_THREADS"] = str(B)
 
 import numpy as np
 from ed_lgt.models import SU2_Model
-from ed_lgt.tools import stag_avg
 from simsio import run_sim
 from time import perf_counter
 import logging
@@ -18,6 +17,8 @@ with run_sim() as sim:
     start_time = perf_counter()
     # -------------------------------------------------------------------------------
     # MODEL HAMILTONIAN
+    sim.par["model"]["sectors"] = [sim.par["sector"]]
+    sim.par["model"]["momentum_k"] = sim.par["momentum_k"]
     model = SU2_Model(**sim.par["model"])
     m = sim.par["m"] if not model.pure_theory else None
     if model.spin > 0.5:
@@ -92,9 +93,7 @@ with run_sim() as sim:
         # MEASURE OBSERVABLES
         if sim.par["observables"]["measure_obs"]:
             model.measure_observables(ii)
-            sim.res["E_square"][ii] = model.link_avg(
-                model.res["T2_px"], model.res["T2_py"]
-            )
+            sim.res["E2"][ii] = model.link_avg(obs_name="T2")
             if not model.pure_theory:
                 sim.res["N_single"][ii] = model.stag_avg(model.res["N_single"])
                 sim.res["N_pair"][ii] += 0.5 * model.stag_avg(

@@ -30,7 +30,7 @@ with run_sim() as sim:
     sim.res["entropy"] = np.zeros((n_spins, n_eigs), dtype=float)
     # -------------------------------------------------------------------------------
     for ss, spin in enumerate(spin_list):
-        sim.par["model"]["spin"] = spin
+        sim.par["model"]["spin"] = int(spin)
         # ---------------------------------------------------------------------------
         # MODEL HAMILTONIAN
         model = QED_Model(**sim.par["model"])
@@ -68,24 +68,8 @@ with run_sim() as sim:
             # MEASURE OBSERVABLES
             if sim.par["observables"]["measure_obs"]:
                 model.measure_observables(ii)
-                sim.res["E_square"][ss, ii] = model.stag_avg(model.res["N_single"])
-                if not model.pure_theory:
-                    sim.res["N_single"][ss, ii] = model.stag_avg(model.res["N_single"])
-                    sim.res["N_pair"][ss, ii] += 0.5 * model.stag_avg(
-                        model.res["N_pair"], "even"
-                    )
-                    sim.res["N_pair"][ss, ii] += 0.5 * model.stag_avg(
-                        model.res["N_zero"], "odd"
-                    )
-                    sim.res["N_zero"][ss, ii] += 0.5 * model.stag_avg(
-                        model.res["N_zero"], "even"
-                    )
-                    sim.res["N_zero"][ss, ii] += 0.5 * model.stag_avg(
-                        model.res["N_pair"], "odd"
-                    )
-                    sim.res["N_tot"][ss, ii] = (
-                        sim.res["N_single"][ss, ii] + 2 * sim.res["N_pair"][ss, ii]
-                    )
+                sim.res["E_square"][ss, ii] = model.stag_avg(model.res["E_square"])
+        logger.info("--------------------------------------------------------------")
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

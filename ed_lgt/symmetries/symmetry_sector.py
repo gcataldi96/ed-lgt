@@ -60,10 +60,10 @@ def sitebased_sym_sector_configs(
 @get_time
 def symmetry_sector_configs(
     loc_dims,
-    glob_op_diags,
+    glob_op_diags: np.ndarray,
     glob_sectors,
     sym_type_flag,
-    link_op_diags,
+    link_op_diags: np.ndarray,
     link_sectors,
     pair_list,
     string_op_diags=None,
@@ -106,7 +106,7 @@ def symmetry_sector_configs(
     return sector_configs
 
 
-def get_symmetry_sector_generators(op_list: list[np.ndarray], action: str):
+def get_symmetry_sector_generators(op_list: list, action: str):
     if action == "global":
         # Generators of Global Abelian Symmetry sector
         n_sites = op_list[0].shape[0]
@@ -495,7 +495,7 @@ def get_link_sector_configs(
     nbody_op_diags=None,
     nbody_sectors=None,
     nbody_sites_list=None,
-    nbody_sym_type: str = "U",
+    nbody_sym_type: str | None = "U",
 ):
     logger.debug("GETTING LINK SECTOR CONFIGURATIONS")
     if not isinstance(link_sectors, np.ndarray):

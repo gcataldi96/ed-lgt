@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Optional
 from scipy.sparse import csc_matrix, isspmatrix, csr_matrix
 from scipy.sparse.linalg import expm
 from math import prod
@@ -39,8 +40,8 @@ class QuantumModel:
         ham_format="sparse",
         logical_unit_size: int = 1,
         momentum_basis: bool = False,
-        momentum_k=0,
-        basis_projector: np.ndarray = None,
+        momentum_k=np.int32(0),
+        basis_projector: np.ndarray | None = None,
     ):
         # Lattice parameters
         self.lvals = lvals
@@ -57,7 +58,7 @@ class QuantumModel:
         # Momentum Basis
         self.momentum_basis = momentum_basis
         self.momentum_k = momentum_k
-        self.logical_unit_size = int(logical_unit_size)
+        self.logical_unit_size = np.int32(logical_unit_size)
         # Hamiltonian format
         self.ham_format = ham_format
         # Efficient reduced basis projector
@@ -68,7 +69,7 @@ class QuantumModel:
         self.res = {}
 
     def default_params(self):
-        if self.momentum_basis:
+        if self.momentum_basis and self.sector_configs is not None:
             if self.has_obc[0]:
                 raise ValueError(f"Momentum is not conserved in OBC")
             self.B = get_momentum_basis(
@@ -92,7 +93,7 @@ class QuantumModel:
         # Initialize the Hamiltonian
         self.H = QMB_hamiltonian(self.lvals, size=hamiltonian_size)
 
-    def project_operators(self, ops_dict: dict[csr_matrix]):
+    def project_operators(self, ops_dict: dict[str, csr_matrix]):
         """
         Compute the local basis of each site and the corresponding lattice labels.
         Project a dictionary of operators into a gauge-invariant or optimal subspace of each
@@ -141,7 +142,7 @@ class QuantumModel:
             # Run over the sites
             for jj, loc_dim in enumerate(self.loc_dims):
                 # For Lattice Gauge Theories where sites have different Hilbert Bases
-                if self.gauge_basis is not None:
+                if self.gauge_basis is not None and self.lattice_labels is not None:
                     # Get the label of the site
                     site_label = self.lattice_labels[jj]
                     # Get the projected operator
@@ -159,45 +160,47 @@ class QuantumModel:
                     )
                 # Save it inside the new list of operators
                 # NOTE: here we assume all the operators to be real
-                self.ops[op][jj, :loc_dim, :loc_dim] = np.real(eff_op)
+                self.ops[op][jj, :loc_dim, :loc_dim] = eff_op.real
 
     def get_abelian_symmetry_sector(
         self,
-        global_ops: list[np.ndarray] = None,
-        global_sectors: list = None,
+        global_ops: list[np.ndarray] | None,
+        global_sectors: list | None = None,
         global_sym_type: str = "U",
-        link_ops: list[np.ndarray] = None,
-        link_sectors: list = None,
-        nbody_ops: list[np.ndarray] = None,
-        nbody_sectors: list = None,
+        link_ops: list[list[np.ndarray]] | None = None,
+        link_sectors: list | None = None,
+        nbody_ops: list[np.ndarray] | None = None,
+        nbody_sectors: list | None = None,
         nbody_sites_list=None,
-        nbody_sym_type: str = None,
+        nbody_sym_type: str | None = None,
     ):
         # ================================================================================
         # GLOBAL ABELIAN SYMMETRIES
         if global_ops is not None:
             logger.debug("Global Symmetry operators")
-            global_ops = get_symmetry_sector_generators(global_ops, action="global")
+            global_ops_diags = get_symmetry_sector_generators(
+                global_ops, action="global"
+            )
         # ================================================================================
         # ABELIAN Z2 SYMMETRIES
         if link_ops is not None:
             logger.debug("Link Symmetry operators")
-            link_ops = get_symmetry_sector_generators(link_ops, action="link")
+            link_ops_diags = get_symmetry_sector_generators(link_ops, action="link")
             pair_list = get_lattice_link_site_pairs(self.lvals, self.has_obc)
         # ================================================================================
         # nBODY ABELIAN SYMMETRIES
         if nbody_ops is not None:
             logger.debug("Nbody Symmetry operators")
-            nbody_ops = get_symmetry_sector_generators(nbody_ops, action="nbody")
+            nbody_ops_diags = get_symmetry_sector_generators(nbody_ops, action="nbody")
         # ================================================================================
         if global_ops is not None and link_ops is not None:
             logger.debug("Global & Link symmetry sector")
             self.sector_configs = symmetry_sector_configs(
                 loc_dims=self.loc_dims,
-                glob_op_diags=global_ops,
+                glob_op_diags=global_ops_diags,
                 glob_sectors=np.array(global_sectors, dtype=float),
                 sym_type_flag=global_sym_type,
-                link_op_diags=link_ops,
+                link_op_diags=link_ops_diags,
                 link_sectors=link_sectors,
                 pair_list=pair_list,
             )
@@ -219,7 +222,7 @@ class QuantumModel:
                 link_op_diags=link_ops,
                 link_sectors=link_sectors,
                 pair_list=pair_list,
-                nbody_op_diags=nbody_ops,
+                nbody_op_diags=nbody_ops_diags,
                 nbody_sectors=nbody_sectors,
                 nbody_sites_list=nbody_sites_list,
                 nbody_sym_type=nbody_sym_type,
@@ -236,7 +239,9 @@ class QuantumModel:
 
     def momentum_basis_projection(self, operator):
         # Project the Hamiltonian onto the momentum sector with k=0
-        if isinstance(operator, str) and operator == "H":
+        if self.B is None:
+            raise ValueError("Basis projector B is not set.")
+        if np.all(isinstance(operator, str), operator == "H"):
             self.H.Ham = self.B.transpose() * self.H.Ham * self.B
         else:
             return self.B.transpose() * operator * self.B
@@ -252,7 +257,7 @@ class QuantumModel:
                 raise ValueError(f"config not compatible with the symmetry sector")
             logger.info(f"{config} in state {index}")
             state[index] = complex(1 / np.sqrt(len(configs)), 0)
-        if self.momentum_basis:
+        if self.momentum_basis and self.B is not None:
             # Project the state in the momentum sector
             state = self.B.transpose().dot(state)
         logger.info("----------------------------------------------------")
@@ -433,22 +438,28 @@ class QuantumModel:
             self.obs_list[obs].get_expval(state)
             self.res[obs] = self.obs_list[obs].obs
 
-    def link_avg(self, obs_px, obs_py):
+    def link_avg(self, obs_name):
+        """Compute the average value of a link observable.
+
+        Args:
+            obs_name (str): The name of the observable.
+
+        Returns:
+            float: The average value of the link observable.
+        """
         avg = 0
         tmp = 0
         for ii in range(prod(self.lvals)):
             # Compute the corresponding coords
             coords = zig_zag(self.lvals, ii)
-            # Check if it admits a x twobody term according to the lattice geometry
-            _, sites_list = get_neighbor_sites(coords, self.lvals, "x", self.has_obc)
-            if sites_list is not None:
-                avg += obs_px[ii]
-                tmp += 1
-            # Check if it admits a y twobody term according to the lattice geometry
-            _, sites_list = get_neighbor_sites(coords, self.lvals, "y", self.has_obc)
-            if sites_list is not None:
-                avg += obs_py[ii]
-                tmp += 1
+            for dir in self.directions:
+                # Check if it admits a link in that direction according to the lattice geometry
+                _, sites_list = get_neighbor_sites(
+                    coords, self.lvals, dir, self.has_obc
+                )
+                if sites_list is not None:
+                    avg += self.res[f"{obs_name}_p{dir}"][ii]
+                    tmp += 1
         logger.debug(f"{tmp} effective links")
         return avg / tmp
 
@@ -669,3 +680,4 @@ def apply_projection(projector, operator):
         return projector.conj().transpose() @ operator @ projector
     else:
         logger.info(f"{type(operator)} {type(projector)}")
+        return TypeError(f"Operator & projector must be both np.ndarray or csr_matrix")

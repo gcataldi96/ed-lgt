@@ -76,7 +76,7 @@ class SU2_Model(QuantumModel):
         if self.pure_theory and not any(self.has_obc):
             logger.info("fixing surface parity fluxes")
             # one flux‐constraint per cartesian direction
-            nbody_sectors = np.ones(self.dim, dtype=float)
+            nbody_sectors = list(np.ones(self.dim, dtype=float))
             nbody_ops = []
             nbody_sites_list = typed.List()
             surfaces = get_origin_surfaces(self.lvals)
@@ -115,6 +115,8 @@ class SU2_Model(QuantumModel):
             nbody_sym_type=nbody_sym_type,
         )
         self.default_params()
+        if self.sector_configs is None:
+            raise ValueError("No configurations found for the given symmetry sectors")
 
     def build_Hamiltonian(self, g, m=None):
         logger.info("BUILDING s=1/2 HAMILTONIAN")
@@ -431,7 +433,7 @@ class SU2_Model(QuantumModel):
         t=1
         """
         if self.dim == 1:
-            E = g / 2
+            E = 8 * g / 3
             B = 0
         else:
             E = g / 2
@@ -443,9 +445,9 @@ class SU2_Model(QuantumModel):
             "B": B,  # MAGNETIC FIELD coupling
             "theta": -complex(0, theta * g),  # THETA TERM coupling
         }
-        if not self.pure_theory:
+        if not self.pure_theory and m is not None:
             # The correct hopping in original units should be 1/2
-            t = 1 / 2
+            t = 2 * np.sqrt(2)
             self.coeffs |= {
                 "tx_even": -complex(0, t),  # x HOPPING (EVEN SITES)
                 "tx_odd": -complex(0, t),  # x HOPPING (ODD SITES)

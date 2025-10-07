@@ -31,9 +31,6 @@ with run_sim() as sim:
     # LIST OF LOCAL OBSERVABLES
     local_obs = ["E_square"]
     local_obs += [f"E_{s}{d}" for d in model.directions for s in "mp"]
-    # local_obs += [f"Ep1_{s}{d}" for d in model.directions for s in "mp"]
-    # local_obs += [f"E0_{s}{d}" for d in model.directions for s in "mp"]
-    # local_obs += [f"Em1_{s}{d}" for d in model.directions for s in "mp"]
     if not model.pure_theory:
         local_obs += ["N"]
     for obs in local_obs:

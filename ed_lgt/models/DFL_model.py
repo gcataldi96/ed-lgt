@@ -274,7 +274,7 @@ class DFL_Model(QuantumModel):
             "E": E,  # ELECTRIC FIELD coupling
             "B": B,  # MAGNETIC FIELD coupling
         }
-        if not self.pure_theory:
+        if not self.pure_theory and m is not None:
             t = 1
             self.coeffs |= {
                 "tx_even": -complex(0, t),  # x HOPPING (EVEN SITES)
