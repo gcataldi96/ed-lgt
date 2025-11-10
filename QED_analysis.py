@@ -520,11 +520,10 @@ cb = fig.colorbar(
 )
 cb.set_label(label=r"$g^{2}$", rotation=0, labelpad=-30, x=-0.02, y=-0.03)
 # %%
-config_filename = f"theta_term/qed_theta_eigvals"
+config_filename = f"qed_theta_term/eigvals"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g", "theta"])
 n_eigs = 5
-
 res = {
     "E_square": np.zeros((len(vals["g"]), len(vals["theta"]), n_eigs)),
     "plaq": np.zeros((len(vals["g"]), len(vals["theta"]), n_eigs)),
@@ -555,10 +554,10 @@ g_index = 0
 for g_index, g in enumerate(res["g"]):
     fig, axs = plt.subplots(1, 1, sharex=True, constrained_layout=True)
     axs.grid()
-    for ii in range(n_eigs):
+    for ii in range(1, n_eigs, 1):
         axs.plot(
             res["theta"],
-            res["energy"][g_index, :, ii],
+            res["energy"][g_index, :, ii] - res["energy"][g_index, :, 0],
             "o-",
             markersize=2,
             markerfacecolor="black",
@@ -568,9 +567,100 @@ for g_index, g in enumerate(res["g"]):
     axs.set(
         xlabel=r"coupling $\theta$",
         # ylabel=r"casimir $E^{2}$",
-        ylabel=rf"energy levels g={round(g,3)}",
+        ylabel=rf"energy levels g^{2}={round(g,3)}",
         xlim=[0.34, 0.45],
+        yscale="log",
+        # ylim=[0, 0.],
     )
     fig.legend()
 save_dictionary(res, f"qed_thetaterm_ED3.pkl")
+# %%
+# %%
+config_filename = f"qed_theta_term/k0"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["theta"])
+n_eigs = 4
+res1 = {
+    "E_square": np.zeros((len(vals["theta"]), n_eigs)),
+    "plaq": np.zeros((len(vals["theta"]), n_eigs)),
+    "energy": np.zeros((len(vals["theta"]), n_eigs)),
+    "theta": vals["theta"],
+}
+
+plaq1 = "C_px,py_C_py,mx_C_my,px_C_mx,my"
+plaq2 = "C_px,pz_C_pz,mx_C_mz,px_C_mx,mz"
+plaq3 = "C_py,pz_C_pz,my_C_mz,py_C_my,mz"
+
+
+for kk, theta in enumerate(vals["theta"]):
+    for neig in range(4):
+        res1["energy"][kk, neig] = get_sim(ugrid[kk]).res["energy"][neig]
+        res1["E_square"][kk, neig] = get_sim(ugrid[kk]).res["E_square"][neig]
+        res1["plaq"][kk, neig] += get_sim(ugrid[kk]).res[plaq1][neig] / 3
+        res1["plaq"][kk, neig] += get_sim(ugrid[kk]).res[plaq2][neig] / 3
+        res1["plaq"][kk] += get_sim(ugrid[kk]).res[plaq3][neig] / 3
+
+
+config_filename = f"qed_theta_term/kpi"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["theta"])
+n_eigs = 4
+res2 = {
+    "E_square": np.zeros((len(vals["theta"]), n_eigs)),
+    "plaq": np.zeros((len(vals["theta"]), n_eigs)),
+    "energy": np.zeros((len(vals["theta"]), n_eigs)),
+    "theta": vals["theta"],
+}
+
+plaq1 = "C_px,py_C_py,mx_C_my,px_C_mx,my"
+plaq2 = "C_px,pz_C_pz,mx_C_mz,px_C_mx,mz"
+plaq3 = "C_py,pz_C_pz,my_C_mz,py_C_my,mz"
+
+gs = np.zeros(len(vals["theta"]))
+
+for kk, theta in enumerate(vals["theta"]):
+    for neig in range(4):
+        res2["energy"][kk, neig] = get_sim(ugrid[kk]).res["energy"][neig]
+        res2["E_square"][kk, neig] = get_sim(ugrid[kk]).res["E_square"][neig]
+        res2["plaq"][kk, neig] += get_sim(ugrid[kk]).res[plaq1][neig] / 3
+        res2["plaq"][kk, neig] += get_sim(ugrid[kk]).res[plaq2][neig] / 3
+        res2["plaq"][kk] += get_sim(ugrid[kk]).res[plaq3][neig] / 3
+    gs[kk] = min(res2["energy"][kk, 0], res1["energy"][kk, 0])
+
+sm_theta = cm.ScalarMappable(cmap="seismic")
+palette_theta = sm_theta.to_rgba(res1["theta"])
+
+
+fig, axs = plt.subplots(1, 1, sharex=True, constrained_layout=True)
+axs.grid()
+for ii in range(n_eigs):
+    axs.plot(
+        res1["theta"],
+        res1["energy"][:, ii],
+        "o-",
+        c="black",
+        markersize=2,
+        markerfacecolor="black",
+        markeredgewidth=0.5,
+        label=rf"E {ii} ($0, 0, 0$)",
+    )
+    axs.plot(
+        res2["theta"],
+        res2["energy"][:, ii],
+        "o-",
+        c="red",
+        markersize=2,
+        markerfacecolor="black",
+        markeredgewidth=0.5,
+        label=rf"E {ii} ($\pi, \pi, \pi$)",
+    )
+axs.set(
+    xlabel=r"coupling $\theta$",
+    # ylabel=r"casimir $E^{2}$",
+    ylabel=rf"energy levels g^{2}=2.327",
+    # ylim=[0, 0.],
+)
+fig.legend()
+# save_dictionary(res, f"qed_thetaterm_ED3.pkl")
+
 # %%

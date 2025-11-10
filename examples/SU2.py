@@ -8,17 +8,13 @@ from ed_lgt.operators import (
     Z2_FermiHubbard_dressed_site_operators,
     SU2_gauge_invariant_states,
     fermi_operators,
-    SU2_check_gauss_law,
     SU2_generators,
     get_SU2_singlets,
     couple_two_spins,
     add_new_spin,
     group_sorted_spin_configs,
-    SU2_singlet_canonical_vector,
-    SU2_Rishon,
-    SU2_Rishon_gen,
-    m_values,
 )
+from ed_lgt.tools import check_hermitian
 
 import logging
 from numba import njit
@@ -68,8 +64,98 @@ a = make_factorial_array_numba(spin_list)
 
 # %%
 gauge_basis, gauge_states = SU2_gauge_invariant_states(
-    0.5, False, lattice_dim=2, background=0.5
+    0.5, False, lattice_dim=1, background=0
 )
+# %%
+from ed_lgt.operators import SU2_dressed_site_operators, SU2_gauge_invariant_states
+
+
+def SU2_gauge_invariant_ops(spin, pure_theory, lattice_dim):
+    in_ops = SU2_dressed_site_operators(spin, pure_theory, lattice_dim)
+    gauge_basis, _ = SU2_gauge_invariant_states(spin, pure_theory, lattice_dim)
+    ops = {}
+    for op in in_ops.keys():
+        ops[op] = gauge_basis["site"].transpose() @ in_ops[op] @ gauge_basis["site"]
+    return ops
+
+
+ops = SU2_gauge_invariant_ops(spin=1 / 2, pure_theory=False, lattice_dim=1)
+from ed_lgt.modeling import qmb_operator as qmb_op
+
+
+def decode_two_site_entries(rc_list, d_loc, data):
+    """
+    rc_list: iterable of (row, col) ints for a 2-site block (size d_loc^2).
+    d_loc  : local dimension per site.
+
+    returns: list of (r1, r2, c1, c2) with
+             row = r1*d_loc + r2,  col = c1*d_loc + c2
+    """
+    out = []
+    for ii, (row, col) in enumerate(rc_list):
+        r1, r2 = divmod(row, d_loc)
+        c1, c2 = divmod(col, d_loc)
+        if np.any(
+            [
+                r1 == 0 and r2 in [1, 3, 5],
+                (r1 == 1 and r2 in [0, 2, 4]),
+                (r1 == 2 and r2 in [0, 2, 4]),
+                (r1 == 3 and r2 in [1, 3, 5]),
+                (r1 == 4 and r2 in [1, 3, 5]),
+                (r1 == 5 and r2 in [0, 2, 4]),
+                (c1 == 0 and c2 in [1, 3, 5]),
+                (c1 == 1 and c2 in [0, 2, 4]),
+                (c1 == 2 and c2 in [0, 2, 4]),
+                (c1 == 3 and c2 in [1, 3, 5]),
+                (c1 == 4 and c2 in [1, 3, 5]),
+                (c1 == 5 and c2 in [0, 2, 4]),
+            ]
+        ):
+            continue
+        out.append((r1, r2, c1, c2, data[ii]))
+    return out
+
+
+# %%
+P = -complex(0, 1) * qmb_op(ops, ["Qpx_dag", "Qmx"])
+P += complex(0, 1) * qmb_op(ops, ["Qpx", "Qmx_dag"])
+coo = P.tocoo()
+rows, cols, data = coo.row, coo.col, coo.data
+
+check_hermitian(P)
+# %%
+from scipy.sparse import csr_matrix, identity, kron
+
+Cdata = [1, 1, 1, 1, 1, -1]
+Crows = [0, 4, 5, 1, 2, 3]
+Ccols = [4, 0, 1, 5, 2, 3]
+C = csr_matrix((Cdata, (Crows, Ccols)), shape=(6, 6))
+ops["C"] = C
+ops["Cdag"] = C.transpose().conj()
+CC = qmb_op(ops, ["C", "C"])
+CCdag = qmb_op(ops, ["Cdag", "Cdag"])
+
+test = CC @ P @ CCdag
+testcoo = test.tocoo()
+trows, tcols, tdata = testcoo.row, testcoo.col, testcoo.data
+
+
+M1 = csr_matrix(ops["N_tot"])
+ID = csr_matrix(np.eye(6))
+massa = kron(M1, ID) - kron(ID, M1)
+
+E = csr_matrix(ops["E_square"])
+casimir = kron(E, ID) + kron(ID, E)
+# %%
+check_hermitian(1j * (CC @ P - P @ CC))
+# %%
+P_lista = decode_two_site_entries(zip(rows, cols), d_loc=6, data=data)
+for ii in range(len(P_lista)):
+    print(f"{P_lista[ii][:-1]} : {P_lista[ii][-1]}")
+print("-------")
+CPC_lista = decode_two_site_entries(zip(trows, tcols), d_loc=6, data=tdata)
+for ii in range(len(CPC_lista)):
+    print(f"{CPC_lista[ii][:-1]} : {CPC_lista[ii][-1]-P_lista[ii][-1]}")
 # %%
 for ii, singlet in enumerate(gauge_states["site"]):
     logger.info(f" {ii} ")
@@ -129,9 +215,9 @@ def QED_gauge_invariant_ops(spin, pure_theory, lattice_dim, get_only_bulk):
 
 
 # %%
-lattice_dim = 2
-spin = 0.5
-pure_theory = False
+lattice_dim = 3
+spin = 3
+pure_theory = True
 get_only_bulk = True
 in_ops = QED_dressed_site_operators(
     spin=spin, pure_theory=pure_theory, lattice_dim=lattice_dim
@@ -149,9 +235,9 @@ ops = QED_gauge_invariant_ops(
     lattice_dim=lattice_dim,
     get_only_bulk=get_only_bulk,
 )
+
+
 # %%
-
-
 def print_semilinks(ops):
     # ops is a dict mapping each direction to a diagonal matrix; we'll just
     # extract the n-th diagonal element as before.  Here we hard-code n=0…6.
@@ -200,11 +286,12 @@ def print_semilinks(ops):
 
 print_semilinks(ops)
 # %%
-indices = [41, 63, 38, 26]
+indices = np.arange(19)
 for n in indices:
     # read and stringify each diagonal element
     vals = {
-        d: str(int(ops[f"E_{d}"].toarray()[n, n])) for d in ("px", "py", "mx", "my")
+        d: str(int(ops["site", f"E_{d}"].toarray()[n, n]))
+        for d in ("px", "py", "mx", "my")
     }
 
     # figure out how wide the widest string is

@@ -96,7 +96,6 @@ class PlaquetteTerm(QMBTerm):
         all_r = []
         all_c = []
         all_v = []
-
         for ii in range(self.n_sites):
             coords = zig_zag(self.lvals, ii)
             _, sites = get_plaquette_neighbors(
@@ -109,7 +108,12 @@ class PlaquetteTerm(QMBTerm):
                 logger.info(f"Sites {sites}")
             # this gives three 1D arrays for this plaquette
             sites_array = np.array(sites, dtype=np.int32)
-            r, c, v = nbody_term(self.sym_ops, sites_array, self.sector_configs)
+            r, c, v = nbody_term(
+                op_list=self.sym_ops,
+                op_sites_list=sites_array,
+                sector_configs=self.sector_configs,
+                momentum_basis=self.momentum_basis,
+            )
             all_r.append(r)
             all_c.append(c)
             all_v.append(v)
@@ -196,22 +200,13 @@ class PlaquetteTerm(QMBTerm):
         else:
             for ii, sites_list in enumerate(list_of_plaq_sites):
                 rows, cols, vals = nbody_term(
-                    self.sym_ops, np.array(sites_list), self.sector_configs
+                    op_list=self.sym_ops,
+                    op_sites_list=np.array(sites_list),
+                    sector_configs=self.sector_configs,
+                    momentum_basis=self.momentum_basis,
                 )
                 self.obs[ii] = exp_val_data(psi.psi, rows, cols, vals)
-                """
-                self.var[ii] = (
-                    psi.expectation_value(
-                        nbody_term(
-                            self.sym_ops,
-                            np.array(sites_list),
-                            self.sector_configs,
-                        )
-                        ** 2
-                    )
-                    - self.obs[ii] ** 2
-                )
-                """
+                # for the moment, variance is not computed in symmetry sectors
                 if self.print_plaq:
                     self.print_Plaquette(list_of_plaq_strings[ii], self.obs[ii])
         # GET STATISTICS

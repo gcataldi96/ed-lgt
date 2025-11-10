@@ -32,6 +32,8 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
     # Get SU2 rishon operators
     in_ops = SU2_Rishon(spin).ops
     in_ops |= SU2_generators(spin)
+    if background > 0:
+        in_ops["T2_bg"] = SU2_generators(background)["T2"]
     if not pure_theory:
         in_ops |= SU2_matter_operators(has_spin=True, colors=True)
         in_ops |= SU2_generators(1 / 2, matter=True)
@@ -238,6 +240,7 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
             ops[f"N_{label}"] = qmb_op(
                 in_ops, [f"N_{label}"] + ["Iz" for _ in range(2 * lattice_dim)]
             )
+        ops["N-1"] = ops["N_tot"] - identity(ops["N_tot"].shape[0])
     # CASIMIR/ELECTRIC OPERATOR
     ops[f"E_square"] = 0
     for s in "pm":
@@ -254,7 +257,7 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
             id_list = ["Iz" for _ in range(2 * lattice_dim)]
         else:
             id_list = ["ID_psi"] + ["Iz" for _ in range(2 * lattice_dim)]
-        ops["bg"] = qmb_op(in_ops, ["T2"] + id_list)
+        ops["bg"] = qmb_op(in_ops, ["T2_bg"] + id_list)
     return ops
 
 
@@ -267,6 +270,8 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
     # Get SU2 rishon operators
     in_ops = SU2_Rishon_gen(spin).ops
     in_ops |= SU2_generators(spin)
+    if background > 0:
+        in_ops["T2_bg"] = SU2_generators(background)["T2"]
     # Add SU2 matter operators / generators
     if not pure_theory:
         in_ops |= SU2_matter_operators(has_spin=True, colors=True)
@@ -517,7 +522,7 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
             id_list = ["Iz" for _ in range(2 * lattice_dim)]
         else:
             id_list = ["ID_psi"] + ["Iz" for _ in range(2 * lattice_dim)]
-        ops["bg"] = qmb_op(in_ops, ["T2"] + id_list)
+        ops["bg"] = qmb_op(in_ops, ["T2_bg"] + id_list)
     return ops
 
 

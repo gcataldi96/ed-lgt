@@ -11,7 +11,7 @@ __all__ = ["QED_Model"]
 
 
 class QED_Model(QuantumModel):
-    def __init__(self, spin, pure_theory, **kwargs):
+    def __init__(self, spin, pure_theory, get_only_bulk=False, **kwargs):
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
@@ -20,7 +20,10 @@ class QED_Model(QuantumModel):
         # -------------------------------------------------------------------------------
         # Acquire gauge invariant basis and states
         self.gauge_basis, self.gauge_states = QED_gauge_invariant_states(
-            self.spin, self.pure_theory, lattice_dim=self.dim
+            self.spin,
+            self.pure_theory,
+            lattice_dim=self.dim,
+            get_only_bulk=get_only_bulk,
         )
         # -------------------------------------------------------------------------------
         # Acquire operators

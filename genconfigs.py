@@ -150,16 +150,22 @@ g = 1 / beta
 params = {"g": g, "theta": np.linspace(-0.5, 0.5, 20)}
 gen_configs("template", params, f"theta_term/qed_theta2")
 # %%
-params = {"g": np.logspace(-2, 3, 40), "m": np.logspace(-3, 1, 40)}
-gen_configs("template", params, f"string_breaking/phasediagram_nobg")
+params = {"g": np.logspace(-2, 2, 30), "m": np.logspace(-2, 2, 30)}
+gen_configs("template", params, f"string_breaking/static/zd")
 # %%
 params = {
-    "g": [0.1, 1, 3, 5, 10],
-    "m": [0.1, 1, 3, 5, 10],
-    "sector": [6, 8, 10, 12, 14],
-    "momentum_k": [0, 1, 2, 3, 4, 5],
+    "g": np.logspace(-1, 1, 7),
+    "m": np.logspace(-1, 1, 7),
+    "sector": [16, 18, 20],
+    "momentum_k_vals": [0, 1, 2, 3, 4, 5, 6, 7, 8],
 }
-gen_configs("template", params, f"scattering/test")
+gen_configs("template", params, f"scattering/bands2")
+# %%
+params = {"g": np.logspace(-2, 2, 30), "m": np.logspace(-2, 2, 30)}
+gen_configs("template", params, f"scattering/phasediagram_d1")
+# %%
+params = {"momentum_k_vals": np.arange(14, dtype=int)}
+gen_configs("template", params, f"scattering/band3_N0")
 # %%
 from scipy.stats import norm
 
@@ -185,6 +191,10 @@ theta_focused = np.sort(np.concatenate([theta_minus, theta_plus, theta]))
 g = np.linspace(0.95, 2.5, 10)
 params = {"g": g, "theta": theta_focused[20:]}
 gen_configs("template", params, f"theta_term/qed_theta_eigvals")
+
+# %%
+params = {"theta": np.linspace(0.41, 0.44, 15)}
+gen_configs("template", params, f"qed_theta_term/nok")
 # %%
 # SU2 FULL THEORY PHASE DIAGRAM
 params = {"g": np.logspace(-3, 3, 30), "m": np.logspace(-3, 3, 30)}

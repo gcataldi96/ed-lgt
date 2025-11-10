@@ -9,7 +9,7 @@ __all__ = [
 ]
 
 
-def fermi_operators(has_spin, colors=False):
+def fermi_operators(has_spin, colors=False, fermionic=True):
     """
     This functions define the matter field operators of the QED Hamiltonian.
     They are related to spinless Dirac Fermions occupying lattice sites
@@ -21,7 +21,10 @@ def fermi_operators(has_spin, colors=False):
     # Define the MATTER FIELDS OPERATORS
     ops["psi"] = diags(np.array([1], dtype=float), 1, (2, 2))
     ops["psi_dag"] = ops["psi"].transpose()
-    ops["P_psi"] = diags(np.array([1, -1], dtype=float), 0, (2, 2))
+    if fermionic:
+        ops["P_psi"] = diags(np.array([1, -1], dtype=float), 0, (2, 2))
+    else:
+        ops["P_psi"] = identity(2, dtype=float)
     ops["N"] = ops["psi_dag"] * ops["psi"]
     ops["ID_psi"] = identity(2, dtype=float)
     ops["ID"] = identity(2, dtype=float)

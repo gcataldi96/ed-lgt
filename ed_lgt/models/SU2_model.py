@@ -1,7 +1,7 @@
 import numpy as np
 from numba import typed
 from .quantum_model import QuantumModel
-from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm
+from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm, QMB_hamiltonian
 from ed_lgt.modeling import check_link_symmetry, staggered_mask, get_origin_surfaces
 from ed_lgt.operators import (
     SU2_dressed_site_operators,
@@ -114,11 +114,11 @@ class SU2_Model(QuantumModel):
             nbody_sites_list=nbody_sites_list,
             nbody_sym_type=nbody_sym_type,
         )
-        self.default_params()
         if self.sector_configs is None:
             raise ValueError("No configurations found for the given symmetry sectors")
 
     def build_Hamiltonian(self, g, m=None):
+        logger.info(f"----------------------------------------------------")
         logger.info("BUILDING s=1/2 HAMILTONIAN")
         # Hamiltonian Coefficients
         self.SU2_Hamiltonian_couplings(g, m)
@@ -170,7 +170,7 @@ class SU2_Model(QuantumModel):
             # STAGGERED MASS TERM
             for site in ["even", "odd"]:
                 h_terms[f"N_{site}"] = LocalTerm(
-                    self.ops["N_tot"], "N_tot", **self.def_params
+                    self.ops["N-1"], "N-1", **self.def_params
                 )
                 self.H.add_term(
                     h_terms[f"N_{site}"].get_Hamiltonian(
@@ -235,6 +235,7 @@ class SU2_Model(QuantumModel):
         self.H.build(self.ham_format)
 
     def build_gen_Hamiltonian(self, g, m=None):
+        logger.info(f"----------------------------------------------------")
         logger.info("BUILDING generalized HAMILTONIAN")
         # Hamiltonian Coefficients
         self.SU2_Hamiltonian_couplings(g, m)
@@ -459,3 +460,125 @@ class SU2_Model(QuantumModel):
                 "m_odd": -m,  # EFFECTIVE MASS for ODD SITES
                 "m_even": m,  # EFFECTIVE MASS for EVEN SITES
             }
+
+    def build_local_Hamiltonian(self, g, m, R0, TC_symmetry):
+        logger.info(f"----------------------------------------------------")
+        logger.info(f"BUILDING local HAMILTONIAN around {R0}")
+        # -------------------------------------------------------------------------------
+        if self.dim > 1:
+            raise ValueError(f"Local Hamiltonian valid only for D=1, got {self.dim}")
+        self.Hlocal = QMB_hamiltonian(self.lvals, size=0)
+        # -------------------------------------------------------------------------------
+        # Hamiltonian Coefficients
+        self.SU2_Hamiltonian_couplings(g, m)
+        # -------------------------------------------------------------------------------
+        hterms = {}
+        # ELECTRIC HAMILTONIAN
+        hterms["E2"] = LocalTerm(self.ops["E_square"], "E_square", **self.def_params)
+        # MASS TERM
+        hterms["N"] = LocalTerm(self.ops["N-1"], "N-1", **self.def_params)
+        # HOPPING
+        op_names_list = ["Qpx_dag", "Qmx"]
+        op_list = [self.ops[op] for op in op_names_list]
+        hterms["hop"] = TwoBodyTerm("x", op_list, op_names_list, **self.def_params)
+        # DAGGER HOPPING
+        op_names_list = ["Qpx", "Qmx_dag"]
+        op_list = [self.ops[op] for op in op_names_list]
+        hterms["hop_dag"] = TwoBodyTerm("x", op_list, op_names_list, **self.def_params)
+        hop_coeff = self.coeffs["tx_even"]
+        hop_coeff_half = 0.5 * hop_coeff
+        # -------------------------------------------------------------------------------
+        if TC_symmetry:
+            logger.info("TC symmetry: translation + charge conjugation")
+            # ---------------------------------------------------------------------------
+            self.Hlocal.add_term(
+                hterms["E2"].get_Hamiltonian(self.coeffs["E"], self.get_mask([R0]))
+            )
+            # ---------------------------------------------------------------------------
+            self.Hlocal.add_term(
+                hterms["N"].get_Hamiltonian(
+                    ((-1) ** R0) * self.coeffs["m"], self.get_mask([R0])
+                )
+            )
+            # ---------------------------------------------------------------------------
+            # Add the hopping term (j,j+1)
+            self.Hlocal.add_term(
+                hterms["hop"].get_Hamiltonian(hop_coeff_half, mask=self.get_mask([R0]))
+            )
+            # ---------------------------------------------------------------------------
+            # Add the term (j-1,j)
+            self.Hlocal.add_term(
+                hterms["hop"].get_Hamiltonian(
+                    hop_coeff_half,
+                    mask=self.get_mask([(R0 - 1) % self.n_sites]),
+                )
+            )
+            # ---------------------------------------------------------------------------
+            # Add the hermitian conjugate
+            # Add the term (j,j+1)
+            self.Hlocal.add_term(
+                hterms["hop_dag"].get_Hamiltonian(
+                    -hop_coeff_half, mask=self.get_mask([R0])
+                )
+            )
+            # ---------------------------------------------------------------------------
+            # Add the term (j-1,j)
+            self.Hlocal.add_term(
+                hterms["hop_dag"].get_Hamiltonian(
+                    -hop_coeff_half,
+                    mask=self.get_mask([(R0 - 1) % self.n_sites]),
+                )
+            )
+        # ===============================================================================
+        else:
+            # ---------------------------------------------------------------------------
+            self.Hlocal.add_term(
+                hterms["E2"].get_Hamiltonian(
+                    self.coeffs["E"],
+                    self.get_mask([R0, (R0 + 1) % self.n_sites]),
+                )
+            )
+            # ---------------------------------------------------------------------------
+            self.Hlocal.add_term(
+                hterms["N"].get_Hamiltonian(((-1) ** R0) * m, self.get_mask([R0]))
+            )
+            self.Hlocal.add_term(
+                hterms["N"].get_Hamiltonian(
+                    ((-1) ** (R0 + 1)) * m,
+                    self.get_mask([(R0 + 1) % self.n_sites]),
+                )
+            )
+            # ---------------------------------------------------------------------------
+            self.Hlocal.add_term(
+                hterms["hop"].get_Hamiltonian(
+                    hop_coeff_half,
+                    mask=self.get_mask(
+                        [(R0 - 1) % self.n_sites, (R0 + 1) % self.n_sites]
+                    ),
+                )
+            )
+            self.Hlocal.add_term(
+                hterms["hop"].get_Hamiltonian(
+                    hop_coeff, mask=self.get_mask(self.lvals, [R0])
+                )
+            )
+            # ---------------------------------------------------------------------------
+            # Add the hermitian conjugate
+            self.Hlocal.add_term(
+                hterms["hop_dag"].get_Hamiltonian(
+                    -hop_coeff_half,
+                    mask=self.get_mask(
+                        [(R0 - 1) % self.n_sites, (R0 + 1) % self.n_sites]
+                    ),
+                )
+            )
+            self.Hlocal.add_term(
+                hterms["hop_dag"].get_Hamiltonian(-hop_coeff, mask=self.get_mask([R0]))
+            )
+            # ---------------------------------------------------------------------------
+
+    def get_mask(self, sites_list):
+        mask = np.zeros(self.lvals, dtype=bool)
+        for site in sites_list:
+            mask[site] = True
+        return mask

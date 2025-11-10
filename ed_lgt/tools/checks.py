@@ -5,7 +5,7 @@ This module provides utility functions for manipulating quantum many-body operat
 import numpy as np
 from functools import wraps
 from math import prod
-from scipy.sparse import isspmatrix
+from scipy.sparse import isspmatrix, csr_matrix
 from scipy.sparse.linalg import norm
 from time import perf_counter
 import logging
@@ -176,7 +176,7 @@ def validate_parameters(
         raise TypeError(f"array must be np.array, not {type(array)}")
     # -----------------------------------------------------------------------------
     if spmatrix is not None and not isspmatrix(spmatrix):
-        raise TypeError(f"spmatrix should be a BOOL, not {type(spmatrix)}")
+        raise TypeError(f"spmatrix should be sparse, not {type(spmatrix)}")
     if index is not None and not isinstance(index, int):
         raise TypeError(f"index should be a SCALAR INT, not {type(index)}")
     if threshold is not None and not isinstance(threshold, float):
@@ -327,13 +327,14 @@ def check_commutator(A, B):
     ratio = norma / norma_max
     # check=(AB!=BA).nnz
     if ratio > 10 ** (-15):
-        logger.debug("    ERROR: A and B do NOT COMMUTE")
-        logger.debug("    NORM", norma)
-        logger.debug("    RATIO", ratio)
-    logger.debug("")
+        logger.info("ERROR: A and B do NOT COMMUTE")
+        logger.info("NORM", norma)
+        logger.info("RATIO", ratio)
+        raise ValueError(f"A & B do not commute: NORM[A,B]={norma}, RATIO {ratio}")
+    logger.info("")
 
 
-def check_matrix(A, B):
+def check_matrix(A: csr_matrix, B: csr_matrix):
     """
     Check the difference between two sparse matrices A and B computing the Frobenius Norm
 
@@ -345,7 +346,7 @@ def check_matrix(A, B):
         TypeError: If the input arguments are of incorrect types or formats.
         ValueError: If the matrices have different shapes or the difference ratio is above a threshold.
     """
-    # CHEKS THE DIFFERENCE BETWEEN TWO SPARSE MATRICES
+    # CHECKS THE DIFFERENCE BETWEEN TWO SPARSE MATRICES
     validate_parameters(spmatrix=A)
     validate_parameters(spmatrix=B)
     if A.shape != B.shape:
@@ -353,9 +354,10 @@ def check_matrix(A, B):
     norma = norm(A - B)
     norma_max = max(norm(A + B), norm(A), norm(B))
     ratio = norma / norma_max
+    logger.debug(f"NORM {norma}, norma max {norma_max}, RATIO {ratio}")
     if ratio > 1e-14:
-        logger.debug("    ERROR: A and B are DIFFERENT MATRICES")
-        raise ValueError(f"    NORM {norma}, RATIO {ratio}")
+        logger.info("ERROR: A and B are DIFFERENT MATRICES")
+        raise ValueError(f"NORM {norma}, RATIO {ratio}")
 
 
 def check_hermitian(A):
@@ -372,4 +374,4 @@ def check_hermitian(A):
     A_dag = A.getH()
     check_matrix(A, A_dag)
     # Get the Hermitian
-    logger.debug("HERMITICITY VALIDATED")
+    logger.info("HERMITICITY VALIDATED")

@@ -1,5 +1,6 @@
 import numpy as np
 from numba import njit, prange
+from scipy.sparse import csc_matrix
 
 
 __all__ = [
@@ -11,6 +12,8 @@ __all__ = [
     "compare_configs",
     "get_translated_state_indices",
     "get_reference_indices",
+    "subenv_map_to_unique_indices",
+    "build_sector_expansion_projector",
 ]
 
 
@@ -35,7 +38,7 @@ def config_to_index(config, loc_dims):
     The latter ones can display local Hilbert space with different dimension.
     The order of the sites must match the order of the dimensionality of the local basis
     Args:
-        loc_states (list of ints): list of numbered state of the lattice sites
+        config (np.ndarray of ints): list of numbered state of the lattice sites
         loc_dims (list of ints, np.ndarray of ints, or int): list of lattice site dimensions
             (in the same order as they are stored in the loc_states!)
     Returns:
@@ -43,7 +46,8 @@ def config_to_index(config, loc_dims):
     """
     qmb_index = 0
     multiplier = 1
-    for site_index in reversed(range(len(config))):
+    n_sites = len(config)
+    for site_index in range(n_sites - 1, -1, -1):
         qmb_index += config[site_index] * multiplier
         multiplier *= loc_dims[site_index]
     return qmb_index
@@ -114,6 +118,26 @@ def config_to_index_binarysearch(config, unique_configs):
     return -1  # Configuration not found
 
 
+@njit(cache=True, parallel=True)
+def subenv_map_to_unique_indices(
+    subsystem_configs: np.ndarray,  # (sector_dim, |S|)
+    environment_configs: np.ndarray,  # (sector_dim, |E|)
+    unique_subsys_configs: np.ndarray,  # (subsys_dim, |S|)
+    unique_env_configs: np.ndarray,  # (env_dim, |E|)
+):
+    sector_dim = subsystem_configs.shape[0]
+    subsys_map = np.empty(sector_dim, dtype=np.int64)
+    env_map = np.empty(sector_dim, dtype=np.int64)
+    for idx in prange(sector_dim):
+        env_map[idx] = config_to_index_linsearch(
+            environment_configs[idx], unique_env_configs
+        )
+        subsys_map[idx] = config_to_index_linsearch(
+            subsystem_configs[idx], unique_subsys_configs
+        )
+    return subsys_map, env_map
+
+
 @njit(cache=True)
 def compare_configs(config1, config2):
     # Custom function to compare configurations element-wise
@@ -173,3 +197,26 @@ def get_reference_indices(sector_configs):
     ref_indices = np.flatnonzero(independent_indices)
     norm = normalization[ref_indices]
     return ref_indices, norm
+
+
+def build_sector_expansion_projector(
+    sector_configs: np.ndarray, local_dims: np.ndarray
+) -> csc_matrix:
+    """
+    sector_configs: (sector_dim, n_sites) int64 — allowed configs of a system with n_sites, each entry in [0, local_dims[j]-1]
+    local_dims: (n_sites,) int64 — local dims for sites in the SAME order as sector_configs columns
+
+    Returns:
+      projector: CSC matrix of shape (prod(local_dims), sector_dim) with one 1 per column.
+    """
+    sector_dim, n_sites = sector_configs.shape
+    local_dims = np.ascontiguousarray(local_dims, dtype=np.int32)
+    assert n_sites == len(local_dims)
+    D_full = int(np.prod(local_dims))
+    rows = np.empty(sector_dim, dtype=np.int64)
+    cols = np.arange(sector_dim, dtype=np.int64)
+    data = np.ones(sector_dim, dtype=np.float64)
+    for idx in range(sector_dim):
+        rows[idx] = config_to_index(sector_configs[idx], local_dims)
+    projector = csc_matrix((data, (rows, cols)), shape=(D_full, sector_dim))
+    return projector

@@ -122,6 +122,8 @@ class TwoBodyTerm(QMBTerm):
             col_list = np.concatenate(all_col_list)
             value_list = np.concatenate(all_value_list) * strength
             if add_dagger:
+                if self.momentum_basis is not None and self.momentum_basis["pair_mode"]:
+                    raise NotImplementedError("Add the explicit HC term!")
                 # Add Hermitian conjugate after the full term construction
                 dagger_row_list = col_list
                 dagger_col_list = row_list

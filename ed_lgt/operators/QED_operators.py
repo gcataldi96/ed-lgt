@@ -19,7 +19,7 @@ __all__ = [
 ]
 
 
-def QED_rishon_operators(spin, pure_theory, U):
+def QED_rishon_operators(spin, pure_theory, U, fermionic=True):
     """
     This function computes the QED Rishon modes adopted
     for the U(1) Lattice Gauge Theory for the chosen spin representation of the Gauge field.
@@ -43,7 +43,10 @@ def QED_rishon_operators(spin, pure_theory, U):
     # Dictionary of Operators
     ops = {}
     # PARITY OPERATOR of RISHON MODES
-    ops["P"] = diags([(-1) ** i for i in range(size)], 0, shape)
+    if fermionic:
+        ops["P"] = diags([(-1) ** i for i in range(size)], 0, shape)
+    else:
+        ops["P"] = identity(size)
     # Based on the U definition, define the diagonal entries of the rishon modes
     if U == "ladder":
         zm_diag = [(-1) ** (i + 1) for i in range(size - 1)][::-1]
@@ -88,7 +91,9 @@ def QED_rishon_operators(spin, pure_theory, U):
     return ops
 
 
-def QED_dressed_site_operators(spin, pure_theory, lattice_dim, U="ladder"):
+def QED_dressed_site_operators(
+    spin, pure_theory, lattice_dim, U="ladder", fermionic=True
+):
     """
     This function generates the dressed-site operators of the QED Hamiltonian
     in d spatial dimensions for d=1,2,3 (pure or with matter fields)
@@ -116,7 +121,7 @@ def QED_dressed_site_operators(spin, pure_theory, lattice_dim, U="ladder"):
     # Lattice Dimensions
     dimensions = "xyz"[:lattice_dim]
     # Get the Rishon operators according to the chosen n truncation
-    in_ops = QED_rishon_operators(spin, pure_theory, U)
+    in_ops = QED_rishon_operators(spin, pure_theory, U, fermionic)
     # Size of the rishon operators
     z_size = int(2 * spin + 1)
     # Size of the whole dressed site
@@ -129,7 +134,7 @@ def QED_dressed_site_operators(spin, pure_theory, lattice_dim, U="ladder"):
         parity = [1, -1]
         # Acquire also matter field operators
         tot_dim *= 2
-        in_ops |= QED_matter_operators(has_spin=False)
+        in_ops |= QED_matter_operators(has_spin=False, fermionic=fermionic)
     # Dictionary for operators
     ops = {}
     if lattice_dim == 1:

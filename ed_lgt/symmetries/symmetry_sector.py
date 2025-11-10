@@ -303,6 +303,10 @@ def check_glob_sym_partial(config, sym_op_diags, sym_sectors, sym_type_flag):
                     return False
             # Full configuration must match exactly
             else:
+                """if not (
+                    np.isclose(operation_result, sym_sectors[jj], atol=1e-13)
+                    or np.isclose(operation_result, sym_sectors[jj] - 4, atol=1e-13)
+                ):"""
                 if not np.isclose(operation_result, sym_sectors[jj], atol=1e-13):
                     return False
         # Z2 case

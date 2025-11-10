@@ -160,6 +160,7 @@ class QMB_hamiltonian:
         else:
             raise ValueError(f"n_eigs must be int or 'full', not {n_eigs}.")
         # Select diagonalization format
+        logger.info(f"----------------------------------------------------")
         if self.Ham_type == "dense" or self.n_eigs == "full":
             logger.info("DIAGONALIZE (dense) HAMILTONIAN")
             Nenergies, Npsi = array_eigh(self.Ham)
@@ -175,6 +176,8 @@ class QMB_hamiltonian:
             order = np.argsort(Nenergies)
             Nenergies, Npsi = Nenergies[order], Npsi[:, order]
         # Save the eigenstates as QMB_states
+        logger.info(f"TOT ENERGY: {Nenergies}")
+        logger.info(f"EN DENSITY: {Nenergies/ np.prod(self.lvals)}")
         self.Nenergies = Nenergies / np.prod(self.lvals)
         self.Npsi = [
             QMB_state(Npsi[:, ii], self.lvals, self.loc_dims)
@@ -412,7 +415,7 @@ class QMB_hamiltonian:
 
     def print_energy(self, en_state):
         logger.info("====================================================")
-        logger.info(f"{en_state} ENERGY: {round(self.Nenergies[en_state],9)}")
+        logger.info(f"{en_state} ENERGY: {round(self.Nenergies[en_state],16)}")
 
     def get_sparsity(self):
         sparsity = len(self.row_list) / (self.shape[0] ** 2)

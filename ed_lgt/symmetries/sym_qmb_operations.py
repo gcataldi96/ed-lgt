@@ -22,31 +22,106 @@ def nbody_term(
     op_list: np.ndarray,
     op_sites_list: np.ndarray,
     sector_configs: np.ndarray,
-    momentum_basis: np.ndarray = None,
+    momentum_basis=None,  # dict with CSC/CSR arrays OR old dense ndarray (back-compat)
 ):
-    if len(op_sites_list) not in [1, 2, 4]:
-        msg = f"nbody operators can be only of 1,2,4 sites, got {len(op_list)}"
+    """
+    Build triplets (row, col, value) for an n-body operator, optionally projected
+    into a momentum sector.
+
+    Parameters
+    ----------
+    op_list : ndarray
+        Shape (M, n_sites, d_loc, d_loc) with M in {1,2,4}.
+    op_sites_list : ndarray
+        Shape (M,), int32 — the lattice sites the operator acts on.
+    sector_configs : ndarray
+        Shape (N, n_sites), int32 — basis configurations in the (symmetry) sector.
+    momentum_basis : dict | ndarray | None
+        If dict, must contain CSC/CSR arrays:
+            {
+              "n_rows", "n_cols",
+              "L_col_ptr", "L_row_idx", "L_data",
+              "R_row_ptr", "R_col_idx", "R_data"
+            }
+        If ndarray (legacy), shape (N, Bdim) complex128/float64.
+        If None, compute in real-space sector (no momentum projection).
+
+    Returns
+    -------
+    row_list, col_list, value_list : ndarrays
+        Triplet arrays for the projected operator.
+    """
+    # normalize site-count & sanity-check
+    M = int(len(op_sites_list))
+    if M not in [1, 2, 4]:
+        msg = f"nbody operators can be only of 1,2,4 sites, got {M}"
         raise NotImplementedError(msg)
-    if momentum_basis is not None:
-        if len(op_list) == 1:
-            return nbody_data_momentum_1site(
-                op_list, op_sites_list, sector_configs, momentum_basis
-            )
-        elif len(op_list) == 2:
-            return nbody_data_momentum_2sites(
-                op_list, op_sites_list, sector_configs, momentum_basis
-            )
-        elif len(op_list) == 4:
-            return nbody_data_momentum_4sites(
-                op_list, op_sites_list, sector_configs, momentum_basis
-            )
-    else:
-        if len(op_list) == 1:
+    # === No momentum projection → original real-space path ===
+    if momentum_basis is None:
+        if M == 1:
             return localbody_data_par(op_list[0], op_sites_list[0], sector_configs)
-        elif len(op_list) == 2:
+        elif M == 2:
             return nbody_data_2sites(op_list, op_sites_list, sector_configs)
-        elif len(op_list) == 4:
+        else:  # M == 4
             return nbody_data_4sites(op_list, op_sites_list, sector_configs)
+    else:
+        # Required keys (we do not use n_rows/n_cols here, but keep them checked)
+        required = (
+            "L_col_ptr",
+            "L_row_idx",
+            "L_data",
+            "R_row_ptr",
+            "R_col_idx",
+            "R_data",
+        )
+        for k in required:
+            if k not in momentum_basis:
+                raise KeyError(
+                    f"momentum_basis dict missing required key '{k}'. "
+                    f"Present keys: {tuple(momentum_basis.keys())}"
+                )
+        L_col_ptr = momentum_basis["L_col_ptr"]
+        L_row_idx = momentum_basis["L_row_idx"]
+        L_data = momentum_basis["L_data"]
+        R_row_ptr = momentum_basis["R_row_ptr"]
+        R_col_idx = momentum_basis["R_col_idx"]
+        R_data = momentum_basis["R_data"]
+        if M == 1:
+            return nbody_data_momentum_1site(
+                op_list,
+                op_sites_list,
+                sector_configs,
+                L_col_ptr,
+                L_row_idx,
+                L_data,
+                R_row_ptr,
+                R_col_idx,
+                R_data,
+            )
+        elif M == 2:
+            return nbody_data_momentum_2sites(
+                op_list,
+                op_sites_list,
+                sector_configs,
+                L_col_ptr,
+                L_row_idx,
+                L_data,
+                R_row_ptr,
+                R_col_idx,
+                R_data,
+            )
+        else:
+            return nbody_data_momentum_4sites(
+                op_list,
+                op_sites_list,
+                sector_configs,
+                L_col_ptr,
+                L_row_idx,
+                L_data,
+                R_row_ptr,
+                R_col_idx,
+                R_data,
+            )
 
 
 @njit(parallel=True, cache=True)

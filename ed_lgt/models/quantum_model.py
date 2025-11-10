@@ -1,7 +1,6 @@
 import numpy as np
-from typing import Optional
-from scipy.sparse import csc_matrix, isspmatrix, csr_matrix
-from scipy.sparse.linalg import expm
+from scipy.sparse import csc_matrix, isspmatrix, csr_matrix, identity
+from scipy.sparse.linalg import expm, norm
 from math import prod
 from ed_lgt.modeling import (
     LocalTerm,
@@ -23,12 +22,13 @@ from ed_lgt.symmetries import (
     get_momentum_basis,
     symmetry_sector_configs,
     config_to_index_binarysearch,
+    config_to_index,
+    subenv_map_to_unique_indices,
 )
+from ed_lgt.tools import exclude_columns
 import logging
 
 logger = logging.getLogger(__name__)
-
-
 __all__ = ["QuantumModel"]
 
 
@@ -38,9 +38,6 @@ class QuantumModel:
         lvals: list[int],
         has_obc: list[bool],
         ham_format="sparse",
-        logical_unit_size: int = 1,
-        momentum_basis: bool = False,
-        momentum_k=np.int32(0),
         basis_projector: np.ndarray | None = None,
     ):
         # Lattice parameters
@@ -56,42 +53,184 @@ class QuantumModel:
         # Staggered Basis
         self.staggered_basis = False
         # Momentum Basis
-        self.momentum_basis = momentum_basis
-        self.momentum_k = momentum_k
-        self.logical_unit_size = np.int32(logical_unit_size)
+        self.momentum_basis = None
         # Hamiltonian format
         self.ham_format = ham_format
         # Efficient reduced basis projector
         self.basis_projector = basis_projector
         if basis_projector is not None:
             logger.info(f"Efficient basis projector: {basis_projector.shape}")
+        # Dictionary for system partition
+        # A cache keyed by each bipartition (keep-indices tuple), storing everything you need for that cut.
+        self._partition_cache: dict[tuple[int, ...], dict] = {}
         # Dictionary for results
         self.res = {}
 
     def default_params(self):
-        if self.momentum_basis and self.sector_configs is not None:
-            if self.has_obc[0]:
-                raise ValueError(f"Momentum is not conserved in OBC")
-            self.B = get_momentum_basis(
-                self.sector_configs, self.logical_unit_size, self.momentum_k
-            )
-            logger.info(f"Momentum basis {self.momentum_k} shape {self.B.shape}")
-            hamiltonian_size = self.B.shape[1]
+        if self.momentum_basis is not None and self.sector_configs is not None:
+            pair_mode = self.momentum_basis.get("pair_mode", False)
+            if pair_mode:
+                hamiltonian_size = None  # rectangular H(k1,k2); can't create a square H
+            else:
+                hamiltonian_size = self.momentum_basis["L_col_ptr"].shape[0] - 1
         elif self.sector_configs is not None:
-            self.B = None
             hamiltonian_size = self.sector_configs.shape[0]
         else:
             hamiltonian_size = np.prod(self.loc_dims)
-            self.B = None
         # Define the default parameters as a dictionary
         self.def_params = {
             "lvals": self.lvals,
             "has_obc": self.has_obc,
             "sector_configs": self.sector_configs,
-            "momentum_basis": self.B,
+            "momentum_basis": self.momentum_basis,
         }
-        # Initialize the Hamiltonian
-        self.H = QMB_hamiltonian(self.lvals, size=hamiltonian_size)
+        if hamiltonian_size is not None:
+            # Initialize the Hamiltonian
+            self.H = QMB_hamiltonian(self.lvals, size=hamiltonian_size)
+        else:
+            self.H = None
+
+    def get_momentum_sector(
+        self,
+        k_unit_cell_size: list[int],
+        k_vals: list[int],
+        TC_symmetry: bool = False,
+    ):
+        if self.sector_configs is None:
+            raise ValueError("symmetry sector_configs not defined yet")
+        if self.has_obc[0]:
+            raise ValueError("Momentum is not conserved with OBC.")
+        if np.ndim(k_vals) == 0:
+            k_vals = np.array([int(k_vals)], dtype=np.int32)
+        else:
+            k_vals = np.ascontiguousarray(k_vals, dtype=np.int32)
+        if k_vals.size != self.dim:
+            raise ValueError(f"expected k_vals shape {self.dim}, got {k_vals.shape}")
+        k_unit_cell_size = np.ascontiguousarray(k_unit_cell_size, dtype=np.int32)
+        k_vals = np.ascontiguousarray(k_vals, dtype=np.int32)
+        logger.info(f"----------------------------------------------------")
+        logger.info(f"Momentum sector {k_vals}")
+        L_col_ptr, L_row_idx, L_data, R_row_ptr, R_col_idx, R_data = get_momentum_basis(
+            sector_configs=self.sector_configs,
+            lvals=self.lvals,
+            unit_cell_size=k_unit_cell_size,
+            k_vals=k_vals,
+            TC_symmetry=TC_symmetry,
+        )
+        n_rows = self.sector_configs.shape[0]
+        n_cols = L_col_ptr.shape[0] - 1
+        # store for later use in projectors
+        self.momentum_basis = {
+            "pair_mode": False,
+            "n_rows": n_rows,
+            "n_cols": n_cols,
+            "L_col_ptr": L_col_ptr,
+            "L_row_idx": L_row_idx,
+            "L_data": L_data,
+            "R_row_ptr": R_row_ptr,
+            "R_col_idx": R_col_idx,
+            "R_data": R_data,
+        }
+        logger.info(f"Momentum basis shape ({n_rows},{n_cols})")
+
+    def set_momentum_pair(
+        self,
+        k_left: list[int],
+        k_right: list[int],
+        k_unit_cell_size: list[int],
+        TC_symmetry: bool,
+    ):
+        """
+        Build *two* momentum projectors P_{kL} and P_{kR} to enable rectangular
+        projections P_{kL}^\dagger O P_{kR}.
+
+        Notes:
+          - Does not resize the main Hamiltonian container; this is for projected
+            blocks and expectation values across different k's.
+          - Keeps self.momentum_basis=None to signal "pair mode".
+        """
+        if self.sector_configs is None:
+            raise ValueError("symmetry sector_configs not defined yet")
+        if self.has_obc[0]:
+            raise ValueError("Momentum is not conserved with OBC.")
+        k_unit_cell_size = np.ascontiguousarray(k_unit_cell_size, dtype=np.int32)
+        k_left = np.ascontiguousarray(k_left, dtype=np.int32)
+        k_right = np.ascontiguousarray(k_right, dtype=np.int32)
+        logger.info(f"----------------------------------------------------")
+        logger.info(f"Combined Momenta {k_left} {k_right}")
+        # Left momentum kL
+        L_col_ptr, L_row_idx, L_data, _, _, _ = get_momentum_basis(
+            sector_configs=self.sector_configs,
+            lvals=self.lvals,
+            unit_cell_size=k_unit_cell_size,
+            k_vals=k_left,
+            TC_symmetry=TC_symmetry,
+        )
+        n_cols_L = L_col_ptr.shape[0] - 1
+        # Right momentum kR
+        _, _, _, R_row_ptr, R_col_idx, R_data = get_momentum_basis(
+            sector_configs=self.sector_configs,
+            lvals=self.lvals,
+            unit_cell_size=k_unit_cell_size,
+            k_vals=k_right,
+            TC_symmetry=TC_symmetry,
+        )
+        n_cols_R = int(R_col_idx.max()) + 1
+        # Save the momentum basis
+        self.momentum_basis = {
+            "pair_mode": True,
+            "n_rows_full": self.sector_configs.shape[0],
+            "n_cols_L": n_cols_L,
+            "n_cols_R": n_cols_R,
+            "L_col_ptr": L_col_ptr,
+            "L_row_idx": L_row_idx,
+            "L_data": L_data,
+            "R_row_ptr": R_row_ptr,
+            "R_col_idx": R_col_idx,
+            "R_data": R_data,
+            "k_left": k_left,
+            "k_right": k_right,
+        }
+        msg = f"Momenta kL={k_left} (cols={n_cols_L}), kR={k_right} (cols={n_cols_R})"
+        logger.info(msg)
+
+    def check_momentum_pair(self):
+        N = self.sector_configs.shape[0]
+        B_L = self.momentum_basis["L_col_ptr"].shape[0] - 1
+        B_R = int(self.momentum_basis["R_col_idx"].max()) + 1
+        P_L = csc_matrix(
+            (
+                self.momentum_basis["L_data"],
+                self.momentum_basis["L_row_idx"],
+                self.momentum_basis["L_col_ptr"],
+            ),
+            shape=(N, B_L),
+        )
+        P_R = csr_matrix(
+            (
+                self.momentum_basis["R_data"],
+                self.momentum_basis["R_col_idx"],
+                self.momentum_basis["R_row_ptr"],
+            ),
+            shape=(N, B_R),
+        )
+        G_L = P_L.conj().T @ P_L
+        G_R = P_R.conj().T @ P_R
+        MIX = P_L.conj().T @ P_R
+        normL2 = norm(G_L - identity(B_L))
+        normR2 = norm(G_R - identity(B_R))
+        normMIX = norm(MIX)
+        logger.info(f"norm: (PL^dag @ PL) -1: {normL2}")
+        logger.info(f"norm: (PL^dag @ PL) -1: {normR2}")
+        logger.info(f"norm: (PL^dag @ PR): {normMIX}")
+        if normL2 > 1e-12:
+            raise ValueError("PL is not a projector")
+        if normR2 > 1e-12:
+            raise ValueError("RL is not a projector")
+        k1 = self.momentum_basis["k_left"]
+        k2 = self.momentum_basis["k_right"]
+        if k1 != k2 and normMIX > 1e-12:
+            raise ValueError("The two basis are not orthogonal")
 
     def project_operators(self, ops_dict: dict[str, csr_matrix]):
         """
@@ -174,27 +313,30 @@ class QuantumModel:
         nbody_sites_list=None,
         nbody_sym_type: str | None = None,
     ):
+        logger.info(f"----------------------------------------------------")
         # ================================================================================
         # GLOBAL ABELIAN SYMMETRIES
         if global_ops is not None:
-            logger.debug("Global Symmetry operators")
+            logger.info("Global Symmetry operators")
             global_ops_diags = get_symmetry_sector_generators(
                 global_ops, action="global"
             )
         # ================================================================================
         # ABELIAN Z2 SYMMETRIES
         if link_ops is not None:
-            logger.debug("Link Symmetry operators")
+            logger.info("Link Symmetry operators")
             link_ops_diags = get_symmetry_sector_generators(link_ops, action="link")
             pair_list = get_lattice_link_site_pairs(self.lvals, self.has_obc)
         # ================================================================================
         # nBODY ABELIAN SYMMETRIES
         if nbody_ops is not None:
-            logger.debug("Nbody Symmetry operators")
+            logger.info("Nbody Symmetry operators")
             nbody_ops_diags = get_symmetry_sector_generators(nbody_ops, action="nbody")
+        else:
+            nbody_ops_diags = None
         # ================================================================================
         if global_ops is not None and link_ops is not None:
-            logger.debug("Global & Link symmetry sector")
+            logger.info("Global & Link Symmetry sector")
             self.sector_configs = symmetry_sector_configs(
                 loc_dims=self.loc_dims,
                 glob_op_diags=global_ops_diags,
@@ -205,21 +347,21 @@ class QuantumModel:
                 pair_list=pair_list,
             )
         elif global_ops is not None:
-            logger.debug("Global symmetry sector")
+            logger.info("Global Symmetry sector")
             self.sector_configs = global_abelian_sector(
                 loc_dims=self.loc_dims,
-                sym_op_diags=global_ops,
+                sym_op_diags=global_ops_diags,
                 sym_sectors=np.array(global_sectors, dtype=float),
                 sym_type=global_sym_type,
             )
         elif link_ops is not None:
             if nbody_ops is not None:
-                logger.debug("Link & Nbody symmetry sector")
+                logger.info("Link & Nbody Symmetry sector")
             else:
-                logger.debug("Link symmetry sector")
+                logger.info("Link Symmetry sector")
             self.sector_configs = get_link_sector_configs(
                 loc_dims=self.loc_dims,
-                link_op_diags=link_ops,
+                link_op_diags=link_ops_diags,
                 link_sectors=link_sectors,
                 pair_list=pair_list,
                 nbody_op_diags=nbody_ops_diags,
@@ -237,16 +379,191 @@ class QuantumModel:
     def time_evolution_Hamiltonian(self, initial_state, time_line):
         self.H.time_evolution(initial_state, time_line, self.loc_dims)
 
+    # ---- Momentum-basis wrappers (no copies) ----
+    def _basis_Pk_as_csc(self):
+        """Return B as a SciPy CSC matrix using the stored arrays (no copy)."""
+        if self.momentum_basis is None:
+            return None
+        mb = self.momentum_basis
+        shape = (mb["n_rows"], mb["n_cols"])
+        return csc_matrix((mb["L_data"], mb["L_row_idx"], mb["L_col_ptr"]), shape=shape)
+
+    def _basis_Pk_as_csr(self):
+        """Return B as a SciPy CSR matrix using the stored arrays (no copy)."""
+        if self.momentum_basis is None:
+            return None
+        mb = self.momentum_basis
+        shape = (mb["n_rows"], mb["n_cols"])
+        return csr_matrix((mb["R_data"], mb["R_col_idx"], mb["R_row_ptr"]), shape=shape)
+
+    def _project_state_with_basis(self, state_realspace):
+        """
+        Compute psi_k = B^† psi (M-vector) using the stored CSR arrays.
+        Always returns complex128 (safe for both Γ and finite-k).
+        """
+        if self.momentum_basis is None:
+            # no momentum sector → identity map
+            return state_realspace.astype(np.complex128, copy=False)
+
+        mb = self.momentum_basis
+        n_rows = mb["n_rows"]
+        n_cols = mb["n_cols"]
+        row_ptr = mb["R_row_ptr"]
+        col_idx = mb["R_col_idx"]
+        data = mb["R_data"]
+
+        psi_out = np.zeros(n_cols, dtype=np.complex128)
+        x = state_realspace  # (N,)
+        # Accumulate: psi_out[j] += conj(B[r,j]) * x[r]
+        for r in range(n_rows):
+            xr = x[r]
+            if xr == 0:  # tiny micro-optimization
+                continue
+            start = row_ptr[r]
+            stop = row_ptr[r + 1]
+            for p in range(start, stop):
+                j = col_idx[p]
+                v = data[p]
+                psi_out[j] += np.conj(v) * xr
+        return psi_out
+
     def momentum_basis_projection(self, operator):
-        # Project the Hamiltonian onto the momentum sector with k=0
-        if self.B is None:
+        """
+        Project an operator A onto the momentum sector: A' = B^† A B.
+        If operator == "H": project self.H.Ham in-place and return it.
+        Else 'operator' can be a scipy.sparse matrix (CSR/CSC/COO) or ndarray.
+        Returns the projected sparse matrix (CSR).
+        """
+        if self.momentum_basis is None:
             raise ValueError("Basis projector B is not set.")
-        if np.all(isinstance(operator, str), operator == "H"):
-            self.H.Ham = self.B.transpose() * self.H.Ham * self.B
+        B_csc = self._basis_as_csc()
+        # 1) pick A
+        if isinstance(operator, str) and operator == "H":
+            A = self.H.Ham
         else:
-            return self.B.transpose() * operator * self.B
+            A = operator
+        # Coerce to sparse
+        if not isspmatrix(A):
+            A = csr_matrix(A)
+        else:
+            A = A.tocsr()  # good for left-multiply
+        # 2) Y = A @ B  (N × M), keep sparse
+        Y = A @ B_csc
+        # 3) A' = B^† @ Y = (B_csc.conj().T) @ Y  (M × M)
+        A_proj = (B_csc.conj().T) @ Y  # returns sparse
+        # If projecting H, store it back in your Hamiltonian container
+        if isinstance(operator, str) and operator == "H":
+            self.H.Ham = A_proj.tocsr()
+        else:
+            return A_proj.tocsr()
+
+    def _get_partition(self, keep_indices):
+        """
+        Build (and cache) all of the bits needed for a given bipartition of the system.
+
+        Args:
+            keep_indices:
+                List or tuple of site-indices (0..n_sites-1) that you want to keep
+                in the “subsystem".
+                The complement of these indices form the “environment”.
+        Returns:
+            A dict with keys:
+
+            - "subsys": (N_states x len(keep_indices)) array
+                The full list of subsystem configurations, one row per symmetry-sector state.
+
+            - "env": (N_states x (n_sites-len(keep_indices))) array
+              The full list of environment configurations, complementary to “subsys”.
+
+            - "uniq_sub": (n_unique_sub x len(keep_indices)) array
+                Unique configurations of the subsystem.
+
+            - "uniq_env": (n_unique_env x (n_sites-len(keep_indices))) array
+                Unique configurations of the environment.
+
+        Caching behavior:
+        -----------------
+        We store everything, keyed by the sorted tuple of keep_indices.  That way
+        if you ever re-ask for the same cut, we do zero work—just a dict lookup.
+        """
+        key = tuple(sorted(keep_indices))
+        logger.info("----------------------------------------------------")
+        logger.info(f"Bipartite the system: SUBSYS {key}")
+        if key not in self._partition_cache:
+            # Determine the environmental indices
+            env_indices = [ii for ii in range(self.n_sites) if ii not in keep_indices]
+            env_indices = np.array(env_indices)
+            keep_indices = np.array(keep_indices)
+            # ---------------------------------------------------------------------------------
+            # Distinguish between the case of symmetry sector and the standard case
+            if self.sector_configs is not None:
+                # SYMMETRY SECTOR
+                # Separate subsystem and environment configurations
+                logger.info("get sybsystem configs")
+                subsys_configs = exclude_columns(self.sector_configs, env_indices)
+                logger.info("get environment configs")
+                env_configs = exclude_columns(self.sector_configs, keep_indices)
+                # Find unique subsystem and environment configurations
+                unique_subsys_configs = np.unique(subsys_configs, axis=0)
+                # Initialize the RDM with shape = number of unique subsys configs
+                unique_env_configs = np.unique(env_configs, axis=0)
+                # Dimensions of the partitions
+                subsys_dim = unique_subsys_configs.shape[0]
+                env_dim = unique_env_configs.shape[0]
+                # Get the maps from subsys_configs to unique_subsys_configs (same for env)
+                subsys_map, env_map = subenv_map_to_unique_indices(
+                    subsystem_configs=subsys_configs,
+                    environment_configs=env_configs,
+                    unique_subsys_configs=unique_subsys_configs,
+                    unique_env_configs=unique_env_configs,
+                )
+            else:
+                # NO SYMMETRY SECTOR
+                # Determine the dimensions of the subsystem and environment for the bipartition
+                subsys_dim = np.prod([self.loc_dims[ii] for ii in keep_indices])
+                env_dim = np.prod([self.loc_dims[ii] for ii in env_indices])
+            # ---------------------------------------------------------------------------------
+            # Save the partition information
+            self._partition_cache[key] = {
+                "subsys_indices": keep_indices,
+                "unique_subsys_configs": unique_subsys_configs,
+                "env_indices": env_indices,
+                "unique_env_configs": unique_env_configs,
+                "subsys_dim": subsys_dim,
+                "env_dim": env_dim,
+                "subsys_map": subsys_map,
+                "env_map": env_map,
+            }
+        return self._partition_cache[key]
+
+    def build_projector_from_sector_to_fullspace(
+        self, indices: list[int]
+    ) -> csc_matrix:
+        """
+        Build the projector that promotes any object living an subsystem (selecting keep_indices)
+        where symmetry sectors are selected, to the full subsystem space where the symmetry sectors
+        are not selected.
+        """
+        unique_subsys_configs = self._get_partition(indices)["unique_subsys_configs"]
+        subsys_dim = unique_subsys_configs.shape[0]
+        subsys_loc_dims = self.loc_dims[indices]
+        tot_subsys_dim = np.prod(subsys_loc_dims)
+        # Build entries of the projector
+        rows = np.empty(subsys_dim, dtype=np.int64)
+        cols = np.arange(subsys_dim, dtype=np.int64)
+        data = np.ones(subsys_dim, dtype=np.float64)
+        # Run over the subsystem_configs
+        for idx in range(subsys_dim):
+            rows[idx] = config_to_index(
+                config=unique_subsys_configs[idx], loc_dims=subsys_loc_dims
+            )
+        # Build the project as a sparse column matrix
+        P = csc_matrix((data, (rows, cols)), shape=(tot_subsys_dim, subsys_dim))
+        return P
 
     def get_qmb_state_from_configs(self, configs):
+        if self.momentum_basis is not None:
+            raise NotImplementedError("cannot get state configs within momentum sector")
         # INITIALIZE the STATE
         state = np.zeros(len(self.sector_configs), dtype=np.complex128)
         # Get the corresponding QMB index of each config
@@ -257,9 +574,6 @@ class QuantumModel:
                 raise ValueError(f"config not compatible with the symmetry sector")
             logger.info(f"{config} in state {index}")
             state[index] = complex(1 / np.sqrt(len(configs)), 0)
-        if self.momentum_basis and self.B is not None:
-            # Project the state in the momentum sector
-            state = self.B.transpose().dot(state)
         logger.info("----------------------------------------------------")
         return state
 

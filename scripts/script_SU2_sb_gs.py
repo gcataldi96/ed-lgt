@@ -8,7 +8,6 @@ os.environ["NUMBA_NUM_THREADS"] = str(B)
 
 import numpy as np
 from ed_lgt.models import DFL_Model
-from ed_lgt.tools import stag_avg
 from ed_lgt.modeling import get_lattice_link_site_pairs
 from ed_lgt.symmetries import get_symmetry_sector_generators, symmetry_sector_configs
 from simsio import run_sim
@@ -23,10 +22,14 @@ with run_sim() as sim:
     # ==============================================================================
     # MODEL
     model = DFL_Model(**sim.par["model"])
+    if model.background < 1:
+        bg = 0.75
+    else:
+        bg = 2
     # ==============================================================================
     # GLOBAL SYMMETRIES
     global_ops = [model.ops["N_tot"]]
-    global_sectors = [model.n_sites]
+    global_sectors = [sim.par["sector"]]
     # GLOBAL OPERATORS
     global_ops = get_symmetry_sector_generators(global_ops, action="global")
     # ==============================================================================
@@ -40,7 +43,14 @@ with run_sim() as sim:
     pair_list = get_lattice_link_site_pairs(model.lvals, model.has_obc)
     # ==============================================================================
     # SELECT THE BACKGROUND SYMMETRY SECTOR CONFIGURATION
-    bg_sector = [1, 0, 0, 0, 0, 0, 0, 0, 0, 1]
+    if model.lvals == [5, 2]:
+        bg_sector = [bg, 0, 0, 0, 0, 0, 0, 0, 0, bg]
+    elif model.lvals == [4, 3] or model.lvals == [6, 2]:
+        bg_sector = [bg, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bg]
+    elif model.lvals == [3, 2]:
+        bg_sector = [bg, 0, 0, 0, 0, bg]
+    elif model.lvals == [2, 2]:
+        bg_sector = [bg, 0, 0, bg]
     logger.info(f"bg sector configs {bg_sector}")
     # BACKGROUND OPERATOR
     bg_global_ops = get_symmetry_sector_generators([model.ops["bg"]], action="global")
@@ -60,7 +70,10 @@ with run_sim() as sim:
     )
     # DEFINE SETTINGS, OBSERVABLES, and BUILD HAMILTONIAN
     model.default_params()
-    model.build_Hamiltonian(sim.par["g"], sim.par["m"])
+    if sim.par["model"]["spin"] < 1:
+        model.build_Hamiltonian(sim.par["g"], sim.par["m"])
+    else:
+        model.build_gen_Hamiltonian(sim.par["g"], sim.par["m"])
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     n_eigs = sim.par["hamiltonian"]["n_eigs"]
@@ -69,10 +82,11 @@ with run_sim() as sim:
     # ===========================================================================
     # OBSERVABLES
     matter_obs = [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
-    extra_obs = ["bg", "E_square"]
+    extra_obs = ["bg", "T2_px", "T2_py"]
     local_obs = matter_obs + extra_obs
     for obs in local_obs:
         sim.res[obs] = np.zeros(n_eigs, dtype=float)
+    sim.res["E2"] = np.zeros(n_eigs, dtype=float)
     model.get_observables(local_obs)
     # ENTROPY
     partition_indices = sim.par["observables"]["entropy_partition"]
@@ -119,14 +133,17 @@ with run_sim() as sim:
         # -----------------------------------------------------------------------
         # MEASURE OBSERVABLES
         model.measure_observables(ii, dynamics=False)
-        sim.res["E_square"][ii] = model.link_avg(model.res["T2_px"], model.res["T2_py"])
-        sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
-        sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
-        sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_pair"], "even")
-        sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_zero"], "odd")
-        sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_zero"], "even")
-        sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_pair"], "odd")
+        sim.res["E2"][ii] = model.link_avg(obs_name="T2")
+        sim.res["N_single"][ii] = model.stag_avg(model.res["N_single"])
+        sim.res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "even")
+        sim.res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "odd")
+        sim.res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "even")
+        sim.res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "odd")
         sim.res["N_tot"][ii] = sim.res["N_single"][ii] + 2 * sim.res["N_pair"][ii]
+        logger.info(f"Nsingle {sim.res['N_single'][ii]}")
+        logger.info(f"Npair {sim.res['N_pair'][ii]}")
+        logger.info(f"Ntot {sim.res['N_tot'][ii]}")
+        logger.info(f"E2 {sim.res['E2'][ii]}")
         # -----------------------------------------------------------------------
         # OVERLAPS with the INITIAL STATE & OTHER CONFIGURATIONS
         if sim.par["observables"]["get_overlap"]:

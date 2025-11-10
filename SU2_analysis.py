@@ -184,6 +184,101 @@ local_obs += ["E_square"]
 local_obs += [f"N_{label}" for label in ["r", "g", "tot", "single", "pair"]]
 # %%
 # ===================================================================
+# SCATTERING MATRIX
+# ===================================================================
+res = {}
+config_filename = f"scattering/convolution_N0old"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g", "m"])
+np.savez_compressed(
+    "wannier_TC_MM.npz",
+    matrix=get_sim(ugrid[0][0]).res["k1k2matrix"],
+    kvals=get_sim(ugrid[0][0]).res["kvals"],
+    gs=get_sim(ugrid[0][0]).res["gs_energy"],
+    g=vals["g"][0],
+    m=vals["m"][0],
+    sector=14,
+    TC_symmetry=True,
+)
+
+# %%
+# ===================================================================
+# SCATTERING MATRIX
+# ===================================================================
+res = {}
+config_filename = f"scattering/test_BB"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["momentum_k_vals"])
+np.savez_compressed(
+    "wannier_TC_14BB.npz",
+    psi=get_sim(ugrid[0]).res["psi0"],
+    energy=get_sim(ugrid[0]).res["enery"],
+    g=get_sim(ugrid[0]).par["g"],
+    m=get_sim(ugrid[0]).par["m"],
+    sector=14,
+    TC_symmetry=True,
+)
+# %%
+# ===================================================================
+# STRING BREAKING PHASE DIAGRAM
+# ===================================================================
+res = {}
+for density in ["fd", "zd"]:
+    config_filename = f"string_breaking/static/{density}"
+    match = SimsQuery(group_glob=config_filename)
+    ugrid, vals = uids_grid(match.uids, ["g", "m"])
+    gvals = vals["g"]
+    mvals = vals["m"]
+    glen = len(gvals)
+    mlen = len(mvals)
+    res[density] = {
+        "energy": np.zeros((glen, mlen)),
+        "entropy": np.zeros((glen, mlen)),
+        "E2": np.zeros((glen, mlen)),
+        "N_single": np.zeros((glen, mlen)),
+        "N_pair": np.zeros((glen, mlen)),
+        "N_tot": np.zeros((glen, mlen)),
+    }
+    res["diff"] = np.zeros((glen, mlen))
+    for ii, g in enumerate(gvals):
+        for kk, m in enumerate(mvals):
+            res[density]["energy"][ii, kk] = get_sim(ugrid[ii][kk]).res["energy"][0]
+            res[density]["entropy"][ii, kk] = get_sim(ugrid[ii][kk]).res["entropy"][0]
+            res[density]["E2"][ii, kk] = get_sim(ugrid[ii][kk]).res["E2"][0]
+            res[density]["N_single"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_single"][0]
+            res[density]["N_pair"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_pair"][0]
+            res[density]["N_tot"][ii, kk] = get_sim(ugrid[ii][kk]).res["N_tot"][0]
+for ii, g in enumerate(gvals):
+    for kk, m in enumerate(mvals):
+        res["diff"][ii, kk] = res["fd"]["energy"][ii, kk] - res["zd"]["energy"][ii, kk]
+# %%
+obs = "N_single"
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+
+X = res["diff"]
+# X = res["fd"][obs]
+img = plt.imshow(
+    X, cmap="seismic", origin="lower", extent=[-2, 2, -2, 2], vmin=-1, vmax=+1
+)
+ax.set(
+    xlabel=r"m",
+    ylabel=r"g^{2}",
+    xticks=[-2, -1, 0, 1, 2],
+    yticks=[-2, -1, 0, 1, 2],
+)
+ax.xaxis.set_major_formatter(fake_log)
+ax.yaxis.set_major_formatter(fake_log)
+cb = fig.colorbar(
+    img,
+    ax=ax,
+    aspect=20,
+    location="right",
+    orientation="vertical",
+    pad=0.01,
+    label="$E_{N=6}-E_{N=4}$",
+)
+# %%
+# ===================================================================
 # STRING BREAKING PHASE DIAGRAM
 # ===================================================================
 su2_res = {}
@@ -4044,6 +4139,85 @@ np.savez_compressed(
     m=np.asarray(vals["m"]),
     sector=np.asarray(vals["sector"]),
     momentum_k=np.asarray(vals["momentum_k"]),
+)
+# %%
+params = {
+    "sector": [16, 18, 20],
+    "momentum_k_vals": [0, 1, 2, 3, 4, 5, 6, 7],
+}
+res = {}
+config_filename = f"scattering/casestudy"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["sector", "momentum_k_vals"])
+
+res = {
+    "energy": np.zeros((len(vals["sector"]), len(vals["momentum_k_vals"]), 10)),
+    "E2": np.zeros(
+        (
+            len(vals["sector"]),
+            len(vals["momentum_k_vals"]),
+            10,
+        )
+    ),
+    "N_single": np.zeros(
+        (
+            len(vals["sector"]),
+            len(vals["momentum_k_vals"]),
+            10,
+        )
+    ),
+    "N_pair": np.zeros(
+        (
+            len(vals["sector"]),
+            len(vals["momentum_k_vals"]),
+            10,
+        )
+    ),
+}
+
+for kk, sector in enumerate(vals["sector"]):
+    for ll, k in enumerate(vals["momentum_k_vals"]):
+        sim_res = get_sim(ugrid[kk][ll]).res
+        res["energy"][kk, ll] = sim_res["energy"]
+        res["E2"][kk, ll] = sim_res["E2"]
+        res["N_single"][kk, ll] = sim_res["N_single"]
+        res["N_pair"][kk, ll] = sim_res["N_pair"]
+
+np.savez_compressed(
+    "case.npz",
+    energy=res["energy"],
+    E2=res["E2"],
+    N_single=res["N_single"],
+    N_pair=res["N_pair"],
+    sector=np.asarray(vals["sector"]),
+    momentum_k_vals=np.asarray(vals["momentum_k_vals"]),
+)
+# %%
+res = {}
+config_filename = f"scattering/test_TC"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["momentum_k_vals"])
+
+res = {
+    "energy": np.zeros((len(vals["momentum_k_vals"]), 10)),
+    "E2": np.zeros((len(vals["momentum_k_vals"]), 10)),
+    "N_single": np.zeros((len(vals["momentum_k_vals"]), 10)),
+    "N_pair": np.zeros((len(vals["momentum_k_vals"]), 10)),
+}
+
+for ll, k in enumerate(vals["momentum_k_vals"]):
+    sim_res = get_sim(ugrid[ll]).res
+    res["energy"][ll] = sim_res["energy"]
+    res["E2"][ll] = sim_res["E2"]
+    res["N_single"][ll] = sim_res["N_single"]
+    res["N_pair"][ll] = sim_res["N_pair"]
+np.savez_compressed(
+    "TC.npz",
+    energy=res["energy"],
+    E2=res["E2"],
+    N_single=res["N_single"],
+    N_pair=res["N_pair"],
+    momentum_k_vals=np.asarray(vals["momentum_k_vals"]),
 )
 # %%
 fig, ax = plt.subplots(

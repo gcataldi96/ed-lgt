@@ -4,8 +4,12 @@ from math import prod
 from scipy.linalg import eigh as array_eigh, svd
 from scipy.sparse.linalg import svds
 from scipy.sparse import isspmatrix, csr_array, csr_matrix
-from ed_lgt.tools import validate_parameters, exclude_columns
-from ed_lgt.symmetries import index_to_config, config_to_index_linsearch
+from ed_lgt.tools import validate_parameters, exclude_columns, get_time
+from ed_lgt.symmetries import (
+    index_to_config,
+    config_to_index_linsearch,
+    subenv_map_to_unique_indices,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -16,6 +20,7 @@ __all__ = [
     "get_norm",
     "diagonalize_density_matrix",
     "get_projector_for_efficient_density_matrix",
+    "exp_val_data2",
 ]
 
 # choose your own sensible thresholds density matrix
@@ -24,7 +29,9 @@ _SPARSE_DENSITY_THRESH = 1e-4  # fraction nonzero
 
 
 class QMB_state:
-    def __init__(self, psi: np.ndarray, lvals=None, loc_dims=None):
+    def __init__(
+        self, psi: np.ndarray, lvals=None, loc_dims=None, symmetry_sector=True
+    ):
         """
         Args:
             psi (np.ndarray): QMB states
@@ -38,8 +45,8 @@ class QMB_state:
         self.lvals = lvals
         self.loc_dims = loc_dims
         self.n_sites = prod(self.lvals)
-        # A cache keyed by each bipartition (keep-indices tuple), storing everything you need for that cut.
-        self._partition_cache: dict[tuple[int, ...], dict] = {}
+        self.symmetry_sector = symmetry_sector
+        self._psi_matrix_cache: dict[tuple[int, ...], np.ndarray | csr_matrix] = {}
 
     def normalize(self, threshold=1e-14):
         """
@@ -108,72 +115,26 @@ class QMB_state:
                 "a dense matrix (np.ndarray), or a sparse matrix (scipy sparse matrix)."
             )
 
-    def _get_partition(self, keep_indices, sector_configs: np.ndarray = None):
-        """
-        Lazily build (and cache) all of the bits needed for a given bipartition.
-
-        Args:
-            keep_indices:
-                List or tuple of site-indices (0..n_sites-1) that you want to keep
-                in the “subsystem".
-                The complement of these indices form the “environment”.
-
-            sector_configs:
-                An (N_states x n_sites) array of basis configurations within your
-                symmetry sector. Rows are full-system configurations. Default to be None
-
-        Returns:
-            A dict with keys:
-
-            - "subsys": (N_states x len(keep_indices)) array
-                The full list of subsystem configurations, one row per symmetry-sector state.
-
-            - "env": (N_states x (n_sites-len(keep_indices))) array
-              The full list of environment configurations, complementary to “subsys”.
-
-            - "uniq_sub": (n_unique_sub x len(keep_indices)) array
-                Unique configurations of the subsystem.
-
-            - "uniq_env": (n_unique_env x (n_sites-len(keep_indices))) array
-                Unique configurations of the environment.
-
-            - "psi_matrix": (n_unique_env x n_unique_sub) array
-                Once you’ve actually built the wave-matrix for this cut, you save it here
-                so you don’t have to rebuild it on each call.
-
-        Caching behavior:
-        -----------------
-        We store everything, keyed by the sorted tuple of keep_indices.  That way
-        if you ever re-ask for the same cut, we do zero work—just a dict lookup.
-        """
+    def _get_psi_matrix(self, keep_indices, partitions_dict):
+        logger.info(f"----------------------------------------------------")
+        logger.info("get_psi_matrix")
         key = tuple(sorted(keep_indices))
-        if key not in self._partition_cache:
-            # Determine the environmental indices
-            env_indices = [ii for ii in range(self.n_sites) if ii not in keep_indices]
-            # ---------------------------------------------------------------------------------
-            # Distinguish between the case of symmetry sector and the standard case
-            if sector_configs is not None:
-                # SYMMETRY SECTOR
-                # Separate subsystem and environment configurations
-                subsys_configs = exclude_columns(sector_configs, np.array(env_indices))
-                env_configs = exclude_columns(sector_configs, np.array(keep_indices))
-                # Find unique subsystem and environment configurations
-                unique_subsys_configs = np.unique(subsys_configs, axis=0)
-                # Initialize the RDM with shape = number of unique subsys configs
-                unique_env_configs = np.unique(env_configs, axis=0)
-                # Dimensions of the partitions
-                subsys_dim = unique_subsys_configs.shape[0]
-                env_dim = unique_env_configs.shape[0]
-                # Compute the psi_matrix
+        if key not in partitions_dict:
+            raise ValueError(f"{key} partition not yet implemented on the model")
+        if key not in self._psi_matrix_cache:
+            if self.symmetry_sector:
+                # Compute the psi matrix assuming model.sector_configs not to be None
                 psi_matrix = build_psi_matrix(
-                    self.psi,
-                    subsys_configs,
-                    env_configs,
-                    unique_subsys_configs,
-                    unique_env_configs,
+                    psi=self.psi,
+                    env_config_index=partitions_dict[key]["env_map"],
+                    subsys_config_index=partitions_dict[key]["subsys_map"],
+                    env_dim=partitions_dict[key]["env_dim"],
+                    subsys_dim=partitions_dict[key]["subsys_dim"],
                 )
+                logger.info(f"psi matrix {psi_matrix.shape}")
             else:
                 # NO SYMMETRY SECTOR
+                env_indices = partitions_dict[key]["env_indices"]
                 # Reshape and reorder psi for partitioning based on keep_indices.
                 # Ensure psi is reshaped into a tensor with one leg per lattice site
                 psi_tensor = self.psi.reshape(self.loc_dims)
@@ -194,16 +155,9 @@ class QMB_state:
             density = nnz / total
             if total > _SPARSE_SIZE_THRESH and density < _SPARSE_DENSITY_THRESH:
                 psi_matrix = csr_matrix(psi_matrix)
-            # ---------------------------------------------------------------------------------
-            # Save the partition information
-            self._partition_cache[key] = {
-                "subsys_indices": keep_indices,
-                "env_indices": env_indices,
-                "subsys_dim": subsys_dim,
-                "env_dim": env_dim,
-                "psi_matrix": psi_matrix,
-            }
-        return self._partition_cache[key]
+            self._psi_matrix_cache[key] = psi_matrix
+        # ---------------------------------------------------------------------------------
+        return self._psi_matrix_cache[key]
 
     def reduced_density_matrix(
         self, keep_indices, sector_configs: np.ndarray = None
@@ -395,39 +349,17 @@ def get_projector_for_efficient_density_matrix(
     return proj
 
 
-@njit(parallel=True, cache=True)
+@njit(cache=True, parallel=True)
 def build_psi_matrix(
-    psi: np.ndarray,
-    subsystem_configs: np.ndarray,
-    environment_configs: np.ndarray,
-    unique_subsys_configs: np.ndarray,
-    unique_env_configs: np.ndarray,
+    psi: np.ndarray,  # (N_states,)
+    env_config_index: np.ndarray,  # (N_states,)
+    subsys_config_index: np.ndarray,  # (N_states,)
+    env_dim: int,
+    subsys_dim: int,
 ):
-    """
-    Repack the full wave function vector psi into a matrix whose rows and columns
-    label the *environment* and the *subsystem* configs of a given bipartition.
-
-    Args:
-        psi (np.ndarray): The wavefunction of the system.
-        subsystem_configs (np.ndarray): Configurations of the subsystem in the symmetry sector.
-        environment_configs (np.ndarray): Configurations of the environment in the symmetry sector.
-        unique_subsys_configs (np.ndarray): Unique configurations of the subsystem.
-        unique_env_configs (np.ndarray): Unique configurations of the environment.
-
-    Returns:
-        psi_matrix (np.ndarray): The matrix representation of the wavefunction in terms
-        of the unique environment and subsystem configurations.
-    """
-    # allocate the matrix
-    unique_env_dim = unique_env_configs.shape[0]
-    unique_subsys_dim = unique_subsys_configs.shape[0]
-    psi_matrix = np.zeros((unique_env_dim, unique_subsys_dim), dtype=np.complex128)
-    for idx in prange(len(psi)):
-        # find which row (env) of psi_matrix this idx belongs to
-        eidx = config_to_index_linsearch(environment_configs[idx], unique_env_configs)
-        # find which col (subsys) of psi_matrix this idx belongs to
-        sidx = config_to_index_linsearch(subsystem_configs[idx], unique_subsys_configs)
-        psi_matrix[eidx, sidx] = psi[idx]
+    psi_matrix = np.zeros((env_dim, subsys_dim), dtype=np.complex128)
+    for i in prange(psi.shape[0]):
+        psi_matrix[env_config_index[i], subsys_config_index[i]] = psi[i]
     return psi_matrix
 
 
@@ -454,3 +386,12 @@ def exp_val_data(psi, row_list, col_list, value_list):
         value = value_list[idx]
         exp_val += psi_dag[row] * value * psi[col]
     return np.real(exp_val)
+
+
+@njit(cache=True)
+def exp_val_data2(psi1, psi2, row_list, col_list, value_list):
+    exp_val = 0.0 + 0.0j
+    psi1_dag = np.conjugate(psi1)
+    for ii in range(len(row_list)):
+        exp_val += psi1_dag[row_list[ii]] * value_list[ii] * psi2[col_list[ii]]
+    return exp_val
