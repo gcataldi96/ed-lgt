@@ -164,8 +164,8 @@ gen_configs("template", params, f"scattering/bands2")
 params = {"g": np.logspace(-2, 2, 30), "m": np.logspace(-2, 2, 30)}
 gen_configs("template", params, f"scattering/phasediagram_d1")
 # %%
-params = {"momentum_k_vals": np.arange(14, dtype=int)}
-gen_configs("template", params, f"scattering/band3_N0")
+params = {"momentum_k_vals": np.arange(7, dtype=int)}
+gen_configs("template", params, f"new_scattering/band_g1m3")
 # %%
 from scipy.stats import norm
 

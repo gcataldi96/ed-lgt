@@ -30,7 +30,12 @@ _SPARSE_DENSITY_THRESH = 1e-4  # fraction nonzero
 
 class QMB_state:
     def __init__(
-        self, psi: np.ndarray, lvals=None, loc_dims=None, symmetry_sector=True
+        self,
+        psi: np.ndarray,
+        lvals=None,
+        loc_dims=None,
+        symmetry_sector=True,
+        debug_mode=False,
     ):
         """
         Args:
@@ -46,6 +51,7 @@ class QMB_state:
         self.loc_dims = loc_dims
         self.n_sites = prod(self.lvals)
         self.symmetry_sector = symmetry_sector
+        self.debug_mode = debug_mode
         self._psi_matrix_cache: dict[tuple[int, ...], np.ndarray | csr_matrix] = {}
 
     def normalize(self, threshold=1e-14):
@@ -126,10 +132,10 @@ class QMB_state:
                 # Compute the psi matrix assuming model.sector_configs not to be None
                 psi_matrix = build_psi_matrix(
                     psi=self.psi,
-                    env_config_index=partitions_dict[key]["env_map"],
                     subsys_config_index=partitions_dict[key]["subsys_map"],
-                    env_dim=partitions_dict[key]["env_dim"],
+                    env_config_index=partitions_dict[key]["env_map"],
                     subsys_dim=partitions_dict[key]["subsys_dim"],
+                    env_dim=partitions_dict[key]["env_dim"],
                 )
                 logger.info(f"psi matrix {psi_matrix.shape}")
             else:
@@ -148,6 +154,15 @@ class QMB_state:
                 env_dim = np.prod([self.loc_dims[ii] for ii in env_indices])
                 # Reshape the reordered tensor to separate subsystem from environment
                 psi_matrix = psi_tensor.reshape((subsys_dim, env_dim))
+            # CHECK NORM
+            if self.debug_mode:
+                norm_vec = np.vdot(self.psi, self.psi).real
+                if hasattr(psi_matrix, "toarray"):
+                    A = psi_matrix.toarray()
+                else:
+                    A = psi_matrix
+                norm_matrix = np.sum(np.abs(A) ** 2)
+                assert np.allclose(norm_vec, norm_matrix, rtol=1e-12, atol=1e-12)
             # ---------------------------------------------------------------------------------
             # According to the size and sparity of psi_matrix, convert it to sparse
             total = psi_matrix.size
@@ -159,9 +174,7 @@ class QMB_state:
         # ---------------------------------------------------------------------------------
         return self._psi_matrix_cache[key]
 
-    def reduced_density_matrix(
-        self, keep_indices, sector_configs: np.ndarray = None
-    ) -> np.ndarray:
+    def reduced_density_matrix(self, keep_indices, partitions_dict: dict) -> np.ndarray:
         """
         Computes the reduced density matrix of the quantum state for specified lattice sites.
         Optionally handles different symmetry sectors.
@@ -179,10 +192,10 @@ class QMB_state:
         logger.info("----------------------------------------------------")
         logger.info(f"RED. DENSITY MATRIX OF SITES {keep_indices}")
         # Call of initialize the partition
-        psi_matrix = self._get_partition(keep_indices, sector_configs)["psi_matrix"]
-        if sector_configs is not None:
+        psi_matrix = self._get_psi_matrix(keep_indices, partitions_dict)
+        if self.symmetry_sector:
             # CASE OF SYMMETRY SECTOR
-            return psi_matrix.conj().T @ psi_matrix
+            return psi_matrix @ psi_matrix.conj().T
         else:
             # CASE with NO SYMMETRIES
             # Compute the reduced density matrix by tracing out the env-indices
@@ -194,9 +207,7 @@ class QMB_state:
             RDM = RDM.reshape((subsys_dim, subsys_dim))
             return RDM
 
-    def entanglement_entropy(
-        self, keep_indices, sector_configs: np.ndarray | None = None
-    ):
+    def entanglement_entropy(self, keep_indices, partitions_dict: dict):
         """
         This function computes the bipartite entanglement entropy of a portion of a QMB state psi
         related to a lattice model with dimension lvals where single sites
@@ -214,11 +225,18 @@ class QMB_state:
         """
         logger.debug("computing SVD of psi_matrix")
         # Call of initialize the partition
-        psi_matrix = self._get_partition(keep_indices, sector_configs)["psi_matrix"]
+        psi_matrix = self._get_psi_matrix(keep_indices, partitions_dict)
         # Get the singular values
+        min_dim = min(psi_matrix.shape)
+        if min_dim == 1:
+            # Rank-1 matrix: no entanglement
+            return 0.0
+        max_ks = [k for k in [50, 100, 200, 400, 600] if k < min_dim]
+        if not max_ks:
+            max_ks = [min_dim - 1]
         if hasattr(psi_matrix, "tocsr"):
             # pick K until you capture enough weight...
-            for n_singvals in [50, 100, 200, 400, 600]:
+            for n_singvals in max_ks:
                 SV = svds(psi_matrix, k=n_singvals, return_singular_vectors=False)
                 ratio = np.sum(SV**2)
                 logger.info(f"ratio of norm {ratio}")
@@ -228,8 +246,15 @@ class QMB_state:
             SV = svd(psi_matrix, full_matrices=False, compute_uv=False)
         llambdas = SV**2
         llambdas = llambdas[llambdas > 1e-10]
+        logger.info(
+            f"n singular values: {llambdas.size} {llambdas[llambdas > 1e-4].size}"
+        )
+        logger.info(f"MAX ENTROPY log2(partitiondim): {np.log2(psi_matrix.shape[0])} ")
         entropy = -np.sum(llambdas * np.log2(llambdas))
-        logger.info(f"ENTROPY of {keep_indices}: {format(entropy, '.9f')}")
+        logger.info(f"ENTROPY S of {keep_indices}: {format(entropy, '.9f')}")
+        chi_exact = llambdas.size  # exact Schmidt rank at that cut
+        chi_min = int(np.ceil(2**entropy))  # lower bound from S alone
+        logger.info(f"-> BOND DIMENSION \chi=2^{entropy}: {chi_min}<{chi_exact}")
         return entropy
 
     def get_state_configurations(self, threshold=1e-2, sector_configs=None):
@@ -277,7 +302,9 @@ class QMB_state:
             rescaled_amp = round(amp * np.exp(-1j * np.angle(vals[0])), 8)
             square_amp = round(np.abs(amp) ** 2, 8)
             coords = " ".join(f"{c:2d}" for c in config)
-            logger.info(f"[{coords}] psi={rescaled_amp} |psi|^2={square_amp}")
+            logger.info(
+                f"[{coords}] {round(amp,3)} psi={rescaled_amp} |psi|^2={square_amp}"
+            )
 
 
 def truncation(array, threshold=1e-14):
@@ -352,14 +379,15 @@ def get_projector_for_efficient_density_matrix(
 @njit(cache=True, parallel=True)
 def build_psi_matrix(
     psi: np.ndarray,  # (N_states,)
-    env_config_index: np.ndarray,  # (N_states,)
     subsys_config_index: np.ndarray,  # (N_states,)
-    env_dim: int,
+    env_config_index: np.ndarray,  # (N_states,)
     subsys_dim: int,
+    env_dim: int,
 ):
-    psi_matrix = np.zeros((env_dim, subsys_dim), dtype=np.complex128)
+    # rows = subsystem, cols = environment
+    psi_matrix = np.zeros((subsys_dim, env_dim), dtype=np.complex128)
     for i in prange(psi.shape[0]):
-        psi_matrix[env_config_index[i], subsys_config_index[i]] = psi[i]
+        psi_matrix[subsys_config_index[i], env_config_index[i]] = psi[i]
     return psi_matrix
 
 

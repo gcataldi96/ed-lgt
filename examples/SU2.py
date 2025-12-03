@@ -112,16 +112,19 @@ def decode_two_site_entries(rc_list, d_loc, data):
             ]
         ):
             continue
-        out.append((r1, r2, c1, c2, data[ii]))
+        out.append((int(r1), int(r2), int(c1), int(c2), data[ii]))
     return out
 
 
 # %%
+logger.info("-- HOPPING -----")
 P = -complex(0, 1) * qmb_op(ops, ["Qpx_dag", "Qmx"])
 P += complex(0, 1) * qmb_op(ops, ["Qpx", "Qmx_dag"])
 coo = P.tocoo()
 rows, cols, data = coo.row, coo.col, coo.data
-
+P_lista = decode_two_site_entries(zip(rows, cols), d_loc=6, data=data)
+for ii in range(len(P_lista)):
+    logger.info(f"{P_lista[ii][:-1]} : {P_lista[ii][-1]}")
 check_hermitian(P)
 # %%
 from scipy.sparse import csr_matrix, identity, kron
@@ -139,23 +142,37 @@ test = CC @ P @ CCdag
 testcoo = test.tocoo()
 trows, tcols, tdata = testcoo.row, testcoo.col, testcoo.data
 
-
+# %%
+logger.info("-- MASS TERM -----")
 M1 = csr_matrix(ops["N_tot"])
 ID = csr_matrix(np.eye(6))
 massa = kron(M1, ID) - kron(ID, M1)
+coo = massa.tocoo()
+rows, cols, data = coo.row, coo.col, coo.data
+P_lista = decode_two_site_entries(zip(rows, cols), d_loc=6, data=data)
+for ii in range(len(P_lista)):
+    logger.info(f"{P_lista[ii][:-1]} : {P_lista[ii][-1]}")
 
+# %%
+logger.info("-- CASIMIR -----")
 E = csr_matrix(ops["E_square"])
 casimir = kron(E, ID) + kron(ID, E)
+coo = casimir.tocoo()
+rows, cols, data = coo.row, coo.col, coo.data
+P_lista = decode_two_site_entries(zip(rows, cols), d_loc=6, data=data)
+for ii in range(len(P_lista)):
+    logger.info(f"{P_lista[ii][:-1]} : {P_lista[ii][-1]}")
+logger.info("-------")
 # %%
 check_hermitian(1j * (CC @ P - P @ CC))
 # %%
-P_lista = decode_two_site_entries(zip(rows, cols), d_loc=6, data=data)
-for ii in range(len(P_lista)):
-    print(f"{P_lista[ii][:-1]} : {P_lista[ii][-1]}")
-print("-------")
+
 CPC_lista = decode_two_site_entries(zip(trows, tcols), d_loc=6, data=tdata)
 for ii in range(len(CPC_lista)):
-    print(f"{CPC_lista[ii][:-1]} : {CPC_lista[ii][-1]-P_lista[ii][-1]}")
+    logger.info(f"{CPC_lista[ii][:-1]} : {CPC_lista[ii][-1]-P_lista[ii][-1]}")
+
+# %%
+
 # %%
 for ii, singlet in enumerate(gauge_states["site"]):
     logger.info(f" {ii} ")
@@ -215,9 +232,9 @@ def QED_gauge_invariant_ops(spin, pure_theory, lattice_dim, get_only_bulk):
 
 
 # %%
-lattice_dim = 3
-spin = 3
-pure_theory = True
+lattice_dim = 2
+spin = 1
+pure_theory = False
 get_only_bulk = True
 in_ops = QED_dressed_site_operators(
     spin=spin, pure_theory=pure_theory, lattice_dim=lattice_dim
@@ -278,19 +295,19 @@ def print_semilinks(ops):
         grid[CENTER][CENTER] = origin
 
         # 6) print
-        print(f"--- state n = {n} ---")
+        logger.info(f"--- state n = {n} ---")
         for row in grid:
-            print(" ".join(row))
-        print()
+            logger.info(" ".join(row))
+        logger.info()
 
 
 print_semilinks(ops)
 # %%
-indices = np.arange(19)
+indices = np.arange(35)
 for n in indices:
     # read and stringify each diagonal element
     vals = {
-        d: str(int(ops["site", f"E_{d}"].toarray()[n, n]))
+        d: str(int(ops["odd", f"E_{d}"].toarray()[n, n]))
         for d in ("px", "py", "mx", "my")
     }
 
@@ -307,13 +324,13 @@ for n in indices:
     # a centered vertical bar in a field of width=wid
     bar = "|".center(wid)
 
-    print(f"--- state n = {n} ---")
-    print(spacer + centered["py"])
-    print(spacer + bar)
-    print(f"{centered['mx']}=o= {centered['px']}")
-    print(spacer + bar)
-    print(spacer + centered["my"])
-    print()
+    logger.info(f"--- state n = {n} ---")
+    logger.info(spacer + centered["py"])
+    logger.info(spacer + bar)
+    logger.info(f"{centered['mx']}=o= {centered['px']}")
+    logger.info(spacer + bar)
+    logger.info(spacer + centered["my"])
+    logger.info()
 
 
 # %%
@@ -346,8 +363,8 @@ def Z2Hubbard_gauge_invariant_ops(lattice_dim):
 
 ops = Z2Hubbard_gauge_invariant_ops(lattice_dim=2)
 for op in ops.keys():
-    print(op)
-    print(ops[op])
+    logger.info(op)
+    logger.info(ops[op])
 
 # %%
 # With the simplified version of SU2
@@ -365,15 +382,15 @@ for op in U1.keys():
     U1[op] = csr_matrix(U1[op].toarray()[rows, :][:, rows])
 
 for op in U1.keys():
-    print(f"U1----- {op} ---------------")
-    print(U1[op].toarray())
-    print("--------------------------")
+    logger.info(f"U1----- {op} ---------------")
+    logger.info(U1[op].toarray())
+    logger.info("--------------------------")
 
 # %%
 for op in in_ops.keys():
-    print(f"------- {op} ---------------")
-    print(in_ops[op].toarray())
-    print("--------------------------")
+    logger.info(f"------- {op} ---------------")
+    logger.info(in_ops[op].toarray())
+    logger.info("--------------------------")
 # %%
 # With the generalized version of SU2
 in_ops2 = SU2_gen_rishon_operators(spin=1 / 2)
@@ -414,27 +431,27 @@ for op in U2.keys():
     U3[op] = csr_matrix(U3[op].toarray()[rows, :][:, rows])
 
 for op in U2.keys():
-    print(f"U2----- {op} ---------------")
-    print(U2[op].toarray())
-    print("--------------------------")
+    logger.info(f"U2----- {op} ---------------")
+    logger.info(U2[op].toarray())
+    logger.info("--------------------------")
 # %%
 for op in U3.keys():
-    print(f"U3----- {op} ---------------")
-    print(U3[op].toarray())
-    print("--------------------------")
+    logger.info(f"U3----- {op} ---------------")
+    logger.info(U3[op].toarray())
+    logger.info("--------------------------")
 # %%
 for op in ["ZA_r", "ZA_g", "ZB_r", "ZB_g"]:
-    print(f"------- {op} ---------------")
-    print(np.sqrt(np.sqrt(2)) * in_ops2[op].toarray())
-    print("--------------------------")
+    logger.info(f"------- {op} ---------------")
+    logger.info(np.sqrt(np.sqrt(2)) * in_ops2[op].toarray())
+    logger.info("--------------------------")
 # %%
 # Matter operators
 f = fermi_operators(has_spin=True, colors=True)
 f |= SU2_generators(spin=1 / 2, matter=True)
 
 for op in f.keys():
-    print("------", op, "--------")
-    print(f[op].toarray())
+    logger.info("------", op, "--------")
+    logger.info(f[op].toarray())
 # %%
 spin_list = [S(1) / 2, S(1) / 2, S(1) / 2, S(1) / 2]
 states1 = couple_two_spins(S(1) / 2, S(1) / 2, get_singlet=False)
@@ -472,14 +489,14 @@ ops = SU2_gauge_invariant_ops(
     spin=1 / 2, pure_theory=True, lattice_dim=2, background=True
 )
 
-print(ops["E_square"].shape)
+logger.info(ops["E_square"].shape)
 
-# print(8 * ops["E_square"] / 3)
+# logger.info(8 * ops["E_square"] / 3)
 # %%
 for s in gauge_states["site"]:
     s.display_singlets()
 # %%
-print(gauge_basis["site"])
+logger.info(gauge_basis["site"])
 
 # %%
 # %%

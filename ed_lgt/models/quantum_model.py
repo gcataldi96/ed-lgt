@@ -70,13 +70,21 @@ class QuantumModel:
         if self.momentum_basis is not None and self.sector_configs is not None:
             pair_mode = self.momentum_basis.get("pair_mode", False)
             if pair_mode:
-                hamiltonian_size = None  # rectangular H(k1,k2); can't create a square H
+                if self.momentum_basis["k_left"] != self.momentum_basis["k_right"]:
+                    # rectangular H(k1,k2); can't create a square H
+                    hamiltonian_size = None
+                else:
+                    hamiltonian_size = self.momentum_basis["n_cols_L"]
+                    self.sector_dim = hamiltonian_size
             else:
-                hamiltonian_size = self.momentum_basis["L_col_ptr"].shape[0] - 1
+                hamiltonian_size = self.momentum_basis["n_cols"]
+                self.sector_dim = hamiltonian_size
         elif self.sector_configs is not None:
             hamiltonian_size = self.sector_configs.shape[0]
+            self.sector_dim = hamiltonian_size
         else:
             hamiltonian_size = np.prod(self.loc_dims)
+            self.sector_dim = hamiltonian_size
         # Define the default parameters as a dictionary
         self.def_params = {
             "lvals": self.lvals,
@@ -90,7 +98,7 @@ class QuantumModel:
         else:
             self.H = None
 
-    def get_momentum_sector(
+    def set_momentum_sector(
         self,
         k_unit_cell_size: list[int],
         k_vals: list[int],
@@ -488,7 +496,7 @@ class QuantumModel:
         """
         key = tuple(sorted(keep_indices))
         logger.info("----------------------------------------------------")
-        logger.info(f"Bipartite the system: SUBSYS {key}")
+        logger.info(f"Bipartite the system: SUBSYS {keep_indices}")
         if key not in self._partition_cache:
             # Determine the environmental indices
             env_indices = [ii for ii in range(self.n_sites) if ii not in keep_indices]
@@ -517,6 +525,11 @@ class QuantumModel:
                     unique_subsys_configs=unique_subsys_configs,
                     unique_env_configs=unique_env_configs,
                 )
+                # Check that maps are correct. Namely unique_cfgs contain all the given rows
+                if not np.all(subsys_map >= 0):
+                    raise ValueError("Invalid subsys_map: some entries are -1")
+                if not np.all(env_map >= 0):
+                    raise ValueError("Invalid env_map: some entries are -1")
             else:
                 # NO SYMMETRY SECTOR
                 # Determine the dimensions of the subsystem and environment for the bipartition
@@ -524,16 +537,24 @@ class QuantumModel:
                 env_dim = np.prod([self.loc_dims[ii] for ii in env_indices])
             # ---------------------------------------------------------------------------------
             # Save the partition information
-            self._partition_cache[key] = {
-                "subsys_indices": keep_indices,
-                "unique_subsys_configs": unique_subsys_configs,
-                "env_indices": env_indices,
-                "unique_env_configs": unique_env_configs,
-                "subsys_dim": subsys_dim,
-                "env_dim": env_dim,
-                "subsys_map": subsys_map,
-                "env_map": env_map,
-            }
+            if self.sector_configs is not None:
+                self._partition_cache[key] = {
+                    "subsys_indices": keep_indices,
+                    "env_indices": env_indices,
+                    "unique_subsys_configs": unique_subsys_configs,
+                    "unique_env_configs": unique_env_configs,
+                    "subsys_dim": subsys_dim,
+                    "env_dim": env_dim,
+                    "subsys_map": subsys_map,
+                    "env_map": env_map,
+                }
+            else:
+                self._partition_cache[key] = {
+                    "subsys_indices": keep_indices,
+                    "env_indices": env_indices,
+                    "subsys_dim": subsys_dim,
+                    "env_dim": env_dim,
+                }
         return self._partition_cache[key]
 
     def build_projector_from_sector_to_fullspace(

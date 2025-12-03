@@ -34,10 +34,7 @@ with run_sim() as sim:
     # GLOBAL OPERATORS
     global_ops = get_symmetry_sector_generators(
         global_ops,
-        loc_dims=model.loc_dims,
         action="global",
-        gauge_basis=model.gauge_basis,
-        lattice_labels=model.lattice_labels,
     )
     # ==============================================================================
     # ABELIAN Z2 SYMMETRIES
@@ -48,16 +45,13 @@ with run_sim() as sim:
     # LINK OPERATORS
     link_ops = get_symmetry_sector_generators(
         link_ops,
-        loc_dims=model.loc_dims,
         action="link",
-        gauge_basis=model.gauge_basis,
-        lattice_labels=model.lattice_labels,
     )
     pair_list = get_lattice_link_site_pairs(model.lvals, model.has_obc)
     # ==============================================================================
     # SELECT THE U(1) GLOBAL and LINK SYMMETRY SECTOR
     # ==============================================================================
-    model.sector_indices, model.sector_configs = symmetry_sector_configs(
+    model.sector_configs = symmetry_sector_configs(
         loc_dims=model.loc_dims,
         glob_op_diags=global_ops,
         glob_sectors=np.array(global_sectors, dtype=float),
@@ -72,8 +66,7 @@ with run_sim() as sim:
     model.build_Hamiltonian(sim.par["g"], m)
     # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
     partition_indices = get_entropy_partition(model.lvals)
-    # Build the list of environment and subsystem sites configurations
-    model.get_subsystem_environment_configs(keep_indices=partition_indices)
+    model._get_partition(partition_indices)
     # ==============================================================================
     # ENUMERATE ALL THE BACKGROUND SYMMETRY SECTORS
     logical_stag_basis = sim.par["dynamics"]["logical_stag_basis"]
@@ -122,11 +115,7 @@ with run_sim() as sim:
                 # ENTROPY
                 if sim.par["get_entropy"]:
                     entropy[ii] = model.H.psi_time[ii].entanglement_entropy(
-                        partition_indices,
-                        model.subsystem_configs,
-                        model.env_configs,
-                        model.unique_subsys_configs,
-                        model.unique_env_configs,
+                        partition_indices, model._partition_cache
                     )
                 # STATE CONFIGURATIONS
                 if sim.par["get_state_configs"]:

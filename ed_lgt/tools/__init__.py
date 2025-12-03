@@ -1,4 +1,12 @@
-from . import checks, derivatives, manage_data, measures, numba_functions, wannier
+from . import (
+    checks,
+    derivatives,
+    manage_data,
+    measures,
+    numba_functions,
+    wannier,
+    magic,
+)
 
 from .checks import *
 from .derivatives import *
@@ -6,6 +14,8 @@ from .manage_data import *
 from .measures import *
 from .numba_functions import *
 from .wannier import *
+from .tensor_newtorks import *
+from .magic import *
 
 # All modules have an __all__ defined
 __all__ = checks.__all__.copy()
@@ -14,3 +24,5 @@ __all__ += manage_data.__all__.copy()
 __all__ += measures.__all__.copy()
 __all__ += numba_functions.__all__.copy()
 __all__ += wannier.__all__.copy()
+__all__ += tensor_newtorks.__all__.copy()
+__all__ += magic.__all__.copy()

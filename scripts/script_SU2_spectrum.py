@@ -25,7 +25,7 @@ with run_sim() as sim:
         unit_cell_size = sim.par["momentum"]["unit_cell_size"]
         k_vals = sim.par["momentum_k_vals"]
         TC_symmetry = sim.par["momentum"]["TC_symmetry"]
-        model.get_momentum_sector(unit_cell_size, k_vals, TC_symmetry)
+        model.set_momentum_sector(unit_cell_size, k_vals, TC_symmetry)
     # Save parameters
     model.default_params()
     # Build Hamiltonian
@@ -84,18 +84,36 @@ with run_sim() as sim:
     # ENTROPY
     # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
     partition_indices = sim.par["observables"]["entropy_partition"]
+    if sim.par["observables"]["get_entropy"] or sim.par["observables"]["get_RDM"]:
+        model._get_partition(partition_indices)
     sim.res["entropy"] = np.zeros(model.H.n_eigs, dtype=float)
+    # INVERSION SYMMETRY
+    if sim.par.get("inversion", None) is not None:
+        apply_parity = sim.par["inversion"]["get_inversion_sym"]
+        wrt_site = sim.par["inversion"]["wrt_site"]
+    else:
+        apply_parity = False
+    if apply_parity:
+        model.get_parity_inversion_operator(wrt_site)
     # -------------------------------------------------------------------------------
     for ii in range(model.H.n_eigs):
         model.H.print_energy(ii)
+        if apply_parity:
+            if model.momentum_basis is None:
+                psi = model.H.Npsi[ii].psi
+            else:
+                # Project the State from the momentum sector to the coordinate one
+                Pk = model._basis_Pk_as_csr()
+                psi = Pk @ model.H.Npsi[ii].psi
+            psiP = model.parityOP @ psi
+            logger.info(f"<psi{ii}|P|psi{ii}> {np.real(np.vdot(psi,psiP))}")
         if model.momentum_basis is None:
             # -------------------------------------------------------------------------------
             # REDUCED DENSITY MATRIX
             if sim.par["observables"]["get_RDM"]:
                 # Get the reduced density matrix of a partition in the ground state
                 RDM = model.H.Npsi[ii].reduced_density_matrix(
-                    partition_indices,
-                    model.sector_configs,
+                    partition_indices, model._partition_cache
                 )
                 logger.info(f"RDM shape {RDM.shape}")
                 rho_eigvals, rho_eigvecs = diagonalize_density_matrix(RDM)
@@ -110,8 +128,7 @@ with run_sim() as sim:
             # ENTROPY
             if sim.par["observables"]["get_entropy"]:
                 sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
-                    partition_indices,
-                    model.sector_configs,
+                    partition_indices, model._partition_cache
                 )
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS

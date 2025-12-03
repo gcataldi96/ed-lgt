@@ -176,8 +176,11 @@ class QMB_hamiltonian:
             order = np.argsort(Nenergies)
             Nenergies, Npsi = Nenergies[order], Npsi[:, order]
         # Save the eigenstates as QMB_states
-        logger.info(f"TOT ENERGY: {Nenergies}")
-        logger.info(f"EN DENSITY: {Nenergies/ np.prod(self.lvals)}")
+        logger.info(f"TOT ENERGY -- EN DENSITY")
+        for ii in range(len(Nenergies)):
+            en_density = round(Nenergies[ii] / np.prod(self.lvals), 5)
+            tot_energy = round(Nenergies[ii], 5)
+            logger.info(f"{tot_energy}      {en_density}")
         self.Nenergies = Nenergies / np.prod(self.lvals)
         self.Npsi = [
             QMB_state(Npsi[:, ii], self.lvals, self.loc_dims)

@@ -182,6 +182,29 @@ def custom_average(arr, staggered=None, norm=None):
 local_obs = [f"T2_{s}{d}" for d in "x" for s in "mp"]
 local_obs += ["E_square"]
 local_obs += [f"N_{label}" for label in ["r", "g", "tot", "single", "pair"]]
+
+
+# %%
+def get_MPO(sim_name):
+    config_filename = f"scattering/{sim_name}"
+    match = SimsQuery(group_glob=config_filename)
+    ugrid, vals = uids_grid(match.uids, ["g", "m"])
+    MPO_list = []
+    for ii in range(4):
+        MPO_list.append(get_sim(ugrid[0, 0]).res[f"MPO[{ii}]"])
+    return MPO_list
+
+
+MPO = get_MPO("get_MPO")
+np.savez_compressed("MPO.npz", *MPO)
+
+
+def get_MPO():
+    data = np.load("MPO.npz")
+    return [data[f"arr_{i}"] for i in range(len(data.files))]
+
+
+mpo = get_MPO()
 # %%
 # ===================================================================
 # SCATTERING MATRIX

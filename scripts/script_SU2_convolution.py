@@ -49,7 +49,7 @@ with run_sim() as sim:
     for kidx in k_vals:
         kdict[f"{kidx}"] = {}
         # Set the momentum basis on the model
-        model.get_momentum_sector(k_unit_cell_size, [kidx], TC_symmetry)
+        model.set_momentum_sector(k_unit_cell_size, [kidx], TC_symmetry)
         model.default_params()
         # Generate HAMILTONIAN
         if model.spin > 0.5:
@@ -58,7 +58,7 @@ with run_sim() as sim:
             model.build_Hamiltonian(sim.par["g"], m)
         # -------------------------------------------------------------------------------
         # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
-        n_eigs = 3 if (kidx == 0 and zero_density) else 2
+        n_eigs = 1 if (kidx == 0 and zero_density) else 0
         model.diagonalize_Hamiltonian(n_eigs, model.ham_format)
         # Save the states of the energy band
         idx = 2 if (kidx == 0 and zero_density) else 1

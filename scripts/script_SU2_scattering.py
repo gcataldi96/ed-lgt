@@ -16,7 +16,7 @@ import logging
 
 
 def get_data_from_sim(sim_filename, obs_name, kindex):
-    config_filename = f"scattering/{sim_filename}"
+    config_filename = f"new_scattering/{sim_filename}"
     match = SimsQuery(group_glob=config_filename)
     ugrid, _ = uids_grid(match.uids, ["momentum_k_vals"])
     return get_sim(ugrid[kindex]).res[obs_name]
@@ -37,14 +37,18 @@ with run_sim() as sim:
     g = sim.par["g"]
     # Choose if TC symmetry is enabled
     TC_symmetry = sim.par.get("TC_symmetry", False)
+    logger.info(f"TC_symmetry {TC_symmetry}")
     k_unit_cell_size = [1] if TC_symmetry else [2]
     n_momenta = model.n_sites if TC_symmetry else model.n_sites // 2
     k_indices = np.arange(0, n_momenta, 1)
     sim.res["k_indices"] = k_indices
+    sim.res["n_sites"] = model.n_sites
+    sim.res["TC_symmetry"] = TC_symmetry
     if TC_symmetry:
         k_phys = 2 * np.pi * k_indices / model.n_sites
     else:
         k_phys = 4 * np.pi * k_indices / model.n_sites
+    logger.info(k_indices)
     # -------------------------------------------------------------------------------
     # GET THE GROUND STATE ENERGY density at momentum 0
     if zero_density:
@@ -66,35 +70,46 @@ with run_sim() as sim:
         logger.info(f"E0 single block size {k_unit_cell_size}: {eg_single_block}")
         logger.info(f"E0 {eg_single_block * n_momenta}")
         sim.res["gs_energy"] = eg_single_block
+    else:
+        sim.res["gs_energy"] = -4.580269235030599 - 1.251803175199139e-18j
     # -------------------------------------------------------------------------------
     # CONVOLUTIONAL expectation values
-    R0 = 0
-    # Save the convolution matrix
+    # Initialize the convolution matrix
     shape = (len(k_indices), len(k_indices))
-    sim.res["k1k2matrix"] = np.zeros(shape, dtype=np.complex128)
-    for k1, k2 in product(k_indices, k_indices):
-        # Set the momentum pair
-        model.set_momentum_pair([k1], [k2], k_unit_cell_size, TC_symmetry)
-        model.default_params()
-        # Check the momentum bases
-        model.check_momentum_pair()
-        # Build the local hamiltonian
-        model.build_local_Hamiltonian(g, m, R0, TC_symmetry)
-        # Acquire the state vectors
-        state_idx_k1 = 1 if (zero_density and k1 == 0) else 0
-        state_idx_k2 = 1 if (zero_density and k2 == 0) else 0
-        state_idx_k1 += band_number
-        state_idx_k2 += band_number
-        psik1 = get_data_from_sim(sim_band_name, f"psi{state_idx_k1}", k1)
-        psik2 = get_data_from_sim(sim_band_name, f"psi{state_idx_k2}", k2)
-        # Measure the overlap with k1 & k2
-        sim.res["k1k2matrix"][k1, k2] = exp_val_data2(
-            psik1,
-            psik2,
-            model.Hlocal.row_list,
-            model.Hlocal.col_list,
-            model.Hlocal.value_list,
-        )
+    if TC_symmetry:
+        R_list = [0]
+        sim.res["k1k2matrix"] = np.zeros(shape, dtype=np.complex128)
+        matrix_names = ["k1k2matrix"]
+    else:
+        R_list = [0, 1]
+        sim.res["k1k2matrix_even"] = np.zeros(shape, dtype=np.complex128)
+        sim.res["k1k2matrix_odd"] = np.zeros(shape, dtype=np.complex128)
+        matrix_names = ["k1k2matrix_even", "k1k2matrix_odd"]
+    for ii, R0 in enumerate(R_list):
+        M_name = matrix_names[ii]
+        for k1, k2 in product(k_indices, k_indices):
+            # Set the momentum pair
+            model.set_momentum_pair([k1], [k2], k_unit_cell_size, TC_symmetry)
+            model.default_params()
+            # Check the momentum bases
+            model.check_momentum_pair()
+            # Build the local hamiltonian
+            model.build_local_Hamiltonian(g, m, R0)
+            # Acquire the state vectors
+            state_idx_k1 = 1 if (zero_density and k1 == 0) else 0
+            state_idx_k2 = 1 if (zero_density and k2 == 0) else 0
+            state_idx_k1 += band_number
+            state_idx_k2 += band_number
+            psik1 = get_data_from_sim(sim_band_name, f"psi{state_idx_k1}", k1)
+            psik2 = get_data_from_sim(sim_band_name, f"psi{state_idx_k2}", k2)
+            # Measure the overlap with k1 & k2
+            sim.res[M_name][k1, k2] = exp_val_data2(
+                psik1,
+                psik2,
+                model.Hlocal.row_list,
+                model.Hlocal.col_list,
+                model.Hlocal.value_list,
+            )
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

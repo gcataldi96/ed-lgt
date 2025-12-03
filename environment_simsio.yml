@@ -39,6 +39,5 @@ dependencies:
   - pip:
       - torch==2.5.1
       - jax==0.4.38
-      - tensorflow==2.18.0
       - qredtea
       - -e simsio

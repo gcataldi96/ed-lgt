@@ -21,7 +21,7 @@ with run_sim() as sim:
     # MODEL HAMILTONIAN
     model = QED_Model(**sim.par["model"])
     m = sim.par["m"] if not model.pure_theory else None
-    model.build_Hamiltonian(sim.par["g"], m, theta=sim.par["theta"])
+    model.build_Hamiltonian(sim.par["g"], m, theta=sim.par.get("theta", 0.0))
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     n_eigs = sim.par["hamiltonian"]["n_eigs"]
@@ -75,7 +75,7 @@ with run_sim() as sim:
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS
             if sim.par["observables"]["get_state_configs"]:
-                model.H.Npsi[ii].get_state_configurations(1e-2, model.sector_configs)
+                model.H.Npsi[ii].get_state_configurations(1e-4, model.sector_configs)
         # ---------------------------------------------------------------------------
         # MEASURE OBSERVABLES
         model.measure_observables(ii)

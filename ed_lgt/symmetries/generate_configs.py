@@ -1,7 +1,9 @@
 import numpy as np
 from numba import njit, prange
 from scipy.sparse import csc_matrix
+import logging
 
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "index_to_config",
@@ -199,7 +201,7 @@ def get_reference_indices(sector_configs):
     return ref_indices, norm
 
 
-def build_sector_expansion_projector(
+def build_sector_expansion_projector_old(
     sector_configs: np.ndarray, local_dims: np.ndarray
 ) -> csc_matrix:
     """
@@ -209,6 +211,8 @@ def build_sector_expansion_projector(
     Returns:
       projector: CSC matrix of shape (prod(local_dims), sector_dim) with one 1 per column.
     """
+    logger.info("----------------------------------------------------")
+    logger.info("Projector from symmetry-sector to full space")
     sector_dim, n_sites = sector_configs.shape
     local_dims = np.ascontiguousarray(local_dims, dtype=np.int32)
     assert n_sites == len(local_dims)
@@ -219,4 +223,23 @@ def build_sector_expansion_projector(
     for idx in range(sector_dim):
         rows[idx] = config_to_index(sector_configs[idx], local_dims)
     projector = csc_matrix((data, (rows, cols)), shape=(D_full, sector_dim))
+    return projector.toarray()
+
+
+@njit(cache=True, parallel=True)
+def build_sector_expansion_projector(
+    sector_configs: np.ndarray, local_dims: np.ndarray
+) -> np.ndarray:
+    """
+    Compute row indices for each symmetry-sector configuration.
+
+    sector_configs: (sector_dim, n_sites) int64
+    local_dims:     (n_sites,)           int32/int64
+    """
+    sector_dim = sector_configs.shape[0]
+    D_full = np.prod(local_dims)
+    projector = np.zeros((D_full, sector_dim), dtype=np.uint8)
+    for idx in prange(sector_dim):
+        row_idx = config_to_index(sector_configs[idx], local_dims)
+        projector[row_idx, idx] = 1
     return projector

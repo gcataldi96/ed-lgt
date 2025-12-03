@@ -1,13 +1,22 @@
 import numpy as np
 from numba import typed
+from scipy.sparse import csr_matrix, identity
+from scipy.sparse.linalg import norm as spnorm
 from .quantum_model import QuantumModel
-from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm, QMB_hamiltonian
+from ed_lgt.modeling import (
+    LocalTerm,
+    TwoBodyTerm,
+    PlaquetteTerm,
+    QMB_hamiltonian,
+    QMB_state,
+)
 from ed_lgt.modeling import check_link_symmetry, staggered_mask, get_origin_surfaces
 from ed_lgt.operators import (
     SU2_dressed_site_operators,
     SU2_gauge_invariant_states,
     SU2_gen_dressed_site_operators,
 )
+from ed_lgt.symmetries import build_parity_operator
 import logging
 
 logger = logging.getLogger(__name__)
@@ -461,13 +470,13 @@ class SU2_Model(QuantumModel):
                 "m_even": m,  # EFFECTIVE MASS for EVEN SITES
             }
 
-    def build_local_Hamiltonian(self, g, m, R0, TC_symmetry):
+    def build_local_Hamiltonian(self, g, m, R0):
         logger.info(f"----------------------------------------------------")
         logger.info(f"BUILDING local HAMILTONIAN around {R0}")
         # -------------------------------------------------------------------------------
         if self.dim > 1:
             raise ValueError(f"Local Hamiltonian valid only for D=1, got {self.dim}")
-        self.Hlocal = QMB_hamiltonian(self.lvals, size=0)
+        self.Hlocal = QMB_hamiltonian(self.lvals, size=self.sector_dim)
         # -------------------------------------------------------------------------------
         # Hamiltonian Coefficients
         self.SU2_Hamiltonian_couplings(g, m)
@@ -487,98 +496,167 @@ class SU2_Model(QuantumModel):
         hterms["hop_dag"] = TwoBodyTerm("x", op_list, op_names_list, **self.def_params)
         hop_coeff = self.coeffs["tx_even"]
         hop_coeff_half = 0.5 * hop_coeff
-        # -------------------------------------------------------------------------------
-        if TC_symmetry:
-            logger.info("TC symmetry: translation + charge conjugation")
-            # ---------------------------------------------------------------------------
-            self.Hlocal.add_term(
-                hterms["E2"].get_Hamiltonian(self.coeffs["E"], self.get_mask([R0]))
+        # ---------------------------------------------------------------------------
+        self.Hlocal.add_term(
+            hterms["E2"].get_Hamiltonian(self.coeffs["E"], self.get_mask([R0]))
+        )
+        # ---------------------------------------------------------------------------
+        self.Hlocal.add_term(
+            hterms["N"].get_Hamiltonian(
+                ((-1) ** R0) * self.coeffs["m"], self.get_mask([R0])
             )
-            # ---------------------------------------------------------------------------
-            self.Hlocal.add_term(
-                hterms["N"].get_Hamiltonian(
-                    ((-1) ** R0) * self.coeffs["m"], self.get_mask([R0])
-                )
+        )
+        # ---------------------------------------------------------------------------
+        # Add the hopping term (j,j+1)
+        self.Hlocal.add_term(
+            hterms["hop"].get_Hamiltonian(hop_coeff_half, mask=self.get_mask([R0]))
+        )
+        # ---------------------------------------------------------------------------
+        # Add the term (j-1,j)
+        self.Hlocal.add_term(
+            hterms["hop"].get_Hamiltonian(
+                hop_coeff_half,
+                mask=self.get_mask([(R0 - 1) % self.n_sites]),
             )
-            # ---------------------------------------------------------------------------
-            # Add the hopping term (j,j+1)
-            self.Hlocal.add_term(
-                hterms["hop"].get_Hamiltonian(hop_coeff_half, mask=self.get_mask([R0]))
+        )
+        # ---------------------------------------------------------------------------
+        # Add the hermitian conjugate
+        # Add the term (j,j+1)
+        self.Hlocal.add_term(
+            hterms["hop_dag"].get_Hamiltonian(-hop_coeff_half, mask=self.get_mask([R0]))
+        )
+        # ---------------------------------------------------------------------------
+        # Add the term (j-1,j)
+        self.Hlocal.add_term(
+            hterms["hop_dag"].get_Hamiltonian(
+                -hop_coeff_half,
+                mask=self.get_mask([(R0 - 1) % self.n_sites]),
             )
-            # ---------------------------------------------------------------------------
-            # Add the term (j-1,j)
-            self.Hlocal.add_term(
-                hterms["hop"].get_Hamiltonian(
-                    hop_coeff_half,
-                    mask=self.get_mask([(R0 - 1) % self.n_sites]),
-                )
-            )
-            # ---------------------------------------------------------------------------
-            # Add the hermitian conjugate
-            # Add the term (j,j+1)
-            self.Hlocal.add_term(
-                hterms["hop_dag"].get_Hamiltonian(
-                    -hop_coeff_half, mask=self.get_mask([R0])
-                )
-            )
-            # ---------------------------------------------------------------------------
-            # Add the term (j-1,j)
-            self.Hlocal.add_term(
-                hterms["hop_dag"].get_Hamiltonian(
-                    -hop_coeff_half,
-                    mask=self.get_mask([(R0 - 1) % self.n_sites]),
-                )
-            )
-        # ===============================================================================
-        else:
-            # ---------------------------------------------------------------------------
-            self.Hlocal.add_term(
-                hterms["E2"].get_Hamiltonian(
-                    self.coeffs["E"],
-                    self.get_mask([R0, (R0 + 1) % self.n_sites]),
-                )
-            )
-            # ---------------------------------------------------------------------------
-            self.Hlocal.add_term(
-                hterms["N"].get_Hamiltonian(((-1) ** R0) * m, self.get_mask([R0]))
-            )
-            self.Hlocal.add_term(
-                hterms["N"].get_Hamiltonian(
-                    ((-1) ** (R0 + 1)) * m,
-                    self.get_mask([(R0 + 1) % self.n_sites]),
-                )
-            )
-            # ---------------------------------------------------------------------------
-            self.Hlocal.add_term(
-                hterms["hop"].get_Hamiltonian(
-                    hop_coeff_half,
-                    mask=self.get_mask(
-                        [(R0 - 1) % self.n_sites, (R0 + 1) % self.n_sites]
-                    ),
-                )
-            )
-            self.Hlocal.add_term(
-                hterms["hop"].get_Hamiltonian(
-                    hop_coeff, mask=self.get_mask(self.lvals, [R0])
-                )
-            )
-            # ---------------------------------------------------------------------------
-            # Add the hermitian conjugate
-            self.Hlocal.add_term(
-                hterms["hop_dag"].get_Hamiltonian(
-                    -hop_coeff_half,
-                    mask=self.get_mask(
-                        [(R0 - 1) % self.n_sites, (R0 + 1) % self.n_sites]
-                    ),
-                )
-            )
-            self.Hlocal.add_term(
-                hterms["hop_dag"].get_Hamiltonian(-hop_coeff, mask=self.get_mask([R0]))
-            )
-            # ---------------------------------------------------------------------------
+        )
 
     def get_mask(self, sites_list):
         mask = np.zeros(self.lvals, dtype=bool)
         for site in sites_list:
             mask[site] = True
         return mask
+
+    def local_parity_labels(self, wrt_site):
+        """
+        Local action of pure spatial inversion (left-right swap)
+        on the 6d dressed-site SU(2) basis.
+
+        Basis labels:
+        0: V, J=(0,0)
+        1: V, J=(1/2,1/2)  (link singlet)
+        2: (1/2,0,1/2)     (matter + right link)
+        3: (1/2,1/2,0)     (matter + left link)
+        4: P, J=(0,0)
+        5: P, J=(1/2,1/2)  (link singlet)
+
+        Returns
+        -------
+        loc_perm[s]: int
+            New local basis index (ignoring global phase).
+        loc_phase[s]: int8
+            Phase (+1 or -1) for each local state.
+        """
+        if self.dim > 1:
+            raise ValueError(f"Does not work in D={self.dim}>1")
+        if self.spin > 0.5:
+            raise ValueError(f"Does not work spin j={self.spin}>0.5")
+        logger.info(f"----------------------------------------------------")
+        if wrt_site:
+            # local map for "parity" (P_loc)
+            loc_perm = np.array([0, 1, 3, 2, 4, 5], dtype=np.int32)
+            loc_phase = np.array([1, -1, 1, -1, 1, -1], dtype=np.int32)
+        else:
+            # local map for "parity + particle-hole" (or C ∘ P_loc)
+            loc_perm = np.array([4, 5, 3, 2, 0, 1], dtype=np.int32)
+            loc_phase = np.array([1, -1, 1, 1, 1, -1], dtype=np.int32)
+        return loc_perm, loc_phase
+
+    def get_parity_inversion_operator(self, wrt_site):
+        # INVERSION SYMMETRY
+        if self.dim < 1:
+            raise NotImplementedError(f"Cannot apply PARITY in D={self.dim}>1")
+        # Acquire the phases and the permutation of the basis
+        if wrt_site:
+            inversion_wrt = f"site {self.n_sites//2-1}"
+        else:
+            inversion_wrt = f"bond ({self.n_sites//2-1}, {self.n_sites//2})"
+        loc_perm, loc_phase = self.local_parity_labels(wrt_site)
+        wrt_site = np.uint8(0 if wrt_site else 1)
+        logger.info(f"----------------------------------------------------")
+        logger.info(f"Parity symmetry: inversion wrt {inversion_wrt}")
+        # Build the projector
+        r, c, d = build_parity_operator(
+            self.sector_configs, loc_perm, loc_phase, wrt_site
+        )
+        shape = (self.sector_dim, self.sector_dim)
+        logger.info(f"r {r.shape} c {c.shape}, d {d.shape}, {shape}")
+        self.parityOP = csr_matrix((d, (r, c)), shape=shape)
+
+    def check_parity_inversion_operator(self):
+        if self.momentum_basis is not None:
+            # Build the projector from the momentum sector to the global one
+            Pk = self._basis_Pk_as_csr()
+            # Check the commutator between the Hamiltonian H and parity P
+            err_PH = spnorm(
+                self.parityOP @ Pk @ self.H.Ham @ Pk.getH()
+                - Pk @ self.H.Ham @ Pk.getH() @ self.parityOP
+            )
+        else:
+            err_PH = spnorm(self.parityOP @ self.H.Ham - self.H.Ham @ self.parityOP)
+        logger.info(f"|PH-HP| = {err_PH}")
+        # -----------------------------------------------------------
+        I = identity(self.sector_dim)
+        # P^2 = I
+        err_P2 = spnorm(self.parityOP @ self.parityOP - I)
+        logger.info(f"|P^2-I| = {err_P2}")
+        # Hermitian: P^† = P
+        err_herm = spnorm(self.parityOP.getH() - self.parityOP)
+        logger.info(f"|P^†-P| = {err_herm}")
+        # Unitary: P^† P = I
+        err_unit = spnorm(self.parityOP.getH() @ self.parityOP - I)
+        logger.info(f"|P^†P-I| = {err_unit}")
+        # nnz per row
+        nnz_per_row = np.diff(self.parityOP.indptr)
+        # nnz per col
+        nnz_per_col = np.diff(self.parityOP.tocsc().indptr)
+        logger.info(f"row nnz counts: {np.unique(nnz_per_row)}")
+        logger.info(f"col nnz counts: {np.unique(nnz_per_col)}")
+        # values
+        unique_vals = np.unique(np.round(self.parityOP.data, 8))
+        logger.info(f"unique data values in P: {unique_vals}")
+        if self.momentum_basis is None and self.sector_configs is not None:
+            for ii, cfg in enumerate(self.sector_configs):
+                s1 = self.get_qmb_state_from_configs([cfg])
+                Ss1 = QMB_state(s1, self.lvals, self.loc_dims)
+                Ps1 = QMB_state(self.parityOP @ s1, self.lvals, self.loc_dims)
+                exp_s1 = Ss1.expectation_value(self.H.Ham)
+                exp_Ps1 = Ps1.expectation_value(self.H.Ham)
+                Hpsi = self.H.Ham @ s1  # H|psi>
+                Ppsi = self.parityOP @ s1  # P|psi>
+                HPpsi = self.H.Ham @ Ppsi  # HP|psi>
+                PHpsi = self.parityOP @ Hpsi  # PH|psi>
+                diff = HPpsi - PHpsi
+                absnorm = np.linalg.norm(diff)
+                if np.abs(exp_Ps1 - exp_s1) > 1e-14:
+                    logger.info(f"{exp_s1}")
+                    logger.info(f"{exp_Ps1}")
+                    raise ValueError(f"config {ii} {cfg} not symmetrized")
+                if np.abs(absnorm) > 1e-14:
+                    logger.info("==============================================")
+                    logger.info("State i")
+                    Ss1.get_state_configurations(1e-3, self.sector_configs)
+                    logger.info("State P|i>")
+                    Ps1.get_state_configurations(1e-3, self.sector_configs)
+                    A = QMB_state(HPpsi, self.lvals, self.loc_dims)
+                    logger.info("State HP|i>")
+                    A.get_state_configurations(1e-3, self.sector_configs)
+                    B = QMB_state(PHpsi, self.lvals, self.loc_dims)
+                    logger.info("State PH|i>")
+                    B.get_state_configurations(1e-3, self.sector_configs)
+                    logger.info(f"VDOT{np.vdot(PHpsi,HPpsi)}")
+                    logger.info(f"Relative |HP-PH|={absnorm}")
+                    raise ValueError(f"config {ii} {cfg} not symmetrized")
