@@ -141,7 +141,7 @@ class QMB_hamiltonian:
             raise ValueError(msg)
         self.Ham_type = format
 
-    def diagonalize(self, n_eigs, format, loc_dims):
+    def diagonalize(self, n_eigs, format, loc_dims, print_results=True):
         # Ensure Hamiltonian is Hermitian and check sparsity
         # check_hermitian(self.Ham)
         validate_parameters(loc_dims=loc_dims)
@@ -175,12 +175,13 @@ class QMB_hamiltonian:
         if not is_sorted(Nenergies):
             order = np.argsort(Nenergies)
             Nenergies, Npsi = Nenergies[order], Npsi[:, order]
-        # Save the eigenstates as QMB_states
-        logger.info(f"TOT ENERGY -- EN DENSITY")
-        for ii in range(len(Nenergies)):
-            en_density = round(Nenergies[ii] / np.prod(self.lvals), 5)
-            tot_energy = round(Nenergies[ii], 5)
-            logger.info(f"{tot_energy}      {en_density}")
+        if print_results:
+            # Save the eigenstates as QMB_states
+            logger.info(f"TOT ENERGY -- EN DENSITY")
+            for ii in range(len(Nenergies)):
+                en_density = Nenergies[ii] / np.prod(self.lvals)
+                tot_energy = Nenergies[ii]
+                logger.info(f"{tot_energy:.10f}  {en_density:.10f}")
         self.Nenergies = Nenergies / np.prod(self.lvals)
         self.Npsi = [
             QMB_state(Npsi[:, ii], self.lvals, self.loc_dims)
@@ -210,10 +211,12 @@ class QMB_hamiltonian:
             # Check if Hamiltonian is already diagonalized
             if not hasattr(self, "Nenergies") or not hasattr(self, "Npsi"):
                 self.diagonalize(n_eigs="full", format="dense", loc_dims=loc_dims)
+            # Multiply energy densities by the number of sites to get total energies
+            evals = self.Nenergies * np.prod(self.lvals)
             # Run the exact time evolution
             psi_time = exact_time_evolution(
                 time_line,
-                self.Nenergies,
+                evals,
                 np.array([A.psi for A in self.Npsi]).T,
                 initial_state.astype(np.complex128),
             )
@@ -259,7 +262,7 @@ class QMB_hamiltonian:
                 endpoint=True,
                 traceA=traceA,
             )
-        logger.info("Saving states")
+        logger.info("Saving time evolved states")
         # Save them as QMB_states
         self.psi_time = [
             QMB_state(psi_time[ii, :], self.lvals, self.loc_dims)
@@ -552,7 +555,7 @@ def exact_time_evolution(
     n_eigs = len(eigenvalues)
     # To store time-evolved states
     n_steps = len(tline)
-    psi_time = psi_time = np.empty((n_steps, psi_dim), np.complex128)
+    psi_time = np.empty((n_steps, psi_dim), np.complex128)
     # Precompute overlaps <E_i|psi(0)> for all i
     overlaps = compute_overlap_with_eigenstates(eigenvectors, initial_state)
     # Loop over time steps in parallel
