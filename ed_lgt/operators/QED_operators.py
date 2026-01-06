@@ -87,7 +87,7 @@ def QED_rishon_operators(spin, pure_theory, U, fermionic=True):
     # ops["Ep1"] = diags(np.array([1, 0, 0]), 0, shape)
     # ops["E0"] = diags(np.array([0, 1, 0]), 0, shape)
     # ops["Em1"] = diags(np.array([0, 0, 1]), 0, shape)
-    ops["E_square"] = ops["E"] ** 2
+    ops["E2"] = ops["E"] ** 2
     return ops
 
 
@@ -139,7 +139,7 @@ def QED_dressed_site_operators(
     ops = {}
     if lattice_dim == 1:
         # Rishon Electric operators
-        for op in ["E", "E_square", "n", "P"]:
+        for op in ["E", "E2", "n", "P"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz"])
             ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", op])
         if not pure_theory:
@@ -159,7 +159,7 @@ def QED_dressed_site_operators(
             ops["N"] = qmb_op(in_ops, ["N", "Iz", "Iz"])
     elif lattice_dim == 2:
         # Rishon Electric operators
-        for op in ["E", "E_square", "n", "P"]:
+        for op in ["E", "E2", "n", "P"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz"])
             ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz"])
@@ -188,7 +188,7 @@ def QED_dressed_site_operators(
             ops["N"] = qmb_op(in_ops, ["N", "Iz", "Iz", "Iz", "Iz"])
     elif lattice_dim == 3:
         # Rishon Electric operators
-        for op in ["E", "E_square", "n", "P"]:  # , "Ep1", "E0", "Em1"]:
+        for op in ["E", "E2", "n", "P"]:  # , "Ep1", "E0", "Em1"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz", "Iz", "Iz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz", "Iz", "Iz"])
             ops[f"{op}_mz"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz", "Iz", "Iz"])
@@ -245,10 +245,10 @@ def QED_dressed_site_operators(
             # Psi Number operators
             ops["N"] = qmb_op(in_ops, ["N", "Iz", "Iz", "Iz", "Iz", "Iz", "Iz"])
     # E_square operators
-    ops["E_square"] = 0
+    ops["E2"] = 0
     for d in dimensions:
         for s in "mp":
-            ops["E_square"] += 0.5 * ops[f"E_square_{s}{d}"]
+            ops["E2"] += 0.5 * ops[f"E2_{s}{d}"]
     # Define Gauss Law operators of hard-core lattice sites
     if spin < 4 and lattice_dim < 3:
         # GAUSS LAW OPERATORS

@@ -106,7 +106,7 @@ class QED_Model(QuantumModel):
         h_terms = {}
         # -------------------------------------------------------------------------------
         # ELECTRIC ENERGY
-        op_name = "E_square"
+        op_name = "E2"
         h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
         self.H.add_term(h_terms[op_name].get_Hamiltonian(strength=self.coeffs["E"]))
         # -------------------------------------------------------------------------------
