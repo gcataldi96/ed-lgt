@@ -6,6 +6,7 @@ from . import (
     numba_functions,
     wannier,
     magic,
+    plotting,
 )
 
 from .checks import *
@@ -16,6 +17,7 @@ from .numba_functions import *
 from .wannier import *
 from .tensor_newtorks import *
 from .magic import *
+from .plotting import *
 
 # All modules have an __all__ defined
 __all__ = checks.__all__.copy()
@@ -26,3 +28,4 @@ __all__ += numba_functions.__all__.copy()
 __all__ += wannier.__all__.copy()
 __all__ += tensor_newtorks.__all__.copy()
 __all__ += magic.__all__.copy()
+__all__ += plotting.__all__.copy()
