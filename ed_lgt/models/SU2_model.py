@@ -126,7 +126,7 @@ class SU2_Model(QuantumModel):
         if self.sector_configs is None:
             raise ValueError("No configurations found for the given symmetry sectors")
 
-    def build_Hamiltonian(self, g, m=None):
+    def build_Hamiltonian(self, g, m=None, lambda_noise=0.0):
         logger.info(f"----------------------------------------------------")
         logger.info("BUILDING s=1/2 HAMILTONIAN")
         # Hamiltonian Coefficients
@@ -241,6 +241,37 @@ class SU2_Model(QuantumModel):
                     strength=self.coeffs["theta"], add_dagger=True
                 )
             )
+        # RANDOM NOISE VIOLATING GAUSS LAW
+        noise_requirements = [self.background > 0, lambda_noise > 0]
+        noise_requirements += [not obc for obc in self.has_obc]
+        if np.all(noise_requirements):
+            logger.info("SU2 GAUSS LAW VIOLATING TERM")
+            # HOPPING
+            op_names_list = ["Vpx_dag", "Vmx"]
+            op_list = [self.ops[op] for op in op_names_list]
+            # Define the Hamiltonian term
+            h_terms["V_hop"] = TwoBodyTerm(
+                "x", op_list, op_names_list, **self.def_params
+            )
+            self.H.add_term(
+                h_terms["V_hop"].get_Hamiltonian(
+                    strength=-lambda_noise, add_dagger=True
+                )
+            )
+            """         
+            seed = 1
+            rng = np.random.default_rng(seed)
+            d0 = 6
+            dhalf = 7
+            # i.i.d. Gaussian entries (you can switch to uniform if you prefer)
+            X = rng.uniform(size=(d0, dhalf))
+            shape = (self.n_sites, np.max(self.loc_dims), np.max(self.loc_dims))
+            self.ops["noise"] = np.zeros(shape, dtype=float)
+            for ii in range(self.n_sites):
+                self.ops["noise"][ii, :d0, d0:] = X
+                self.ops["noise"][ii, d0:, :d0] = X.T
+            h_terms["noise"] = LocalTerm(self.ops["noise"], "noise", **self.def_params)
+            self.H.add_term(h_terms["noise"].get_Hamiltonian(strength=lambda_noise))"""
         self.H.build(self.ham_format)
 
     def build_gen_Hamiltonian(self, g, m=None):

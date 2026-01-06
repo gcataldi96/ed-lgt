@@ -23,7 +23,7 @@ __all__ = [
 ]
 
 
-def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False):
+def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=0):
     validate_parameters(
         spin_list=[spin], pure_theory=pure_theory, lattice_dim=lattice_dim
     )
@@ -258,6 +258,23 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=False)
         else:
             id_list = ["ID_psi"] + ["Iz" for _ in range(2 * lattice_dim)]
         ops["bg"] = qmb_op(in_ops, ["T2_bg"] + id_list)
+        # GAUSS LAW VIOLATING OPERATORS
+        if lattice_dim == 1:
+            # Add background hopping operators
+            for side in "pm":
+                for ax in dimensions:
+                    ops[f"V{side}{ax}_dag"] = 0
+            for col in "rg":
+                ops["Vmx_dag"] += qmb_op(
+                    in_ops, [f"Z{col}_dag", "P_psi", f"Z{col}", "Iz"]
+                )
+                ops["Vpx_dag"] += qmb_op(
+                    in_ops, [f"Z{col}_dag", "P_psi", "P", f"Z{col}"]
+                )
+            # --------------------------------------------------------------------------
+            # add their dagger operators
+            ops["Vmx"] = csr_matrix(ops["Vmx_dag"].conj().transpose())
+            ops["Vpx"] = csr_matrix(ops["Vpx_dag"].conj().transpose())
     return ops
 
 
