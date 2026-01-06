@@ -1,7 +1,6 @@
 import numpy as np
-from ed_lgt.tools import stag_avg
-from ed_lgt.modeling import get_entropy_partition
 from ed_lgt.models import SU2_Model
+from scipy.sparse import eye
 from simsio import run_sim
 from time import perf_counter
 import logging
@@ -13,10 +12,26 @@ with run_sim() as sim:
     # MODEL HAMILTONIAN
     model = SU2_Model(**sim.par["model"])
     m = sim.par["m"] if not model.pure_theory else None
-    if model.spin > 1 / 2:
+    # Select Momentum Sector
+    if sim.par["momentum"]["get_momentum_basis"]:
+        unit_cell_size = sim.par["momentum"]["unit_cell_size"]
+        k_vals = sim.par["momentum_k_vals"]
+        TC_symmetry = sim.par["momentum"]["TC_symmetry"]
+        model.set_momentum_sector(unit_cell_size, k_vals, TC_symmetry)
+    # Save parameters
+    model.default_params()
+    # Build Hamiltonian
+    if model.spin > 0.5:
         model.build_gen_Hamiltonian(sim.par["g"], m)
     else:
         model.build_Hamiltonian(sim.par["g"], m)
+    """# Measure the parity on the initial state
+    model.get_parity_inversion_operator(wrt_site=False)
+    # elem = np.vdot(in_state, model.parityOP @ in_state)
+    # logger.info(f"<psi0|P|psi0 {elem}")
+    id = eye(len(model.sector_configs), format="csr")
+    Pminus = 0.5 * (id - model.parityOP)
+    model.H.Ham = model.H.Ham + 300 * Pminus"""
     # -------------------------------------------------------------------------------
     # DYNAMICS PARAMETERS
     name = sim.par["dynamics"]["state"]
@@ -28,37 +43,40 @@ with run_sim() as sim:
     n_steps = len(sim.res["time_steps"])
     # -------------------------------------------------------------------------------
     # INITIAL STATE PREPARATION
-    if name != "micro":
-        config = model.overlap_QMB_state(name)
-        logger.info(f"config {config}")
-        in_state = model.get_qmb_state_from_configs([config])
+    config = model.overlap_QMB_state(name)
+    in_state = model.get_qmb_state_from_configs([config])
     # -------------------------------------------------------------------------------
     # STAGGERED BASIS
-    """logical_stag_basis = sim.par["dynamics"]["logical_stag_basis"]
+    logical_stag_basis = sim.par["dynamics"]["logical_stag_basis"]
     num_blocks = model.n_sites // (2 * logical_stag_basis)
     stag_array = np.array(
         [-1] * logical_stag_basis + [1] * logical_stag_basis, dtype=int
     )
     norm_scalar_product = np.tile(stag_array, num_blocks)
-    logger.info(f"norm scalar product {norm_scalar_product}")"""
+    logger.info(f"norm scalar product {norm_scalar_product}")
     # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
-    local_obs = [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
-    local_obs += ["E_square"]
+    local_obs = [f"T2_p{d}" for d in model.directions]
+    if not model.pure_theory:
+        local_obs += [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
     # LIST OF TWOBODY CORRELATORS
     twobody_obs = [[f"P_p{d}", f"P_m{d}"] for d in model.directions]
     twobody_axes = [d for d in model.directions]
     # LIST OF PLAQUETTE OPERATORS
     plaquette_obs = []
     # DEFINE OBSERVABLES
-    model.get_observables(local_obs)
-    for obs in local_obs:
-        sim.res[obs] = np.zeros(n_steps, dtype=float)
-    # sim.res["delta"] = np.zeros(n_steps, dtype=float)
+    if sim.par["observables"]["measure_obs"]:
+        model.get_observables(local_obs)
+        sim.res["E2"] = np.zeros(n_steps, dtype=float)
+        for obs in local_obs:
+            sim.res[obs] = np.zeros(n_steps, dtype=float)
+    sim.res["delta"] = np.zeros(n_steps, dtype=float)
     # -------------------------------------------------------------------------------
     # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
-    partition_indices = get_entropy_partition(model.lvals)
-    sim.res["entropy"] = np.zeros(n_steps, dtype=float)
+    partition_indices = sim.par["observables"]["entropy_partition"]
+    if sim.par["observables"]["get_entropy"] or sim.par["observables"]["get_RDM"]:
+        model._get_partition(partition_indices)
+        sim.res["entropy"] = np.zeros(n_steps, dtype=float)
     if sim.par["observables"]["get_overlap"]:
         sim.res["overlap"] = np.zeros(n_steps, dtype=float)
     # -------------------------------------------------------------------------------
@@ -68,7 +86,7 @@ with run_sim() as sim:
     # MICROCANONICAL ENSEMBLE (it requires a large part of the Hamiltonian spectrum)
     if get_micro_avg:
         # DIAGONALIZE THE HAMILTONIAN
-        model.diagonalize_Hamiltonian("full", "dense")
+        model.diagonalize_Hamiltonian("full", "dense", print_results=True)
         sim.res["energy"] = model.H.Nenergies
         stag_avgs = {
             "N_tot": None,
@@ -82,11 +100,11 @@ with run_sim() as sim:
             "N_pair": None,
             "N_zero": None,
         }
-        psi_thermal, ME = model.microcanonical_avg1(
+        _, ME = model.microcanonical_avg(
             ["N_tot", "N_single", "N_pair", "N_zero"],
             in_state,
-            staggered_avg=stag_avgs,
-            special_norm=norms,
+            staggered_avgs=stag_avgs,
+            special_norms=norms,
         )
         sim.res |= ME
     # -------------------------------------------------------------------------------
@@ -96,8 +114,6 @@ with run_sim() as sim:
         if sim.par["ensemble"]["canonical"]["state"] != "micro":
             config = model.overlap_QMB_state(sim.par["ensemble"]["canonical"]["state"])
             ref_state = model.get_qmb_state_from_configs([config])
-        else:
-            ref_state = micro_state
         beta = model.get_thermal_beta(ref_state, threshold)
         sim.res["canonical_avg"] = model.canonical_avg(obs, beta)
     # -------------------------------------------------------------------------------
@@ -108,10 +124,10 @@ with run_sim() as sim:
             model.diagonalize_Hamiltonian("full", "dense")
             sim.res["energy"] = model.H.Nenergies
         # MEASURE DIAGONAL ENSEMBLE of some OBSERVABLES
-        sim.res |= model.diagonal_avg1(
+        sim.res |= model.diagonal_avg(
             ["N_tot", "N_single", "N_pair", "N_zero"],
             in_state,
-            staggered_avg=stag_avgs,
+            staggered_avgs=stag_avgs,
             special_norms=norms,
         )
     # -------------------------------------------------------------------------------
@@ -127,8 +143,7 @@ with run_sim() as sim:
                 # ENTROPY
                 if sim.par["observables"]["get_entropy"]:
                     sim.res["entropy"][ii] = model.H.psi_time[ii].entanglement_entropy(
-                        partition_indices,
-                        model.sector_configs,
+                        partition_indices, model._partition_cache
                     )
                 # -----------------------------------------------------------------------
                 # STATE CONFIGURATIONS
@@ -140,17 +155,27 @@ with run_sim() as sim:
             # MEASURE OBSERVABLES
             if sim.par["observables"]["measure_obs"]:
                 model.measure_observables(ii, dynamics=True)
-                sim.res["E_square"][ii] = np.mean(model.res["E_square"])
-                sim.res["N_single"][ii] = stag_avg(model.res["N_single"])
-                sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_pair"], "even")
-                sim.res["N_pair"][ii] += 0.5 * stag_avg(model.res["N_zero"], "odd")
-                sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_zero"], "even")
-                sim.res["N_zero"][ii] += 0.5 * stag_avg(model.res["N_pair"], "odd")
-                sim.res["N_tot"][ii] += sim.res["N_single"][ii]
-                sim.res["N_tot"][ii] += 2 * sim.res["N_pair"][ii]
-                """sim.res["delta"][ii] = (
+                sim.res["E2"][ii] = model.link_avg(obs_name="T2")
+                if not model.pure_theory:
+                    sim.res["N_single"][ii] = model.stag_avg(model.res["N_single"])
+                    sim.res["N_pair"][ii] += 0.5 * model.stag_avg(
+                        model.res["N_pair"], "even"
+                    )
+                    sim.res["N_pair"][ii] += 0.5 * model.stag_avg(
+                        model.res["N_zero"], "odd"
+                    )
+                    sim.res["N_zero"][ii] += 0.5 * model.stag_avg(
+                        model.res["N_zero"], "even"
+                    )
+                    sim.res["N_zero"][ii] += 0.5 * model.stag_avg(
+                        model.res["N_pair"], "odd"
+                    )
+                    sim.res["N_tot"][ii] = (
+                        sim.res["N_single"][ii] + 2 * sim.res["N_pair"][ii]
+                    )
+                sim.res["delta"][ii] = (
                     np.dot(model.res["N_tot"], norm_scalar_product) / model.n_sites
-                )"""
+                )
                 # logger.info(f"delta {sim.res['delta'][ii]}")
                 logger.info(f"N_single {sim.res['N_single'][ii]}")
                 logger.info(f"N_pair {sim.res['N_pair'][ii]}")

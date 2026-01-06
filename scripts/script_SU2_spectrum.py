@@ -36,7 +36,9 @@ with run_sim() as sim:
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     n_eigs = sim.par["hamiltonian"]["n_eigs"]
-    model.diagonalize_Hamiltonian(n_eigs, model.ham_format)
+    model.diagonalize_Hamiltonian(n_eigs, model.ham_format, print_results=True)
+    if n_eigs == "full":
+        n_eigs = len(model.sector_configs)
     sim.res["energy"] = model.H.Nenergies
     if sim.par["hamiltonian"]["save_psi"]:
         for ii in range(n_eigs):

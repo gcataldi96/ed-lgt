@@ -32,10 +32,7 @@ with run_sim() as sim:
     global_ops = [model.ops["N_tot"]]
     global_sectors = [model.n_sites]
     # GLOBAL OPERATORS
-    global_ops = get_symmetry_sector_generators(
-        global_ops,
-        action="global",
-    )
+    global_ops = get_symmetry_sector_generators(global_ops, action="global")
     # ==============================================================================
     # ABELIAN Z2 SYMMETRIES
     link_ops = [
