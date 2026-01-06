@@ -31,6 +31,7 @@ setuptools.setup(
         "ed_lgt.operators": "ed_lgt/operators",
         "ed_lgt.symmetries": "ed_lgt/symmetries",
         "ed_lgt.tools": "ed_lgt/tools",
+        "ed_lgt.workflows": "ed_lgt/workflows",
     },
     packages=[
         "ed_lgt",
@@ -39,6 +40,7 @@ setuptools.setup(
         "ed_lgt.operators",
         "ed_lgt.symmetries",
         "ed_lgt.tools",
+        "ed_lgt.workflows",
     ],
     python_requires=">=3.6",
     # entry_points = { 'console_scripts': ['build_exec = ed_lgt.bin.compiler:main', ], },

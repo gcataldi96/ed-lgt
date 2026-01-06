@@ -1,189 +1,377 @@
 # %%
+import os
 import numpy as np
-from ed_lgt.models import SU2_Model
-from ed_lgt.operators import SU2_Hamiltonian_couplings
-from time import perf_counter
 import logging
+from time import perf_counter
+from ed_lgt.modeling import diagonalize_density_matrix
+from ed_lgt.models import SU2_Model
 
 logger = logging.getLogger(__name__)
+
+
+def _get(d, path, default=None):
+    cur = d
+    for k in path:
+        if not isinstance(cur, dict) or k not in cur:
+            return default
+        cur = cur[k]
+    return cur
+
 
 par = {
     "model": {
         "lvals": [6],
-        "has_obc": [True],
+        "sectors": [6],
+        "has_obc": [False],
         "spin": 0.5,
         "pure_theory": False,
-        "momentum_basis": False,
-        "logical_unit_size": 2,
+        "background": 0,
+        "ham_format": "sparse",
     },
-    "hamiltonian": {"diagonalize": True, "n_eigs": 1, "format": "sparse"},
+    "hamiltonian": {
+        "n_eigs": 1,
+        "save_psi": False,
+    },
     "dynamics": {
-        "time_evolution": False,
+        "time_evolution": True,
         "start": 0,
         "stop": 1,
-        "delta_n": 0.5,
-        "state": "PV",
+        "delta_n": 0.1,
+        "state": "V",
+        "logical_stag_basis": 2,
+    },
+    "momentum": {
+        "get_momentum_basis": False,
+        "unit_cell_size": [2],
+        "TC_symmetry": False,
+    },
+    "observables": {
+        "measure_obs": True,
+        "get_entropy": True,
+        "entropy_partition": [0, 1, 2],
+        "get_state_configs": False,
+        "get_overlap": False,
     },
     "ensemble": {
-        "local_obs": "N_single",
-        "microcanonical": {
-            "average": False,
-            "state": "PV",
-            "delta": 0.1,
-        },
-        "canonical": {
-            "average": False,
-            "state": "PV",
-            "threshold": 1e-8,
-        },
-        "diagonal": {
-            "average": False,
-            "state": "PV",
-        },
+        "microcanonical": {"average": False},
+        "diagonal": {"average": False},
+        "canonical": {"average": False},
     },
-    "overlap_list": ["PV"],
     "g": 1,
     "m": 5,
 }
-res = {}
-start_time = perf_counter()
-model = SU2_Model(**par["model"])
-# -------------------------------------------------------------------------------
-# BUILD THE HAMILTONIAN
-coeffs = SU2_Hamiltonian_couplings(model.dim, model.pure_theory, par["g"], par["m"])
-model.build_Hamiltonian(coeffs)
-# -------------------------------------------------------------------------------
-# DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
-if par["hamiltonian"]["diagonalize"]:
-    model.diagonalize_Hamiltonian(
-        n_eigs=par["hamiltonian"]["n_eigs"],
-        format=par["hamiltonian"]["format"],
-    )
+
+
+def run_SU2_spectrum(par: dict) -> dict:
+    """
+    Run the SU2 ED workflow using a plain parameter dictionary.
+
+    Parameters
+    ----------
+    par : dict
+        Dictionary of parameters (same structure as par).
+    Returns
+    -------
+    res : dict
+        Results dictionary (same role as res).
+    """
+    res = {}
+    start_time = perf_counter()
+    # -------------------------------------------------------------------------------
+    # Initialize model
+    model = SU2_Model(**par["model"])
+    # -------------------------------------------------------------------------------
+    # Momentum sector (optional)
+    if _get(par, ["momentum", "get_momentum_basis"], False):
+        unit_cell_size = _get(par, ["momentum", "unit_cell_size"], None)
+        k_vals = _get(par, ["momentum", "momentum_k_vals"], None)
+        TC_symmetry = _get(par, ["momentum", "TC_symmetry"], False)
+        model.set_momentum_sector(unit_cell_size, k_vals, TC_symmetry)
+    # -------------------------------------------------------------------------------
+    model.default_params()
+    # -------------------------------------------------------------------------------
+    # Build Hamiltonian
+    g = par["g"]
+    m = par.get("m", None) if not model.pure_theory else None
+    if model.spin > 0.5:
+        model.build_gen_Hamiltonian(g, m)
+    else:
+        model.build_Hamiltonian(g, m)
+    # -------------------------------------------------------------------------------
+    # Diagonalize
+    n_eigs = _get(par, ["hamiltonian", "n_eigs"], "full")
+    save_psi = _get(par, ["hamiltonian", "save_psi"], False)
+    model.diagonalize_Hamiltonian(n_eigs, model.ham_format, print_results=True)
+    n_eigs_eff = len(model.sector_configs) if n_eigs == "full" else int(n_eigs)
     res["energy"] = model.H.Nenergies
-# -------------------------------------------------------------------------------
-# LIST OF LOCAL OBSERVABLES
-local_obs = [f"T2_{s}{d}" for d in model.directions for s in "mp"]
-local_obs += ["E_square"]
-if not model.pure_theory:
-    local_obs = [f"N_{label}" for label in ["tot", "single", "pair"]]
-# LIST OF TWOBODY CORRELATORS
-twobody_obs = [[f"P_p{d}", f"P_m{d}"] for d in model.directions]
-twobody_axes = [d for d in model.directions]
-# LIST OF PLAQUETTE OPERATORS
-plaquette_obs = []
-# DEFINE OBSERVABLES
-model.get_observables(local_obs)
-# -------------------------------------------------------------------------------
-# ENSEMBLE BEHAVIORS
-obs = par["ensemble"]["local_obs"]
-# -------------------------------------------------------------------------------
-# MICROCANONICAL ENSEMBLE
-if par["ensemble"]["microcanonical"]["average"]:
-    config = model.overlap_QMB_state(par["ensemble"]["microcanonical"]["state"])
-    ref_state = model.get_qmb_state_from_config(config)
-    micro_state, res["microcan_avg"] = model.microcanonical_avg(obs, ref_state)
-# -------------------------------------------------------------------------------
-# CANONICAL ENSEMBLE
-if par["ensemble"]["canonical"]["average"]:
-    threshold = par["ensemble"]["canonical"]["threshold"]
-    if par["ensemble"]["canonical"]["state"] != "micro":
-        config = model.overlap_QMB_state(par["ensemble"]["canonical"]["state"])
-        ref_state = model.get_qmb_state_from_config(config)
+    if save_psi:
+        for ii in range(n_eigs_eff):
+            res[f"psi{ii}"] = model.H.Npsi[ii].psi
+    # -------------------------------------------------------------------------------
+    # Observables definition
+    local_obs = [f"T2_p{d}" for d in model.directions]
+    if not model.pure_theory:
+        local_obs += [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
+    res["E2"] = np.zeros(n_eigs_eff, dtype=float)
+    for obs in local_obs:
+        res[obs] = np.zeros(n_eigs_eff, dtype=float)
+    twobody_obs = []
+    twobody_axes = []
+    # Plaquettes
+    if model.spin < 1 and model.dim in (2, 3):
+        if model.dim == 2:
+            plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
+        else:  # dim == 3
+            plaquette_obs = [
+                ["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"],
+                ["C_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
+                ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
+            ]
     else:
-        ref_state = micro_state
-    beta = model.get_thermal_beta(ref_state, threshold)
-    res["canonical_avg"] = model.canonical_avg(obs, beta)
-# -------------------------------------------------------------------------------
-# DIAGONAL ENSEMBLE
-if par["ensemble"]["diagonal"]["average"]:
-    if par["ensemble"]["diagonal"]["state"] != "micro":
-        config = model.overlap_QMB_state(par["ensemble"]["diagonal"]["state"])
-        ref_state = model.get_qmb_state_from_config(config)
+        plaquette_obs = []
+    for obs_names_list in plaquette_obs:
+        obs = "_".join(obs_names_list)
+        res[obs] = np.zeros(n_eigs_eff, dtype=float)
+    model.get_observables(
+        local_obs, twobody_obs, plaquette_obs, twobody_axes=twobody_axes
+    )
+    measure_obs = _get(par, ["observables", "measure_obs"], False)
+    # -------------------------------------------------------------------------------
+    # Overlap state (optional)
+    get_overlap = _get(par, ["observables", "get_overlap"], False)
+    if get_overlap:
+        name = _get(par, ["hamiltonian", "state"], None)
+        config = model.overlap_QMB_state(name)
+        logger.info(f"config {config}")
+        in_state = model.get_qmb_state_from_configs([config])
+        res["overlap"] = np.zeros(model.H.n_eigs, dtype=float)
+    # -------------------------------------------------------------------------------
+    # Entropy / RDM partition (optional)
+    partition_indices = _get(par, ["observables", "entropy_partition"], [])
+    get_entropy = _get(par, ["observables", "get_entropy"], False)
+    get_rdm = _get(par, ["observables", "get_RDM"], False)
+    if get_entropy or get_rdm:
+        model._get_partition(partition_indices)
+    res["entropy"] = np.zeros(model.H.n_eigs, dtype=float)
+    get_state_configs = _get(par, ["observables", "get_state_configs"], False)
+    # -------------------------------------------------------------------------------
+    # Parity (optional)
+    apply_parity = False
+    wrt_site = False
+    if isinstance(par.get("inversion", None), dict):
+        apply_parity = _get(par, ["inversion", "get_inversion_sym"], False)
+        wrt_site = _get(par, ["inversion", "wrt_site"], False)
+    if apply_parity:
+        model.get_parity_inversion_operator(wrt_site)
+    # -------------------------------------------------------------------------------
+    # Main loop over eigenstates
+    for ii in range(model.H.n_eigs):
+        model.H.print_energy(ii)
+        # Parity expectation (debug/info)
+        if apply_parity:
+            if model.momentum_basis is None:
+                psi = model.H.Npsi[ii].psi
+            else:
+                Pk = model._basis_Pk_as_csr()
+                psi = Pk @ model.H.Npsi[ii].psi
+            psiP = model.parityOP @ psi
+            logger.info(f"<psi{ii}|P|psi{ii}> {np.real(np.vdot(psi, psiP))}")
+        # ---------------------------------------------------------------------------
+        # ONLY IN THE COORDINATE BASIS
+        if model.momentum_basis is None:
+            # ---------------------------------------------------------------------------
+            # REDUCED DENSITY MATRIX
+            if get_rdm:
+                RDM = model.H.Npsi[ii].reduced_density_matrix(
+                    partition_indices, model._partition_cache
+                )
+                logger.info(f"RDM shape {RDM.shape}")
+                rho_eigvals, rho_eigvecs = diagonalize_density_matrix(RDM)
+                sorted_indices = np.argsort(rho_eigvals)[::-1]
+                rho_eigvals = rho_eigvals[sorted_indices]
+                logger.info(f"eigvals {rho_eigvals}")
+                res["eigvals"] = rho_eigvals
+                rho_eigvecs = rho_eigvecs[:, sorted_indices]
+            # ---------------------------------------------------------------------------
+            # ENTANGLEMENT ENTROPY
+            if get_entropy:
+                res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
+                    partition_indices, model._partition_cache
+                )
+            # ---------------------------------------------------------------------------
+            # STATE CONFIGURATIONS
+            if get_state_configs:
+                model.H.Npsi[ii].get_state_configurations(1e-3, model.sector_configs)
+        # -------------------------------------------------------------------------------
+        # LOCAL OBSERVABLES
+        if measure_obs:
+            model.measure_observables(ii)
+            res["E2"][ii] = model.link_avg(obs_name="T2")
+            if not model.pure_theory:
+                res["N_single"][ii] = model.stag_avg(model.res["N_single"])
+                res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "even")
+                res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "odd")
+                res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "even")
+                res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "odd")
+                res["N_tot"][ii] = res["N_single"][ii] + 2.0 * res["N_pair"][ii]
+        # -------------------------------------------------------------------------------
+        # Overlaps
+        if get_overlap:
+            res["overlap"][ii] = model.measure_fidelity(in_state, ii, print_value=True)
+    # -------------------------------------------------------------------------------
+    end_time = perf_counter()
+    logger.info(f"TIME SIMS {round(end_time - start_time, 5)}")
+    return res
+
+
+def run_SU2_dynamics(par: dict) -> dict:
+    """
+    Run the SU2 ED workflow using a plain parameter dictionary.
+
+    Parameters
+    ----------
+    par : dict
+        Dictionary of parameters (same structure as par).
+    Returns
+    -------
+    res : dict
+        Results dictionary (same role as res).
+    """
+    res = {}
+    start_time = perf_counter()
+    # -------------------------------------------------------------------------------
+    # Initialize model
+    model = SU2_Model(**par["model"])
+    # -------------------------------------------------------------------------------
+    # Momentum sector (optional)
+    if _get(par, ["momentum", "get_momentum_basis"], False):
+        unit_cell_size = _get(par, ["momentum", "unit_cell_size"], None)
+        k_vals = _get(par, ["momentum", "momentum_k_vals"], None)
+        TC_symmetry = _get(par, ["momentum", "TC_symmetry"], False)
+        model.set_momentum_sector(unit_cell_size, k_vals, TC_symmetry)
+    # -------------------------------------------------------------------------------
+    model.default_params()
+    # -------------------------------------------------------------------------------
+    # Build Hamiltonian
+    g = par["g"]
+    m = par.get("m", None) if not model.pure_theory else None
+    if model.spin > 0.5:
+        model.build_gen_Hamiltonian(g, m)
     else:
-        ref_state = micro_state
-    res["diagonal_avg"] = model.diagonal_avg(obs, ref_state)
-# -------------------------------------------------------------------------------
-# DYNAMICS
-if par["dynamics"]["time_evolution"]:
+        model.build_Hamiltonian(g, m)
+    # -------------------------------------------------------------------------------
+    # Time evolution setup
+    name = par["dynamics"]["state"]
     start = par["dynamics"]["start"]
     stop = par["dynamics"]["stop"]
-    delta_n = par["dynamics"]["delta_n"]
-    n_steps = int((stop - start) / delta_n)
+    delta_t = par["dynamics"]["delta_n"]
+    time_line = np.arange(start, stop + delta_t, delta_t)
+    res["time_steps"] = time_line
+    n_steps = len(time_line)
+    # -------------------------------------------------------------------------------
     # INITIAL STATE PREPARATION
-    name = par["dynamics"]["state"]
-    if name != "micro":
-        config = model.overlap_QMB_state(name)
-        in_state = model.get_qmb_state_from_config(config)
+    config = model.overlap_QMB_state(name)
+    in_state = model.get_qmb_state_from_configs([config])
+    # Overlap state (optional)
+    get_overlap = _get(par, ["observables", "get_overlap"], False)
+    if get_overlap:
+        res["overlap"] = np.zeros(n_steps, dtype=float)
+    # -------------------------------------------------------------------------------
+    # Observables definition
+    local_obs = [f"T2_p{d}" for d in model.directions]
+    if not model.pure_theory:
+        local_obs += [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
+    res["E2"] = np.zeros(n_steps, dtype=float)
+    for obs in local_obs:
+        res[obs] = np.zeros(n_steps, dtype=float)
+    twobody_obs = []
+    twobody_axes = []
+    # Plaquettes
+    if model.spin < 1 and model.dim in (2, 3):
+        if model.dim == 2:
+            plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
+        else:  # dim == 3
+            plaquette_obs = [
+                ["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"],
+                ["C_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
+                ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
+            ]
     else:
-        in_state = micro_state
+        plaquette_obs = []
+    for obs_names_list in plaquette_obs:
+        obs = "_".join(obs_names_list)
+        res[obs] = np.zeros(n_steps, dtype=float)
+    model.get_observables(
+        local_obs, twobody_obs, plaquette_obs, twobody_axes=twobody_axes
+    )
+    measure_obs = _get(par, ["observables", "measure_obs"], False)
+    # -------------------------------------------------------------------------------
+    # Entropy / RDM partition (optional)
+    partition_indices = _get(par, ["observables", "entropy_partition"], [])
+    get_entropy = _get(par, ["observables", "get_entropy"], False)
+    get_rdm = _get(par, ["observables", "get_RDM"], False)
+    if get_entropy or get_rdm:
+        model._get_partition(partition_indices)
+    res["entropy"] = np.zeros(n_steps, dtype=float)
+    get_state_configs = _get(par, ["observables", "get_state_configs"], False)
+    # -------------------------------------------------------------------------------
     # TIME EVOLUTION
-    model.time_evolution_Hamiltonian(in_state, start, stop, n_steps)
-# -------------------------------------------------------------------------------
-# DEFINE THE STEP (FROM DYNAMICS OR DIAGONALIZATION)
-N = n_steps if par["dynamics"]["time_evolution"] else model.n_eigs
-# -------------------------------------------------------------------------------
-res["entropy"] = np.zeros(N, dtype=float)
-ov_states = {}
-for overlap_state in par["overlap_list"]:
-    res[f"overlap_{overlap_state}"] = np.zeros(N, dtype=float)
-    config = model.overlap_QMB_state(overlap_state)
-    ov_states[overlap_state] = model.get_qmb_state_from_config(config)
-for obs in local_obs:
-    res[obs] = np.zeros((N, model.n_sites), dtype=float)
-# -------------------------------------------------------------------------------
-if par["dynamics"]["time_evolution"]:
-    for ii in range(N):
-        logger.info(f"================== {ii} ===================")
-        if not model.momentum_basis:
+    if par["dynamics"]["time_evolution"]:
+        model.time_evolution_Hamiltonian(in_state, time_line)
+    # Main loop over time steps
+    for ii in range(n_steps):
+        # ---------------------------------------------------------------------------
+        # ONLY IN THE COORDINATE BASIS
+        if model.momentum_basis is None:
             # -----------------------------------------------------------------------
-            # ENTROPY
-            res["entropy"][ii] = model.H.psi_time[ii].entanglement_entropy(
-                list(np.arange(0, int(model.lvals[0] / 2), 1)),
-                sector_configs=model.sector_configs,
-            )
+            # REDUCED DENSITY MATRIX
+            if get_rdm:
+                RDM = model.H.psi_time[ii].reduced_density_matrix(
+                    partition_indices, model._partition_cache
+                )
+                logger.info(f"RDM shape {RDM.shape}")
+                rho_eigvals, rho_eigvecs = diagonalize_density_matrix(RDM)
+                sorted_indices = np.argsort(rho_eigvals)[::-1]
+                rho_eigvals = rho_eigvals[sorted_indices]
+                logger.info(f"eigvals {rho_eigvals}")
+                res["eigvals"] = rho_eigvals
+                rho_eigvecs = rho_eigvecs[:, sorted_indices]
+            # -----------------------------------------------------------------------
+            # ENTANGLEMENT ENTROPY
+            if get_entropy:
+                res["entropy"][ii] = model.H.psi_time[ii].entanglement_entropy(
+                    partition_indices, model._partition_cache
+                )
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS
-            model.H.psi_time[ii].get_state_configurations(
-                threshold=1e-1, sector_configs=model.sector_configs
-            )
-        # -----------------------------------------------------------------------
-        # MEASURE OBSERVABLES
-        model.measure_observables(ii, par["dynamics"]["time_evolution"])
-        for obs in local_obs:
-            res[obs][ii, :] = model.res[obs]
+            if get_state_configs:
+                model.H.psi_time[ii].get_state_configurations(
+                    1e-3, model.sector_configs
+                )
         # ---------------------------------------------------------------------------
-        # OVERLAPS with the INITIAL STATE
-        for overlap_state in par["overlap_list"]:
-            res[f"overlap_{overlap_state}"][ii] = model.measure_fidelity(
-                in_state, ii, par["dynamics"]["time_evolution"], True
-            )
-elif par["hamiltonian"]["diagonalize"]:
-    for ii in range(N):
-        logger.info(f"================== {ii} ===================")
-        if not model.momentum_basis:
-            # -----------------------------------------------------------------------
-            # ENTROPY
-            res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
-                list(np.arange(0, int(model.lvals[0] / 2), 1)),
-                sector_configs=model.sector_configs,
-            )
-            # -----------------------------------------------------------------------
-            # STATE CONFIGURATIONS
-            model.H.Npsi[ii].get_state_configurations(
-                threshold=1e-1, sector_configs=model.sector_configs
-            )
-        # -----------------------------------------------------------------------
-        # MEASURE OBSERVABLES
-        model.measure_observables(ii, par["dynamics"]["time_evolution"])
-        for obs in local_obs:
-            res[obs][ii, :] = model.res[obs]
+        # LOCAL OBSERVABLES
+        if measure_obs:
+            model.measure_observables(ii, dynamics=True)
+            res["E2"][ii] = model.link_avg(obs_name="T2")
+            if not model.pure_theory:
+                res["N_single"][ii] = model.stag_avg(model.res["N_single"])
+                res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "even")
+                res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "odd")
+                res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "even")
+                res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "odd")
+                res["N_tot"][ii] = res["N_single"][ii] + 2.0 * res["N_pair"][ii]
         # ---------------------------------------------------------------------------
-        # OVERLAPS with the INITIAL STATE
-        for overlap_state in par["overlap_list"]:
-            res[f"overlap_{overlap_state}"][ii] = model.measure_fidelity(
-                ov_states[overlap_state], ii, False, True
-            )
-# -------------------------------------------------------------------------------
-end_time = perf_counter()
-logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")
+        # Overlaps
+        if get_overlap:
+            res["overlap"][ii] = model.measure_fidelity(in_state, ii, print_value=True)
+    # -------------------------------------------------------------------------------
+    end_time = perf_counter()
+    logger.info(f"TIME SIMS {round(end_time - start_time, 5)}")
+    return res
+
+
+# %%
+run_SU2_spectrum(par)
+# %%
+run_SU2_dynamics(par)
 # %%

@@ -3,6 +3,10 @@ from simsio import gen_configs
 import numpy as np
 
 # %%
+# DFL
+params = {"g": np.linspace(0, 15, 7), "m": np.linspace(0, 15, 7)}
+gen_configs("template", params, f"DFL/HSF_dyn_P")
+# %%
 # SU2 PURE THEORY TOPOLOGY
 params = {"g": np.logspace(-1, 1, 15)}
 gen_configs("template", params, f"SU2/pure/topology")
