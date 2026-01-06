@@ -1,15 +1,10 @@
 import numpy as np
 from numba import njit, prange
-from math import prod
 from scipy.linalg import eigh as array_eigh, svd
 from scipy.sparse.linalg import svds
-from scipy.sparse import isspmatrix, csr_array, csr_matrix
-from ed_lgt.tools import validate_parameters, exclude_columns, get_time
-from ed_lgt.symmetries import (
-    index_to_config,
-    config_to_index_linsearch,
-    subenv_map_to_unique_indices,
-)
+from scipy.sparse import isspmatrix, csr_matrix
+from ed_lgt.tools import validate_parameters, encode_all_configs, compute_strides
+from ed_lgt.symmetries import index_to_config
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,6 +16,7 @@ __all__ = [
     "diagonalize_density_matrix",
     "get_projector_for_efficient_density_matrix",
     "exp_val_data2",
+    "extract_support",
 ]
 
 # choose your own sensible thresholds density matrix
@@ -49,7 +45,6 @@ class QMB_state:
         self.psi = psi
         self.lvals = lvals
         self.loc_dims = loc_dims
-        self.n_sites = prod(self.lvals)
         self.symmetry_sector = symmetry_sector
         self.debug_mode = debug_mode
         self._psi_matrix_cache: dict[tuple[int, ...], np.ndarray | csr_matrix] = {}
@@ -112,7 +107,7 @@ class QMB_state:
                 msg = f"The dimensions of the quantum state {self.psi.shape[0]} and the operator {operator.shape[0]} do not match."
                 raise ValueError(msg)
             if isinstance(operator, np.ndarray):
-                operator = csr_array(operator)
+                operator = csr_matrix(operator)
             validate_parameters(op_list=[operator])
             return np.real(np.dot(np.conjugate(self.psi), (operator.dot(self.psi))))
         else:
@@ -123,7 +118,6 @@ class QMB_state:
 
     def _get_psi_matrix(self, keep_indices, partitions_dict):
         logger.info(f"----------------------------------------------------")
-        logger.info("get_psi_matrix")
         key = tuple(sorted(keep_indices))
         if key not in partitions_dict:
             raise ValueError(f"{key} partition not yet implemented on the model")
@@ -246,15 +240,13 @@ class QMB_state:
             SV = svd(psi_matrix, full_matrices=False, compute_uv=False)
         llambdas = SV**2
         llambdas = llambdas[llambdas > 1e-10]
-        logger.info(
-            f"n singular values: {llambdas.size} {llambdas[llambdas > 1e-4].size}"
-        )
-        logger.info(f"MAX ENTROPY log2(partitiondim): {np.log2(psi_matrix.shape[0])} ")
+        logger.debug(f"n singvals: {llambdas.size} {llambdas[llambdas > 1e-4].size}")
+        logger.debug(f"MAX ENTROPY log2(partitiondim): {np.log2(psi_matrix.shape[0])} ")
         entropy = -np.sum(llambdas * np.log2(llambdas))
-        logger.info(f"ENTROPY S of {keep_indices}: {format(entropy, '.9f')}")
+        logger.info(f"ENTROPY S of {keep_indices}: {format(entropy, '.12f')}")
         chi_exact = llambdas.size  # exact Schmidt rank at that cut
         chi_min = int(np.ceil(2**entropy))  # lower bound from S alone
-        logger.info(f"-> BOND DIMENSION \chi=2^{entropy}: {chi_min}<{chi_exact}")
+        logger.debug(f"BOND DIMENSION \chi=2^{entropy}: {chi_min}<{chi_exact}")
         return entropy
 
     def get_state_configurations(self, threshold=1e-2, sector_configs=None):
@@ -328,7 +320,7 @@ def get_sorted_indices(data):
     return sorted_indices[::-1]  # Descending order
 
 
-def diagonalize_density_matrix(rho):
+def diagonalize_density_matrix(rho: np.ndarray | csr_matrix):
     # Diagonalize a density matrix which is HERMITIAN COMPLEX MATRIX
     if isinstance(rho, np.ndarray):
         rho_eigvals, rho_eigvecs = array_eigh(rho)
@@ -386,8 +378,8 @@ def build_psi_matrix(
 ):
     # rows = subsystem, cols = environment
     psi_matrix = np.zeros((subsys_dim, env_dim), dtype=np.complex128)
-    for i in prange(psi.shape[0]):
-        psi_matrix[subsys_config_index[i], env_config_index[i]] = psi[i]
+    for ii in prange(psi.shape[0]):
+        psi_matrix[subsys_config_index[ii], env_config_index[ii]] = psi[ii]
     return psi_matrix
 
 
@@ -423,3 +415,46 @@ def exp_val_data2(psi1, psi2, row_list, col_list, value_list):
     for ii in range(len(row_list)):
         exp_val += psi1_dag[row_list[ii]] * value_list[ii] * psi2[col_list[ii]]
     return exp_val
+
+
+def extract_support(
+    psi: np.ndarray,
+    loc_dims: np.ndarray,
+    sector_configs: np.ndarray,
+    prob_threshold: float = 1e-2,
+    sort_for_encoding: bool = True,
+):
+    """
+    Build a truncated-support representation of |psi>.
+
+    Returns
+    -------
+    support_indices : (K,) int64
+        Indices in the *sector basis* (i.e. indices into sector_configs / psi).
+    support_coeffs  : (K,) complex128
+        Amplitudes psi[support_indices].
+    support_configs : (K, N) uint16
+        Configurations for each kept basis index, sorted consistently if requested.
+    discarded_weight : float
+        Sum of probabilities outside the support (delta = 1 - sum(|coeffs|^2)).
+    """
+    prob = np.abs(psi) ** 2
+    mask = prob > prob_threshold
+    support_indices = np.nonzero(mask)[0].astype(np.int64)
+    probs_kept = prob[support_indices]
+    order_desc = np.argsort(-probs_kept)
+    support_indices = support_indices[order_desc]
+    support_coeffs = psi[support_indices]
+    support_configs = sector_configs[support_indices, :]
+    # Compute discarded probability mass (delta)
+    kept_weight = float(np.sum(np.abs(support_coeffs) ** 2))
+    discarded_weight = max(0.0, 1.0 - kept_weight)
+    # Sort support by the same encoding order your algorithm expects
+    if sort_for_encoding:
+        # rightmost-fastest encoding key
+        encoding_keys = encode_all_configs(support_configs, compute_strides(loc_dims))
+        sort_order = np.argsort(encoding_keys, kind="mergesort")
+        support_indices = support_indices[sort_order]
+        support_coeffs = support_coeffs[sort_order]
+        support_configs = support_configs[sort_order, :]
+    return support_indices, support_coeffs, support_configs, discarded_weight
