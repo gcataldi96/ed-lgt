@@ -19,35 +19,30 @@ def _get(d, path, default=None):
 
 par = {
     "model": {
-        "lvals": [4, 4],
-        "has_obc": [False, False],
+        "lvals": [2, 2, 2],
+        "has_obc": [False, False, False],
         "spin": 1,
         "pure_theory": True,
         "ham_format": "sparse",
     },
     "hamiltonian": {
-        "n_eigs": 4,
+        "n_eigs": 1,
         "save_psi": False,
     },
     "momentum": {
-        "get_momentum_basis": True,
-        "unit_cell_size": [1, 1],
-        "momentum_k_vals": [0, 0],
+        "get_momentum_basis": False,
+        "unit_cell_size": [1, 1, 1],
+        "momentum_k_vals": [0, 0, 0],
     },
     "observables": {
         "measure_obs": True,
-        "get_entropy": True,
+        "get_entropy": False,
         "entropy_partition": [0, 1],
-        "get_state_configs": False,
+        "get_state_configs": True,
         "get_overlap": False,
     },
-    "ensemble": {
-        "microcanonical": {"average": False},
-        "diagonal": {"average": False},
-        "canonical": {"average": False},
-    },
-    "g": 1,
-    "theta": 0.5,
+    "g": 2.3277777777777775,
+    "theta": 10,
 }
 
 
@@ -84,6 +79,7 @@ def run_QED_simulation(par: dict) -> dict:
     # LIST OF LOCAL OBSERVABLES
     local_obs = ["E2"]
     local_obs += [f"E_{s}{d}" for d in model.directions for s in "mp"]
+    local_obs += [f"E2_{s}{d}" for d in model.directions for s in "mp"]
     if not model.pure_theory:
         local_obs += ["N"]
     for obs in local_obs:

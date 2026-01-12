@@ -74,14 +74,9 @@ class SU2_Model(QuantumModel):
         # -------------------------------------------------------------------------------
         # SU2 ELECTRIC-FLUX “NBODY” SYMMETRIES
         # only in the pure (no-matter) theory, more than 1D, *and* PBC
-        # Constrain, for each cartesian direction, the parity of the face/line through the origin:
-        # 3D:
-        #    for 'Ex' → the yz-face at x=0
-        #    for 'Ey' → the xz-face at y=0
-        #    for 'Ez' → the xy-face at z=0
-        # 2D:
-        #    for 'Ex' → the y-axis at x=0
-        #    for 'Ey' → the x-axis at y=0
+        # Constrain, for each direction, the parity of the face/line through the origin:
+        # 3D: (Ex → yz-face at x=0) (Ey → xz-face at y=0) (Ez → xy-face at z=0)
+        # 2D: (Ex → y-axis at x=0) (Ey → x-axis at y=0)
         if self.pure_theory and not any(self.has_obc):
             logger.info("fixing surface parity fluxes")
             # one flux‐constraint per cartesian direction

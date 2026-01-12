@@ -960,3 +960,5 @@ cb = fig.colorbar(
     sm, ax=axs, aspect=80, location="top", orientation="horizontal", pad=0.02
 )
 cb.set_label(label=r"$h$", labelpad=-22, x=-0.02, y=0)
+
+# %%

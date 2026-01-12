@@ -452,6 +452,7 @@ def main(
             tensor_backend=py_tensor_backend,
             sites=sites_list,
         )
+        state.eff_op = None  # eff_op is now outdated
         tot_singvals_cut = state.apply_mpo(W_mpo_i)
         print(f"{tot_singvals_cut} singular values cut")
         list_states.append(state)
@@ -463,12 +464,14 @@ def main(
         overlap = list_states[ii].dot(list_states[ii + 1])
         print(f"<W{ii}|W{ii+1}> {overlap:.16f}")
     print("SUMMING WAVEPACKET STATE")
+    initial_state = list_states[3].copy()
+    initial_state.convergence_parameters = wp_conv
     wavepacket_state = TTN.sum_approximate(
         sum_states=list_states,
         sum_amplitudes=amplitudes,
         convergence_parameters=wp_conv,
         max_iterations=100,
-        initial_state=list_states[3].copy(),
+        initial_state=initial_state,
     )
     print(f"Wave packet tensor")
     for tensor in wavepacket_state._iter_tensors():
