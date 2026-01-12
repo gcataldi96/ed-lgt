@@ -92,7 +92,14 @@ def spread_functional(E_profile: np.ndarray, R_target: int, center_mode: int) ->
 
 
 def get_Wannier_function(
-    sim_name, R_target=6, n_restarts=10, seed=0, maxiter=5000, center_mode=0
+    Mk1k2_matrix,
+    k_indices,
+    gs_energy,
+    R_target=6,
+    n_restarts=10,
+    seed=0,
+    maxiter=5000,
+    center_mode=0,
 ):
     # ================================================================
     def objective(x):
@@ -109,16 +116,6 @@ def get_Wannier_function(
         # 2) anchored spread around chosen site
         return spread_functional(E, R_target, center_mode)
 
-    # ================================================================
-    # We load the convolution results
-    config_filename = f"scattering/{sim_name}"
-    match = SimsQuery(group_glob=config_filename)
-    ugrid, _ = uids_grid(match.uids, ["g", "m"])
-    # (Nk, Nk) complex128 M_{k1,k2} = <k1|H_0|k2>
-    Mk1k2_matrix = get_sim(ugrid[0][0]).res["k1k2matrix"]
-    # (Nk,) integer indices of k T^2 vs TC
-    k_indices = get_sim(ugrid[0][0]).res["k_indices"]
-    gs_energy = -4.580269235030599 - 1.251803175199139e-18j
     # ------------------------------------------------
     Nk = len(k_indices)
     k_physical = 2 * np.pi * k_indices / Nk
@@ -129,10 +126,10 @@ def get_Wannier_function(
     best_theta = None
     offset = np.complex128(gs_energy)
     # Optimize the theta phases
-    print("=======================================")
-    print("theta phases optimization")
+    logger.info("=======================================")
+    logger.info("theta phases optimization")
     for indtry in range(n_restarts):
-        print(f"Restart {indtry+1}/{n_restarts}")
+        logger.info(f"Restart {indtry+1}/{n_restarts}")
         # Random initialization of the theta
         x0 = rng.uniform(0.0, 2.0 * np.pi, size=Nk)  # random phases for k>=1
         res = minimize(
@@ -151,13 +148,45 @@ def get_Wannier_function(
     best_theta = np.mod(best_theta, 2.0 * np.pi)
     # Obtain the energy profile
     energy_best = energy_functional(Mk1k2_matrix, k_physical, best_theta, offset)
-    print(f"Optimal \sigma^2 estimated: {best_sigma}")
-    print(f"Optimal theta phases (rad): {best_theta}")
+    logger.info(f"Optimal \sigma^2 estimated: {best_sigma}")
+    logger.info(f"Optimal theta phases (rad): {best_theta}")
     return energy_best, best_sigma, best_theta
 
 
+# function to acquire the convolution matrix and k indices from the simulation
+def get_simulation_data1(sim_name):
+    # ================================================================
+    # We load the convolution results
+    config_filename = f"scattering/{sim_name}"
+    match = SimsQuery(group_glob=config_filename)
+    ugrid, _ = uids_grid(match.uids, ["g", "m"])
+    # (Nk, Nk) complex128 M_{k1,k2} = <k1|H_0|k2>
+    Mk1k2_matrix = get_sim(ugrid[0][0]).res["k1k2matrix"]
+    # (Nk,) integer indices of k T^2 vs TC
+    k_indices = get_sim(ugrid[0][0]).res["k_indices"]
+    gs_energy = -4.580269235030599 - 1.251803175199139e-18j
+    return Mk1k2_matrix, k_indices, gs_energy
+
+
+def get_simulation_data2(sim_name):
+    with np.load(sim_name, allow_pickle=False) as z:
+        Mk1k2_matrix = z["matrix"]
+        k_indices = z["kvals"]
+        gs_energy = z["gs"]
+    return Mk1k2_matrix, k_indices, gs_energy
+
+
 # %%
-E_best, best_sigma, best_theta = get_Wannier_function("convolution1_N0", center_mode=1)
+Mk1k2_matrix, k_indices, gs_energy = get_simulation_data2("wannier_TC_MM.npz")
+E_best, best_sigma, best_theta = get_Wannier_function(
+    Mk1k2_matrix, k_indices, gs_energy, center_mode=1
+)
+Nk = E_best.shape[0]
+# %%
+Mk1k2_matrix, k_indices, gs_energy = get_simulation_data1("convolution1_N0")
+E_best, best_sigma, best_theta = get_Wannier_function(
+    Mk1k2_matrix, k_indices, gs_energy, center_mode=1
+)
 Nk = E_best.shape[0]
 # %%
 fig, ax = plt.subplots(1, 1, constrained_layout=True)
