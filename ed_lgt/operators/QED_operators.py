@@ -294,10 +294,10 @@ def QED_plq_site_operators(
     
     #def Id operator on vertex 
     #electric operators on plaquette    
-    ops_plqt[f"E2_plq"]=qmb_op(ops,["E2_px","Id", "Id", "Id"])
-    ops_plqt[f"E2_plq"]+=qmb_op(ops, ["E2_py", "Id" ,"Id", "Id"])
-    ops_plqt[f"E2_plq"]+=qmb_op(ops, ["Id" ,"E2_py","Id" ,"Id"])
-    ops_plqt[f"E2_plq"]+=qmb_op(ops, [ "Id" ,"Id", "Id","E2_px"])
+    ops_plqt["E2_plq"]=qmb_op(ops,["E2_px","Id", "Id", "Id"])
+    ops_plqt["E2_plq"]+=qmb_op(ops, ["E2_py", "Id" ,"Id", "Id"])
+    ops_plqt["E2_plq"]+=qmb_op(ops, ["Id" ,"E2_py","Id" ,"Id"])
+    ops_plqt["E2_plq"]+=qmb_op(ops, [ "Id" ,"Id", "Id","E2_px"])
 
     
     #U*U*Udag*Udag operators on plaquette    
@@ -307,11 +307,11 @@ def QED_plq_site_operators(
     #operators between plaquettes     
     
     #electric operators between plaquettes 
-    ops_plqt[f"E2_plq_px"]=qmb_op(ops,["Id","E2_px", "Id", "Id"])
-    ops_plqt[f"E2_plq_px"]+=qmb_op(ops, [ "Id" ,"Id","E2_px","Id"])
+    ops_plqt["E2_plq_px"]=qmb_op(ops,["Id","E2_px", "Id", "Id"])
+    ops_plqt["E2_plq_px"]+=qmb_op(ops, [ "Id" ,"Id","E2_px","Id"])
     
-    ops_plqt[f"E2_plq_py"]=qmb_op(ops,["Id","Id","E2_py", "Id"])
-    ops_plqt[f"E2_plq_py"]+=qmb_op(ops, [ "Id" ,"Id","Id","E2_py"])
+    ops_plqt["E2_plq_py"]=qmb_op(ops,["Id","Id","E2_py", "Id"])
+    ops_plqt["E2_plq_py"]+=qmb_op(ops, [ "Id" ,"Id","Id","E2_py"])
        
     #U operators between plaquettes    
     ops_plqt["B2_plq_px"]=qmb_op(ops,["C_px,py","Id","Id","C_my,px"])
@@ -322,7 +322,6 @@ def QED_plq_site_operators(
     
     ops_plqt["B2_plq_px_py"]=qmb_op(ops,["Id","id","C_px,py","Id"])
     ops_plqt["B2_plq_px_py"]+=ops_plqt["B2_plq_px_py"].conj().transpose()
-    
     
     return ops_plqt 
     
