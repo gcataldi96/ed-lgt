@@ -270,10 +270,6 @@ def QED_dressed_site_operators(
     return ops
 
 
-def tensor_lr(mats, fmt="csr"):
-    """Tensor (Kronecker) product left-to-right for a list of sparse matrices."""
-    return reduce(lambda A, B: kron(A, B, format=fmt), mats)
-
 
 def QED_plq_site_operators(
     spin, pure_theory, lattice_dim, U="ladder", fermionic=True
@@ -294,41 +290,37 @@ def QED_plq_site_operators(
     
     # get all the operaprtors from the dressed site formulation
     ops = QED_dressed_site_operators(spin, pure_theory, lattice_dim, U=U, fermionic=True)
-    in_ops = QED_rishon_operators(spin, pure_theory, U, fermionic)
-    ops_plqt={}
+    ops_plqt={} 
     
+    #def Id operator on vertex 
     #electric operators on plaquette    
-    for op in ["E", "E2", "n", "P"]:
-        ops_plqt[f"{op}_plq"]=tensor_lr([ops[f"{op}_py"] ,*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])] * 3)])
-        ops_plqt[f"{op}_plq"]+=tensor_lr([*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])]),ops[f"{op}_mx"] ,*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])] * 2)])
-        ops_plqt[f"{op}_plq"]+=tensor_lr([*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])]*2),[ops[f"{op}_my"] ,*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])])]])
-        ops_plqt[f"{op}_plq"]+=tensor_lr([*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])]*3),[ops[f"{op}_px"]]])
+    ops_plqt[f"E2_plq"]=qmb_op(ops,["E2_px","Id", "Id", "Id"])
+    ops_plqt[f"E2_plq"]+=qmb_op(ops, ["E2_py", "Id" ,"Id", "Id"])
+    ops_plqt[f"E2_plq"]+=qmb_op(ops, ["Id" ,"E2_py","Id" ,"Id"])
+    ops_plqt[f"E2_plq"]+=qmb_op(ops, [ "Id" ,"Id", "Id","E2_px"])
+
     
     #U*U*Udag*Udag operators on plaquette    
-    ops_plqt["U_plq"]=tensor_lr([ops["C_px,py"],ops["C_py,mx"],ops["C_mx,my"],ops["C_my,px"]])
+    ops_plqt["B2_plq"]=qmb_op(ops,["C_px,py","C_py,mx","C_mx,my","C_my,px"])
+    ops_plqt["B2_plq"]+=ops_plqt["B2_plq"].conj().transpose()
     
     #operators between plaquettes     
-    #electric operators between plaquettes
-    for op in ["E", "E2", "n", "P"]:
-        ops_plqt[f"{op}_plq_hop_r"]=tensor_lr([*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])]),ops[f"{op}_mx"] ,*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])] * 2)])
-        ops_plqt[f"{op}_plq_hop_r"]+=tensor_lr([*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])]*2),[ops[f"{op}_my"] ,*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])])]])
     
+    #electric operators between plaquettes 
+    ops_plqt[f"E2_plq_px"]=qmb_op(ops,["Id","E2_px", "Id", "Id"])
+    ops_plqt[f"E2_plq_px"]+=qmb_op(ops, [ "Id" ,"Id","E2_px","Id"])
     
-    for op in ["E", "E2", "n", "P"]:
-        ops_plqt[f"{op}_plq_hop_u"]=tensor_lr([ops[f"{op}_py"] ,*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])] * 3)])
-        ops_plqt[f"{op}_plq_hop_u"]+=tensor_lr([*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])]*3),[ops[f"{op}_px"]]])
-        
-        
-    ops_plqt["U_plq_r"]=tensor_lr([ops["C_px,py"],ops["C_py,mx"],ops["C_mx,my"],ops["C_my,px"]])
-    ops_plqt["U_plq_u"]=tensor_lr([ops["C_px,py"],ops["C_py,mx"],ops["C_mx,my"],ops["C_my,px"]])
-    ops_plqt["U_plq_d"]=tensor_lr([ops["C_px,py"],ops["C_py,mx"],ops["C_mx,my"],ops["C_my,px"]])
+    ops_plqt[f"E2_plq_py"]=qmb_op(ops,["Id","Id","E2_py", "Id"])
+    ops_plqt[f"E2_plq_py"]+=qmb_op(ops, [ "Id" ,"Id","Id","E2_py"])
+    
+       
+    # fix this part for U operators between plaquettes    
+    ops_plqt["B2_plq_px"]=qmb_op(ops,["C_px,py","Id","Id","C_my,px"])
+    ops_plqt["B2_plq_py"]=qmb_op(ops,["Id","Id","C_mx,py","C_py,px"])
+    ops_plqt["B2_plq_px_py"]=qmb_op(ops,["Id","id","C_px,py","Id"])
     
     return ops_plqt 
     
-    
-  
-
-
 
 
 def QED_check_gauss_law(spin, pure_theory, lattice_dim, gauss_law_ops, threshold=1e-15):
