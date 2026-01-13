@@ -11,6 +11,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+from functools import reduce
+
+
 __all__ = [
     "QED_dressed_site_operators",
     "QED_gauge_invariant_states",
@@ -266,32 +270,47 @@ def QED_dressed_site_operators(
     return ops
 
 
+def tensor_lr(mats, fmt="csr"):
+    """Tensor (Kronecker) product left-to-right for a list of sparse matrices."""
+    return reduce(lambda A, B: kron(A, B, format=fmt), mats)
 
 
 def QED_plq_site_operators(
     spin, pure_theory, lattice_dim, U="ladder", fermionic=True
 ):
     """
+    Output:
     
+    E2 operator on one plaquette in 2D lattice:
+       12|  11  |10
+    13-- o ---- o --9
+         |      |
+        1|     8|
+     2-- o ---- o --7
+        3|  4  5| 
     """
     assert lattice_dim == 2, "Plaquette formulation only defined for 2D lattices"
     assert pure_theory, "Plaquette formulation only defined for pure gauge theory"
-    # get all the operaprtors from the dressed site formulation
     
+    # get all the operaprtors from the dressed site formulation
     ops = QED_dressed_site_operators(
         spin, pure_theory, lattice_dim, U=U, fermionic=True)
     
     
-    ops_plq = {} 
+    in_ops = QED_rishon_operators(spin, pure_theory, U, fermionic)
     #plaquette operators
-
-    #E2 on plaquette
+    ops_plqt={}
     
-        #for op in ["E", "E2", "n", "P"]:
-            #ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz"])
-            #ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz"])
-            #ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz"])
-            #ops[f"{op}_py"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", op])
+    #electric operators on plaquette    
+    for op in ["E", "E2", "n", "P"]:
+        ops_plqt[f"{op}_plq"]=tensor_lr([ops[f"{op}_py"] ,*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])] * 3)])
+        ops_plqt[f"{op}_plq"]+=tensor_lr([*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])]),ops[f"{op}_mx"] ,*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])] * 2)])
+        ops_plqt[f"{op}_plq"]+=tensor_lr([*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])]*2),[ops[f"{op}_my"] ,*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])])]])
+        ops_plqt[f"{op}_plq"]+=tensor_lr([*([qmb_op(in_ops, ["Iz", "Iz", "Iz", "Iz"])]*3),[ops[f"{op}_px"]]])
+    
+    #U*U*Udag*Udag operators on plaquette    
+    ops_plqt["U_plq"]=tensor_lr([ops["C_px,py"],ops["C_py,mx"],ops["C_mx,my"],ops["C_my,px"]])
+
 
 
 
