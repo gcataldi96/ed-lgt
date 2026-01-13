@@ -266,6 +266,36 @@ def QED_dressed_site_operators(
     return ops
 
 
+
+
+def QED_plq_site_operators(
+    spin, pure_theory, lattice_dim, U="ladder", fermionic=True
+):
+    """
+    
+    """
+    assert lattice_dim == 2, "Plaquette formulation only defined for 2D lattices"
+    assert pure_theory, "Plaquette formulation only defined for pure gauge theory"
+    # get all the operaprtors from the dressed site formulation
+    
+    ops = QED_dressed_site_operators(
+        spin, pure_theory, lattice_dim, U=U, fermionic=True)
+    
+    
+    ops_plq = {} 
+    #plaquette operators
+
+    #E2 on plaquette
+    
+        #for op in ["E", "E2", "n", "P"]:
+            #ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz"])
+            #ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz"])
+            #ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz"])
+            #ops[f"{op}_py"] = qmb_op(in_ops, ["Iz", "Iz", "Iz", op])
+
+
+
+
 def QED_check_gauss_law(spin, pure_theory, lattice_dim, gauss_law_ops, threshold=1e-15):
     """
     This function perform a series of checks to the gauge invariant dressed-site local basis
