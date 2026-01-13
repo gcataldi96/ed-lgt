@@ -295,9 +295,6 @@ def QED_plq_site_operators(
     # get all the operaprtors from the dressed site formulation
     ops = QED_dressed_site_operators(spin, pure_theory, lattice_dim, U=U, fermionic=True)
     in_ops = QED_rishon_operators(spin, pure_theory, U, fermionic)
-    
-    
-    #plaquette operators
     ops_plqt={}
     
     #electric operators on plaquette    
@@ -309,7 +306,6 @@ def QED_plq_site_operators(
     
     #U*U*Udag*Udag operators on plaquette    
     ops_plqt["U_plq"]=tensor_lr([ops["C_px,py"],ops["C_py,mx"],ops["C_mx,my"],ops["C_my,px"]])
-    
     
     #operators between plaquettes     
     #electric operators between plaquettes
@@ -326,6 +322,8 @@ def QED_plq_site_operators(
     ops_plqt["U_plq_r"]=tensor_lr([ops["C_px,py"],ops["C_py,mx"],ops["C_mx,my"],ops["C_my,px"]])
     ops_plqt["U_plq_u"]=tensor_lr([ops["C_px,py"],ops["C_py,mx"],ops["C_mx,my"],ops["C_my,px"]])
     ops_plqt["U_plq_d"]=tensor_lr([ops["C_px,py"],ops["C_py,mx"],ops["C_mx,my"],ops["C_my,px"]])
+    
+    return ops_plqt 
     
     
   
