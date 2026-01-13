@@ -312,12 +312,17 @@ def QED_plq_site_operators(
     
     ops_plqt[f"E2_plq_py"]=qmb_op(ops,["Id","Id","E2_py", "Id"])
     ops_plqt[f"E2_plq_py"]+=qmb_op(ops, [ "Id" ,"Id","Id","E2_py"])
-    
        
-    # fix this part for U operators between plaquettes    
+    #U operators between plaquettes    
     ops_plqt["B2_plq_px"]=qmb_op(ops,["C_px,py","Id","Id","C_my,px"])
+    ops_plqt["B2_plq_px"]+=ops_plqt["B2_plq_px"].conj().transpose()
+        
     ops_plqt["B2_plq_py"]=qmb_op(ops,["Id","Id","C_mx,py","C_py,px"])
+    ops_plqt["B2_plq_py"]+=ops_plqt["B2_plq_py"].conj().transpose()
+    
     ops_plqt["B2_plq_px_py"]=qmb_op(ops,["Id","id","C_px,py","Id"])
+    ops_plqt["B2_plq_px_py"]+=ops_plqt["B2_plq_px_py"].conj().transpose()
+    
     
     return ops_plqt 
     
