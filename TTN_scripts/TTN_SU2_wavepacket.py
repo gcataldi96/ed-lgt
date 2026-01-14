@@ -431,8 +431,8 @@ def main(
     amplitudes = list(gaussian_wavepacket_coeffs(wp_size, k=np.pi / 4, sigma=1.0))
     list_states = []
     wp_conv = TNConvergenceParameters(
-        max_bond_dimension=200,
-        cut_ratio=1e-8,
+        max_bond_dimension=100,
+        cut_ratio=0,
     )
     print("BUILDING WAVEPACKET STATE")
     for ii in range(wp_size):
@@ -454,15 +454,19 @@ def main(
         )
         state.eff_op = None  # eff_op is now outdated
         tot_singvals_cut = state.apply_mpo(W_mpo_i)
+        state.normalize()
         print(f"{tot_singvals_cut} singular values cut")
         list_states.append(state)
         print(f"Single state tensor")
         for tensor in state._iter_tensors():
             print(f"{tensor.shape}")
     print("------------ OVERLAP between Wanniers ------------------")
-    for ii in range(len(list_states) - 1):
-        overlap = list_states[ii].dot(list_states[ii + 1])
-        print(f"<W{ii}|W{ii+1}> {overlap:.16f}")
+    overlaps = np.zeros((len(list_states), len(list_states)))
+    for ii in range(len(list_states)):
+        for jj in range(len(list_states)):
+            overlaps[ii, jj] = np.abs(list_states[ii].dot(list_states[jj]))
+            print(f"<W{ii}|W{jj}> {overlaps[ii, jj]:.8f}")
+    print(overlaps)
     print("SUMMING WAVEPACKET STATE")
     initial_state = list_states[3].copy()
     initial_state.convergence_parameters = wp_conv
