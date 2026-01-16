@@ -275,24 +275,23 @@ def QED_plq_site_operators(
     spin, pure_theory, lattice_dim, U="ladder", fermionic=True
 ):
     """
-    Output:
-    
-    E2 operator on one plaquette in 2D lattice:
-       12|  11  |10
-    13-- o ---- o --9
-         |      |
-        1|     8|
-     2-- o ---- o --7
-        3|  4  5| 
+    Here we indecate the the order we chose 
+    of vertex operators within on plaquette:
+      4|     3|
+    -- o ---- o --
+       |      |
+      1|     2|
+    -- o ---- o --
+       |      | 
     """
     assert lattice_dim == 2, "Plaquette formulation only defined for 2D lattices"
     assert pure_theory, "Plaquette formulation only defined for pure gauge theory"
     
     # get all the operaprtors from the dressed site formulation
     ops = QED_dressed_site_operators(spin, pure_theory, lattice_dim, U=U, fermionic=True)
+    ops["Id"]=qmb_op(ops,["Iz", "Iz", "Iz", "Iz"])
     ops_plqt={} 
     
-    #def Id operator on vertex 
     #electric operators on plaquette    
     ops_plqt["E2_plq"]=qmb_op(ops,["E2_px","Id", "Id", "Id"])
     ops_plqt["E2_plq"]+=qmb_op(ops, ["E2_py", "Id" ,"Id", "Id"])
@@ -305,7 +304,6 @@ def QED_plq_site_operators(
     ops_plqt["B2_plq"]+=ops_plqt["B2_plq"].conj().transpose()
     
     #operators between plaquettes     
-    
     #electric operators between plaquettes 
     ops_plqt["E2_plq_px"]=qmb_op(ops,["Id","E2_px", "Id", "Id"])
     ops_plqt["E2_plq_px"]+=qmb_op(ops, [ "Id" ,"Id","E2_px","Id"])
@@ -320,8 +318,17 @@ def QED_plq_site_operators(
     ops_plqt["B2_plq_py"]=qmb_op(ops,["Id","Id","C_mx,py","C_py,px"])
     ops_plqt["B2_plq_py"]+=ops_plqt["B2_plq_py"].conj().transpose()
     
-    ops_plqt["B2_plq_px_py"]=qmb_op(ops,["Id","id","C_px,py","Id"])
+    ops_plqt["B2_plq_px_py"]=qmb_op(ops,["Id","Id","C_px,py","Id"])
     ops_plqt["B2_plq_px_py"]+=ops_plqt["B2_plq_px_py"].conj().transpose()
+     
+    ops_plqt["B2_plq_mx_py"]=qmb_op(ops,["C_mx,py","Id","Id","Id"])
+    ops_plqt["B2_plq_mx_py"]+=ops_plqt["B2_plq_mx_py"].conj().transpose()
+    
+    ops_plqt["B2_plq_mx_my"]=qmb_op(ops,["Id","Id","Id","C_mx,my"])
+    ops_plqt["B2_plq_mx_my"]+=ops_plqt["B2_plq_mx_my"].conj().transpose()
+    
+    ops_plqt["B2_plq_px_my"]=qmb_op(ops,["Id","C_px,py","Id","Id"])
+    ops_plqt["B2_plq_px_my"]+=ops_plqt["B2_plq_px_my"].conj().transpose()
     
     return ops_plqt 
     
