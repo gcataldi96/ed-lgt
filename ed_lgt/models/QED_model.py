@@ -228,7 +228,7 @@ class QED_Model(QuantumModel):
                     )
         self.H.build(format=self.ham_format)
 
-    # TODO: build plaquette Hamiltonian
+
     def build_plq_Hamiltonian(self, g, m=None, theta=0.0):
         logger.info("BUILDING HAMILTONIAN")
         # Hamiltonian Coefficients
@@ -242,25 +242,15 @@ class QED_Model(QuantumModel):
             h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
             self.H.add_term(h_terms[op_name].get_Hamiltonian(strength=self.coeffs["E"]))
             
-            
         # -------------------------------------------------------------------------------
+        # MAGNETIC ENERGY 
         # PLAQUETTE TERM: MAGNETIC INTERACTION
         if self.dim == 2:
-            #op_names_list = ["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]
-            #op_list = [self.ops[op] for op in op_names_list]
+            for op_name in ["B2_plq","B2_plq_px","B2_plq_py","B2_plq_px_py","B2_plq_mx_py","B2_plq_mx_my","B2_plq_px_my"]:
+                h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
+                self.H.add_term(h_terms[op_name].get_Hamiltonian(strength=self.coeffs["B"]))
             
-            #for op_name in ["B2_plq_px","B2_plq_py","B2_plq_px_py"]:
-                
-                #fix this 
-                #h_terms["plaq_xy"] = PlaquetteTerm(
-                #["x", "y"], op_list, op_names_list, **self.def_params
-                #)
-                #self.H.add_term(
-                #    h_terms["plaq_xy"].get_Hamiltonian(
-                #        strength=self.coeffs["B"], add_dagger=True
-                #    )
-                #)
-        
+        self.H.build(format=self.ham_format)
         
     def check_symmetries(self):
         # CHECK LINK SYMMETRIES
