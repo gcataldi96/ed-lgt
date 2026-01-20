@@ -251,7 +251,7 @@ class QED_Model(QuantumModel):
             
         for d in self.directions:
             # Define the list of the 2 non trivial operators
-            op_names_list = ["B2_plq_px", "B2_plq_mx"]
+            op_names_list = [f"B2_plq_p{d}", f"B2_plq_m{d}"] 
             op_list = [self.ops[op] for op in op_names_list]
             # Define the Hamiltonian term
             h_terms[f"{d}_hop"] = TwoBodyTerm(
@@ -275,7 +275,6 @@ class QED_Model(QuantumModel):
                 strength=self.coeffs["B"], add_dagger=True
             )
         )
-            
             
         self.H.build(format=self.ham_format)
         

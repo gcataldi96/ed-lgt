@@ -306,22 +306,31 @@ def QED_plq_site_operators(
     
     
     #operators between plaquettes     
+    
     #electric operators between plaquettes 
     ops_plqt["E2_plq_px"]=qmb_op(ops,["Id","E2_px", "Id", "Id"])
     ops_plqt["E2_plq_px"]+=qmb_op(ops, [ "Id" ,"Id","E2_px","Id"])
     
     ops_plqt["E2_plq_py"]=qmb_op(ops,["Id","Id","E2_py", "Id"]) 
     ops_plqt["E2_plq_py"]+=qmb_op(ops, [ "Id" ,"Id","Id","E2_py"])
-    
-    #TODO: for tn make also the negative, since symmetries are hard to inforce 
+       
        
     #U operators between plaquettes    
-    ops_plqt["B2_plq_px"]=qmb_op(ops,["Id","C_px,py","C_px,my","Id"])
+    ops_plqt["B2_plq_px"]=qmb_op(ops,["C_px,py","Id","Id","C_px,my"])
     ops_plqt["B2_plq_px_dag"]=ops_plqt["B2_plq_px"].conj().transpose()
         
     ops_plqt["B2_plq_py"]=qmb_op(ops,["Id","Id","C_mx,py","C_px,py"]) 
     ops_plqt["B2_plq_py_dag"]=ops_plqt["B2_plq_py"].conj().transpose()
     
+    #minus direction 
+    ops_plqt["B2_plq_mx"]=qmb_op(ops,["Id","C_mx,py","C_mx,my","Id"])
+    ops_plqt["B2_plq_mx_dag"]=ops_plqt["B2_plq_mx"].conj().transpose()
+        
+    ops_plqt["B2_plq_my"]=qmb_op(ops,["Id","Id","C_mx,my","C_px,my"]) 
+    ops_plqt["B2_plq_my_dag"]=ops_plqt["B2_plq_my"].conj().transpose()
+    
+    
+    #TODO:probably I dont need the dagger 
     ops_plqt["B2_plq_px_py"]=qmb_op(ops,["Id","Id","C_px,py","Id"])
     ops_plqt["B2_plq_px_py_dag"]=ops_plqt["B2_plq_px_py"].conj().transpose()
      
