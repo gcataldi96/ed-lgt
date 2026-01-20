@@ -20,6 +20,7 @@ __all__ = [
     "QED_gauge_invariant_states",
     "QED_rishon_operators",
     "QED_check_gauss_law",
+    "QED_plq_site_operators"
 ]
 
 
@@ -311,25 +312,27 @@ def QED_plq_site_operators(
     
     ops_plqt["E2_plq_py"]=qmb_op(ops,["Id","Id","E2_py", "Id"]) 
     ops_plqt["E2_plq_py"]+=qmb_op(ops, [ "Id" ,"Id","Id","E2_py"])
+    
+    #TODO: for tn make also the negative, since symmetries are hard to inforce 
        
     #U operators between plaquettes    
-    ops_plqt["B2_plq_px"]=qmb_op(ops,["C_px,py","Id","Id","C_my,px"])
-    ops_plqt["B2_plq_px"]+=ops_plqt["B2_plq_px"].conj().transpose()
+    ops_plqt["B2_plq_px"]=qmb_op(ops,["Id","C_px,py","C_px,my","Id"])
+    ops_plqt["B2_plq_px_dag"]=ops_plqt["B2_plq_px"].conj().transpose()
         
-    ops_plqt["B2_plq_py"]=qmb_op(ops,["Id","Id","C_mx,py","C_py,px"]) 
-    ops_plqt["B2_plq_py"]+=ops_plqt["B2_plq_py"].conj().transpose()
+    ops_plqt["B2_plq_py"]=qmb_op(ops,["Id","Id","C_mx,py","C_px,py"]) 
+    ops_plqt["B2_plq_py_dag"]=ops_plqt["B2_plq_py"].conj().transpose()
     
     ops_plqt["B2_plq_px_py"]=qmb_op(ops,["Id","Id","C_px,py","Id"])
-    ops_plqt["B2_plq_px_py"]+=ops_plqt["B2_plq_px_py"].conj().transpose()
+    ops_plqt["B2_plq_px_py_dag"]=ops_plqt["B2_plq_px_py"].conj().transpose()
      
-    ops_plqt["B2_plq_mx_py"]=qmb_op(ops,["C_mx,py","Id","Id","Id"])
-    ops_plqt["B2_plq_mx_py"]+=ops_plqt["B2_plq_mx_py"].conj().transpose()
+    ops_plqt["B2_plq_mx_py"]=qmb_op(ops,["Id","Id","Id","C_mx,py"])
+    ops_plqt["B2_plq_mx_py_dag"]=ops_plqt["B2_plq_mx_py"].conj().transpose()
     
-    ops_plqt["B2_plq_mx_my"]=qmb_op(ops,["Id","Id","Id","C_mx,my"])
-    ops_plqt["B2_plq_mx_my"]+=ops_plqt["B2_plq_mx_my"].conj().transpose()
+    ops_plqt["B2_plq_mx_my"]=qmb_op(ops,["C_mx,my","Id","Id","Id"])
+    ops_plqt["B2_plq_mx_my_dag"]=ops_plqt["B2_plq_mx_my"].conj().transpose()
     
-    ops_plqt["B2_plq_px_my"]=qmb_op(ops,["Id","C_px,py","Id","Id"])
-    ops_plqt["B2_plq_px_my"]+=ops_plqt["B2_plq_px_my"].conj().transpose()
+    ops_plqt["B2_plq_px_my"]=qmb_op(ops,["Id","C_px,my","Id","Id"])
+    ops_plqt["B2_plq_px_my_dag"]=ops_plqt["B2_plq_px_my"].conj().transpose()
     
     return ops_plqt 
     

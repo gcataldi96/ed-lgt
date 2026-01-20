@@ -3,7 +3,7 @@ from numba import typed
 from ed_lgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm
 from ed_lgt.modeling import check_link_symmetry, staggered_mask, get_origin_surfaces
 from .quantum_model import QuantumModel
-from ed_lgt.operators import QED_dressed_site_operators, QED_gauge_invariant_states
+from ed_lgt.operators import QED_dressed_site_operators,QED_plq_site_operators,QED_gauge_invariant_states
 import logging
 
 logger = logging.getLogger(__name__)
@@ -12,6 +12,7 @@ __all__ = ["QED_Model"]
 
 class QED_Model(QuantumModel):
     def __init__(self, spin, pure_theory, get_only_bulk=False, **kwargs):
+        #TODO flag for dressed or plaquette 
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
@@ -239,16 +240,42 @@ class QED_Model(QuantumModel):
         # -------------------------------------------------------------------------------
         # ELECTRIC ENERGY
         for op_name in ["E2_plq","E2_plq_px","E2_plq_py"]:
-            h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
+            h_terms[op_name] = LocalTerm(self.ops_plqt[op_name], op_name, **self.def_params)
             self.H.add_term(h_terms[op_name].get_Hamiltonian(strength=self.coeffs["E"]))
             
         # -------------------------------------------------------------------------------
         # MAGNETIC ENERGY 
         # PLAQUETTE TERM: MAGNETIC INTERACTION
-        if self.dim == 2:
-            for op_name in ["B2_plq","B2_plq_px","B2_plq_py","B2_plq_px_py","B2_plq_mx_py","B2_plq_mx_my","B2_plq_px_my"]:
-                h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
-                self.H.add_term(h_terms[op_name].get_Hamiltonian(strength=self.coeffs["B"]))
+        h_terms["B2_plq"] = LocalTerm(self.ops_plqt["B2_plq"], "B2_plq", **self.def_params)
+        self.H.add_term(h_terms[op_name].get_Hamiltonian(strength=self.coeffs["B"]))
+            
+        for d in self.directions:
+            # Define the list of the 2 non trivial operators
+            op_names_list = ["B2_plq_px", "B2_plq_mx"]
+            op_list = [self.ops[op] for op in op_names_list]
+            # Define the Hamiltonian term
+            h_terms[f"{d}_hop"] = TwoBodyTerm(
+                d, op_list, op_names_list, **self.def_params
+            )
+            self.H.add_term(
+                h_terms[f"{d}_hop"].get_Hamiltonian(
+                strength=self.coeffs["B"],
+                add_dagger=True,
+                )) 
+                
+                
+        #Plaquette operator between sites: 
+        op_names_list = ["B2_plq_px_py","B2_plq_mx_py","B2_plq_mx_my","B2_plq_px_my"]
+        op_list = [self.ops[op] for op in op_names_list]
+        h_terms["plaq_xy"] = PlaquetteTerm(
+            ["x", "y"], op_list, op_names_list, **self.def_params
+        )
+        self.H.add_term(
+            h_terms["plaq_xy"].get_Hamiltonian(
+                strength=self.coeffs["B"], add_dagger=True
+            )
+        )
+            
             
         self.H.build(format=self.ham_format)
         
