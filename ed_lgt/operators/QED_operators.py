@@ -300,7 +300,7 @@ def QED_plq_site_operators(
     ops_plqt["E2_plq"]+=qmb_op(ops, [ "Id" ,"Id", "Id","E2_px"])
 
     
-    #U*U*Udag*Udag operators on plaquette    
+    #U*U*Udag*Udag + dag on plaquette    
     ops_plqt["B2_plq"]=qmb_op(ops,["C_px,py","C_py,mx","C_mx,my","C_my,px"])
     ops_plqt["B2_plq"]+=ops_plqt["B2_plq"].conj().transpose()
     
@@ -308,8 +308,8 @@ def QED_plq_site_operators(
     #operators between plaquettes     
     
     #electric operators between plaquettes 
-    ops_plqt["E2_plq_px"]=qmb_op(ops,["Id","E2_px", "Id", "Id"])
-    ops_plqt["E2_plq_px"]+=qmb_op(ops, [ "Id" ,"Id","E2_px","Id"])
+    ops_plqt["E2_plq_px"]=qmb_op(ops,["E2_px","Id" ,"Id", "Id"])
+    ops_plqt["E2_plq_px"]+=qmb_op(ops, [ "Id" ,"Id","Id","E2_px"])
     
     ops_plqt["E2_plq_py"]=qmb_op(ops,["Id","Id","E2_py", "Id"]) 
     ops_plqt["E2_plq_py"]+=qmb_op(ops, [ "Id" ,"Id","Id","E2_py"])
