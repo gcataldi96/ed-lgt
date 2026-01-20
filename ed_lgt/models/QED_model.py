@@ -254,24 +254,24 @@ class QED_Model(QuantumModel):
             op_names_list = [f"B2_plq_p{d}", f"B2_plq_m{d}"] 
             op_list = [self.ops[op] for op in op_names_list]
             # Define the Hamiltonian term
-            h_terms[f"{d}_hop"] = TwoBodyTerm(
+            h_terms[f"plq_{d}"] = TwoBodyTerm(
                 d, op_list, op_names_list, **self.def_params
             )
             self.H.add_term(
-                h_terms[f"{d}_hop"].get_Hamiltonian(
+                h_terms[f"plq_{d}"].get_Hamiltonian(
                 strength=self.coeffs["B"],
                 add_dagger=True,
                 )) 
                 
                 
         #Plaquette operator between sites: 
-        op_names_list = ["B2_plq_px_py","B2_plq_mx_py","B2_plq_mx_my","B2_plq_px_my"]
+        op_names_list = ["B2_plq_px_py","B2_plq_mx_py","B2_plq_px_my","B2_plq_mx_my"]
         op_list = [self.ops[op] for op in op_names_list]
-        h_terms["plaq_xy"] = PlaquetteTerm(
+        h_terms["B2_plaq_xy"] = PlaquetteTerm(
             ["x", "y"], op_list, op_names_list, **self.def_params
         )
         self.H.add_term(
-            h_terms["plaq_xy"].get_Hamiltonian(
+            h_terms["B2_plaq_xy"].get_Hamiltonian(
                 strength=self.coeffs["B"], add_dagger=True
             )
         )

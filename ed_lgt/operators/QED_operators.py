@@ -313,6 +313,8 @@ def QED_plq_site_operators(
     
     ops_plqt["E2_plq_py"]=qmb_op(ops,["Id","Id","E2_py", "Id"]) 
     ops_plqt["E2_plq_py"]+=qmb_op(ops, [ "Id" ,"Id","Id","E2_py"])
+    
+    #TODO: add minus direction 
        
        
     #U operators between plaquettes    
