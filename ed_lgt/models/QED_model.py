@@ -11,13 +11,14 @@ __all__ = ["QED_Model"]
 
 
 class QED_Model(QuantumModel):
-    def __init__(self, spin, pure_theory, get_only_bulk=False, **kwargs):
+    def __init__(self, spin, pure_theory,plqt_basis=False ,get_only_bulk=False, **kwargs):
         #TODO flag for dressed or plaquette 
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
         self.pure_theory = pure_theory
         self.staggered_basis = False if self.pure_theory else True
+        self.plqt_basis=plqt_basis
         # -------------------------------------------------------------------------------
         # Acquire gauge invariant basis and states
         self.gauge_basis, self.gauge_states = QED_gauge_invariant_states(
@@ -28,9 +29,14 @@ class QED_Model(QuantumModel):
         )
         # -------------------------------------------------------------------------------
         # Acquire operators
-        ops = QED_dressed_site_operators(self.spin, self.pure_theory, self.dim)
-        # Initialize the operators, local dimension and lattice labels
-        self.project_operators(ops)
+        if self.plqt_basis ==False:
+            ops = QED_dressed_site_operators(self.spin, self.pure_theory, self.dim)
+            # Initialize the operators, local dimension and lattice labels
+            self.project_operators(ops)
+        else:
+            ops_plqt=QED_plq_site_operators()#fix it
+            self.project_operators(ops)
+            
         # -------------------------------------------------------------------------------
         # GLOBAL SYMMETRIES
         if self.pure_theory:
@@ -41,8 +47,15 @@ class QED_Model(QuantumModel):
             global_sectors = [int(self.n_sites / 2)]
         # -------------------------------------------------------------------------------
         # LINK SYMMETRIES
-        link_ops = [[self.ops[f"E_p{d}"], self.ops[f"E_m{d}"]] for d in self.directions]
-        link_sectors = [0 for _ in self.directions]
+        if self.plqt_basis==False:
+            link_ops = [[self.ops[f"E_p{d}"], self.ops[f"E_m{d}"]] for d in self.directions]
+            link_sectors = [0 for _ in self.directions]
+        else: 
+            link_ops = [[self.ops[f"E_plqt_p{d}1"], self.ops[f"E_plqt_m{d}1"]] for d in self.directions]
+            link_ops += [[self.ops[f"E_plqt_p{d}2"], self.ops[f"E_plqt_m{d}2"]] for d in self.directions]
+            link_sectors = [0 for _ in self.directions]
+            link_sectors += [0 for _ in self.directions]
+            
         """
         # -------------------------------------------------------------------------------
         ELECTRIC-FLUX “NBODY” SYMMETRIES ———
