@@ -353,16 +353,31 @@ def QED_plq_site_operators(
     ops_plqt["B2_plq_px_my_dag"]=ops_plqt["B2_plq_px_my"].conj().transpose()
     
     
-    #examples of gio
-    #plq_obs["E_plq_px1"] = qmb_op(ops, ["Id", "E_px", "Id", "Id"])
-    #plq_obs["E_plq_px2"] = qmb_op(ops, ["Id", "Id", "E_px", "Id"])
-    #plq_obs["E_plq_px"] = plq_obs["E_plq_px1"] + plq_obs["E_plq_px2"]
-    # do for y
-
-    #plq_obs["E_plq_mx1"] = qmb_op(ops, ["E_mx","Id", "Id", "Id"])
-    #plq_obs["E_plq_mx2"] = qmb_op(ops, ["Id", "Id", "Id", "E_mx"])
-    #plq_obs["E_plq_mx"] = plq_obs["E_plq_mx1"] + plq_obs["E_plq_mx2"]
+    #ops for constraints 
     
+    # Convetnion:
+    # For the x-direction we enumerate from lower to up 
+    # For the y-direction we enumerate from left to right 
+    
+    # plus x-direction
+    ops_plqt["E_plq_px1"] = qmb_op(ops, ["Id", "E_px", "Id", "Id"])
+    ops_plqt["E_plq_px2"] = qmb_op(ops, ["Id", "Id", "E_px", "Id"])
+    ops_plqt["E_plq_px"] = ops_plqt["E_plq_px1"] + ops_plqt["E_plq_px2"]
+
+    # minus x-direction
+    ops_plqt["E_plq_mx1"] = qmb_op(ops, ["E_mx","Id", "Id", "Id"])
+    ops_plqt["E_plq_mx2"] = qmb_op(ops, ["Id", "Id", "Id", "E_mx"])
+    ops_plqt["E_plq_mx"] = ops_plqt["E_plq_mx1"] + ops_plqt["E_plq_mx2"]
+    
+    # plus y-direction 
+    ops_plqt["E_plq_py1"] = qmb_op(ops, ["Id", "Id", "Id", "E_py"])
+    ops_plqt["E_plq_py2"] = qmb_op(ops, ["Id", "Id", "E_py", "Id"])
+    ops_plqt["E_plq_py"] = ops_plqt["E_plq_py1"] + ops_plqt["E_plq_py2"]
+    
+    # minus y-direction 
+    ops_plqt["E_plq_my1"] = qmb_op(ops, ["E_my", "Id", "Id", "Id"])
+    ops_plqt["E_plq_my2"] = qmb_op(ops, ["Id", "E_my", "Id", "Id"])
+    ops_plqt["E_plq_my"] = ops_plqt["E_plq_my1"] + ops_plqt["E_plq_my2"]
     
     return ops_plqt 
     
