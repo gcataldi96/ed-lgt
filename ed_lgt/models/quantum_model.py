@@ -117,7 +117,7 @@ class QuantumModel:
             raise ValueError(f"expected k_vals shape {self.dim}, got {k_vals.shape}")
         k_unit_cell_size = np.ascontiguousarray(k_unit_cell_size, dtype=np.int32)
         k_vals = np.ascontiguousarray(k_vals, dtype=np.int32)
-        logger.info(f"----------------------------------------------------")
+        logger.info(f"====================================================")
         logger.info(f"Momentum sector {k_vals}")
         L_col_ptr, L_row_idx, L_data, R_row_ptr, R_col_idx, R_data = get_momentum_basis(
             sector_configs=self.sector_configs,
@@ -165,7 +165,7 @@ class QuantumModel:
         k_unit_cell_size = np.ascontiguousarray(k_unit_cell_size, dtype=np.int32)
         k_left = np.ascontiguousarray(k_left, dtype=np.int32)
         k_right = np.ascontiguousarray(k_right, dtype=np.int32)
-        logger.info(f"----------------------------------------------------")
+        logger.info(f"====================================================")
         logger.info(f"Combined Momenta {k_left} {k_right}")
         # Left momentum kL
         L_col_ptr, L_row_idx, L_data, _, _, _ = get_momentum_basis(

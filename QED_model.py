@@ -17,7 +17,7 @@ def product_state_preparation(L, local_dim):
     # Start from the staggered bare vacuum
     for xx in range(L):
         for yy in range(L):
-            product_state[xx, yy, 9] = 1
+            product_state[xx, yy, 0] = 1
     return product_state
 
 
@@ -102,11 +102,15 @@ def get_QED_model(open_bc=True):
     # ---------------------------------------------------------------------------
     # TWO-BODY PENALTY TERM
     op_names_list = ["E_px", "E_mx"]
-    model += TwoBodyTerm2D(op_names_list, shift=[1, 0], prefactor=20, has_obc=open_bc)
+    model += TwoBodyTerm2D(
+        op_names_list, shift=[1, 0], strength="alpha", has_obc=open_bc
+    )
     op_names_list = ["E_py", "E_my"]
-    model += TwoBodyTerm2D(op_names_list, shift=[0, 1], prefactor=20, has_obc=open_bc)
+    model += TwoBodyTerm2D(
+        op_names_list, shift=[0, 1], strength="alpha", has_obc=open_bc
+    )
     op_name = "E2"
-    model += LocalTerm(op_name, prefactor=10)
+    model += LocalTerm(op_name, strength="alpha")
     # --------------------------------------------
     # PLAQUETTE TERM: MAGNETIC INTERACTION
     op_names_list = ["C_px,py", "C_my,px", "C_py,mx", "C_mx,my"]

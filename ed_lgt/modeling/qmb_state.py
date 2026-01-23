@@ -3,7 +3,14 @@ from numba import njit, prange
 from scipy.linalg import eigh as array_eigh, svd
 from scipy.sparse.linalg import svds
 from scipy.sparse import isspmatrix, csr_matrix
-from ed_lgt.tools import validate_parameters, encode_all_configs, compute_strides
+from ed_lgt.tools import (
+    validate_parameters,
+    encode_all_configs,
+    compute_strides,
+    all_pairwise_pkeys_support,
+    unique_sorted_int64,
+    stabilizer_renyi_sum,
+)
 from ed_lgt.symmetries import index_to_config
 import logging
 
@@ -15,7 +22,7 @@ __all__ = [
     "get_norm",
     "diagonalize_density_matrix",
     "get_projector_for_efficient_density_matrix",
-    "exp_val_data2",
+    "mixed_exp_val_data",
     "extract_support",
 ]
 
@@ -298,6 +305,134 @@ class QMB_state:
                 f"[{coords}] {round(amp,3)} psi={rescaled_amp} |psi|^2={square_amp}"
             )
 
+    def participation_renyi_entropy(self, alpha: int = 2) -> float:
+        """
+        Compute the participation Rényi entropy (order ``alpha``) of the state in the
+        current basis.
+
+        The participation Rényi entropy quantifies how delocalized the probability
+        distribution ``P_i = |psi_i|^2`` is over the basis states. It is defined as
+
+        - For ``alpha != 1``:
+        ``PE_alpha = (1 / (1 - alpha)) * log( sum_i P_i**alpha )``
+
+        - In the limit ``alpha -> 1`` it approaches the Shannon entropy
+        ``-sum_i P_i log P_i`` (not implemented here).
+
+        Parameters
+        ----------
+        alpha:
+            Rényi order. Must satisfy ``alpha > 0`` and ``alpha != 1``.
+            The default ``alpha=2`` gives the commonly used inverse participation
+            ratio (IPR) form:
+            ``PE_2 = -log( sum_i P_i**2 )``.
+
+        Returns
+        -------
+        float
+            The participation Rényi entropy of order ``alpha`` (natural logarithm).
+
+        Notes
+        -----
+        - The result depends on the basis in which ``self.psi`` is represented
+        (e.g. full computational basis, symmetry sector basis, momentum basis, ...).
+        - This function assumes ``self.psi`` is normalized to 1. If not, probabilities
+        do not sum to 1 and the quantity is not an entropy.
+        - Numerical stability: a small epsilon is added inside the logarithm to
+        avoid ``log(0)`` when underflow or exact zeros occur.
+
+        Raises
+        ------
+        ValueError
+            If ``alpha <= 0`` or ``alpha == 1``.
+
+        Examples
+        --------
+        Uniform state on a D-dimensional basis (``P_i = 1/D``) has
+        ``PE_alpha = log(D)`` for any ``alpha``.
+        A basis state (one-hot probability) has ``PE_alpha = 0``.
+        """
+        if alpha <= 0 or alpha == 1:
+            raise ValueError(f"alpha must be > 0 and != 1. Got alpha={alpha}.")
+        logger.info("----------------------------------------------------")
+        logger.info(f"PARTICIPATION RÉNYI ENTROPY alpha={alpha} (PE_{alpha})")
+        prob = np.abs(self.psi) ** 2
+        ipr_alpha = np.sum(prob**alpha)
+        prefactor = 1.0 / (1.0 - float(alpha))
+        return float(prefactor * np.log(ipr_alpha + 1e-16))
+
+    def stabilizer_renyi_entropy(
+        self,
+        sector_configs: np.ndarray,
+        prob_threshold: float = 1e-2,
+    ):
+        """
+        Compute the Rényi-2 stabilizer entropy using a truncated support in a sector basis.
+
+        Parameters
+        ----------
+        sector_configs:
+            2D uint array (D_sector, n_sites). Basis configurations for the symmetry sector.
+            Row i corresponds to basis index i of self.psi.
+        prob_threshold:
+            Keep basis configurations with |psi[i]|^2 > prob_threshold.
+            This controls the support size K (and therefore the cost).
+
+        Returns
+        -------
+        SRE2:
+            float. The (normalized) Rényi-2 stabilizer entropy estimate from the support.
+
+        Notes
+        -----
+        - This implementation uses the identity that the sum over all Z-strings for a fixed
+          X-string can be performed analytically, reducing the problem to overlaps of
+          probabilities between shifted configurations.
+        - This function does NOT require the X-strings to commute with symmetries. It only
+          counts strings that act within the support (and therefore contribute on the support).
+        - The dominant cost is O(K^2 * n_sites) to build candidate strings, plus
+          O(n_strings * K * n_sites) to accumulate contributions.
+        """
+        logger.info("----------------------------------------------------")
+        logger.info("STABILIZER RENYI-ENTROPY SRE2 on support.")
+        # Step 1: extract support arrays (Python-level) ----
+        _, support_coeffs, support_configs, support_keys, discarded_weight = (
+            extract_support(
+                self.psi,
+                self.loc_dims,
+                sector_configs,
+                prob_threshold,
+                sort_for_encoding=True,
+            )
+        )
+        n_configs_support = support_configs.shape[0]
+        if n_configs_support == 0:
+            raise ValueError("Support is empty; cannot compute stabilizer entropy.")
+        msg = f"Support size = {n_configs_support}, discarded weight = {discarded_weight:.3e}"
+        logger.info(msg)
+        # Step 2: compute strides consistent with encoding (rightmost fastest)
+        strides = compute_strides(self.loc_dims)
+        # Step 3: generate candidate X-strings from support
+        pkeys_all = all_pairwise_pkeys_support(support_configs, self.loc_dims, strides)
+        pkeys_all.sort()
+        pkeys_uniq = unique_sorted_int64(pkeys_all)
+        n_strings = int(pkeys_uniq.shape[0])
+        msg = f"Generated {n_strings} candidate X-strings from support."
+        logger.info(msg)
+        # Step 4: compute M2 and per-string contributions in parallel
+        support_probs = (np.abs(support_coeffs) ** 2).astype(np.float64, copy=False)
+        M2 = stabilizer_renyi_sum(
+            pkeys_uniq=pkeys_uniq,
+            support_configs=support_configs,
+            support_probs=support_probs,
+            support_keys=support_keys,
+            loc_dims=self.loc_dims,
+            strides=strides,
+        )
+        # Step 5: compute SRE2
+        SRE2 = -float(np.log(max(M2, 1e-16)))
+        return SRE2
+
 
 def truncation(array, threshold=1e-14):
     validate_parameters(array=array, threshold=threshold)
@@ -409,7 +544,21 @@ def exp_val_data(psi, row_list, col_list, value_list):
 
 
 @njit(cache=True)
-def exp_val_data2(psi1, psi2, row_list, col_list, value_list):
+def mixed_exp_val_data(psi1, psi2, row_list, col_list, value_list):
+    """
+    Compute a mixed expectation value directly from the nonzero elements of the operator
+    without constructing the full sparse matrix.
+
+    Args:
+        psi1 (np.ndarray): The first quantum state (bra).
+        psi2 (np.ndarray): The second quantum state (ket).
+        row_list (np.ndarray): Row indices of nonzero elements in the operator.
+        col_list (np.ndarray): Column indices of nonzero elements in the operator.
+        value_list (np.ndarray): Nonzero values of the operator.
+
+    Returns:
+        float: The computed expectation value.
+    """
     exp_val = 0.0 + 0.0j
     psi1_dag = np.conjugate(psi1)
     for ii in range(len(row_list)):
@@ -425,18 +574,40 @@ def extract_support(
     sort_for_encoding: bool = True,
 ):
     """
-    Build a truncated-support representation of |psi>.
+    Extract a truncated support of a state represented in a symmetry-sector basis.
+
+    Parameters
+    ----------
+    psi:
+        1D complex array of shape (n_configs,). State coefficients in the sector basis.
+    loc_dims:
+        1D int array of shape (n_sites,). Local dimensions per site.
+    sector_configs:
+        2D uint array of shape (n_configs, n_sites). Basis configurations for the sector.
+        Row i corresponds to basis index i of psi.
+    prob_threshold:
+        Keep configurations with probability |psi[i]|^2 > prob_threshold.
+    sort_for_encoding:
+        If True, sort the support by the same encoding order used by the X-string code:
+        "rightmost site is fastest digit" (i.e. consistent with compute_strides).
 
     Returns
     -------
-    support_indices : (K,) int64
-        Indices in the *sector basis* (i.e. indices into sector_configs / psi).
-    support_coeffs  : (K,) complex128
-        Amplitudes psi[support_indices].
-    support_configs : (K, N) uint16
-        Configurations for each kept basis index, sorted consistently if requested.
-    discarded_weight : float
-        Sum of probabilities outside the support (delta = 1 - sum(|coeffs|^2)).
+    support_indices:
+        1D int64 array, indices in the sector basis that are kept.
+    support_coeffs:
+        1D complex128 array, psi[support_indices].
+    support_configs:
+        2D uint16 array, sector_configs[support_indices].
+    support_keys:
+        1D int64 array, encoded keys for support_configs, sorted ascending if sort_for_encoding=True.
+    discarded_weight:
+        float. Probability mass discarded: 1 - sum(support_probs).
+
+    Notes
+    -----
+    - Sorting by encoding order is important because we do membership queries with
+      binary_search_sorted(support_keys, key).
     """
     prob = np.abs(psi) ** 2
     mask = prob > prob_threshold
@@ -449,12 +620,19 @@ def extract_support(
     # Compute discarded probability mass (delta)
     kept_weight = float(np.sum(np.abs(support_coeffs) ** 2))
     discarded_weight = max(0.0, 1.0 - kept_weight)
+    # rightmost-fastest encoding key
+    support_keys = encode_all_configs(support_configs, compute_strides(loc_dims))
+    sort_order = np.argsort(support_keys, kind="mergesort")
     # Sort support by the same encoding order your algorithm expects
     if sort_for_encoding:
-        # rightmost-fastest encoding key
-        encoding_keys = encode_all_configs(support_configs, compute_strides(loc_dims))
-        sort_order = np.argsort(encoding_keys, kind="mergesort")
         support_indices = support_indices[sort_order]
         support_coeffs = support_coeffs[sort_order]
         support_configs = support_configs[sort_order, :]
-    return support_indices, support_coeffs, support_configs, discarded_weight
+        support_keys = support_keys[sort_order]
+    return (
+        support_indices,
+        support_coeffs,
+        support_configs,
+        support_keys,
+        discarded_weight,
+    )

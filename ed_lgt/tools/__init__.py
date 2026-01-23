@@ -15,7 +15,7 @@ from .manage_data import *
 from .measures import *
 from .numba_functions import *
 from .wannier import *
-from .tensor_newtorks import *
+from .tensor_networks import *
 from .magic import *
 from .plotting import *
 
@@ -26,6 +26,6 @@ __all__ += manage_data.__all__.copy()
 __all__ += measures.__all__.copy()
 __all__ += numba_functions.__all__.copy()
 __all__ += wannier.__all__.copy()
-__all__ += tensor_newtorks.__all__.copy()
+__all__ += tensor_networks.__all__.copy()
 __all__ += magic.__all__.copy()
 __all__ += plotting.__all__.copy()

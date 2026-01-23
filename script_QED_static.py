@@ -1,15 +1,14 @@
 import qtealeaves as qtl
 from qtealeaves.convergence_parameters import TNConvergenceParameters
-from qtealeaves.observables import (
-    TNObsLocal,
-    TNObservables,
-    TNObsBondEntropy,
-)
+from qtealeaves.observables import Local, TNObservables, BondEntropy
 from qtealeaves.emulator.ttn_simulator import TTN
 from qredtea.torchapi import default_pytorch_backend
 import torch as to
 from pathlib import Path
 from qtealeaves.tooling import HilbertCurveMap
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def setup_run_dir(sim_name: str) -> Path:
@@ -34,9 +33,9 @@ def main(
     tn_type=5,
     statics_method=2,
     bond_dim=100,
-    g=3,
+    g=0.1,
     L=4,
-    alpha=30,
+    alpha=20,
     local_dim=19,
     device="cpu",
     simulation_name="QED2D",
@@ -50,20 +49,17 @@ def main(
         max_bond_dimension=bond_dim,
         statics_method=statics_method,
         device=device,
+        cut_ratio=1e-12,
     )
     # Define the list of observables
+    obs_list = ["E2"]
+    obs_list += [f"E_{s}{d}" for s in "pm" for d in "xy"]
+    obs_list += [f"E2_{s}{d}" for s in "pm" for d in "xy"]
     my_obs = TNObservables()
-    my_obs += TNObsLocal("E2", "E2")
-    my_obs += TNObsLocal("E_px", "E_px")
-    my_obs += TNObsLocal("E_mx", "E_mx")
-    my_obs += TNObsLocal("E_py", "E_py")
-    my_obs += TNObsLocal("E_my", "E_my")
-    my_obs += TNObsLocal("E2_px", "E2_px")
-    my_obs += TNObsLocal("E2_mx", "E2_mx")
-    my_obs += TNObsLocal("E2_py", "E2_py")
-    my_obs += TNObsLocal("E2_my", "E2_my")
+    for obs in obs_list:
+        my_obs += Local(obs, obs)
     # Add Entropy
-    my_obs.add_observable(TNObsBondEntropy())
+    my_obs.add_observable(BondEntropy())
     # Define the python backend
     py_tensor_backend = default_pytorch_backend(device=device, dtype=to.complex128)
     # Configure the simulation
@@ -74,7 +70,6 @@ def main(
         my_obs,
         tn_type=tn_type,
         py_tensor_backend=py_tensor_backend,
-        folder_name_input=sim_folder,
         folder_name_output=sim_folder,
         store_checkpoints=False,
     )
@@ -93,7 +88,7 @@ def main(
         "g": g,
         "alpha": alpha,
         "device": device,
-        # "continue_file": initial_state,
+        "continue_file": initial_state,
         "exclude_from_hash": ["device", "t_x_even", "t_x_odd", "theta"],
     }
     sim_dict |= QED_Hamiltonian_couplings(dim=2, g=g, alpha=alpha)
@@ -104,17 +99,7 @@ def main(
     static_results = simulation.get_static_obs(params[0])
     # Save results results
     res = {"results": static_results, "entropies": {}}
-    obs_list = [
-        "E2",
-        "E_px",
-        "E_mx",
-        "E_py",
-        "E_my",
-        "E2_px",
-        "E2_mx",
-        "E2_py",
-        "E2_my",
-    ]
+
     for obs in obs_list:
         res[obs] = static_results[obs]
     # Entropy
@@ -125,8 +110,8 @@ def main(
     hilb = HilbertCurveMap(2, L)
     for obs in obs_list:
         res2d[obs] = hilb.backmapping_vector_observable(res[obs])
-    for xx in range(L):
-        for yy in range(L):
+    for yy in range(L):
+        for xx in range(L):
             if xx == 0:
                 print(f"({xx}, {yy}) Emx {res2d['E_mx'][xx, yy]:.8f}")
             elif xx == L - 1:

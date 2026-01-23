@@ -17,35 +17,6 @@ def _get(d, path, default=None):
     return cur
 
 
-par = {
-    "model": {
-        "lvals": [2, 2, 2],
-        "has_obc": [False, False, False],
-        "spin": 1,
-        "pure_theory": True,
-        "ham_format": "sparse",
-    },
-    "hamiltonian": {
-        "n_eigs": 1,
-        "save_psi": False,
-    },
-    "momentum": {
-        "get_momentum_basis": False,
-        "unit_cell_size": [1, 1, 1],
-        "momentum_k_vals": [0, 0, 0],
-    },
-    "observables": {
-        "measure_obs": True,
-        "get_entropy": False,
-        "entropy_partition": [0, 1],
-        "get_state_configs": True,
-        "get_overlap": False,
-    },
-    "g": 2.3277777777777775,
-    "theta": 10,
-}
-
-
 def run_QED_simulation(par: dict) -> dict:
     res = {}
     start_time = perf_counter()
@@ -174,5 +145,32 @@ def run_QED_simulation(par: dict) -> dict:
 
 
 # %%
+par = {
+    "model": {
+        "lvals": [4, 4],
+        "has_obc": [True, True],
+        "spin": 1,
+        "pure_theory": True,
+        "ham_format": "sparse",
+    },
+    "hamiltonian": {
+        "n_eigs": 1,
+        "save_psi": False,
+    },
+    "momentum": {
+        "get_momentum_basis": False,
+        "unit_cell_size": [1, 1],
+        "momentum_k_vals": [0, 0],
+    },
+    "observables": {
+        "measure_obs": True,
+        "get_entropy": False,
+        "entropy_partition": [0, 1],
+        "get_state_configs": True,
+        "get_overlap": False,
+    },
+    "g": 0.1,
+    "theta": 0,
+}
 run_QED_simulation(par)
 # %%
