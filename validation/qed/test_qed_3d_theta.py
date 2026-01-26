@@ -32,7 +32,7 @@ def main():
     res = run_QED_spectrum(par)
     ref = {
         "energy": -0.0892347822873874,
-        "E2": 00.242194958774601,
+        "E2": 0.242194958774601,
     }
     atol = 1e-10
     obs_list = ["energy", "E2"]

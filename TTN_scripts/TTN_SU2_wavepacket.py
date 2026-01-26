@@ -3,13 +3,14 @@ import numpy as np
 from qtealeaves import QuantumGreenTeaSimulation
 from qtealeaves.convergence_parameters import TNConvergenceParameters
 from qtealeaves.observables import (
-    TNObsLocal,
+    Local,
     TNObservables,
-    TNObsBondEntropy,
-    TNState2File,
+    BondEntropy,
+    State2File,
+    GenericMPO,
 )
-from qtealeaves.mpos import DenseMPO, MPOSite
-from qtealeaves.emulator import MPS, TTN
+from qtealeaves.mpos import DenseMPO
+from qtealeaves.emulator import TTN
 from qredtea.torchapi import default_pytorch_backend
 import torch as to
 from pathlib import Path
@@ -337,7 +338,7 @@ def main(
     gs_max_bond_dim=200,
     m=3,
     g=1,
-    L=16,
+    L=64,
     local_dim=6,
     device="cpu",
     simulation_name="dynamics",
@@ -360,10 +361,10 @@ def main(
     obs_list = ["N_single", "N_pair", "E_square", "T2_px", "T2_mx"]
     my_obs = TNObservables()
     for obs in obs_list:
-        my_obs += TNObsLocal(obs, obs)
-    my_obs += TNState2File("GS_state", "U")
+        my_obs += Local(obs, obs)
+    my_obs += State2File("GS_state", "U")
     # Add Entropy
-    my_obs += TNObsBondEntropy()
+    my_obs += BondEntropy()
     # Define the python backend
     py_tensor_backend = default_pytorch_backend(device=device, dtype=to.complex128)
     simulation = QuantumGreenTeaSimulation(
@@ -373,7 +374,6 @@ def main(
         my_obs,
         tn_type=tn_type,
         py_tensor_backend=py_tensor_backend,
-        folder_name_input=sim_folder,
         folder_name_output=sim_folder,
         store_checkpoints=False,
     )
@@ -422,8 +422,8 @@ def main(
     for tensor in GSpsi._iter_tensors():
         print(f"{tensor.shape}")
     support = 4
-    wp_size = 6
-    offset = 1
+    wp_size = 7
+    offset = 2
     MPO = get_MPO()
     for i, W in enumerate(MPO):
         print(f"site {i}: shape {W.shape}")
@@ -431,20 +431,29 @@ def main(
     amplitudes = list(gaussian_wavepacket_coeffs(wp_size, k=np.pi / 4, sigma=1.0))
     list_states = []
     wp_conv = TNConvergenceParameters(
-        max_bond_dimension=100,
-        cut_ratio=0,
+        max_bond_dimension=150,
+        cut_ratio=1e-13,
     )
-    print("BUILDING WAVEPACKET STATE")
+    for ii in range(0, L, 2):
+        sites_list = np.arange(ii, ii + support + 1, 1, dtype=int).tolist()
+        W_mpo_i = DenseMPO.from_tensor_list(
+            MPO,
+            conv_params=wp_conv,
+            iso_center=None,
+            tensor_backend=py_tensor_backend,
+            sites=sites_list,
+        )
+    print("------------ OVERLAP between Wanniers ------------------")
     for ii in range(wp_size):
+        print("----------------------------------------------------")
         print(f"Building wavepacket state {ii+1}/{wp_size}")
+        site = int(2 * ii)
         sites_list = np.arange(
-            offset + ii, offset + ii + support, 1, dtype=int
+            offset + site, offset + site + support, 1, dtype=int
         ).tolist()
         print(f"sites list {sites_list}")
         state = GSpsi.copy()
         state.convergence_parameters = wp_conv
-        print(f"{state.convergence_parameters.max_bond_dimension}")
-        print(f"{state.convergence_parameters.cut_ratio}")
         W_mpo_i = DenseMPO.from_tensor_list(
             MPO,
             conv_params=wp_conv,
@@ -468,14 +477,11 @@ def main(
             print(f"<W{ii}|W{jj}> {overlaps[ii, jj]:.8f}")
     print(overlaps)
     print("SUMMING WAVEPACKET STATE")
-    initial_state = list_states[3].copy()
-    initial_state.convergence_parameters = wp_conv
     wavepacket_state = TTN.sum_approximate(
         sum_states=list_states,
         sum_amplitudes=amplitudes,
         convergence_parameters=wp_conv,
         max_iterations=100,
-        initial_state=initial_state,
     )
     print(f"Wave packet tensor")
     for tensor in wavepacket_state._iter_tensors():

@@ -24,7 +24,15 @@ __all__ = ["SU2_Model"]
 
 
 class SU2_Model(QuantumModel):
-    def __init__(self, spin, pure_theory, background, sectors=None, **kwargs):
+    def __init__(
+        self,
+        spin,
+        pure_theory,
+        background,
+        sectors=None,
+        use_generic_model=False,
+        **kwargs,
+    ):
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
@@ -40,7 +48,7 @@ class SU2_Model(QuantumModel):
         )
         # -------------------------------------------------------------------------------
         # Acquire operators
-        if self.spin < 1:
+        if self.spin < 1 and not use_generic_model:
             ops = SU2_dressed_site_operators(
                 self.spin,
                 self.pure_theory,
@@ -62,9 +70,11 @@ class SU2_Model(QuantumModel):
         if self.pure_theory:
             global_ops = None
             global_sectors = None
+            self.zero_density = None
         else:
             global_ops = [self.ops["N_tot"]]
             global_sectors = sectors
+            self.zero_density = True if sectors[0] == self.n_sites else False
         # -------------------------------------------------------------------------------
         # LINK SYMMETRIES
         link_ops = [
@@ -318,7 +328,10 @@ class SU2_Model(QuantumModel):
         # -------------------------------------------------------------------------------
         # PLAQUETTE TERM: MAGNETIC INTERACTION
         plaq_list = []
-        plaquette_directions = ["xy", "xz", "yz"]
+        if self.dim == 3:
+            plaquette_directions = ["xy", "xz", "yz"]
+        elif self.dim == 2:
+            plaquette_directions = ["xy"]
         plaquette_set = [
             ["AB", "AB", "AB", "AB"],
             ["AA", "AB", "BB", "AB"],
@@ -337,8 +350,8 @@ class SU2_Model(QuantumModel):
             ["BB", "BA", "AA", "BA"],
             ["BA", "BA", "BA", "BA"],
         ]
-        for ii, pdir in enumerate(plaquette_directions):
-            if (self.dim > 1 and ii == 0) or self.dim == 3:
+        if self.dim > 1:
+            for pdir in plaquette_directions:
                 for p_set in plaquette_set:
                     # DEFINE THE LIST OF CORNER OPERATORS
                     op_names_list = [

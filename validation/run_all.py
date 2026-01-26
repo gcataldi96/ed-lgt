@@ -3,6 +3,9 @@ import sys
 import argparse
 import subprocess
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def set_threads_env(n: int | None) -> None:
@@ -40,57 +43,52 @@ def discover_test_files(root: Path) -> list[Path]:
 
 def run_one_test(test_path: Path, env: dict) -> int:
     """Run one test file as a subprocess; return its exit code."""
-    print(f"\n=== Running {test_path.relative_to(test_path.parents[1])} ===")
+    logger.info(f"Running {test_path.relative_to(test_path.parents[1])} ===")
     # ^ prints "su2/test01_..." nicely (parents[1] == validation/)
     r = subprocess.run([sys.executable, str(test_path)], env=env)
     return r.returncode
 
 
 def main() -> int:
+    # ----------------------------------------------------------------------------
     parser = argparse.ArgumentParser(description="Run manual validation tests.")
-    parser.add_argument(
-        "--threads",
-        type=int,
-        default=None,
-        help=(
-            "Threads for NUMBA/OMP/MKL/OPENBLAS. "
-            "If omitted, use system/default (all available)."
-        ),
-    )
-    parser.add_argument(
-        "--suite",
-        type=str,
-        default=None,
-        help="Run only one suite (e.g. su2 or qed). If omitted, run all.",
-    )
+    threads_msg = "Threads for NUMBA/OMP/MKL/OPENBLAS. Default: system/default."
+    parser.add_argument("--threads", type=int, default=None, help=threads_msg)
+    suite_msg = "Run only one suite (e.g. su2 or qed). If omitted, run all."
+    parser.add_argument("--suite", type=str, default=None, help=suite_msg)
     args = parser.parse_args()
+    # ----------------------------------------------------------------------------
     # IMPORTANT: set env vars before importing heavy stuff in child processes.
     set_threads_env(args.threads)
     env = os.environ.copy()
     root = Path(__file__).resolve().parent
+    # ----------------------------------------------------------------------------
     # Optional: filter suites
     if args.suite is not None:
         suite_dir = root / args.suite
         if not suite_dir.is_dir():
-            print(f"Suite not found: {suite_dir}")
+            logger.info(f"Suite not found: {suite_dir}")
             return 2
         tests = sorted(suite_dir.glob("test*.py"))
     else:
         tests = discover_test_files(root)
     if not tests:
-        print("No validation tests found.")
+        logger.info("No validation tests found.")
         return 2
     failed = 0
     for test_path in tests:
         code = run_one_test(test_path, env)
         if code != 0:
             failed += 1
-
+    # ----------------------------------------------------------------------------
     total = len(tests)
+    logger.info("====================================================")
+    logger.info(" Validation Summary ")
+    logger.info("====================================================")
     if failed:
-        print(f"\nFAILED: {failed}/{total} tests")
+        logger.info(f"FAILED: {failed}/{total} tests")
         return 1
-    print(f"\nALL PASSED: {total} tests")
+    logger.info(f"ALL PASSED: {total} tests")
     return 0
 
 

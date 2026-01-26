@@ -90,18 +90,18 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=0):
                 for ax in dimensions:
                     ops[f"Q{side}{ax}_dag"] = 0
             for col in "rg":
-                ops["Qmx_dag"] += qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", f"Z{col}", "Iz", "Iz", "Iz"]
-                )
-                ops["Qmy_dag"] += qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", "P", f"Z{col}", "Iz", "Iz"]
-                )
-                ops["Qpx_dag"] += qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", "P", "P", f"Z{col}", "Iz"]
-                )
-                ops["Qpy_dag"] += qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", "P", "P", "P", f"Z{col}"]
-                )
+                # ----------------------------------------------------------------------
+                op_list = [f"psi_{col}_dag_P", f"Z{col}", "Iz", "Iz", "Iz"]
+                ops["Qmx_dag"] += qmb_op(in_ops, op_list)
+                # ----------------------------------------------------------------------
+                op_list = [f"psi_{col}_dag_P", "P", f"Z{col}", "Iz", "Iz"]
+                ops["Qmy_dag"] += qmb_op(in_ops, op_list)
+                # ----------------------------------------------------------------------
+                op_list = [f"psi_{col}_dag_P", "P", "P", f"Z{col}", "Iz"]
+                ops["Qpx_dag"] += qmb_op(in_ops, op_list)
+                # ----------------------------------------------------------------------
+                op_list = [f"psi_{col}_dag_P", "P", "P", "P", f"Z{col}"]
+                ops["Qpy_dag"] += qmb_op(in_ops, op_list)
             # add their dagger operators
             Qs = {}
             for op in ops:
@@ -132,48 +132,43 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=0):
         for col in "rg":
             # --------------------------------------------------------------------------
             # XY Plane
-            ops["C_px,py"] += qmb_op(
-                in_ops,
-                ["Iz", "Iz", "Iz", f"Z{col}_P", f"Z{col}_dag", "Iz"],
-            )
-            ops["C_py,mx"] += qmb_op(
-                in_ops, [f"P_Z{col}_dag", "P", "P", "P", f"Z{col}", "Iz"]
-            )
-            ops["C_mx,my"] += qmb_op(
-                in_ops,
-                [f"Z{col}_P", f"Z{col}_dag", "Iz", "Iz", "Iz", "Iz"],
-            )
-            ops["C_my,px"] += qmb_op(
-                in_ops, ["Iz", f"Z{col}_P", "P", f"Z{col}_dag", "Iz", "Iz"]
-            )
+            op_list = ["Iz", "Iz", "Iz", f"Z{col}_P", f"Z{col}_dag", "Iz"]
+            ops["C_px,py"] += qmb_op(in_ops, op_list)
+            # --------------------------------------------------------------------------
+            op_list = [f"P_Z{col}_dag", "P", "P", "P", f"Z{col}", "Iz"]
+            ops["C_py,mx"] += qmb_op(in_ops, op_list)
+            # --------------------------------------------------------------------------
+            op_list = [f"Z{col}_P", f"Z{col}_dag", "Iz", "Iz", "Iz", "Iz"]
+            ops["C_mx,my"] += qmb_op(in_ops, op_list)
+            # --------------------------------------------------------------------------
+            op_list = ["Iz", f"Z{col}_P", "P", f"Z{col}_dag", "Iz", "Iz"]
+            ops["C_my,px"] += qmb_op(in_ops, op_list)
             # --------------------------------------------------------------------------
             # XZ Plane
-            ops["C_px,pz"] += qmb_op(
-                in_ops, ["Iz", "Iz", "Iz", f"Z{col}_P", "P", f"Z{col}_dag"]
-            )
-            ops["C_pz,mx"] += qmb_op(
-                in_ops, [f"P_Z{col}_dag", "P", "P", "P", "P", f"Z{col}"]
-            )
-            ops["C_mx,mz"] += qmb_op(
-                in_ops, [f"Z{col}_P", "P", f"Z{col}_dag", "Iz", "Iz", "Iz"]
-            )
-            ops["C_mz,px"] += qmb_op(
-                in_ops, ["Iz", "Iz", f"Z{col}_P", f"Z{col}_dag", "Iz", "Iz"]
-            )
+            op_list = ["Iz", "Iz", "Iz", f"Z{col}_P", "P", f"Z{col}_dag"]
+            ops["C_px,pz"] += qmb_op(in_ops, op_list)
+            # --------------------------------------------------------------------------
+            op_list = [f"P_Z{col}_dag", "P", "P", "P", "P", f"Z{col}"]
+            ops["C_pz,mx"] += qmb_op(in_ops, op_list)
+            # --------------------------------------------------------------------------
+            op_list = [f"Z{col}_P", "P", f"Z{col}_dag", "Iz", "Iz", "Iz"]
+            ops["C_mx,mz"] += qmb_op(in_ops, op_list)
+            # --------------------------------------------------------------------------
+            op_list = ["Iz", "Iz", f"Z{col}_P", f"Z{col}_dag", "Iz", "Iz"]
+            ops["C_mz,px"] += qmb_op(in_ops, op_list)
             # --------------------------------------------------------------------------
             # YZ Plane
-            ops["C_py,pz"] += qmb_op(
-                in_ops, ["Iz", "Iz", "Iz", "Iz", f"Z{col}_P", f"Z{col}_dag"]
-            )
-            ops["C_pz,my"] += qmb_op(
-                in_ops, ["Iz", f"P_Z{col}_dag", "P", "P", "P", f"Z{col}"]
-            )
-            ops["C_my,mz"] += qmb_op(
-                in_ops, ["Iz", f"Z{col}_P", f"Z{col}_dag", "Iz", "Iz", "Iz"]
-            )
-            ops["C_mz,py"] += qmb_op(
-                in_ops, ["Iz", "Iz", f"Z{col}_P", "P", f"Z{col}_dag", "Iz"]
-            )
+            op_list = ["Iz", "Iz", "Iz", "Iz", f"Z{col}_P", f"Z{col}_dag"]
+            ops["C_py,pz"] += qmb_op(in_ops, op_list)
+            # --------------------------------------------------------------------------
+            op_list = ["Iz", f"P_Z{col}_dag", "P", "P", "P", f"Z{col}"]
+            ops["C_pz,my"] += qmb_op(in_ops, op_list)
+            # --------------------------------------------------------------------------
+            op_list = ["Iz", f"Z{col}_P", f"Z{col}_dag", "Iz", "Iz", "Iz"]
+            ops["C_my,mz"] += qmb_op(in_ops, op_list)
+            # --------------------------------------------------------------------------
+            op_list = ["Iz", "Iz", f"Z{col}_P", "P", f"Z{col}_dag", "Iz"]
+            ops["C_mz,py"] += qmb_op(in_ops, op_list)
         # THETA TERM
         ops["EzC_px,py"] = 0
         ops["ExC_py,pz"] = 0
@@ -186,16 +181,17 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=0):
             for ii, c1 in enumerate("rg"):
                 for jj, c2 in enumerate("rg"):
                     factor = sigma_ops[f"S{nu}"].todense()[ii, jj]
-                    ops["EzC_px,py"] += qmb_op(
-                        in_ops,
-                        ["Iz", "Iz", "Iz", f"Z{c1}_P", f"Z{c2}_dag", "Iz"],
-                    ) @ (factor * Ez)
-                    ops["EyC_px,pz"] += qmb_op(
-                        in_ops, ["Iz", "Iz", "Iz", f"Z{c1}_P", "P", f"Z{c2}_dag"]
-                    ) @ (factor * Ey)
-                    ops["ExC_py,pz"] += qmb_op(
-                        in_ops, ["Iz", "Iz", "Iz", "Iz", f"Z{c1}_P", f"Z{c2}_dag"]
-                    ) @ (factor * Ex)
+                    logger.info(f"T{nu}_a S{nu}_{c1}{c2} C_bc{c1}{c2} factor: {factor}")
+                    # ------------------------------------------------------------------
+                    op_list = ["Iz", "Iz", "Iz", f"Z{c1}_P", f"Z{c2}_dag", "Iz"]
+                    ops["EzC_px,py"] += qmb_op(in_ops, op_list) @ (factor * Ez)
+                    # ------------------------------------------------------------------
+                    op_list = ["Iz", "Iz", "Iz", f"Z{c1}_P", "P", f"Z{c2}_dag"]
+                    ops["EyC_px,pz"] += qmb_op(in_ops, op_list) @ (factor * Ey)
+                    # ------------------------------------------------------------------
+                    op_list = ["Iz", "Iz", "Iz", "Iz", f"Z{c1}_P", f"Z{c2}_dag"]
+                    ops["ExC_py,pz"] += qmb_op(in_ops, op_list) @ (factor * Ex)
+                    # ------------------------------------------------------------------
         if not pure_theory:
             # Update Electric and Corner operators
             for op in ops.keys():
@@ -205,27 +201,24 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=0):
                 for ax in dimensions:
                     ops[f"Q{side}{ax}_dag"] = 0
             for col in "rg":
-                ops["Qmx_dag"] += qmb_op(
-                    in_ops,
-                    [f"psi_{col}_dag_P", f"Z{col}", "Iz", "Iz", "Iz", "Iz", "Iz"],
-                )
-                ops["Qmy_dag"] += qmb_op(
-                    in_ops,
-                    [f"psi_{col}_dag_P", "P", f"Z{col}", "Iz", "Iz", "Iz", "Iz"],
-                )
-                ops["Qmz_dag"] += qmb_op(
-                    in_ops,
-                    [f"psi_{col}_dag_P", "P", "P", f"Z{col}", "Iz", "Iz", "Iz"],
-                )
-                ops["Qpx_dag"] += qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", "P", "P", "P", f"Z{col}", "Iz", "Iz"]
-                )
-                ops["Qpy_dag"] += qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", "P", "P", "P", "P", f"Z{col}", "Iz"]
-                )
-                ops["Qpz_dag"] += qmb_op(
-                    in_ops, [f"psi_{col}_dag_P", "P", "P", "P", "P", "P", f"Z{col}"]
-                )
+                # ----------------------------------------------------------------------
+                op_list = [f"psi_{col}_dag_P", f"Z{col}", "Iz", "Iz", "Iz", "Iz", "Iz"]
+                ops["Qmx_dag"] += qmb_op(in_ops, op_list)
+                # ----------------------------------------------------------------------
+                op_list = [f"psi_{col}_dag_P", "P", f"Z{col}", "Iz", "Iz", "Iz", "Iz"]
+                ops["Qmy_dag"] += qmb_op(in_ops, op_list)
+                # ----------------------------------------------------------------------
+                op_list = [f"psi_{col}_dag_P", "P", "P", f"Z{col}", "Iz", "Iz", "Iz"]
+                ops["Qmz_dag"] += qmb_op(in_ops, op_list)
+                # ----------------------------------------------------------------------
+                op_list = [f"psi_{col}_dag_P", "P", "P", "P", f"Z{col}", "Iz", "Iz"]
+                ops["Qpx_dag"] += qmb_op(in_ops, op_list)
+                # ----------------------------------------------------------------------
+                op_list = [f"psi_{col}_dag_P", "P", "P", "P", "P", f"Z{col}", "Iz"]
+                ops["Qpy_dag"] += qmb_op(in_ops, op_list)
+                # ----------------------------------------------------------------------
+                op_list = [f"psi_{col}_dag_P", "P", "P", "P", "P", "P", f"Z{col}"]
+                ops["Qpz_dag"] += qmb_op(in_ops, op_list)
             # --------------------------------------------------------------------------
             # add their dagger operators
             Qs = {}
@@ -237,15 +230,17 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=0):
     if not pure_theory:
         # Psi NUMBER OPERATORS
         for label in ["r", "g", "tot", "single", "pair", "zero"]:
-            ops[f"N_{label}"] = qmb_op(
-                in_ops, [f"N_{label}"] + ["Iz" for _ in range(2 * lattice_dim)]
-            )
+            op_list = [f"N_{label}"] + ["Iz" for _ in range(2 * lattice_dim)]
+            ops[f"N_{label}"] = qmb_op(in_ops, op_list)
         ops["N-1"] = ops["N_tot"] - identity(ops["N_tot"].shape[0])
+    # -----------------------------------------------------------------------------
     # CASIMIR/ELECTRIC OPERATOR
     ops[f"E_square"] = 0
     for s in "pm":
         for d in dimensions:
             ops[f"E_square"] += 0.5 * ops[f"T2_{s}{d}"]
+    # -----------------------------------------------------------------------------
+    # BACKGROUND FIELD OPERATORS
     if background > 0:
         bg_len = 0
         j_bg_set = np.arange(0, spin_space(background), 1) / 2
@@ -265,12 +260,12 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=0):
                 for ax in dimensions:
                     ops[f"V{side}{ax}_dag"] = 0
             for col in "rg":
-                ops["Vmx_dag"] += qmb_op(
-                    in_ops, [f"Z{col}_dag", "P_psi", f"Z{col}", "Iz"]
-                )
-                ops["Vpx_dag"] += qmb_op(
-                    in_ops, [f"Z{col}_dag", "P_psi", "P", f"Z{col}"]
-                )
+                # ----------------------------------------------------------------------
+                op_list = [f"Z{col}_dag", "P_psi", f"Z{col}", "Iz"]
+                ops["Vmx_dag"] += qmb_op(in_ops, op_list)
+                # ----------------------------------------------------------------------
+                op_list = [f"Z{col}_dag", "P_psi", "P", f"Z{col}"]
+                ops["Vpx_dag"] += qmb_op(in_ops, op_list)
             # --------------------------------------------------------------------------
             # add their dagger operators
             ops["Vmx"] = csr_matrix(ops["Vmx_dag"].conj().transpose())
@@ -278,7 +273,7 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=0):
     return ops
 
 
-def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=False):
+def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=0):
     validate_parameters(
         spin_list=[spin], pure_theory=pure_theory, lattice_dim=lattice_dim
     )
@@ -306,21 +301,26 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
             # Update Electric operators
             for op in ops.keys():
                 ops[op] = kron(in_ops["ID_psi"], ops[op])
-            # Add Hopping operators
+            # Hopping operators
+            # Q1dag = psi_r_dag Zg_dag - psi_g_dag Zr_dag
             # ------------------------------------------------------------------
-            ops["Q1_mx_dag"] = qmb_op(in_ops, ["psi_r_dag_P", "Zg_dag", "Iz"]) - qmb_op(
-                in_ops, ["psi_g_dag_P", "Zr_dag", "Iz"]
-            )
-            ops["Q1_px_dag"] = qmb_op(in_ops, ["psi_r_dag_P", "P", "Zg_dag"]) - qmb_op(
-                in_ops, ["psi_g_dag_P", "P", "Zr_dag"]
-            )
+            op_list1 = ["psi_r_dag_P", "Zg_dag", "Iz"]
+            op_list2 = ["psi_g_dag_P", "Zr_dag", "Iz"]
+            ops["Q1_mx_dag"] = qmb_op(in_ops, op_list1) - qmb_op(in_ops, op_list2)
             # ------------------------------------------------------------------
-            ops["Q2_mx_dag"] = qmb_op(in_ops, ["psi_r_dag_P", "Zr", "Iz"]) + qmb_op(
-                in_ops, ["psi_g_dag_P", "Zg", "Iz"]
-            )
-            ops["Q2_px_dag"] = qmb_op(in_ops, ["psi_r_dag_P", "P", "Zr"]) + qmb_op(
-                in_ops, ["psi_g_dag_P", "P", "Zg"]
-            )
+            op_list1 = ["psi_r_dag_P", "P", "Zg_dag"]
+            op_list2 = ["psi_g_dag_P", "P", "Zr_dag"]
+            ops["Q1_px_dag"] = qmb_op(in_ops, op_list1) - qmb_op(in_ops, op_list2)
+            # ------------------------------------------------------------------
+            # Hopping operators Q2dag = psi_r_dag Zr + psi_g_dag Zg
+            op_list1 = ["psi_r_dag_P", "Zr", "Iz"]
+            op_list2 = ["psi_g_dag_P", "Zg", "Iz"]
+            ops["Q2_mx_dag"] = qmb_op(in_ops, op_list1) + qmb_op(in_ops, op_list2)
+            # ------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "Zr"]
+            op_list2 = ["psi_g_dag_P", "P", "Zg"]
+            ops["Q2_px_dag"] = qmb_op(in_ops, op_list1) + qmb_op(in_ops, op_list2)
+            # ------------------------------------------------------------------
             # add their dagger operators
             Qs = {}
             for op in ops:
@@ -339,49 +339,58 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
             for corner in ["px,py", "py,mx", "mx,my", "my,px"]:
                 ops[f"C{l1}{l2}_{corner}"] = 0
             for s in ["r", "g"]:
-                ops[f"C{l1}{l2}_px,py"] += qmb_op(
-                    in_ops, ["Iz", "Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag"]
-                )
-                ops[f"C{l1}{l2}_py,mx"] += qmb_op(
-                    in_ops, [f"P_Z{l2}_{s}_dag", "P", "P", f"Z{l1}_{s}"]
-                )
-                ops[f"C{l1}{l2}_mx,my"] += qmb_op(
-                    in_ops, [f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz", "Iz"]
-                )
-                ops[f"C{l1}{l2}_my,px"] += qmb_op(
-                    in_ops, ["Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz"]
-                )
+                # ------------------------------------------------------------------
+                op_list = ["Iz", "Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag"]
+                ops[f"C{l1}{l2}_px,py"] += qmb_op(in_ops, op_list)
+                # ------------------------------------------------------------------
+                op_list = [f"P_Z{l2}_{s}_dag", "P", "P", f"Z{l1}_{s}"]
+                ops[f"C{l1}{l2}_py,mx"] += qmb_op(in_ops, op_list)
+                # ------------------------------------------------------------------
+                op_list = [f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz", "Iz"]
+                ops[f"C{l1}{l2}_mx,my"] += qmb_op(in_ops, op_list)
+                # ------------------------------------------------------------------
+                op_list = ["Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz"]
+                ops[f"C{l1}{l2}_my,px"] += qmb_op(in_ops, op_list)
         if not pure_theory:
             # Update Electric and Corner operators
             for op in ops.keys():
                 ops[op] = kron(in_ops["ID_psi"], ops[op])
-            # Add Hopping operators
+            # Hopping operators
+            # Q1dag = psi_r_dag Zg_dag - psi_g_dag Zr_dag
             # ------------------------------------------------------------------
-            ops["Q1_mx_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "Zg_dag", "Iz", "Iz", "Iz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "Zr_dag", "Iz", "Iz", "Iz"])
-            ops["Q1_my_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "Zg_dag", "Iz", "Iz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "Zr_dag", "Iz", "Iz"])
-            ops["Q1_px_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "Zg_dag", "Iz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "Zr_dag", "Iz"])
-            ops["Q1_py_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "P", "Zg_dag"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "Zr_dag"])
+            op_list1 = ["psi_r_dag_P", "Zg_dag", "Iz", "Iz", "Iz"]
+            op_list2 = ["psi_g_dag_P", "Zr_dag", "Iz", "Iz", "Iz"]
+            ops["Q1_mx_dag"] = qmb_op(in_ops, op_list1) - qmb_op(in_ops, op_list2)
             # ------------------------------------------------------------------
-            ops["Q2_mx_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "Zr", "Iz", "Iz", "Iz"]
-            ) + qmb_op(in_ops, ["psi_g_dag_P", "Zg", "Iz", "Iz", "Iz"])
-            ops["Q2_my_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "Zr", "Iz", "Iz"]
-            ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "Zg", "Iz", "Iz"])
-            ops["Q2_px_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "Zr", "Iz"]
-            ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "Zg", "Iz"])
-            ops["Q2_py_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "P", "Zr"]
-            ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "Zg"])
+            op_list1 = ["psi_r_dag_P", "P", "Zg_dag", "Iz", "Iz"]
+            op_list2 = ["psi_g_dag_P", "P", "Zr_dag", "Iz", "Iz"]
+            ops["Q1_my_dag"] = qmb_op(in_ops, op_list1) - qmb_op(in_ops, op_list2)
+            # ------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "P", "Zg_dag", "Iz"]
+            op_list2 = ["psi_g_dag_P", "P", "P", "Zr_dag", "Iz"]
+            ops["Q1_px_dag"] = qmb_op(in_ops, op_list1) - qmb_op(in_ops, op_list2)
+            # ------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "P", "P", "Zg_dag"]
+            op_list2 = ["psi_g_dag_P", "P", "P", "P", "Zr_dag"]
+            ops["Q1_py_dag"] = qmb_op(in_ops, op_list1) - qmb_op(in_ops, op_list2)
+            # ------------------------------------------------------------------
+            # Hopping operators Q2dag = psi_r_dag Zr + psi_g_dag Zg
+            op_list1 = ["psi_r_dag_P", "Zr", "Iz", "Iz", "Iz"]
+            op_list2 = ["psi_g_dag_P", "Zg", "Iz", "Iz", "Iz"]
+            ops["Q2_mx_dag"] = qmb_op(in_ops, op_list1) + qmb_op(in_ops, op_list2)
+            # ------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "Zr", "Iz", "Iz"]
+            op_list2 = ["psi_g_dag_P", "P", "Zg", "Iz", "Iz"]
+            ops["Q2_my_dag"] = qmb_op(in_ops, op_list1) + qmb_op(in_ops, op_list2)
+            # ------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "P", "Zr", "Iz"]
+            op_list2 = ["psi_g_dag_P", "P", "P", "Zg", "Iz"]
+            ops["Q2_px_dag"] = qmb_op(in_ops, op_list1) + qmb_op(in_ops, op_list2)
+            # ------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "P", "P", "Zr"]
+            op_list2 = ["psi_g_dag_P", "P", "P", "P", "Zg"]
+            ops["Q2_py_dag"] = qmb_op(in_ops, op_list1) + qmb_op(in_ops, op_list2)
+            # ------------------------------------------------------------------
             # add their dagger operators
             Qs = {}
             for op in ops:
@@ -412,104 +421,100 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=Fa
                 ops[f"C{l1}{l2}_{corner}"] = 0
             for s in ["r", "g"]:
                 # XY Plane
-                ops[f"C{l1}{l2}_px,py"] += qmb_op(
-                    in_ops,
-                    ["Iz", "Iz", "Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz"],
-                )
-                ops[f"C{l1}{l2}_py,mx"] += qmb_op(
-                    in_ops, [f"P_Z{l2}_{s}_dag", "P", "P", "P", f"Z{l1}_{s}", "Iz"]
-                )
-                ops[f"C{l1}{l2}_mx,my"] += qmb_op(
-                    in_ops,
-                    [f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz", "Iz", "Iz", "Iz"],
-                )
-                ops[f"C{l1}{l2}_my,px"] += qmb_op(
-                    in_ops, ["Iz", f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag", "Iz", "Iz"]
-                )
+                # --------------------------------------------------------------------------
+                op_list = ["Iz", "Iz", "Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz"]
+                ops[f"C{l1}{l2}_px,py"] += qmb_op(in_ops, op_list)
+                # --------------------------------------------------------------------------
+                op_list = [f"P_Z{l2}_{s}_dag", "P", "P", "P", f"Z{l1}_{s}", "Iz"]
+                ops[f"C{l1}{l2}_py,mx"] += qmb_op(in_ops, op_list)
+                # --------------------------------------------------------------------------
+                op_list = [f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz", "Iz", "Iz", "Iz"]
+                ops[f"C{l1}{l2}_mx,my"] += qmb_op(in_ops, op_list)
+                # --------------------------------------------------------------------------
+                op_list = ["Iz", f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag", "Iz", "Iz"]
+                ops[f"C{l1}{l2}_my,px"] += qmb_op(in_ops, op_list)
+                # --------------------------------------------------------------------------
                 # XZ Plane
-                ops[f"C{l1}{l2}_px,pz"] += qmb_op(
-                    in_ops,
-                    ["Iz", "Iz", "Iz", f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag"],
-                )
-                ops[f"C{l1}{l2}_pz,mx"] += qmb_op(
-                    in_ops, [f"P_Z{l2}_{s}_dag", "P", "P", "P", "P", f"Z{l1}_{s}"]
-                )
-                ops[f"C{l1}{l2}_mx,mz"] += qmb_op(
-                    in_ops,
-                    [f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag", "Iz", "Iz", "Iz"],
-                )
-                ops[f"C{l1}{l2}_mz,px"] += qmb_op(
-                    in_ops,
-                    ["Iz", "Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz", "Iz"],
-                )
+                op_list = ["Iz", "Iz", "Iz", f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag"]
+                ops[f"C{l1}{l2}_px,pz"] += qmb_op(in_ops, op_list)
+                # --------------------------------------------------------------------------
+                op_list = [f"P_Z{l2}_{s}_dag", "P", "P", "P", "P", f"Z{l1}_{s}"]
+                ops[f"C{l1}{l2}_pz,mx"] += qmb_op(in_ops, op_list)
+                # --------------------------------------------------------------------------
+                op_list = [f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag", "Iz", "Iz", "Iz"]
+                ops[f"C{l1}{l2}_mx,mz"] += qmb_op(in_ops, op_list)
+                # --------------------------------------------------------------------------
+                op_list = ["Iz", "Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz", "Iz"]
+                ops[f"C{l1}{l2}_mz,px"] += qmb_op(in_ops, op_list)
+                # --------------------------------------------------------------------------
                 # YZ Plane
-                ops[f"C{l1}{l2}_py,pz"] += qmb_op(
-                    in_ops,
-                    ["Iz", "Iz", "Iz", "Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag"],
-                )
-                ops[f"C{l1}{l2}_pz,my"] += qmb_op(
-                    in_ops, ["Iz", f"P_Z{l2}_{s}_dag", "P", "P", "P", f"Z{l1}_{s}"]
-                )
-                ops[f"C{l1}{l2}_my,mz"] += qmb_op(
-                    in_ops,
-                    ["Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz", "Iz", "Iz"],
-                )
-                ops[f"C{l1}{l2}_mz,py"] += qmb_op(
-                    in_ops,
-                    ["Iz", "Iz", f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag", "Iz"],
-                )
+                op_list = ["Iz", "Iz", "Iz", "Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag"]
+                ops[f"C{l1}{l2}_py,pz"] += qmb_op(in_ops, op_list)
+                # --------------------------------------------------------------------------
+                op_list = ["Iz", f"P_Z{l2}_{s}_dag", "P", "P", "P", f"Z{l1}_{s}"]
+                ops[f"C{l1}{l2}_pz,my"] += qmb_op(in_ops, op_list)
+                # --------------------------------------------------------------------------
+                op_list = ["Iz", f"Z{l1}_{s}_P", f"Z{l2}_{s}_dag", "Iz", "Iz", "Iz"]
+                ops[f"C{l1}{l2}_my,mz"] += qmb_op(in_ops, op_list)
+                # --------------------------------------------------------------------------
+                op_list = ["Iz", "Iz", f"Z{l1}_{s}_P", "P", f"Z{l2}_{s}_dag", "Iz"]
+                ops[f"C{l1}{l2}_mz,py"] += qmb_op(in_ops, op_list)
+                # --------------------------------------------------------------------------
         if not pure_theory:
             # Update Electric and Corner operators
             for op in ops.keys():
                 ops[op] = kron(in_ops["ID_psi"], ops[op])
             # Add Hopping operators
-            ops["Q1_mx_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "Zg_dag", "Iz", "Iz", "Iz", "Iz", "Iz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "Zr_dag", "Iz", "Iz", "Iz", "Iz", "Iz"])
-            ops["Q1_my_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "Zg_dag", "Iz", "Iz", "Iz", "Iz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "Zr_dag", "Iz", "Iz", "Iz", "Iz"])
-            ops["Q1_mz_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "Zg_dag", "Iz", "Iz", "Iz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "Zr_dag", "Iz", "Iz", "Iz"])
-            ops["Q1_px_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "P", "Zg_dag", "Iz", "Iz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "Zr_dag", "Iz", "Iz"])
-            ops["Q1_py_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "P", "P", "Zg_dag", "Iz"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "P", "Zr_dag", "Iz"])
-            ops["Q1_pz_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "P", "P", "P", "Zg_dag"]
-            ) - qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "P", "P", "Zr_dag"])
+            # Q1dag = psi_r_dag Zg_dag - psi_g_dag Zr_dag
+            op_list1 = ["psi_r_dag_P", "Zg_dag", "Iz", "Iz", "Iz", "Iz", "Iz"]
+            op_list2 = ["psi_g_dag_P", "Zr_dag", "Iz", "Iz", "Iz", "Iz", "Iz"]
+            ops["Q1_mx_dag"] = qmb_op(in_ops, op_list1) - qmb_op(in_ops, op_list2)
             # --------------------------------------------------------------------------
-            ops["Q2_mx_dag"] = qmb_op(
-                in_ops,
-                ["psi_r_dag_P", "Zr", "Iz", "Iz", "Iz", "Iz", "Iz"],
-            ) + qmb_op(
-                in_ops,
-                ["psi_g_dag_P", "Zg", "Iz", "Iz", "Iz", "Iz", "Iz"],
-            )
-            ops["Q2_my_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "Zr", "Iz", "Iz", "Iz", "Iz"]
-            ) + qmb_op(
-                in_ops,
-                ["psi_g_dag_P", "P", "Zg", "Iz", "Iz", "Iz", "Iz"],
-            )
-            ops["Q2_mz_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "Zr", "Iz", "Iz", "Iz"]
-            ) + qmb_op(
-                in_ops,
-                ["psi_g_dag_P", "P", "P", "Zg", "Iz", "Iz", "Iz"],
-            )
-            ops["Q2_px_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "P", "Zr", "Iz", "Iz"]
-            ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "Zg", "Iz", "Iz"])
-            ops["Q2_py_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "P", "P", "Zr", "Iz"]
-            ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "P", "Zg", "Iz"])
-            ops["Q2_pz_dag"] = qmb_op(
-                in_ops, ["psi_r_dag_P", "P", "P", "P", "P", "P", "Zr"]
-            ) + qmb_op(in_ops, ["psi_g_dag_P", "P", "P", "P", "P", "P", "Zg"])
+            op_list1 = ["psi_r_dag_P", "P", "Zg_dag", "Iz", "Iz", "Iz", "Iz"]
+            op_list2 = ["psi_g_dag_P", "P", "Zr_dag", "Iz", "Iz", "Iz", "Iz"]
+            ops["Q1_my_dag"] = qmb_op(in_ops, op_list1) - qmb_op(in_ops, op_list2)
+            # --------------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "P", "Zg_dag", "Iz", "Iz", "Iz"]
+            op_list2 = ["psi_g_dag_P", "P", "P", "Zr_dag", "Iz", "Iz", "Iz"]
+            ops["Q1_mz_dag"] = qmb_op(in_ops, op_list1) - qmb_op(in_ops, op_list2)
+            # --------------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "P", "P", "Zg_dag", "Iz", "Iz"]
+            op_list2 = ["psi_g_dag_P", "P", "P", "P", "Zr_dag", "Iz", "Iz"]
+            ops["Q1_px_dag"] = qmb_op(in_ops, op_list1) - qmb_op(in_ops, op_list2)
+            # --------------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "P", "P", "P", "Zg_dag", "Iz"]
+            op_list2 = ["psi_g_dag_P", "P", "P", "P", "P", "Zr_dag", "Iz"]
+            ops["Q1_py_dag"] = qmb_op(in_ops, op_list1) - qmb_op(in_ops, op_list2)
+            # --------------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "P", "P", "P", "P", "Zg_dag"]
+            op_list2 = ["psi_g_dag_P", "P", "P", "P", "P", "P", "Zr_dag"]
+            ops["Q1_pz_dag"] = qmb_op(in_ops, op_list1) - qmb_op(in_ops, op_list2)
+            # Hopping operators Q2dag = psi_r_dag Zr + psi_g_dag Zg
+            # --------------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "Zr", "Iz", "Iz", "Iz", "Iz", "Iz"]
+            op_list2 = ["psi_g_dag_P", "Zg", "Iz", "Iz", "Iz", "Iz", "Iz"]
+            ops["Q2_mx_dag"] = qmb_op(in_ops, op_list1) + qmb_op(in_ops, op_list2)
+            # --------------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "Zr", "Iz", "Iz", "Iz", "Iz"]
+            op_list2 = ["psi_g_dag_P", "P", "Zg", "Iz", "Iz", "Iz", "Iz"]
+            ops["Q2_my_dag"] = qmb_op(in_ops, op_list1) + qmb_op(in_ops, op_list2)
+            # --------------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "P", "Zr", "Iz", "Iz", "Iz"]
+            op_list2 = ["psi_g_dag_P", "P", "P", "Zg", "Iz", "Iz", "Iz"]
+            ops["Q2_mz_dag"] = qmb_op(in_ops, op_list1) + qmb_op(in_ops, op_list2)
+            # --------------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "P", "P", "Zr", "Iz", "Iz"]
+            op_list2 = ["psi_g_dag_P", "P", "P", "P", "Zg", "Iz", "Iz"]
+            ops["Q2_px_dag"] = qmb_op(in_ops, op_list1) + qmb_op(in_ops, op_list2)
+            # --------------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "P", "P", "P", "Zr", "Iz"]
+            op_list2 = ["psi_g_dag_P", "P", "P", "P", "P", "Zg", "Iz"]
+            ops["Q2_py_dag"] = qmb_op(in_ops, op_list1) + qmb_op(in_ops, op_list2)
+            # --------------------------------------------------------------------------
+            op_list1 = ["psi_r_dag_P", "P", "P", "P", "P", "P", "Zr"]
+            op_list2 = ["psi_g_dag_P", "P", "P", "P", "P", "P", "Zg"]
+            ops["Q2_pz_dag"] = qmb_op(in_ops, op_list1) + qmb_op(in_ops, op_list2)
+            # --------------------------------------------------------------------------
             # add their dagger operators
             Qs = {}
             for op in ops:

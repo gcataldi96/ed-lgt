@@ -1,4 +1,7 @@
 from ed_lgt.workflows.su2 import run_SU2_spectrum
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -36,6 +39,11 @@ def main():
         "g": 1,
         "m": 5,
     }
+    logger.info("****************************************************")
+    logger.info("")
+    logger.info("Running SU2 spectrum test01")
+    logger.info("")
+    logger.info("****************************************************")
     res = run_SU2_spectrum(par)
     ref = {
         "energy": -6.173752796132477,
@@ -51,7 +59,11 @@ def main():
     for obs in obs_list:
         if not abs(res[obs][0] - ref[obs]) < atol:
             raise ValueError(f"SU2 spectrum test01: FAIL on observable {obs}")
-    print("SU2 spectrum test01: PASS")
+    logger.info("****************************************************")
+    logger.info("")
+    logger.info("SU2 spectrum test01: PASS")
+    logger.info("")
+    logger.info("****************************************************")
 
 
 if __name__ == "__main__":

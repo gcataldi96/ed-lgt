@@ -234,12 +234,11 @@ def QED_gauge_invariant_ops(spin, pure_theory, lattice_dim, get_only_bulk):
 # %%
 lattice_dim = 2
 spin = 1
-pure_theory = False
+pure_theory = True
 get_only_bulk = True
 in_ops = QED_dressed_site_operators(
     spin=spin, pure_theory=pure_theory, lattice_dim=lattice_dim
 )
-# %%
 s, b = QED_gauge_invariant_states(
     spin=spin,
     pure_theory=pure_theory,
@@ -272,8 +271,7 @@ def print_semilinks(ops):
 
     for n in indices:
         # 1) read & stringify each diagonal element
-        vals = {d: str(int(ops[f"E_{d}"].toarray()[n, n])) for d in directions}
-
+        vals = {d: str(int(ops["site", f"E_{d}"].toarray()[n, n])) for d in directions}
         # 2) figure how wide the widest string is
         wid = max(len(s) for s in vals.values())
 
@@ -298,16 +296,16 @@ def print_semilinks(ops):
         logger.info(f"--- state n = {n} ---")
         for row in grid:
             logger.info(" ".join(row))
-        logger.info()
+        logger.info("")
 
 
 print_semilinks(ops)
 # %%
-indices = np.arange(35)
+indices = np.arange(19)
 for n in indices:
     # read and stringify each diagonal element
     vals = {
-        d: str(int(ops["odd", f"E_{d}"].toarray()[n, n]))
+        d: str(int(ops["site", f"E_{d}"].toarray()[n, n]))
         for d in ("px", "py", "mx", "my")
     }
 
@@ -330,7 +328,7 @@ for n in indices:
     logger.info(f"{centered['mx']}=o= {centered['px']}")
     logger.info(spacer + bar)
     logger.info(spacer + centered["my"])
-    logger.info()
+    logger.info("")
 
 
 # %%

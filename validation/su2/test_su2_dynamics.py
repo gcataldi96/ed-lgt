@@ -1,7 +1,9 @@
 import os
 import numpy as np
 from ed_lgt.workflows.su2 import run_SU2_dynamics  # adjust to your module
+import logging
 
+logger = logging.getLogger(__name__)
 GOLD_PATH = os.path.join(os.path.dirname(__file__), "gold_dynamics_case01_dense.npz")
 
 
@@ -57,6 +59,11 @@ def main():
         "g": 1.0,
         "m": 5.0,
     }
+    logger.info("****************************************************")
+    logger.info("")
+    logger.info("Running SU2 dynamics test01")
+    logger.info("")
+    logger.info("****************************************************")
     # --- Load (or create) dense reference
     if not os.path.exists(GOLD_PATH):
         par_ref = dict(base_par)
@@ -71,8 +78,8 @@ def main():
             E2=res_ref["E2"],
             S=res_ref["entropy"],
         )
-        print(f"Created golden file: {GOLD_PATH}")
-        print("Re-run the test now that goldens exist.")
+        logger.info(f"Created golden file: {GOLD_PATH}")
+        logger.info("Re-run the test now that goldens exist.")
         return
     gold = np.load(GOLD_PATH)
     t_ref = gold["time_steps"]
@@ -118,7 +125,11 @@ def main():
         1e-10,
         1e-11,
     )
-    print("SU2 dynamics backends test: PASS")
+    logger.info("****************************************************")
+    logger.info("")
+    logger.info("SU2 dynamics backend: PASS")
+    logger.info("")
+    logger.info("****************************************************")
 
 
 if __name__ == "__main__":
