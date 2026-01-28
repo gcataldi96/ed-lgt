@@ -170,7 +170,7 @@ def nbody_data_4sites(
     # Preallocate the output arrays
     row_list = np.empty(total_nnz, dtype=np.int32)
     col_list = np.empty(total_nnz, dtype=np.int32)
-    value_list = np.empty(total_nnz, dtype=np.float64)
+    value_list = np.empty(total_nnz, dtype=np.complex128)
     # --- PASS 2: explicit 4‐nested‐loops version for M=4  ---------------
     for irow in prange(N):
         # 1) grab the bra’s full config and where to write
@@ -179,7 +179,7 @@ def nbody_data_4sites(
 
         # 2) build the per‐site (idxs,vs,lens) from the one‐site operators
         idxs = np.empty((M, d_loc), np.int32)
-        vs = np.empty((M, d_loc), np.float64)
+        vs = np.empty((M, d_loc), np.complex128)
         lens = np.empty(M, np.int32)
         for kk in range(M):
             site = op_sites_list[kk]

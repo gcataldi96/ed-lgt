@@ -18,50 +18,6 @@ def _get(d, path, default=None):
     return cur
 
 
-par = {
-    "model": {
-        "lvals": [6],
-        "sectors": [6],
-        "has_obc": [False],
-        "spin": 0.5,
-        "pure_theory": False,
-        "background": 0,
-        "ham_format": "sparse",
-    },
-    "hamiltonian": {
-        "n_eigs": 1,
-        "save_psi": False,
-    },
-    "dynamics": {
-        "time_evolution": True,
-        "start": 0,
-        "stop": 1,
-        "delta_n": 0.1,
-        "state": "V",
-        "logical_stag_basis": 2,
-    },
-    "momentum": {
-        "get_momentum_basis": False,
-        "unit_cell_size": [2],
-        "TC_symmetry": False,
-    },
-    "observables": {
-        "measure_obs": True,
-        "get_entropy": True,
-        "entropy_partition": [0, 1, 2],
-        "get_state_configs": False,
-        "get_overlap": False,
-    },
-    "ensemble": {
-        "microcanonical": {"average": False},
-        "diagonal": {"average": False},
-        "canonical": {"average": False},
-    },
-    "g": 1,
-    "m": 5,
-}
-
-
 def run_SU2_spectrum(par: dict) -> dict:
     """
     Run the SU2 ED workflow using a plain parameter dictionary.
@@ -93,10 +49,11 @@ def run_SU2_spectrum(par: dict) -> dict:
     # Build Hamiltonian
     g = par["g"]
     m = par.get("m", None) if not model.pure_theory else None
+    theta = par.get("theta", None) if model.pure_theory else None
     if model.spin > 0.5:
         model.build_gen_Hamiltonian(g, m)
     else:
-        model.build_Hamiltonian(g, m)
+        model.build_Hamiltonian(g, m, theta)
     # -------------------------------------------------------------------------------
     # Diagonalize
     n_eigs = _get(par, ["hamiltonian", "n_eigs"], "full")
@@ -371,7 +328,106 @@ def run_SU2_dynamics(par: dict) -> dict:
 
 
 # %%
+par = {
+    "model": {
+        "lvals": [6],
+        "sectors": [6],
+        "has_obc": [False],
+        "spin": 0.5,
+        "pure_theory": False,
+        "background": 0,
+        "ham_format": "sparse",
+    },
+    "hamiltonian": {
+        "n_eigs": 1,
+        "save_psi": False,
+    },
+    "momentum": {
+        "get_momentum_basis": False,
+        "unit_cell_size": [2],
+        "TC_symmetry": False,
+    },
+    "observables": {
+        "measure_obs": True,
+        "get_entropy": True,
+        "entropy_partition": [0, 1, 2],
+        "get_state_configs": False,
+        "get_overlap": False,
+    },
+    "g": 1,
+    "m": 5,
+}
 run_SU2_spectrum(par)
 # %%
+par = {
+    "model": {
+        "lvals": [6],
+        "sectors": [6],
+        "has_obc": [False],
+        "spin": 0.5,
+        "pure_theory": False,
+        "background": 0,
+        "ham_format": "sparse",
+    },
+    "dynamics": {
+        "time_evolution": True,
+        "start": 0,
+        "stop": 1,
+        "delta_n": 0.1,
+        "state": "V",
+        "logical_stag_basis": 2,
+    },
+    "momentum": {
+        "get_momentum_basis": False,
+        "unit_cell_size": [2],
+        "TC_symmetry": False,
+    },
+    "observables": {
+        "measure_obs": True,
+        "get_entropy": True,
+        "entropy_partition": [0, 1, 2],
+        "get_state_configs": False,
+        "get_overlap": False,
+    },
+    "ensemble": {
+        "microcanonical": {"average": False},
+        "diagonal": {"average": False},
+        "canonical": {"average": False},
+    },
+    "g": 1,
+    "m": 5,
+}
 run_SU2_dynamics(par)
+# %%
+par = {
+    "model": {
+        "lvals": [2, 2, 2],
+        "has_obc": [False, False, False],
+        "spin": 0.5,
+        "pure_theory": True,
+        "background": 0,
+        "ham_format": "sparse",
+    },
+    "hamiltonian": {
+        "n_eigs": 1,
+        "save_psi": False,
+    },
+    "momentum": {
+        "get_momentum_basis": False,
+        "unit_cell_size": [1, 1, 1],
+        "TC_symmetry": False,
+        "momentum_k_vals": [0, 0, 0],
+    },
+    "observables": {
+        "measure_obs": True,
+        "get_entropy": True,
+        "entropy_partition": [0, 1],
+        "get_state_configs": True,
+        "get_overlap": False,
+    },
+    "g": 5,
+    "theta": 2,
+}
+run_SU2_spectrum(par)
+
 # %%

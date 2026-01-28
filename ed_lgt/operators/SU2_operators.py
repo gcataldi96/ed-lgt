@@ -180,8 +180,7 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=0):
             Ex = ops[f"T{nu}_px"] + ops[f"T{nu}_mx"]
             for ii, c1 in enumerate("rg"):
                 for jj, c2 in enumerate("rg"):
-                    factor = sigma_ops[f"S{nu}"].todense()[ii, jj]
-                    logger.info(f"T{nu}_a S{nu}_{c1}{c2} C_bc{c1}{c2} factor: {factor}")
+                    factor = sigma_ops[f"S{nu}"].todense()[jj, ii]
                     # ------------------------------------------------------------------
                     op_list = ["Iz", "Iz", "Iz", f"Z{c1}_P", f"Z{c2}_dag", "Iz"]
                     ops["EzC_px,py"] += qmb_op(in_ops, op_list) @ (factor * Ez)

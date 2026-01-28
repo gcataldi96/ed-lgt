@@ -9,6 +9,7 @@ from ed_lgt.tools import get_data_from_sim, get_Wannier_support, localize_Wannie
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "_get",
     "run_SU2_spectrum",
     "run_SU2_dynamics",
     "su2_get_momentum_params",

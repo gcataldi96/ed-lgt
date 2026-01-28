@@ -131,11 +131,11 @@ class SU2_Model(QuantumModel):
         if self.sector_configs is None:
             raise ValueError("No configurations found for the given symmetry sectors")
 
-    def build_Hamiltonian(self, g, m=None, lambda_noise=0.0):
+    def build_Hamiltonian(self, g, m=None, theta=0.0, lambda_noise=0.0):
         logger.info(f"----------------------------------------------------")
         logger.info("BUILDING s=1/2 HAMILTONIAN")
         # Hamiltonian Coefficients
-        self.SU2_Hamiltonian_couplings(g, m)
+        self.SU2_Hamiltonian_couplings(g, m, theta)
         h_terms = {}
         # ---------------------------------------------------------------------------
         # ELECTRIC ENERGY
@@ -449,7 +449,7 @@ class SU2_Model(QuantumModel):
         config_state = config_state
         return np.array(config_state)
 
-    def SU2_Hamiltonian_couplings(self, g, m=None, theta=0):
+    def SU2_Hamiltonian_couplings(self, g, m=None, theta=0.0):
         """
         This function provides the couplings of the SU2 Yang-Mills Hamiltonian
         starting from the gauge coupling g and the bare mass parameter m

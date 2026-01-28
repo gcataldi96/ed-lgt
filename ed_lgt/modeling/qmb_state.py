@@ -275,14 +275,24 @@ class QMB_state:
         logger.info("STATE CONFIGURATIONS")
         # 1) mask off small amplitudes
         psi = self.psi
-        mask = np.abs(psi) ** 2 > threshold
+        prob = np.abs(psi) ** 2
+        current_threshold = float(threshold)
+        idx = np.empty(0, dtype=np.int64)
+        relax_steps = 0
+        while True:
+            mask = prob > current_threshold
+            idx = np.nonzero(mask)[0]
+            if idx.size > 0:
+                break
+            relax_steps += 1
+            new_threshold = current_threshold / 10
+            msg = f"No configs above threshold {current_threshold:.3e}; relaxe to {new_threshold:.3e}."
+            logger.info(msg)
+            current_threshold = new_threshold
         # 2) collect indices & values
-        idx = np.nonzero(mask)[0]  # shape (K,)
-        vals = psi[idx]  # shape (K,)
-        logger.info(f"{len(idx)} configurations above threshold {threshold}")
-        if idx.size == 0:
-            logger.info("[no configurations above threshold]")
-            return
+        vals = psi[idx]
+        msg = f"{len(idx)} configs above threshold {current_threshold:.3e}."
+        logger.info(msg)
         # 3) sort by descending absolute value
         order = np.argsort(-np.abs(vals))
         idx = idx[order]
