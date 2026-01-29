@@ -394,7 +394,7 @@ def stabilizer_renyi_sum(
 
     The full stabilizer quantity (restricted to the given support) is then:
 
-        M2 = sum over p in pkeys_uniq of S_p.
+        M2 = sum over p in pkeys_uniq of (S_p)^2.
 
     Important: this already corresponds to summing over all Z-strings for each
     fixed X-string p (the Z-dependence cancels analytically by character
@@ -430,7 +430,7 @@ def stabilizer_renyi_sum(
     Returns
     -------
     M2:
-        float64 scalar equal to sum_p S_p, restricted to the provided support.
+        float64 scalar equal to sum_p S_p^{2}, restricted to the provided support.
 
     Notes
     -----
@@ -479,5 +479,5 @@ def stabilizer_renyi_sum(
     # Final total sum over all X-strings
     M2 = np.float64(0.0)
     for str_idx in range(n_strings):
-        M2 += Sp[str_idx]
+        M2 += Sp[str_idx] * Sp[str_idx]
     return M2

@@ -42,20 +42,13 @@ class QED_Model(QuantumModel):
         # LINK SYMMETRIES
         link_ops = [[self.ops[f"E_p{d}"], self.ops[f"E_m{d}"]] for d in self.directions]
         link_sectors = [0 for _ in self.directions]
-        """
         # -------------------------------------------------------------------------------
-        ELECTRIC-FLUX “NBODY” SYMMETRIES ———
-        only in the pure (no-matter) theory, more than 1D, *and* PBC
-        Constrain, for each cartesian direction, the corresponding 
-        Electric flux on the face/line through the origin:
-        3D:
-            for 'Ex' → the yz-face at x=0
-            for 'Ey' → the xz-face at y=0
-            for 'Ez' → the xy-face at z=0
-        2D:
-            for 'Ex' → the y-axis at x=0
-            for 'Ey' → the x-axis at y=0
-        """
+        # ELECTRIC-FLUX “NBODY” SYMMETRIES
+        # only in the pure (no-matter) theory, more than 1D, *and* PBC
+        # Constrain, for each cartesian direction, the corresponding
+        # Electric flux on the face/line through the origin:
+        # 3D: (Ex → yz-face at x=0) (Ey → xz-face at y=0) (Ez → xy-face at z=0)
+        # 2D: (Ex → y-axis at x=0) (Ey → x-axis at y=0)
         if self.pure_theory and not any(self.has_obc):
             logger.info("fixing surface electric fluxes")
             # one flux‐constraint per cartesian direction
@@ -147,6 +140,7 @@ class QED_Model(QuantumModel):
             )
         # -------------------------------------------------------------------------------
         # TOPOLOGICAL TERM
+        # -------------------------------------------------------------------------------
         if self.dim == 2 and np.abs(self.coeffs["theta"]) > 10e-10:
             logger.info("Adding topological term")
             op_names_list = ["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]

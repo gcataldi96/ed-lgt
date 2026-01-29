@@ -11,6 +11,7 @@ from ed_lgt.models import QED_Model
 from simsio import run_sim
 from time import perf_counter
 from ed_lgt.modeling import diagonalize_density_matrix
+from ed_lgt.workflows import _get
 import logging
 
 logger = logging.getLogger(__name__)
@@ -21,7 +22,15 @@ with run_sim() as sim:
     # MODEL HAMILTONIAN
     model = QED_Model(**sim.par["model"])
     m = sim.par["m"] if not model.pure_theory else None
-    model.build_Hamiltonian(sim.par["g"], m, theta=sim.par.get("theta", 0.0))
+    theta = sim.par.get("theta", 0)
+    # Select Momentum Sector
+    if sim.par["momentum"]["get_momentum_basis"]:
+        unit_cell_size = sim.par["momentum"]["unit_cell_size"]
+        k_vals = sim.par["momentum"]["momentum_k_vals"]
+        model.set_momentum_sector(unit_cell_size, k_vals)
+    # Save parameters
+    model.default_params()
+    model.build_Hamiltonian(sim.par["g"], m, theta=theta)
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     n_eigs = sim.par["hamiltonian"]["n_eigs"]
@@ -29,7 +38,7 @@ with run_sim() as sim:
     sim.res["energy"] = model.H.Nenergies
     # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
-    local_obs = ["E_square"]
+    local_obs = ["E2"]
     local_obs += [f"E_{s}{d}" for d in model.directions for s in "mp"]
     if not model.pure_theory:
         local_obs += ["N"]
@@ -59,7 +68,11 @@ with run_sim() as sim:
     # -------------------------------------------------------------------------------
     # ENTROPY
     # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
-    partition_indices = sim.par["observables"]["entropy_partition"]
+    partition_indices = _get(sim.par, ["observables", "entropy_partition"], [])
+    get_entropy = _get(sim.par, ["observables", "get_entropy"], False)
+    get_rdm = _get(sim.par, ["observables", "get_RDM"], False)
+    if get_entropy or get_rdm:
+        model._get_partition(partition_indices)
     sim.res["entropy"] = np.zeros(model.H.n_eigs, dtype=float)
     # -------------------------------------------------------------------------------
     for ii in range(model.H.n_eigs):
@@ -67,10 +80,9 @@ with run_sim() as sim:
         if not model.momentum_basis:
             # -----------------------------------------------------------------------
             # ENTROPY
-            if sim.par["observables"]["get_entropy"]:
+            if get_entropy:
                 sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
-                    partition_indices,
-                    model.sector_configs,
+                    partition_indices, model._partition_cache
                 )
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS
@@ -85,7 +97,7 @@ with run_sim() as sim:
             obs = "_".join(obs_names_list)
             sim.res[obs][ii] = model.res[obs]
     # -------------------------------------------------------------------------------
-    if sim.par["observables"]["get_RDM"]:
+    if get_rdm:
         # Get the reduced density matrix of a partition in the ground state
         RDM = model.H.Npsi[0].reduced_density_matrix(
             partition_indices,

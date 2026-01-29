@@ -146,8 +146,8 @@ gen_configs("template", params, f"LBO/qed_error")
 params = {"g": np.logspace(-1, 1, 10)}
 gen_configs("template", params, f"LBO/qed_plaq_svd")
 # %%
-params = {"g": np.logspace(-1, 2, 20)}
-gen_configs("template", params, f"theta_term/qed_notheta")
+params = {"g": np.logspace(-1, 1, 10), "theta": np.linspace(0, 5, 20)}
+gen_configs("template", params, f"su2_thetaterm/scan")
 # %%
 beta = np.array([0.75, 0.5, 0.3, 0.1, 0.05, 0.01, 0.005])
 g = 1 / beta
@@ -190,15 +190,15 @@ theta_plus = theta_plus[(theta_plus >= theta_range[0]) & (theta_plus <= theta_ra
 # Mirror to get negative side (centered at -0.4)
 theta_minus = -theta_plus[::-1]
 # Combine and sort
-theta = np.linspace(-0.6, 0.6, 15)
+theta = np.linspace(-2, 2, 15)
 theta_focused = np.sort(np.concatenate([theta_minus, theta_plus, theta]))
-g = np.linspace(0.95, 2.5, 10)
+g = np.linspace(0.95, 2.5, 15)
 params = {"g": g, "theta": theta_focused[20:]}
-gen_configs("template", params, f"theta_term/qed_theta_eigvals")
+gen_configs("template", params, f"su2_thetaterm/scan2")
 
 # %%
-params = {"theta": np.linspace(0.41, 0.44, 15)}
-gen_configs("template", params, f"qed_theta_term/nok")
+params = {"g": [2.328, 4, 10], "theta": np.linspace(0.4, 0.45, 20)}
+gen_configs("template", params, f"qed_theta_term/kpipipi")
 # %%
 # SU2 FULL THEORY PHASE DIAGRAM
 params = {"g": np.logspace(-3, 3, 30), "m": np.logspace(-3, 3, 30)}

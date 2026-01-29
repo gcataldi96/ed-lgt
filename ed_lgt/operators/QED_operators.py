@@ -220,22 +220,24 @@ def QED_dressed_site_operators(
             for op in ops.keys():
                 ops[op] = kron(in_ops["ID_psi"], ops[op])
             # Hopping operators
-            ops["Q_mx_dag"] = qmb_op(
-                in_ops, ["psi_dag", "Zm", "Iz", "Iz", "Iz", "Iz", "Iz"]
-            )
-            ops["Q_my_dag"] = qmb_op(
-                in_ops, ["psi_dag", "P", "Zm", "Iz", "Iz", "Iz", "Iz"]
-            )
-            ops["Q_mz_dag"] = qmb_op(
-                in_ops, ["psi_dag", "P", "P", "Zm", "Iz", "Iz", "Iz"]
-            )
-            ops["Q_px_dag"] = qmb_op(
-                in_ops, ["psi_dag", "P", "P", "P", "Zp", "Iz", "Iz"]
-            )
-            ops["Q_py_dag"] = qmb_op(
-                in_ops, ["psi_dag", "P", "P", "P", "P", "Zp", "Iz"]
-            )
-            ops["Q_pz_dag"] = qmb_op(in_ops, ["psi_dag", "P", "P", "P", "P", "P", "Zp"])
+            # ---------------------------------------------------------
+            op_list = ["psi_dag", "Zm", "Iz", "Iz", "Iz", "Iz", "Iz"]
+            ops["Q_mx_dag"] = qmb_op(in_ops, op_list)
+            # ---------------------------------------------------------
+            op_list = ["psi_dag", "P", "Zm", "Iz", "Iz", "Iz", "Iz"]
+            ops["Q_my_dag"] = qmb_op(in_ops, op_list)
+            # ---------------------------------------------------------
+            op_list = ["psi_dag", "P", "P", "Zm", "Iz", "Iz", "Iz"]
+            ops["Q_mz_dag"] = qmb_op(in_ops, op_list)
+            # ---------------------------------------------------------
+            op_list = ["psi_dag", "P", "P", "P", "Zp", "Iz", "Iz"]
+            ops["Q_px_dag"] = qmb_op(in_ops, op_list)
+            # ---------------------------------------------------------
+            op_list = ["psi_dag", "P", "P", "P", "P", "Zp", "Iz"]
+            ops["Q_py_dag"] = qmb_op(in_ops, op_list)
+            # ---------------------------------------------------------
+            op_list = ["psi_dag", "P", "P", "P", "P", "P", "Zp"]
+            ops["Q_pz_dag"] = qmb_op(in_ops, op_list)
             # Add dagger operators
             Qs = {}
             for op in ops:
@@ -272,9 +274,11 @@ def QED_check_gauss_law(spin, pure_theory, lattice_dim, gauss_law_ops, threshold
     of the QED Hamiltonian, in order to verify that Gauss Law is effectively satified.
 
     Args:
-        spin (scalar, int): spin representation of the U(1) Gauge field, corresponding to a gauge Hilbert space of dimension (2 spin +1)
+        spin (scalar, int): spin representation of the U(1) Gauge field,
+        corresponding to a gauge Hilbert space of dimension (2 spin +1)
 
-        pure_theory (bool): If True, the local basis describes gauge invariant states in absence of matter. Defaults to False.
+        pure_theory (bool): If True, the local basis describes gauge
+        invariant states in absence of matter. Defaults to False.
 
         lattice_dim (int): number of lattice spatial dimensions
 

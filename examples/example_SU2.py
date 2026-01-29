@@ -49,7 +49,7 @@ def run_SU2_spectrum(par: dict) -> dict:
     # Build Hamiltonian
     g = par["g"]
     m = par.get("m", None) if not model.pure_theory else None
-    theta = par.get("theta", None) if model.pure_theory else None
+    theta = par.get("theta", 0.0) if model.pure_theory else 0
     if model.spin > 0.5:
         model.build_gen_Hamiltonian(g, m)
     else:
@@ -111,6 +111,12 @@ def run_SU2_spectrum(par: dict) -> dict:
         model._get_partition(partition_indices)
     res["entropy"] = np.zeros(model.H.n_eigs, dtype=float)
     get_state_configs = _get(par, ["observables", "get_state_configs"], False)
+    get_PE = _get(par, ["observables", "get_PE"], False)
+    if get_PE:
+        res["PE"] = np.zeros(model.H.n_eigs, dtype=float)
+    get_SRE = _get(par, ["observables", "get_SRE"], False)
+    if get_SRE:
+        res["SRE"] = np.zeros(model.H.n_eigs, dtype=float)
     # -------------------------------------------------------------------------------
     # Parity (optional)
     apply_parity = False
@@ -159,6 +165,24 @@ def run_SU2_spectrum(par: dict) -> dict:
             # STATE CONFIGURATIONS
             if get_state_configs:
                 model.H.Npsi[ii].get_state_configurations(1e-3, model.sector_configs)
+            if get_PE:
+                res["PE"][ii] = model.H.Npsi[ii].participation_renyi_entropy()
+            if get_SRE:
+                res["SRE"][ii] = model.H.Npsi[ii].stabilizer_renyi_entropy(
+                    model.sector_configs, prob_threshold=1e-3
+                )
+                res["SRE"][ii] = model.H.Npsi[ii].stabilizer_renyi_entropy(
+                    model.sector_configs, prob_threshold=1e-4
+                )
+                res["SRE"][ii] = model.H.Npsi[ii].stabilizer_renyi_entropy(
+                    model.sector_configs, prob_threshold=1e-5
+                )
+                res["SRE"][ii] = model.H.Npsi[ii].stabilizer_renyi_entropy(
+                    model.sector_configs, prob_threshold=1e-6
+                )
+                res["SRE"][ii] = model.H.Npsi[ii].stabilizer_renyi_entropy(
+                    model.sector_configs, prob_threshold=1e-7
+                )
         # -------------------------------------------------------------------------------
         # LOCAL OBSERVABLES
         if measure_obs:
@@ -271,12 +295,17 @@ def run_SU2_dynamics(par: dict) -> dict:
         model._get_partition(partition_indices)
     res["entropy"] = np.zeros(n_steps, dtype=float)
     get_state_configs = _get(par, ["observables", "get_state_configs"], False)
+    get_PE = _get(par, ["observables", "get_PE"], False)
+    if get_PE:
+        res["PE"] = np.zeros(n_steps, dtype=float)
     # -------------------------------------------------------------------------------
     # TIME EVOLUTION
     if par["dynamics"]["time_evolution"]:
         model.time_evolution_Hamiltonian(in_state, time_line)
     # Main loop over time steps
     for ii in range(n_steps):
+        msg = f"TIME {time_line[ii]}"
+        logger.info(f"================== {msg} ==========================")
         # ---------------------------------------------------------------------------
         # ONLY IN THE COORDINATE BASIS
         if model.momentum_basis is None:
@@ -299,6 +328,8 @@ def run_SU2_dynamics(par: dict) -> dict:
                 res["entropy"][ii] = model.H.psi_time[ii].entanglement_entropy(
                     partition_indices, model._partition_cache
                 )
+            if get_PE:
+                res["PE"][ii] = model.H.psi_time[ii].participation_renyi_entropy()
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS
             if get_state_configs:
@@ -320,7 +351,7 @@ def run_SU2_dynamics(par: dict) -> dict:
         # ---------------------------------------------------------------------------
         # Overlaps
         if get_overlap:
-            res["overlap"][ii] = model.measure_fidelity(in_state, ii, print_value=True)
+            res["overlap"][ii] = model.measure_fidelity(in_state, ii, True, True)
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time - start_time, 5)}")
@@ -330,8 +361,8 @@ def run_SU2_dynamics(par: dict) -> dict:
 # %%
 par = {
     "model": {
-        "lvals": [6],
-        "sectors": [6],
+        "lvals": [12],
+        "sectors": [12],
         "has_obc": [False],
         "spin": 0.5,
         "pure_theory": False,
@@ -351,18 +382,20 @@ par = {
         "measure_obs": True,
         "get_entropy": True,
         "entropy_partition": [0, 1, 2],
-        "get_state_configs": False,
+        "get_state_configs": True,
         "get_overlap": False,
+        "get_PE": True,
+        "get_SRE": True,
     },
-    "g": 1,
-    "m": 5,
+    "g": 0.1,
+    "m": 0.1,
 }
 run_SU2_spectrum(par)
 # %%
 par = {
     "model": {
-        "lvals": [6],
-        "sectors": [6],
+        "lvals": [10],
+        "sectors": [10],
         "has_obc": [False],
         "spin": 0.5,
         "pure_theory": False,
@@ -372,9 +405,9 @@ par = {
     "dynamics": {
         "time_evolution": True,
         "start": 0,
-        "stop": 1,
-        "delta_n": 0.1,
-        "state": "V",
+        "stop": 20,
+        "delta_n": 0.02,
+        "state": "PV",
         "logical_stag_basis": 2,
     },
     "momentum": {
@@ -384,20 +417,47 @@ par = {
     },
     "observables": {
         "measure_obs": True,
-        "get_entropy": True,
-        "entropy_partition": [0, 1, 2],
+        "get_entropy": False,
+        "get_PE": True,
+        "entropy_partition": [0, 1, 2, 3, 4, 5],
         "get_state_configs": False,
-        "get_overlap": False,
+        "get_overlap": True,
     },
     "ensemble": {
         "microcanonical": {"average": False},
         "diagonal": {"average": False},
         "canonical": {"average": False},
     },
-    "g": 1,
-    "m": 5,
+    "g": 5,
+    "m": 1,
 }
-run_SU2_dynamics(par)
+res = run_SU2_dynamics(par)
+# %%
+import numpy as np
+import matplotlib.pyplot as plt
+
+fig, ax1 = plt.subplots()
+ax2 = ax1.twinx()  # right y-axis sharing the same x-axis
+
+xticks = np.arange(10)
+
+# left axis
+(l1,) = ax1.plot(res["time_steps"], res["overlap"], label="Fidelity", c="#1f77b4")
+ax1.set_ylabel("Fidelity")  # left ylabel
+
+# right axis
+(l2,) = ax2.plot(res["time_steps"], res["PE"], label="PE2", c="#ff7f0e")
+ax2.set_ylabel("Participation Renyi-2 Entropy PE2")  # right ylabel
+ax1.set(xticks=xticks, xlabel="time t", xlim=(-0.1, 10))
+
+# optional: set y-limits independently (edit as needed)
+# ax1.set_ylim(0, 1)
+# ax2.set_ylim(res["PE"].min(), res["PE"].max())
+# grid (draw it from the left axis)
+ax1.grid(True, which="both", linestyle="--", linewidth=0.5)
+
+fig.tight_layout()
+fig.savefig("PE2_Scar_SU2_PV.pdf")
 # %%
 par = {
     "model": {
@@ -409,24 +469,24 @@ par = {
         "ham_format": "sparse",
     },
     "hamiltonian": {
-        "n_eigs": 1,
+        "n_eigs": 2,
         "save_psi": False,
     },
     "momentum": {
         "get_momentum_basis": False,
         "unit_cell_size": [1, 1, 1],
         "TC_symmetry": False,
-        "momentum_k_vals": [0, 0, 0],
+        "momentum_k_vals": [1, 1, 1],
     },
     "observables": {
         "measure_obs": True,
-        "get_entropy": True,
+        "get_entropy": False,
         "entropy_partition": [0, 1],
         "get_state_configs": True,
         "get_overlap": False,
     },
-    "g": 5,
-    "theta": 2,
+    "g": 10,
+    "theta": 0.1,
 }
 run_SU2_spectrum(par)
 

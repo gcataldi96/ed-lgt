@@ -9,6 +9,7 @@ os.environ["NUMBA_NUM_THREADS"] = str(B)
 import numpy as np
 from ed_lgt.models import SU2_Model
 from ed_lgt.modeling import diagonalize_density_matrix
+from ed_lgt.workflows import _get
 from simsio import run_sim
 from time import perf_counter
 import logging
@@ -20,19 +21,20 @@ with run_sim() as sim:
     # Initialize the model
     model = SU2_Model(**sim.par["model"])
     m = sim.par["m"] if not model.pure_theory else None
+    theta = sim.par.get("theta", 0)
     # Select Momentum Sector
     if sim.par["momentum"]["get_momentum_basis"]:
         unit_cell_size = sim.par["momentum"]["unit_cell_size"]
-        k_vals = sim.par["momentum_k_vals"]
+        k_vals = sim.par["momentum"]["momentum_k_vals"]
         TC_symmetry = sim.par["momentum"]["TC_symmetry"]
         model.set_momentum_sector(unit_cell_size, k_vals, TC_symmetry)
     # Save parameters
     model.default_params()
     # Build Hamiltonian
     if model.spin > 0.5:
-        model.build_gen_Hamiltonian(sim.par["g"], m)
+        model.build_gen_Hamiltonian(sim.par["g"], m, theta)
     else:
-        model.build_Hamiltonian(sim.par["g"], m)
+        model.build_Hamiltonian(sim.par["g"], m, theta)
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     n_eigs = sim.par["hamiltonian"]["n_eigs"]
@@ -85,8 +87,10 @@ with run_sim() as sim:
     # -------------------------------------------------------------------------------
     # ENTROPY
     # DEFINE THE PARTITION FOR THE ENTANGLEMENT ENTROPY
-    partition_indices = sim.par["observables"]["entropy_partition"]
-    if sim.par["observables"]["get_entropy"] or sim.par["observables"]["get_RDM"]:
+    partition_indices = _get(sim.par, ["observables", "entropy_partition"], [])
+    get_entropy = _get(sim.par, ["observables", "get_entropy"], False)
+    get_rdm = _get(sim.par, ["observables", "get_RDM"], False)
+    if get_entropy or get_rdm:
         model._get_partition(partition_indices)
     sim.res["entropy"] = np.zeros(model.H.n_eigs, dtype=float)
     # INVERSION SYMMETRY
@@ -112,7 +116,7 @@ with run_sim() as sim:
         if model.momentum_basis is None:
             # -------------------------------------------------------------------------------
             # REDUCED DENSITY MATRIX
-            if sim.par["observables"]["get_RDM"]:
+            if get_rdm:
                 # Get the reduced density matrix of a partition in the ground state
                 RDM = model.H.Npsi[ii].reduced_density_matrix(
                     partition_indices, model._partition_cache
@@ -128,7 +132,7 @@ with run_sim() as sim:
                 rho_eigvecs = rho_eigvecs[:, sorted_indices]
             # -----------------------------------------------------------------------
             # ENTROPY
-            if sim.par["observables"]["get_entropy"]:
+            if get_entropy:
                 sim.res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
                     partition_indices, model._partition_cache
                 )
@@ -158,6 +162,9 @@ with run_sim() as sim:
                 sim.res["N_tot"][ii] = (
                     sim.res["N_single"][ii] + 2 * sim.res["N_pair"][ii]
                 )
+            for obs_names_list in plaquette_obs:
+                obs = "_".join(obs_names_list)
+                sim.res[obs][ii] = model.res[obs]
         # ---------------------------------------------------------------------------
         # OVERLAPS with the INITIAL STATE
         if sim.par["observables"]["get_overlap"]:

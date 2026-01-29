@@ -369,7 +369,9 @@ class QMB_state:
         prob = np.abs(self.psi) ** 2
         ipr_alpha = np.sum(prob**alpha)
         prefactor = 1.0 / (1.0 - float(alpha))
-        return float(prefactor * np.log(ipr_alpha + 1e-16))
+        PE_value = float(prefactor * np.log(ipr_alpha + 1e-16))
+        logger.info(f"PE_{alpha} = {PE_value:.12f}")
+        return PE_value
 
     def stabilizer_renyi_entropy(
         self,
@@ -431,6 +433,9 @@ class QMB_state:
         logger.info(msg)
         # Step 4: compute M2 and per-string contributions in parallel
         support_probs = (np.abs(support_coeffs) ** 2).astype(np.float64, copy=False)
+        # Normalize support probabilities
+        kept_weight = float(np.sum(support_probs))
+        support_probs /= kept_weight
         M2 = stabilizer_renyi_sum(
             pkeys_uniq=pkeys_uniq,
             support_configs=support_configs,
@@ -441,6 +446,7 @@ class QMB_state:
         )
         # Step 5: compute SRE2
         SRE2 = -float(np.log(max(M2, 1e-16)))
+        logger.info(f"SRE2 = {SRE2:.12f}")
         return SRE2
 
 
