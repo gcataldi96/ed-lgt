@@ -34,7 +34,7 @@ class QED_Model(QuantumModel):
             # Initialize the operators, local dimension and lattice labels
             self.project_operators(ops)
         else:
-            ops_plqt=QED_plq_site_operators()#fix it
+            ops_plqt=QED_plq_site_operators()#TODO: fix it
             self.project_operators(ops)
             
         # -------------------------------------------------------------------------------
