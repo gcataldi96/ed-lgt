@@ -7,9 +7,8 @@ os.environ["NUMBA_NUM_THREADS"] = str(B)
 
 import numpy as np
 from itertools import product
-from scipy.sparse import csr_matrix
 from ed_lgt.models import SU2_Model
-from ed_lgt.modeling import exp_val_data2
+from ed_lgt.modeling import mixed_exp_val_data
 from simsio import *
 from time import perf_counter
 import logging
@@ -66,7 +65,7 @@ with run_sim() as sim:
         model.set_momentum_sector(k_unit_cell_size, [0], TC_symmetry)
         model.default_params()
         model.build_local_Hamiltonian(g, m, 0, TC_symmetry)
-        eg_single_block = exp_val_data2(
+        eg_single_block = mixed_exp_val_data(
             GS,
             GS,
             model.Hlocal.row_list,
@@ -149,7 +148,7 @@ with run_sim() as sim:
             model.default_params()
             model.check_momentum_pair()
             model.build_local_Hamiltonian(g, m, 0, TC_symmetry)
-            sim.res["k1k2matrix"][k1, k2] = exp_val_data2(
+            sim.res["k1k2matrix"][k1, k2] = mixed_exp_val_data(
                 psi_k1,
                 psi_k2,
                 model.Hlocal.row_list,

@@ -6,21 +6,15 @@ B = int(sys.argv[-1])
 # Read the B parameter from command-line arguments
 os.environ["NUMBA_NUM_THREADS"] = str(B)
 
-import numpy as np
-from itertools import product
 from ed_lgt.models import SU2_Model
-from ed_lgt.modeling import exp_val_data2
+from ed_lgt.workflows import (
+    su2_get_momentum_params,
+    su2_get_convolution_gs_energy,
+    su2_get_convolution_matrix,
+)
 from simsio import *
 from time import perf_counter
 import logging
-
-
-def get_data_from_sim(sim_filename, obs_name, kindex):
-    config_filename = f"new_scattering/{sim_filename}"
-    match = SimsQuery(group_glob=config_filename)
-    ugrid, _ = uids_grid(match.uids, ["momentum_k_vals"])
-    return get_sim(ugrid[kindex]).res[obs_name]
-
 
 logger = logging.getLogger(__name__)
 with run_sim() as sim:
@@ -37,79 +31,38 @@ with run_sim() as sim:
     g = sim.par["g"]
     # Choose if TC symmetry is enabled
     TC_symmetry = sim.par.get("TC_symmetry", False)
-    logger.info(f"TC_symmetry {TC_symmetry}")
-    k_unit_cell_size = [1] if TC_symmetry else [2]
-    n_momenta = model.n_sites if TC_symmetry else model.n_sites // 2
-    k_indices = np.arange(0, n_momenta, 1)
-    sim.res["k_indices"] = k_indices
-    sim.res["n_sites"] = model.n_sites
-    sim.res["TC_symmetry"] = TC_symmetry
-    if TC_symmetry:
-        k_phys = 2 * np.pi * k_indices / model.n_sites
-    else:
-        k_phys = 4 * np.pi * k_indices / model.n_sites
-    logger.info(k_indices)
+    momentum_params = su2_get_momentum_params(TC_symmetry, model.n_sites)
+    logger.info(f"Momentum params {momentum_params}")
+    band_params = {
+        "sim_band_name": sim_band_name,
+        "zero_density": zero_density,
+        "band_number": band_number,
+        "m": m,
+        "g": g,
+    }
     # -------------------------------------------------------------------------------
     # GET THE GROUND STATE ENERGY density at momentum 0
-    if zero_density:
-        GS = get_data_from_sim(sim_band_name, "psi0", 0)
-        # Check Translational Hamiltonian
-        model.set_momentum_pair([0], [0], k_unit_cell_size, TC_symmetry)
-        model.default_params()
-        # Check the momentum bases
-        model.check_momentum_pair()
-        # Build the local hamiltonian
-        model.build_local_Hamiltonian(g, m, 0, TC_symmetry)
-        eg_single_block = exp_val_data2(
-            GS,
-            GS,
-            model.Hlocal.row_list,
-            model.Hlocal.col_list,
-            model.Hlocal.value_list,
-        )
-        logger.info(f"E0 single block size {k_unit_cell_size}: {eg_single_block}")
-        logger.info(f"E0 {eg_single_block * n_momenta}")
-        sim.res["gs_energy"] = eg_single_block
-    else:
-        sim.res["gs_energy"] = -4.580269235030599 - 1.251803175199139e-18j
+    gsdensity = su2_get_convolution_gs_energy(model, momentum_params, band_params)
     # -------------------------------------------------------------------------------
-    # CONVOLUTIONAL expectation values
-    # Initialize the convolution matrix
-    shape = (len(k_indices), len(k_indices))
+    # CONVOLUTION MATRIX
     if TC_symmetry:
-        R_list = [0]
-        sim.res["k1k2matrix"] = np.zeros(shape, dtype=np.complex128)
-        matrix_names = ["k1k2matrix"]
+        band_params["R0"] = 0
+        sim.res["k1k2matrix"] = su2_get_convolution_matrix(
+            model, momentum_params, band_params
+        )
+        for ii in range(momentum_params["n_momenta"]):
+            logger.info("==================")
+            for jj in range(momentum_params["n_momenta"]):
+                logger.info(f"{ii} {jj} {sim.res["k1k2matrix"][ii, jj]}")
     else:
-        R_list = [0, 1]
-        sim.res["k1k2matrix_even"] = np.zeros(shape, dtype=np.complex128)
-        sim.res["k1k2matrix_odd"] = np.zeros(shape, dtype=np.complex128)
-        matrix_names = ["k1k2matrix_even", "k1k2matrix_odd"]
-    for ii, R0 in enumerate(R_list):
-        M_name = matrix_names[ii]
-        for k1, k2 in product(k_indices, k_indices):
-            # Set the momentum pair
-            model.set_momentum_pair([k1], [k2], k_unit_cell_size, TC_symmetry)
-            model.default_params()
-            # Check the momentum bases
-            model.check_momentum_pair()
-            # Build the local hamiltonian
-            model.build_local_Hamiltonian(g, m, R0)
-            # Acquire the state vectors
-            state_idx_k1 = 1 if (zero_density and k1 == 0) else 0
-            state_idx_k2 = 1 if (zero_density and k2 == 0) else 0
-            state_idx_k1 += band_number
-            state_idx_k2 += band_number
-            psik1 = get_data_from_sim(sim_band_name, f"psi{state_idx_k1}", k1)
-            psik2 = get_data_from_sim(sim_band_name, f"psi{state_idx_k2}", k2)
-            # Measure the overlap with k1 & k2
-            sim.res[M_name][k1, k2] = exp_val_data2(
-                psik1,
-                psik2,
-                model.Hlocal.row_list,
-                model.Hlocal.col_list,
-                model.Hlocal.value_list,
-            )
+        band_params["R0"] = 0
+        sim.res["k1k2matrix_even"] = su2_get_convolution_matrix(
+            model, momentum_params, band_params
+        )
+        band_params["R0"] = 1
+        sim.res["k1k2matrix_odd"] = su2_get_convolution_matrix(
+            model, momentum_params, band_params
+        )
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")

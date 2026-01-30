@@ -9,18 +9,10 @@ os.environ["NUMBA_NUM_THREADS"] = str(B)
 import numpy as np
 from itertools import product
 from ed_lgt.models import SU2_Model
-from ed_lgt.modeling import exp_val_data2
+from ed_lgt.modeling import mixed_exp_val_data
 from simsio import *
 from time import perf_counter
 import logging
-
-
-def get_data_from_sim(sim_filename, obs_name, kindex):
-    config_filename = f"scattering/{sim_filename}"
-    match = SimsQuery(group_glob=config_filename)
-    ugrid, vals = uids_grid(match.uids, ["momentum_k_vals"])
-    return get_sim(ugrid[kindex]).res[obs_name]
-
 
 logger = logging.getLogger(__name__)
 with run_sim() as sim:
@@ -47,7 +39,7 @@ with run_sim() as sim:
     for kidx in k_vals:
         kdict[f"{kidx}"] = {}
         # Set the momentum basis on the model
-        model.get_momentum_sector(k_unit_cell_size, [kidx], TC_symmetry)
+        model.set_momentum_sector(k_unit_cell_size, [kidx], TC_symmetry)
         model.default_params()
         # Generate HAMILTONIAN
         if model.spin > 0.5:
@@ -74,7 +66,7 @@ with run_sim() as sim:
         for ii in range(n_momenta):
             # Build the local hamiltonian
             model.build_local_Hamiltonian(sim.par["g"], m, ii, TC_symmetry)
-            eg_single_block = exp_val_data2(
+            eg_single_block = mixed_exp_val_data(
                 GS,
                 GS,
                 model.Hlocal.row_list,
@@ -96,7 +88,7 @@ with run_sim() as sim:
         # Build the local hamiltonian
         model.build_local_Hamiltonian(sim.par["g"], m, R0, TC_symmetry)
         # Measure the overlap with k1 & k2
-        kdict["overlaps"][k1, k2] = exp_val_data2(
+        kdict["overlaps"][k1, k2] = mixed_exp_val_data(
             kdict[f"{k1}"]["psi"],
             kdict[f"{k2}"]["psi"],
             model.Hlocal.row_list,
