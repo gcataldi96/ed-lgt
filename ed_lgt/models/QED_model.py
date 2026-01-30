@@ -12,7 +12,6 @@ __all__ = ["QED_Model"]
 
 class QED_Model(QuantumModel):
     def __init__(self, spin, pure_theory,plqt_basis=False ,get_only_bulk=False, **kwargs):
-        #TODO flag for dressed or plaquette 
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
@@ -34,7 +33,7 @@ class QED_Model(QuantumModel):
             # Initialize the operators, local dimension and lattice labels
             self.project_operators(ops)
         else:
-            ops_plqt=QED_plq_site_operators()#TODO: fix it
+            ops_plqt=QED_plq_site_operators(self.spin,self.pure_theory,self.dim)
             self.project_operators(ops)
             
         # -------------------------------------------------------------------------------
