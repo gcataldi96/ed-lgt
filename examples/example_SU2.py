@@ -127,7 +127,6 @@ def run_SU2_spectrum(par: dict) -> dict:
         wrt_site = _get(par, ["inversion", "wrt_site"], False)
     if apply_parity:
         model.get_parity_inversion_operator(wrt_site)
-    model.print_state_config([0, 4, 0, 4, 0, 2])
     # -------------------------------------------------------------------------------
     # Main loop over eigenstates
     for ii in range(model.H.n_eigs):

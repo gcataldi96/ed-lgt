@@ -545,3 +545,13 @@ class DFL_Model(QuantumModel):
         else:
             msg = "String breaking in ED considered only for lvals=[5,2] or [4,3] or [3,2]"
             raise ValueError(msg)
+
+    def print_state_config(self, config):
+        logger.info(f"----------------------------------------------------")
+        logger.info(f"SINGLETS IN CONFIG {config}")
+        logger.info(f"----------------------------------------------------")
+        for ii, cfg_idx in enumerate(config):
+            msg = f"site {ii} state {cfg_idx}"
+            lattice_label = self.lattice_labels[ii]
+            local_basis_state = self.gauge_states[lattice_label][cfg_idx]
+            local_basis_state.display_singlet(msg)
