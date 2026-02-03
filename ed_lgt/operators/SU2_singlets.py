@@ -159,7 +159,7 @@ class SU2_singlet:
         for ii, m in enumerate(self.M_configs):
             self.JM_configs.append(self.J_config + m)
 
-    def display_singlets(self):
+    def display_singlet(self, msg: str | None = None):
         """
         Print the list of singlets (s1 ... sN) in the following way:
             Js   J1, J2, J3, ... JN
@@ -170,11 +170,15 @@ class SU2_singlet:
 
             s3 [ m1, m2, m3, ... mN] CG3
         """
-        logger.info("====================================================")
+        if msg is not None:
+            msg_len = len(msg)
+            line = "=" * int(np.ceil((52 - 2 - msg_len) / 2))
+            logger.info(line + " " + msg + " " + line)
+        else:
+            logger.info("====================================================")
         logger.info(f"J: {self.J_config}")
         for m, CG in zip(self.M_configs, self.CG_values):
-            logger.info(f"M:{m} CG:{float(CG)}")
-        logger.info("----------------------------------------------------")
+            logger.info(f"M: {m} CG:{float(CG)}")
 
 
 @get_time

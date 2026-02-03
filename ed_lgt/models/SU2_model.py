@@ -699,3 +699,13 @@ class SU2_Model(QuantumModel):
                     logger.info(f"VDOT{np.vdot(PHpsi,HPpsi)}")
                     logger.info(f"Relative |HP-PH|={absnorm}")
                     raise ValueError(f"config {ii} {cfg} not symmetrized")
+
+    def print_state_config(self, config):
+        logger.info(f"----------------------------------------------------")
+        logger.info(f"SINGLETS IN CONFIG {config}")
+        logger.info(f"----------------------------------------------------")
+        for ii, cfg_idx in enumerate(config):
+            msg = f"site {ii} state {cfg_idx}"
+            lattice_label = self.lattice_labels[ii]
+            local_basis_state = self.gauge_states[lattice_label][cfg_idx]
+            local_basis_state.display_singlet(msg)

@@ -1,10 +1,11 @@
 # %%
-import os
 import numpy as np
 import logging
 from time import perf_counter
-from ed_lgt.modeling import diagonalize_density_matrix
+from ed_lgt.modeling import diagonalize_density_matrix, get_lattice_link_site_pairs
 from ed_lgt.models import SU2_Model
+from ed_lgt.models import DFL_Model
+from ed_lgt.symmetries import get_symmetry_sector_generators, symmetry_sector_configs
 
 logger = logging.getLogger(__name__)
 
@@ -126,6 +127,7 @@ def run_SU2_spectrum(par: dict) -> dict:
         wrt_site = _get(par, ["inversion", "wrt_site"], False)
     if apply_parity:
         model.get_parity_inversion_operator(wrt_site)
+    model.print_state_config([0, 4, 0, 4, 0, 2])
     # -------------------------------------------------------------------------------
     # Main loop over eigenstates
     for ii in range(model.H.n_eigs):
@@ -293,7 +295,7 @@ def run_SU2_dynamics(par: dict) -> dict:
     get_rdm = _get(par, ["observables", "get_RDM"], False)
     if get_entropy or get_rdm:
         model._get_partition(partition_indices)
-    res["entropy"] = np.zeros(n_steps, dtype=float)
+        res["entropy"] = np.zeros(n_steps, dtype=float)
     get_state_configs = _get(par, ["observables", "get_state_configs"], False)
     get_PE = _get(par, ["observables", "get_PE"], False)
     if get_PE:
@@ -355,6 +357,118 @@ def run_SU2_dynamics(par: dict) -> dict:
     # -------------------------------------------------------------------------------
     end_time = perf_counter()
     logger.info(f"TIME SIMS {round(end_time - start_time, 5)}")
+    return res
+
+
+def run_SU2_bg_groundstate(par: dict) -> dict:
+    start_time = perf_counter()
+    res = {}
+    # ==============================================================================
+    # MODEL
+    model = DFL_Model(**par["model"])
+    bg = 0.75 if model.background < 1 else 2
+    # ==============================================================================
+    # GLOBAL SYMMETRIES
+    global_ops = [model.ops["N_tot"]]
+    global_sectors = par["sectors"]
+    # GLOBAL OPERATORS
+    global_ops = get_symmetry_sector_generators(global_ops, action="global")
+    # ==============================================================================
+    # ABELIAN LINK SYMMETRIES
+    dirs = model.directions
+    link_ops = [[model.ops[f"T2_p{d}"], -model.ops[f"T2_m{d}"]] for d in dirs]
+    link_sectors = [0 for _ in dirs]
+    # LINK OPERATORS
+    link_ops = get_symmetry_sector_generators(link_ops, action="link")
+    pair_list = get_lattice_link_site_pairs(model.lvals, model.has_obc)
+    # ==============================================================================
+    # SELECT THE BACKGROUND SYMMETRY SECTOR CONFIGURATION
+    if model.lvals == [5, 2]:
+        bg_sector = [bg, 0, 0, 0, 0, 0, 0, 0, 0, bg]
+    elif model.lvals == [4, 3] or model.lvals == [6, 2]:
+        bg_sector = [bg, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, bg]
+    elif model.lvals == [3, 2]:
+        bg_sector = [bg, 0, 0, 0, 0, bg]
+    elif model.lvals == [2, 2]:
+        bg_sector = [bg, 0, 0, bg]
+    logger.info(f"bg sector configs {bg_sector}")
+    # BACKGROUND OPERATOR
+    bg_global_ops = get_symmetry_sector_generators([model.ops["bg"]], action="global")
+    # ==============================================================================
+    # SELECT THE U(1) GLOBAL and LINK SYMMETRY & BACKGROUND STRING SECTOR
+    # ==============================================================================
+    model.sector_configs = symmetry_sector_configs(
+        loc_dims=model.loc_dims,
+        glob_op_diags=global_ops,
+        glob_sectors=np.array(global_sectors, dtype=float),
+        sym_type_flag="U",
+        link_op_diags=link_ops,
+        link_sectors=link_sectors,
+        pair_list=pair_list,
+        string_op_diags=bg_global_ops,
+        string_sectors=np.array([bg_sector], dtype=float),
+    )
+    # DEFINE SETTINGS, OBSERVABLES, and BUILD HAMILTONIAN
+    model.default_params()
+    if par["model"]["spin"] < 1:
+        model.build_Hamiltonian(par["g"], par["m"])
+    else:
+        model.build_gen_Hamiltonian(par["g"], par["m"])
+    # -------------------------------------------------------------------------------
+    # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
+    n_eigs = par["hamiltonian"]["n_eigs"]
+    model.diagonalize_Hamiltonian(n_eigs, model.ham_format)
+    res["energy"] = model.H.Nenergies
+    # ===========================================================================
+    # OBSERVABLES
+    matter_obs = [f"N_{label}" for label in ["tot", "single", "pair", "zero"]]
+    extra_obs = ["bg", "T2_px", "T2_py"]
+    local_obs = matter_obs + extra_obs
+    for obs in local_obs:
+        res[obs] = np.zeros(n_eigs, dtype=float)
+    res["E2"] = np.zeros(n_eigs, dtype=float)
+    model.get_observables(local_obs)
+    measure_obs = _get(par, ["observables", "measure_obs"], False)
+    # GET STATE CONFIGURATIONS
+    get_state_configs = _get(par, ["observables", "get_state_configs"], False)
+    # ENTROPY
+    partition_indices = _get(par, ["observables", "entropy_partition"], [])
+    get_entropy = _get(par, ["observables", "get_entropy"], False)
+    if get_entropy:
+        model._get_partition(partition_indices)
+        res["entropy"] = np.zeros(n_eigs, dtype=float)
+    # -------------------------------------------------------------------------------
+    for ii in range(model.H.n_eigs):
+        model.H.print_energy(ii)
+        if not model.momentum_basis:
+            # -----------------------------------------------------------------------
+            # ENTROPY
+            if get_entropy:
+                res["entropy"][ii] = model.H.Npsi[ii].entanglement_entropy(
+                    partition_indices, model._partition_cache
+                )
+            # -----------------------------------------------------------------------
+            # STATE CONFIGURATIONS
+            if get_state_configs:
+                model.H.Npsi[ii].get_state_configurations(1e-2, model.sector_configs)
+        # -----------------------------------------------------------------------
+        # MEASURE OBSERVABLES
+        if measure_obs:
+            model.measure_observables(ii, dynamics=False)
+            res["E2"][ii] = model.link_avg(obs_name="T2")
+            res["N_single"][ii] = model.stag_avg(model.res["N_single"])
+            res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "even")
+            res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "odd")
+            res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "even")
+            res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "odd")
+            res["N_tot"][ii] = res["N_single"][ii] + 2 * res["N_pair"][ii]
+            logger.info(f"Nsingle {res['N_single'][ii]}")
+            logger.info(f"Npair {res['N_pair'][ii]}")
+            logger.info(f"Ntot {res['N_tot'][ii]}")
+            logger.info(f"E2 {res['E2'][ii]}")
+    # -------------------------------------------------------------------------------
+    end_time = perf_counter()
+    logger.info(f"TIME SIMS {round(end_time-start_time, 5)}")
     return res
 
 
@@ -461,12 +575,13 @@ fig.savefig("PE2_Scar_SU2_PV.pdf")
 # %%
 par = {
     "model": {
-        "lvals": [2, 2, 2],
-        "has_obc": [False, False, False],
+        "lvals": [6],
+        "has_obc": [True],
         "spin": 0.5,
-        "pure_theory": True,
+        "pure_theory": False,
         "background": 0,
         "ham_format": "sparse",
+        "sectors": [6],
     },
     "hamiltonian": {
         "n_eigs": 2,
@@ -486,8 +601,36 @@ par = {
         "get_overlap": False,
     },
     "g": 10,
-    "theta": 0.1,
+    "m": 1,
 }
 run_SU2_spectrum(par)
+
+# %%
+par = {
+    "model": {
+        "lvals": [2, 2],
+        "has_obc": [True, True],
+        "spin": 0.5,
+        "pure_theory": False,
+        "background": 0.5,
+        "ham_format": "sparse",
+    },
+    "sectors": [4],
+    "hamiltonian": {
+        "n_eigs": 1,
+        "save_psi": False,
+    },
+    "observables": {
+        "measure_obs": True,
+        "get_entropy": True,
+        "entropy_partition": [0, 1],
+        "get_state_configs": True,
+        "get_overlap": False,
+        "get_PE": True,
+    },
+    "g": 0.1,
+    "m": 0.1,
+}
+res = run_SU2_bg_groundstate(par)
 
 # %%
