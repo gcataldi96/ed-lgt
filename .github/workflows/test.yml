@@ -2,59 +2,57 @@ name: Python CI
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   smoke:
     runs-on: ubuntu-latest
-
     strategy:
       matrix:
-        python-version: ["3.8", "3.9", "3.10", "3.11"]
+        python-version: ["3.9", "3.10", "3.11"]
 
     steps:
-    - name: Check out code
-      uses: actions/checkout@v4
+      - name: Check out code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pytest
-        pip install -e .  # Installs your library in editable mode
+      - name: Install package + test deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          pip install pytest
 
-    - name: Run tests
-      run: pytest
+      - name: Run unit tests (ignore validation)
+        run: pytest -q --ignore=validation
+
 
   validation:
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
     steps:
-    - name: Check out code
-      uses: actions/checkout@v4
+      - name: Check out code
+        uses: actions/checkout@v4
 
-    - name: Set up Conda environment
-      uses: conda-incubator/setup-miniconda@v3
-      with:
-        auto-activate-base: false
-        activate-environment: ed
-        environment-file: environment.yml
+      - name: Set up Conda environment
+        uses: conda-incubator/setup-miniconda@v3
+        with:
+          auto-activate-base: false
+          activate-environment: ed
+          environment-file: environment.yml
 
-    - name: Install package
-      shell: bash -el {0}
-      run: |
-        python -m pip install --upgrade pip
-        pip install -e .
+      - name: Install package
+        shell: bash -el {0}
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
 
-    - name: Run validation suite
-      shell: bash -el {0}
-      run: python validation/run_all.py
+      - name: Run validation suite
+        shell: bash -el {0}
+        run: python validation/run_all.py
