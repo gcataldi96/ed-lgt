@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if [[ "${SKIP_VALIDATION_PRE_PUSH:-0}" == "1" ]]; then
+  echo "Skipping pre-push validation (SKIP_VALIDATION_PRE_PUSH=1)."
+  exit 0
+fi
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "${repo_root}"
+
+echo "Running validation before push: python validation/run_all.py"
+python validation/run_all.py
