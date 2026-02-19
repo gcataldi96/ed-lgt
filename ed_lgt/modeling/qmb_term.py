@@ -43,7 +43,7 @@ class QMBTerm:
         if self.sector_configs is not None:
             # Construct the symmetry operators
             sym_op_list = [self.op] if self.op is not None else self.op_list
-            self.sym_ops = np.array(sym_op_list)
+            self.sym_ops = np.array(sym_op_list, dtype=complex)
 
     def get_staggered_conditions(self, coords, stag_label):
         # Compute the staggered factor

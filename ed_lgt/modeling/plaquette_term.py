@@ -10,7 +10,7 @@ from scipy.sparse import isspmatrix, csr_matrix
 from .lattice_geometry import get_plaquette_neighbors
 from .lattice_mappings import zig_zag
 from .qmb_operations import four_body_op
-from .qmb_state import QMB_state, exp_val_data
+from .qmb_state import QMB_state
 from .qmb_term import QMBTerm
 from ed_lgt.tools import validate_parameters
 from ed_lgt.symmetries import nbody_term
@@ -66,7 +66,8 @@ class PlaquetteTerm(QMBTerm):
                 (if True) where to apply the local term. Defaults to None.
 
         Returns:
-            scipy.sparse: Plaquette Hamiltonian term ready to be used for exact diagonalization/expectation values.
+            scipy.sparse: Plaquette Hamiltonian term ready to be used for exact
+            diagonalization/expectation values.
         """
         if not np.isscalar(strength):
             raise TypeError(f"strength must be scalar, not {type(strength)}")
@@ -118,27 +119,27 @@ class PlaquetteTerm(QMBTerm):
             all_c.append(c)
             all_v.append(v)
         # merge them
-        row = np.concatenate(all_r)
-        col = np.concatenate(all_c)
-        val = np.concatenate(all_v) * strength
-
+        row_list = np.concatenate(all_r)
+        col_list = np.concatenate(all_c)
+        val_list = np.concatenate(all_v) * strength
         if add_dagger:
-            # append the Hermitian conjugate block
-            row = np.concatenate([row, col])
-            # careful: we want original row before concat
-            col = np.concatenate([col, row[: len(row) // 2]])
-            val = np.concatenate([val, np.conjugate(val)])
-        return row, col, val
+            # Add Hermitian conjugate after the full term construction
+            dagger_row_list = col_list
+            dagger_col_list = row_list
+            dagger_val_list = np.conjugate(val_list)
+            # Concatenate the dagger part to the original term
+            row_list = np.concatenate([row_list, dagger_row_list])
+            col_list = np.concatenate([col_list, dagger_col_list])
+            val_list = np.concatenate([val_list, dagger_val_list])
+        return row_list, col_list, val_list
 
-    def get_expval(self, psi, get_imag=False, stag_label=None):
+    def get_expval(self, psi, component: str = "real", stag_label: str | None = None):
         """
         The function calculates the expectation value (and it variance) of the Plaquette Hamiltonian
         and its average over all the lattice sites.
 
         Args:
             psi (numpy.ndarray): QMB state where the expectation value has to be computed
-
-            get_imag(bool, optional): if true, it results the imaginary part of the expectation value, otherwise, the real part. Default to False.
 
             stag_label (str, optional): if odd/even, then the expectation value is performed only on that kind of sites. Defaults to None.
 
@@ -148,7 +149,9 @@ class PlaquetteTerm(QMBTerm):
         # Check on parameters
         if not isinstance(psi, QMB_state):
             raise TypeError(f"psi must be instance of class:QMB_state not {type(psi)}")
-        validate_parameters(stag_label=stag_label, get_imag=get_imag)
+        validate_parameters(stag_label=stag_label)
+        if component not in ["real", "imag"]:
+            raise ValueError(f"component must be 'real' or 'imag': got {component}")
         # ADVERTISE OF THE CHOSEN PART OF THE PLAQUETTE YOU WANT TO COMPUTE
         if self.print_plaq:
             logger.info(f"----------------------------------------------------")
@@ -176,28 +179,23 @@ class PlaquetteTerm(QMBTerm):
         # IN CASE OF NO SYMMETRY SECTOR
         if self.sector_configs is None:
             for ii, sites_list in enumerate(list_of_plaq_sites):
-                self.obs[ii] = psi.expectation_value(
-                    four_body_op(
-                        op_list=self.op_list,
-                        op_sites_list=sites_list,
-                        **self.def_params,
-                    )
+                plaq_op = four_body_op(
+                    op_list=self.op_list,
+                    op_sites_list=sites_list,
+                    **self.def_params,
                 )
-                self.var[ii] = (
-                    psi.expectation_value(
-                        four_body_op(
-                            op_list=self.op_list,
-                            op_sites_list=sites_list,
-                            **self.def_params,
-                        )
-                        ** 2,
-                    )
-                    - self.obs[ii] ** 2
-                )
+                if component == "real":
+                    obs_op = 0.5 * (plaq_op + plaq_op.getH())
+                elif component == "imag":
+                    obs_op = (-0.5j) * (plaq_op - plaq_op.getH())
+                self.obs[ii] = np.real(np.vdot(psi.psi, obs_op.dot(psi.psi)))
+                tmp = obs_op.dot(psi.psi)
+                self.var[ii] = np.real(np.vdot(tmp, tmp))
+                self.var[ii] -= self.obs[ii] ** 2
                 if self.print_plaq:
                     self.print_Plaquette(list_of_plaq_strings[ii], self.obs[ii])
-        # GET THE EXPVAL ON THE SYMMETRY SECTOR
         else:
+            # GET THE EXPVAL ON THE SYMMETRY SECTOR
             for ii, sites_list in enumerate(list_of_plaq_sites):
                 rows, cols, vals = nbody_term(
                     op_list=self.sym_ops,
@@ -205,7 +203,7 @@ class PlaquetteTerm(QMBTerm):
                     sector_configs=self.sector_configs,
                     momentum_basis=self.momentum_basis,
                 )
-                self.obs[ii] = exp_val_data(psi.psi, rows, cols, vals)
+                self.obs[ii] = psi.expectation_value((rows, cols, vals), component)
                 # for the moment, variance is not computed in symmetry sectors
                 if self.print_plaq:
                     self.print_Plaquette(list_of_plaq_strings[ii], self.obs[ii])

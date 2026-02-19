@@ -204,4 +204,60 @@ gen_configs("template", params, f"qed_theta_term/kpipipi")
 params = {"g": np.logspace(-3, 3, 30), "m": np.logspace(-3, 3, 30)}
 gen_configs("template", params, f"string_breaking/phasediagram_bg")
 gen_configs("template", params, f"string_breaking/phasediagram_nobg")
+
+
+# %%
+def build_theta_grid(
+    theta_max: float = 3.0,
+    theta_c: float = 0.52,
+    coarse_step: float = 0.05,
+    medium_window: tuple[float, float] = (0.35, 0.80),
+    medium_step: float = 0.01,
+    fine_halfwidth: float = 0.06,  # gives [0.46, 0.58] if theta_c=0.52
+    fine_step: float = 0.002,
+) -> np.ndarray:
+    """
+    Build a positive-theta grid with multi-resolution refinement near theta_c.
+
+    Returns
+    -------
+    theta : np.ndarray, shape (N,)
+        Sorted unique theta values in [0, theta_max], including theta=0.
+    """
+    # Coarse global grid
+    theta_coarse = np.arange(0.0, theta_max + 0.5 * coarse_step, coarse_step)
+
+    # Medium grid around the interesting region
+    theta_medium = np.arange(
+        medium_window[0],
+        medium_window[1] + 0.5 * medium_step,
+        medium_step,
+    )
+
+    # Fine grid around theta_c
+    fine_min = max(0.0, theta_c - fine_halfwidth)
+    fine_max = min(theta_max, theta_c + fine_halfwidth)
+    theta_fine = np.arange(fine_min, fine_max + 0.5 * fine_step, fine_step)
+
+    # Merge, unique (avoid float glitches by rounding), sort
+    theta_all = np.concatenate([theta_coarse, theta_medium, theta_fine])
+    theta_all = np.unique(np.round(theta_all, 12))
+    theta_all.sort()
+    return theta_all
+
+
+theta_vals = build_theta_grid()
+print(theta_vals[:10], "...", theta_vals[-10:])
+print("N(theta) =", theta_vals.size)
+
+
+def build_g_grid(g_min=0.8, g_max=10.0, n=10):
+    """Geometrically spaced g grid (good default for terms ~g^2 and ~1/g^2)."""
+    g_vals = np.geomspace(g_min, g_max, n)
+    return np.round(g_vals, 6)
+
+
+g_vals = build_g_grid()
+params = {"g": g_vals, "theta": theta_vals}
+gen_configs("template", params, f"su2_thetaterm/scan3")
 # %%

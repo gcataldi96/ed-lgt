@@ -31,9 +31,9 @@ dependencies:
   - sphinx_rtd_theme
   # (Optional) If you want explicit BLAS, uncomment one of these blocks.
   # Otherwise let conda choose to avoid conflicts with pip wheels.
-  - libblas=*=*mkl
-  - mkl
-  - mkl-devel
+  # - libblas=*=*mkl
+  # - mkl
+  # - mkl-devel
   # or:
   # - libblas=*=*openblas
   - pip:

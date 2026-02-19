@@ -76,6 +76,7 @@ def symmetry_sector_configs(
     # Acquire Sector dimension
     sector_dim = math.prod(int(d) for d in loc_dims)
     bits = sum(math.log2(d) for d in loc_dims)
+    logger.info(f"----------------------------------------------------")
     logger.info(f"TOT DIM: {sector_dim}, 2^{round(bits,3)}")
     if string_op_diags is not None:
         sector_configs = iterative_sitebased_sym_sector_configs1(

@@ -84,7 +84,7 @@ class QMB_state:
         """
         return truncation(self.psi, threshold)
 
-    def expectation_value(self, operator):
+    def expectation_value(self, operator, component: str = "real"):
         """
         Calculates the expectation value of the given operator with the current quantum state.
         The operator can be provided in one of the following formats:
@@ -107,16 +107,18 @@ class QMB_state:
         if isinstance(operator, tuple) and len(operator) == 3:
             # Case 1: Operator as (row_list, col_list, value_list)
             row_list, col_list, value_list = operator
-            return exp_val_data(self.psi, row_list, col_list, value_list)
+            exp_val = exp_val_data(self.psi, row_list, col_list, value_list)
+            return _select_component(exp_val, component)
         elif isinstance(operator, np.ndarray) or isspmatrix(operator):
             # Case 2: Dense or Sparse Matrix
             if self.psi.shape[0] != operator.shape[0]:
-                msg = f"The dimensions of the quantum state {self.psi.shape[0]} and the operator {operator.shape[0]} do not match."
+                msg = f"quantum state dim {self.psi.shape[0]} is NOT the operator dim {operator.shape[0]}"
                 raise ValueError(msg)
             if isinstance(operator, np.ndarray):
                 operator = csr_matrix(operator)
             validate_parameters(op_list=[operator])
-            return np.real(np.dot(np.conjugate(self.psi), (operator.dot(self.psi))))
+            exp_val = np.dot(np.conjugate(self.psi), (operator.dot(self.psi)))
+            return _select_component(exp_val, component)
         else:
             raise TypeError(
                 "Operator must be provided as a tuple (row_list, col_list, value_list), "
@@ -308,12 +310,11 @@ class QMB_state:
         # 5) print
         for _, config, amp in zip(idx, cfgs, vals):
             # rescale all the amplitudes to have the first one real and positive
-            rescaled_amp = round(amp * np.exp(-1j * np.angle(vals[0])), 8)
-            square_amp = round(np.abs(amp) ** 2, 8)
+            rescaled_amp = amp * np.exp(-1j * np.angle(vals[0]))
+            square_amp = np.abs(amp) ** 2
             coords = " ".join(f"{c:2d}" for c in config)
-            logger.info(
-                f"[{coords}] {round(amp,3)} psi={rescaled_amp} |psi|^2={square_amp}"
-            )
+            msg = f"[{coords}] |psi|^2={square_amp:6f} ({amp:6f})"
+            logger.info(msg)
 
     def participation_renyi_entropy(self, alpha: int = 2) -> float:
         """
@@ -432,14 +433,15 @@ class QMB_state:
         msg = f"Generated {n_strings} candidate X-strings from support."
         logger.info(msg)
         # Step 4: compute M2 and per-string contributions in parallel
-        support_probs = (np.abs(support_coeffs) ** 2).astype(np.float64, copy=False)
         # Normalize support probabilities
-        kept_weight = float(np.sum(support_probs))
-        support_probs /= kept_weight
+        kept_weight = float(
+            np.sum((np.abs(support_coeffs) ** 2).astype(np.float64, copy=False))
+        )
+        support_coeffs /= np.sqrt(kept_weight)
         M2 = stabilizer_renyi_sum(
             pkeys_uniq=pkeys_uniq,
             support_configs=support_configs,
-            support_probs=support_probs,
+            support_coeffs=support_coeffs,
             support_keys=support_keys,
             loc_dims=self.loc_dims,
             strides=strides,
@@ -534,7 +536,7 @@ def build_psi_matrix(
     return psi_matrix
 
 
-@njit
+@njit(cache=True)
 def exp_val_data(psi, row_list, col_list, value_list):
     """
     Compute the expectation value directly from the nonzero elements of the operator
@@ -547,16 +549,16 @@ def exp_val_data(psi, row_list, col_list, value_list):
         value_list (np.ndarray): Nonzero values of the operator.
 
     Returns:
-        float: The computed expectation value.
+        complex: The computed expectation value.
     """
-    exp_val = 0.0
+    exp_val = 0.0 + 0.0j
     psi_dag = np.conjugate(psi)
     for idx in range(len(row_list)):
         row = row_list[idx]
         col = col_list[idx]
         value = value_list[idx]
         exp_val += psi_dag[row] * value * psi[col]
-    return np.real(exp_val)
+    return exp_val
 
 
 @njit(cache=True)
@@ -582,6 +584,14 @@ def mixed_exp_val_data(psi1, psi2, row_list, col_list, value_list):
     return exp_val
 
 
+def _select_component(exp_val: complex, component: str) -> float:
+    if component == "real":  # <(A + A†)/2>
+        return float(np.real(exp_val))
+    if component == "imag":  # <(A - A†)/(2i)>
+        return float(np.imag(exp_val))
+    raise ValueError(f"Unknown component='{component}'")
+
+
 def extract_support(
     psi: np.ndarray,
     loc_dims: np.ndarray,
@@ -602,7 +612,8 @@ def extract_support(
         2D uint array of shape (n_configs, n_sites). Basis configurations for the sector.
         Row i corresponds to basis index i of psi.
     prob_threshold:
-        Keep configurations with probability |psi[i]|^2 > prob_threshold.
+        Tail tolerance delta in [0,1). The support is chosen such that the cumulative
+        probability mass kept is at least (1 - delta).
     sort_for_encoding:
         If True, sort the support by the same encoding order used by the X-string code:
         "rightmost site is fastest digit" (i.e. consistent with compute_strides).
@@ -625,22 +636,31 @@ def extract_support(
     - Sorting by encoding order is important because we do membership queries with
       binary_search_sorted(support_keys, key).
     """
+    # Interpret prob_threshold as a tail tolerance delta
+    delta = float(prob_threshold)
+    if delta <= 0.0 or delta >= 1:
+        raise ValueError("prob_threshold must be 1> delta >0.")
     prob = np.abs(psi) ** 2
-    mask = prob > prob_threshold
-    support_indices = np.nonzero(mask)[0].astype(np.int64)
-    probs_kept = prob[support_indices]
-    order_desc = np.argsort(-probs_kept)
-    support_indices = support_indices[order_desc]
+    # Sort all sector-basis configurations by descending probability
+    order_desc = np.argsort(-prob, kind="mergesort")
+    prob_sorted = prob[order_desc]
+    # Find smallest prefix length K with cumulative mass >= 1 - delta
+    cum = np.cumsum(prob_sorted, dtype=np.float64)
+    target = 1.0 - delta
+    k_last = int(np.searchsorted(cum, target, side="left"))
+    # Keep indices [0, ..., k_last]
+    support_indices = order_desc[: k_last + 1].astype(np.int64)
     support_coeffs = psi[support_indices]
-    support_configs = sector_configs[support_indices, :]
+    support_configs = sector_configs[support_indices, :].astype(np.uint16, copy=False)
     # Compute discarded probability mass (delta)
     kept_weight = float(np.sum(np.abs(support_coeffs) ** 2))
     discarded_weight = max(0.0, 1.0 - kept_weight)
     # rightmost-fastest encoding key
-    support_keys = encode_all_configs(support_configs, compute_strides(loc_dims))
-    sort_order = np.argsort(support_keys, kind="mergesort")
+    strides = compute_strides(loc_dims)
+    support_keys = encode_all_configs(support_configs, strides)
     # Sort support by the same encoding order your algorithm expects
     if sort_for_encoding:
+        sort_order = np.argsort(support_keys, kind="mergesort")
         support_indices = support_indices[sort_order]
         support_coeffs = support_coeffs[sort_order]
         support_configs = support_configs[sort_order, :]

@@ -23,10 +23,7 @@ with run_sim() as sim:
     # MODEL HAMILTONIAN
     model = SU2_Model(**sim.par["model"])
     m = sim.par["m"] if not model.pure_theory else None
-    if model.spin > 0.5:
-        model.build_gen_Hamiltonian(sim.par["g"], m)
-    else:
-        model.build_Hamiltonian(sim.par["g"], m)
+    model.build_Hamiltonian(sim.par["g"], m)
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     n_eigs = sim.par["hamiltonian"]["n_eigs"]

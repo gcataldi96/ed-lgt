@@ -1,4 +1,7 @@
 from ed_lgt.workflows.qed import run_QED_spectrum
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -38,8 +41,13 @@ def main():
     obs_list = ["energy", "E2"]
     for obs in obs_list:
         if not abs(res[obs][0] - ref[obs]) < atol:
+            logger.info(f"{obs} expected {ref[obs]} got {res[obs][0]}")
             raise ValueError(f"QED spectrum test01: FAIL on observable {obs}")
-    print("QED spectrum test01: PASS")
+    logger.info("****************************************************")
+    logger.info("")
+    logger.info("QED 3D theta term spectrum test01: PASS")
+    logger.info("")
+    logger.info("****************************************************")
 
 
 if __name__ == "__main__":

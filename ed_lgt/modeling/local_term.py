@@ -134,13 +134,15 @@ class LocalTerm(QMBTerm):
         # =============================================================================
         if self.sector_configs is None:
             for ii in range(self.n_sites):
-                self.obs[ii] = psi.expectation_value(
+                exp_val = psi.expectation_value(
                     local_op(operator=self.op, op_site=ii, **self.def_params)
                 )
+                self.obs[ii] = float(np.real(exp_val))
                 if get_variance:
-                    self.var[ii] = psi.expectation_value(
+                    var_val = psi.expectation_value(
                         local_op(operator=self.op**2, op_site=ii, **self.def_params)
                     )
+                    self.var[ii] = float(np.real(var_val))
                     self.var[ii] -= self.obs[ii] ** 2
         # =============================================================================
         else:
@@ -152,10 +154,12 @@ class LocalTerm(QMBTerm):
                     self.sector_configs,
                     self.momentum_basis,
                 )
-                self.obs[ii] = exp_val_data(psi.psi, r_list, c_list, v_list)
+                exp_val = exp_val_data(psi.psi, r_list, c_list, v_list)
+                self.obs[ii] = float(np.real(exp_val))
                 if get_variance and self.momentum_basis is None:
                     # Without momentum basis, <O^2> - <O>^2 CAN be computed by squaring v_list
-                    self.var[ii] = exp_val_data(psi.psi, r_list, c_list, v_list**2)
+                    var_val = exp_val_data(psi.psi, r_list, c_list, v_list**2)
+                    self.var[ii] = float(np.real(var_val))
                     self.var[ii] -= self.obs[ii] ** 2
             # COMPUTE THE VARIANCE within MOMENTUM BASIS
             if get_variance and self.momentum_basis is not None:
@@ -174,7 +178,8 @@ class LocalTerm(QMBTerm):
                         self.sector_configs,
                         self.momentum_basis,
                     )
-                    self.var[ii] = exp_val_data(psi.psi, r_list1, c_list1, v_list1)
+                    var_val = exp_val_data(psi.psi, r_list1, c_list1, v_list1)
+                    self.var[ii] = float(np.real(var_val))
                     self.var[ii] -= self.obs[ii] ** 2
         # =============================================================================
         # CHECK STAGGERED CONDITION AND PRINT VALUES

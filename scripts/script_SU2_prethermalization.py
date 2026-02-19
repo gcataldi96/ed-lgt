@@ -1,6 +1,5 @@
 import numpy as np
 from ed_lgt.models import SU2_Model
-from scipy.sparse import eye
 from simsio import run_sim
 from time import perf_counter
 import logging
@@ -22,10 +21,7 @@ with run_sim() as sim:
     # Save parameters
     model.default_params()
     # Build Hamiltonian
-    if model.spin > 0.5:
-        model.build_gen_Hamiltonian(sim.par["g"], m)
-    else:
-        model.build_Hamiltonian(sim.par["g"], m, lambda_noise=llambda)
+    model.build_Hamiltonian(sim.par["g"], m, lambda_noise=llambda)
     logger.info(f"loc dim {model.loc_dims}")
     # -------------------------------------------------------------------------------
     # DYNAMICS PARAMETERS

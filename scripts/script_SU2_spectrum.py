@@ -9,12 +9,22 @@ os.environ["NUMBA_NUM_THREADS"] = str(B)
 import numpy as np
 from ed_lgt.models import SU2_Model
 from ed_lgt.modeling import diagonalize_density_matrix
-from ed_lgt.workflows import _get
 from simsio import run_sim
 from time import perf_counter
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+def _get(d, path, default=None):
+    cur = d
+    for k in path:
+        if not isinstance(cur, dict) or k not in cur:
+            return default
+        cur = cur[k]
+    return cur
+
+
 with run_sim() as sim:
     start_time = perf_counter()
     # -------------------------------------------------------------------------------
@@ -31,10 +41,7 @@ with run_sim() as sim:
     # Save parameters
     model.default_params()
     # Build Hamiltonian
-    if model.spin > 0.5:
-        model.build_gen_Hamiltonian(sim.par["g"], m, theta)
-    else:
-        model.build_Hamiltonian(sim.par["g"], m, theta)
+    model.build_Hamiltonian(sim.par["g"], m, theta)
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     n_eigs = sim.par["hamiltonian"]["n_eigs"]
@@ -66,6 +73,12 @@ with run_sim() as sim:
                 ["C_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
                 ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
             ]
+            if np.abs(theta) > 1e-10:
+                plaquette_obs += [
+                    ["EzC_px,py", "C_py,mx", "C_my,px", "C_mx,my"],
+                    ["EyC_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
+                    ["ExC_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
+                ]
         else:
             plaquette_obs = []
     else:

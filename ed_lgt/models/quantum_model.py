@@ -50,6 +50,7 @@ class QuantumModel:
         self.sector_configs = None
         # Gauge Basis
         self.gauge_basis = None
+        self.gauge_states = None
         # Staggered Basis
         self.staggered_basis = False
         # Momentum Basis
@@ -241,7 +242,7 @@ class QuantumModel:
         if k1 != k2 and normMIX > 1e-12:
             raise ValueError("The two basis are not orthogonal")
 
-    def project_operators(self, ops_dict: dict[str, csr_matrix]):
+    def project_operators(self, ops_dict: dict[str, csr_matrix], bg_sector_list=None):
         """
         Compute the local basis of each site and the corresponding lattice labels.
         Project a dictionary of operators into a gauge-invariant or optimal subspace of each
@@ -256,47 +257,68 @@ class QuantumModel:
             for each site, accounting for the possibility of different local Hilbert spaces among the sites.
         """
         if self.gauge_basis is not None:
-            # Acquire local dimension and lattice label
             lattice_labels, loc_dims = lattice_base_configs(
                 self.gauge_basis, self.lvals, self.has_obc, self.staggered_basis
             )
             loc_dims = loc_dims.transpose().reshape(self.n_sites)
             self.lattice_labels = lattice_labels.transpose().reshape(self.n_sites)
         else:
-            # Local dimension is the same for all sites
             local_dim = ops_dict[list(ops_dict.keys())[0]].shape[0]
             loc_dims = np.array([local_dim] * self.n_sites, dtype=int)
             self.lattice_labels = None
+        # If a global basis_projector is used, keep old behavior (uniform dim)
         # Determine effective local dimension
         # NOTE: we assume that the basis projector is the same for all sites
         # This will be eventually generalized
         if self.basis_projector is not None:
             local_dim = self.basis_projector.shape[1]
             self.loc_dims = np.array([local_dim] * self.n_sites, dtype=int)
+            # background slicing would need to apply after this projector
+            bg_sector_list = None
         else:
-            self.loc_dims = loc_dims
+            self.loc_dims = loc_dims.copy()
+        # -------------------------------------------------------------------------
+        # build per-site background-sector column selections (if requested)
+        sector_cols_per_site = None
+        if (bg_sector_list is not None) and (self.gauge_basis is not None):
+            if len(bg_sector_list) != self.n_sites:
+                raise ValueError("bg_sector_list must have length self.n_sites")
+            sector_cols_per_site = [None] * self.n_sites
+            for ii in range(self.n_sites):
+                site_label = self.lattice_labels[ii]
+                bg_value = int(bg_sector_list[ii])
+                # Extract the columns with that bg_value
+                bg_col = self.gauge_states[site_label][:, 0]
+                cols = np.flatnonzero(bg_col == bg_value).astype(np.int64)
+                if cols.size == 0:
+                    msg = f"No GI states at site {ii} label={site_label} with bg {bg_value}"
+                    raise ValueError(msg)
+                # store cols (explicit list is safest; contiguous slicing is just an optimization)
+                sector_cols_per_site[ii] = cols
+                self.loc_dims[ii] = cols.size
         logger.info(f"local dimensions: {self.loc_dims}")
         # Determine the maximum local dimension
-        max_loc_dim = max(self.loc_dims)
+        max_loc_dim = int(np.max(self.loc_dims))
         # -----------------------------------------------------------------------------
         # Initialize new dictionary with the projected operators
         logger.debug(f"Projecting operators to the effective Hilbert space")
         self.ops = {}
         # Iterate over operators
         for op, operator in ops_dict.items():
-            self.ops[op] = np.zeros(
-                (self.n_sites, max_loc_dim, max_loc_dim), dtype=ops_dict[op].dtype
-            )
+            op_shape = (self.n_sites, max_loc_dim, max_loc_dim)
+            self.ops[op] = np.zeros(op_shape, dtype=ops_dict[op].dtype)
             # Run over the sites
             for jj, loc_dim in enumerate(self.loc_dims):
                 # For Lattice Gauge Theories where sites have different Hilbert Bases
                 if self.gauge_basis is not None and self.lattice_labels is not None:
                     # Get the label of the site
                     site_label = self.lattice_labels[jj]
-                    # Get the projected operator
+                    # Get the projector
+                    projector = self.gauge_basis[site_label]
+                    if sector_cols_per_site is not None:
+                        projector = projector[:, sector_cols_per_site[jj]]
                     eff_op = apply_projection(
-                        projector=self.gauge_basis[site_label],
-                        operator=operator,
+                        projector=projector, operator=operator
                     ).toarray()
                 # For Theories where all the sites have the same Hilber basis
                 else:
@@ -307,8 +329,7 @@ class QuantumModel:
                         projector=self.basis_projector, operator=eff_op
                     )
                 # Save it inside the new list of operators
-                # NOTE: here we assume all the operators to be real
-                self.ops[op][jj, :loc_dim, :loc_dim] = eff_op.real
+                self.ops[op][jj, :loc_dim, :loc_dim] = eff_op
 
     def get_abelian_symmetry_sector(
         self,
@@ -617,6 +638,7 @@ class QuantumModel:
         ref_psi = self.H.Npsi[index].psi if not dynamics else self.H.psi_time[index].psi
         fidelity = np.abs(state.conj().dot(ref_psi)) ** 2
         if print_value:
+            logger.info("----------------------------------------------------")
             logger.info(f"FIDELITY: {fidelity}")
         return fidelity
 

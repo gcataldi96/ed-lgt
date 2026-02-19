@@ -38,10 +38,7 @@ with run_sim() as sim:
         model = SU2_Model(**sim.par["model"])
         sim.res["irrep_basis"][ss] = model.loc_dims[0]
         m = sim.par["m"] if not model.pure_theory else None
-        if model.spin > 0.5:
-            model.build_gen_Hamiltonian(sim.par["g"], m)
-        else:
-            model.build_Hamiltonian(sim.par["g"], m)
+        model.build_Hamiltonian(sim.par["g"], m)
         # ---------------------------------------------------------------------------
         # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
         model.diagonalize_Hamiltonian(n_eigs, model.ham_format)

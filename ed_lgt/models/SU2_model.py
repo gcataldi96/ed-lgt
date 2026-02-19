@@ -38,6 +38,12 @@ class SU2_Model(QuantumModel):
         self.spin = spin
         self.pure_theory = pure_theory
         self.background = background
+        self.use_generic_model = use_generic_model
+        pure_label = "pure" if self.pure_theory else "with matter"
+        logger.info(f"----------------------------------------------------")
+        msg = f"({self.dim}+1)D SU(2) MODEL {pure_label} j={spin}, bg={background}"
+        logger.info(msg)
+        logger.info(f"----------------------------------------------------")
         # -------------------------------------------------------------------------------
         # Acquire gauge invariant basis and states
         self.gauge_basis, self.gauge_states = SU2_gauge_invariant_states(
@@ -48,7 +54,7 @@ class SU2_Model(QuantumModel):
         )
         # -------------------------------------------------------------------------------
         # Acquire operators
-        if self.spin < 1 and not use_generic_model:
+        if self.spin < 1 and not self.use_generic_model:
             ops = SU2_dressed_site_operators(
                 self.spin,
                 self.pure_theory,
@@ -132,8 +138,15 @@ class SU2_Model(QuantumModel):
             raise ValueError("No configurations found for the given symmetry sectors")
 
     def build_Hamiltonian(self, g, m=None, theta=0.0, lambda_noise=0.0):
+        if self.spin < 1 and not self.use_generic_model:
+            self.build_base_Hamiltonian(g, m, theta, lambda_noise)
+        else:
+            self.build_gen_Hamiltonian(g, m)
+
+    def build_base_Hamiltonian(self, g, m=None, theta=0.0, lambda_noise=0.0):
         logger.info(f"----------------------------------------------------")
-        logger.info("BUILDING s=1/2 HAMILTONIAN")
+        logger.info("BUILDING (H)ardocore (G)luon J=1/2 HAMILTONIAN")
+        logger.info(f"g={g}, m={m}, theta={theta}, lambda_noise={lambda_noise}")
         # Hamiltonian Coefficients
         self.SU2_Hamiltonian_couplings(g, m, theta)
         h_terms = {}
@@ -232,7 +245,7 @@ class SU2_Model(QuantumModel):
             )
             self.H.add_term(
                 h_terms["Ey_Bxz"].get_Hamiltonian(
-                    strength=-self.coeffs["theta"], add_dagger=True
+                    strength=self.coeffs["theta"], add_dagger=True
                 )
             )
             # YZ Plane
@@ -281,7 +294,7 @@ class SU2_Model(QuantumModel):
 
     def build_gen_Hamiltonian(self, g, m=None):
         logger.info(f"----------------------------------------------------")
-        logger.info("BUILDING generalized HAMILTONIAN")
+        logger.info(f"BUILDING generalized HAMILTONIAN with g={g}, m={m}")
         # Hamiltonian Coefficients
         self.SU2_Hamiltonian_couplings(g, m)
         h_terms = {}
@@ -492,7 +505,7 @@ class SU2_Model(QuantumModel):
             "g": g,
             "E": E,  # ELECTRIC FIELD coupling
             "B": B,  # MAGNETIC FIELD coupling
-            "theta": -complex(0, theta * g),  # THETA TERM coupling
+            "theta": -theta * g,  # THETA TERM coupling
         }
         if not self.pure_theory and m is not None:
             # The correct hopping in original units should be 1/2

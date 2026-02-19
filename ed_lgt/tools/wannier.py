@@ -1,5 +1,4 @@
 import numpy as np
-from simsio import *
 from numba import njit, prange
 from scipy.optimize import minimize
 import logging
@@ -7,19 +6,12 @@ import logging
 logger = logging.getLogger(__name__)
 
 __all__ = [
-    "get_data_from_sim",
     "get_Wannier_support",
     "geodesic_distance",
     "energy_functional",
     "spread_functional",
     "localize_Wannier",
 ]
-
-
-def get_data_from_sim(sim_filename, obs_name, kindex):
-    match = SimsQuery(group_glob=sim_filename)
-    ugrid, _ = uids_grid(match.uids, ["momentum_k_vals"])
-    return get_sim(ugrid[kindex]).res[obs_name]
 
 
 def get_Wannier_support(
@@ -82,7 +74,7 @@ def get_Wannier_support(
     # --- Normalize to dimensionless localization weights
     q = weights / weight_sum
     q_sum = float(np.sum(q))  # should be ~1
-    logger.info(f"n_sites={n_sites}, sum(q)={q_sum:.16f}, tail_tol={tail_tol:g}")
+    logger.info(f"n_sites={n_sites}, sum(q)={q_sum:.10f}, tail_tol={tail_tol:g}")
     # --- Decide centering mode
     max_site_weight = float(np.max(q))
     max_bond_weight = float(np.max(q[:-1] + q[1:])) if n_sites > 1 else -np.inf
@@ -136,7 +128,7 @@ def get_Wannier_support(
         logger.info(f"max_bond_weight={max_bond_weight:.6g}")
     discarded_weight = float(1.0 - kept_weight)
     support = np.arange(left, right + 1, dtype=int)
-    logger.info(f"mode={mode}, support=[{left},{right}] (size={support.size})")
+    logger.info(f"support indices={support} (size={support.size})")
     logger.info(f"kept={kept_weight:.8f}, discarded={discarded_weight:.8e}")
     # Optional extra diagnostics (helpful when things look weird)
     logger.info(f"argmax(q)={int(np.argmax(q))}, max(q)={max_site_weight:.6g}")
@@ -261,6 +253,7 @@ def localize_Wannier(
     # Optimize the theta phases
     logger.info("====================================================")
     logger.info("Localize Wannier function")
+    logger.info("====================================================")
     logger.info("Theta phases optimization")
     for indtry in range(n_restarts):
         logger.info(f"Restart {indtry+1}/{n_restarts}")

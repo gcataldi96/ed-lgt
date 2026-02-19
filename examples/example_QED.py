@@ -35,7 +35,8 @@ def run_QED_simulation(par: dict) -> dict:
     # -------------------------------------------------------------------------------
     # Build Hamiltonian
     m = par["m"] if not model.pure_theory else None
-    model.build_Hamiltonian(par["g"], m, theta=par.get("theta", 0.0))
+    theta = par.get("theta", 0.0)
+    model.build_Hamiltonian(par["g"], m, theta)
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     n_eigs = _get(par, ["hamiltonian", "n_eigs"], "full")
@@ -49,7 +50,6 @@ def run_QED_simulation(par: dict) -> dict:
     # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
     local_obs = ["E2"]
-    local_obs += [f"E_{s}{d}" for d in model.directions for s in "mp"]
     local_obs += [f"E2_{s}{d}" for d in model.directions for s in "mp"]
     if not model.pure_theory:
         local_obs += ["N"]
@@ -67,6 +67,12 @@ def run_QED_simulation(par: dict) -> dict:
             ["C_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
             ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
         ]
+        if np.abs(theta) > 1e-10:
+            plaquette_obs += [
+                ["EzC_px,py", "C_py,mx", "C_my,px", "C_mx,my"],
+                ["EyC_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
+                ["ExC_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
+            ]
     else:
         plaquette_obs = []
     for obs_names_list in plaquette_obs:
@@ -145,9 +151,10 @@ def run_QED_simulation(par: dict) -> dict:
 
 
 # %%
+# 2+1 QED with matter
 par = {
     "model": {
-        "lvals": [4, 4],
+        "lvals": [4, 2],
         "has_obc": [True, True],
         "spin": 1,
         "pure_theory": True,
@@ -164,13 +171,74 @@ par = {
     },
     "observables": {
         "measure_obs": True,
+        "get_entropy": True,
+        "entropy_partition": [0, 1, 2, 3],
+        "get_state_configs": True,
+        "get_overlap": False,
+    },
+    "g": 0.5,
+    "m": 1,
+}
+run_QED_simulation(par)
+# %%
+# TOPOLOGICAL 3+1 QED
+par = {
+    "model": {
+        "lvals": [2, 2, 2],
+        "has_obc": [True, True, True],
+        "spin": 1,
+        "pure_theory": True,
+        "ham_format": "sparse",
+    },
+    "hamiltonian": {
+        "n_eigs": 1,
+        "save_psi": False,
+    },
+    "momentum": {
+        "get_momentum_basis": False,
+        "unit_cell_size": [1, 1, 1],
+        "momentum_k_vals": [0, 0, 0],
+    },
+    "observables": {
+        "measure_obs": True,
         "get_entropy": False,
         "entropy_partition": [0, 1],
         "get_state_configs": True,
         "get_overlap": False,
     },
-    "g": 0.1,
+    "g": 10,
     "theta": 0,
 }
 run_QED_simulation(par)
+
+# %%
+par = {
+    "model": {
+        "lvals": [2, 2, 2],
+        "has_obc": [True, True, True],
+        "spin": 1,
+        "pure_theory": False,
+        "ham_format": "sparse",
+        "bg_list": [0, 0, 0, 0, 0, 0],
+    },
+    "hamiltonian": {
+        "n_eigs": 1,
+        "save_psi": False,
+    },
+    "momentum": {
+        "get_momentum_basis": False,
+        "unit_cell_size": [1, 1, 1],
+        "momentum_k_vals": [0, 0, 0],
+    },
+    "observables": {
+        "measure_obs": True,
+        "get_entropy": False,
+        "entropy_partition": [0, 1],
+        "get_state_configs": True,
+        "get_overlap": False,
+    },
+    "g": 1,
+    "m": 1,
+}
+res = run_QED_simulation(par)
 # %%

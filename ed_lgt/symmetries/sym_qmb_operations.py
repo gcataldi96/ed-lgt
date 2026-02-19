@@ -140,7 +140,7 @@ def nbody_data_4sites(
         (row_list, col_list, value_list):
         - row_list (np.ndarray of ints): The row indices of nonzero elements.
         - col_list (np.ndarray of ints): The column indices of nonzero elements.
-        - value_list (np.ndarray of floats): The nonzero values of the operator elements.
+        - value_list (np.ndarray of complex): The nonzero values of the operator elements.
     """
     N = sector_configs.shape[0]
     n_sites = sector_configs.shape[1]
@@ -176,7 +176,6 @@ def nbody_data_4sites(
         # 1) grab the bra’s full config and where to write
         row_cfg = sector_configs[irow]
         ptr = nnz_cols_per_row[irow]
-
         # 2) build the per‐site (idxs,vs,lens) from the one‐site operators
         idxs = np.empty((M, d_loc), np.int32)
         vs = np.empty((M, d_loc), np.complex128)
@@ -193,7 +192,6 @@ def nbody_data_4sites(
                     vs[kk, cnt] = v
                     cnt += 1
             lens[kk] = cnt
-
         # 3) a scratch array for the ket
         ket_config = np.empty(n_sites, np.int32)
         # start from the bra each time
@@ -204,33 +202,26 @@ def nbody_data_4sites(
         site1 = op_sites_list[1]
         site2 = op_sites_list[2]
         site3 = op_sites_list[3]
-
         for i0 in range(lens[0]):
             b0 = idxs[0, i0]
             v0 = vs[0, i0]
             ket_config[site0] = b0
-
             for i1 in range(lens[1]):
                 b1 = idxs[1, i1]
                 v1 = vs[1, i1]
                 ket_config[site1] = b1
-
                 for i2 in range(lens[2]):
                     b2 = idxs[2, i2]
                     v2 = vs[2, i2]
                     ket_config[site2] = b2
-
                     for i3 in range(lens[3]):
                         b3 = idxs[3, i3]
                         v3 = vs[3, i3]
                         ket_config[site3] = b3
-
                         # compute the full amplitude
                         amp = v0 * v1 * v2 * v3
-
                         # lookup that ket in your sorted sector_configs
                         icol = config_to_index_binarysearch(ket_config, sector_configs)
-
                         # write out the entry
                         row_list[ptr] = irow
                         col_list[ptr] = icol
@@ -255,7 +246,7 @@ def nbody_data_2sites(
         (row_list, col_list, value_list):
         - row_list (np.ndarray of ints): The row indices of nonzero elements.
         - col_list (np.ndarray of ints): The column indices of nonzero elements.
-        - value_list (np.ndarray of floats): The nonzero values of the operator elements.
+        - value_list (np.ndarray of complex): The nonzero values of the operator elements.
     """
     N = sector_configs.shape[0]
     n_sites = sector_configs.shape[1]
@@ -285,16 +276,15 @@ def nbody_data_2sites(
     # Preallocate the output arrays
     row_list = np.empty(total_nnz, dtype=np.int32)
     col_list = np.empty(total_nnz, dtype=np.int32)
-    value_list = np.empty(total_nnz, dtype=np.float64)
+    value_list = np.empty(total_nnz, dtype=np.complex128)
     # --- PASS 2: explicit 4‐nested‐loops version for M=4  ---------------
     for irow in prange(N):
         # 1) grab the bra’s full config and where to write
         row_cfg = sector_configs[irow]
         ptr = nnz_cols_per_row[irow]
-
         # 2) build the per‐site (idxs,vs,lens) from the one‐site operators
         idxs = np.empty((M, d_loc), np.int32)
-        vs = np.empty((M, d_loc), np.float64)
+        vs = np.empty((M, d_loc), np.complex128)
         lens = np.empty(M, np.int32)
         for kk in range(M):
             site = op_sites_list[kk]
@@ -361,7 +351,7 @@ def localbody_data_par2(
         tuple:
             - row_list (np.ndarray of ints): The indices of configurations (rows) with nonzero contribution.
             - col_list (np.ndarray of ints): Identical to row_list (since the operator is diagonal).
-            - value_list (np.ndarray of floats): The computed (summed) diagonal values for those configurations.
+            - value_list (np.ndarray of complex): The computed (summed) diagonal values for those configurations.
     """
     sector_dim = sector_configs.shape[0]
     # Start with every configuration.
@@ -369,8 +359,7 @@ def localbody_data_par2(
     # We'll use a boolean mask to filter out rows with zero contribution.
     check_rows = np.zeros(sector_dim, dtype=np.bool_)
     # Preallocate an array for the computed operator values.
-    value_list = np.zeros(sector_dim, dtype=np.float64)
-
+    value_list = np.zeros(sector_dim, dtype=np.complex128)
     # Process each configuration in parallel.
     for row in prange(sector_dim):
         # Accumulate the contribution from each site in op_site_list.
@@ -381,7 +370,7 @@ def localbody_data_par2(
                 sector_configs[row, op_site], sector_configs[row, op_site]
             ]
         # Check that the element is nonzero
-        if not np.isclose(value_list[row], 0, atol=1e-10):
+        if np.abs(value_list[row]) >= 1e-10:
             # Mark the row as having at least one nonzero element
             check_rows[row] = True
     # Filter out zero elements
@@ -404,13 +393,13 @@ def localbody_data_par(op: np.ndarray, op_site: int, sector_configs: np.ndarray)
         (row_list, col_list, value_list):
             - row_list (np.ndarray of ints): The row indices of diagonal elements.
             - col_list (np.ndarray of ints): Same as row_list (since diagonal).
-            - value_list (np.ndarray of floats): The diagonal elements of the operator.
+            - value_list (np.ndarray of complex): The diagonal elements of the operator.
     """
     sector_dim = sector_configs.shape[0]
     # Initialize row_list and col_list as the diagonal indices
     row_list = np.arange(sector_dim, dtype=np.int32)
     check_rows = np.zeros(sector_dim, dtype=np.bool_)
-    value_list = np.zeros(sector_dim, dtype=np.float64)
+    value_list = np.zeros(sector_dim, dtype=np.complex128)
     # Isolate the action of the operator on the site
     op_diag = op[op_site]
     for row in prange(len(row_list)):

@@ -51,10 +51,7 @@ def run_SU2_spectrum(par: dict) -> dict:
     g = par["g"]
     m = par.get("m", None) if not model.pure_theory else None
     theta = par.get("theta", 0.0) if model.pure_theory else 0
-    if model.spin > 0.5:
-        model.build_gen_Hamiltonian(g, m)
-    else:
-        model.build_Hamiltonian(g, m, theta)
+    model.build_Hamiltonian(g, m, theta)
     # -------------------------------------------------------------------------------
     # Diagonalize
     n_eigs = _get(par, ["hamiltonian", "n_eigs"], "full")
@@ -76,7 +73,7 @@ def run_SU2_spectrum(par: dict) -> dict:
     twobody_obs = []
     twobody_axes = []
     # Plaquettes
-    if model.spin < 1 and model.dim in (2, 3):
+    if np.all([model.spin < 1, model.dim in (2, 3), not model.use_generic_model]):
         if model.dim == 2:
             plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
         else:  # dim == 3
@@ -85,6 +82,12 @@ def run_SU2_spectrum(par: dict) -> dict:
                 ["C_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
                 ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
             ]
+            if np.abs(theta) > 1e-10:
+                plaquette_obs += [
+                    ["EzC_px,py", "C_py,mx", "C_my,px", "C_mx,my"],
+                    ["EyC_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
+                    ["ExC_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
+                ]
     else:
         plaquette_obs = []
     for obs_names_list in plaquette_obs:
@@ -196,6 +199,9 @@ def run_SU2_spectrum(par: dict) -> dict:
                 res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "even")
                 res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "odd")
                 res["N_tot"][ii] = res["N_single"][ii] + 2.0 * res["N_pair"][ii]
+            for obs_names_list in plaquette_obs:
+                obs = "_".join(obs_names_list)
+                res[obs][ii] = model.res[obs]
         # -------------------------------------------------------------------------------
         # Overlaps
         if get_overlap:
@@ -237,10 +243,8 @@ def run_SU2_dynamics(par: dict) -> dict:
     # Build Hamiltonian
     g = par["g"]
     m = par.get("m", None) if not model.pure_theory else None
-    if model.spin > 0.5:
-        model.build_gen_Hamiltonian(g, m)
-    else:
-        model.build_Hamiltonian(g, m)
+    theta = par.get("theta", 0.0) if model.pure_theory else 0
+    model.build_Hamiltonian(g, m, theta)
     # -------------------------------------------------------------------------------
     # Time evolution setup
     name = par["dynamics"]["state"]
@@ -269,7 +273,7 @@ def run_SU2_dynamics(par: dict) -> dict:
     twobody_obs = []
     twobody_axes = []
     # Plaquettes
-    if model.spin < 1 and model.dim in (2, 3):
+    if np.all([model.spin < 1, model.dim in (2, 3), not model.use_generic_model]):
         if model.dim == 2:
             plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
         else:  # dim == 3
@@ -278,6 +282,12 @@ def run_SU2_dynamics(par: dict) -> dict:
                 ["C_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
                 ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
             ]
+            if np.abs(theta) > 1e-10:
+                plaquette_obs += [
+                    ["EzC_px,py", "C_py,mx", "C_my,px", "C_mx,my"],
+                    ["EyC_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
+                    ["ExC_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
+                ]
     else:
         plaquette_obs = []
     for obs_names_list in plaquette_obs:
@@ -299,6 +309,11 @@ def run_SU2_dynamics(par: dict) -> dict:
     get_PE = _get(par, ["observables", "get_PE"], False)
     if get_PE:
         res["PE"] = np.zeros(n_steps, dtype=float)
+    get_SRE = _get(par, ["observables", "get_SRE"], False)
+    if get_SRE:
+        res["SRE1"] = np.zeros(n_steps, dtype=float)
+        res["SRE2"] = np.zeros(n_steps, dtype=float)
+        res["SRE3"] = np.zeros(n_steps, dtype=float)
     # -------------------------------------------------------------------------------
     # TIME EVOLUTION
     if par["dynamics"]["time_evolution"]:
@@ -331,6 +346,16 @@ def run_SU2_dynamics(par: dict) -> dict:
                 )
             if get_PE:
                 res["PE"][ii] = model.H.psi_time[ii].participation_renyi_entropy()
+            if get_SRE:
+                res["SRE1"][ii] = model.H.psi_time[ii].stabilizer_renyi_entropy(
+                    model.sector_configs, prob_threshold=1e-3
+                )
+                res["SRE2"][ii] = model.H.psi_time[ii].stabilizer_renyi_entropy(
+                    model.sector_configs, prob_threshold=1e-4
+                )
+                res["SRE3"][ii] = model.H.psi_time[ii].stabilizer_renyi_entropy(
+                    model.sector_configs, prob_threshold=1e-5
+                )
             # -----------------------------------------------------------------------
             # STATE CONFIGURATIONS
             if get_state_configs:
@@ -349,6 +374,9 @@ def run_SU2_dynamics(par: dict) -> dict:
                 res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "even")
                 res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "odd")
                 res["N_tot"][ii] = res["N_single"][ii] + 2.0 * res["N_pair"][ii]
+            for obs_names_list in plaquette_obs:
+                obs = "_".join(obs_names_list)
+                res[obs][ii] = model.res[obs]
         # ---------------------------------------------------------------------------
         # Overlaps
         if get_overlap:
@@ -474,8 +502,8 @@ def run_SU2_bg_groundstate(par: dict) -> dict:
 # %%
 par = {
     "model": {
-        "lvals": [12],
-        "sectors": [12],
+        "lvals": [10],
+        "sectors": [10],
         "has_obc": [False],
         "spin": 0.5,
         "pure_theory": False,
@@ -500,8 +528,8 @@ par = {
         "get_PE": True,
         "get_SRE": True,
     },
-    "g": 0.1,
-    "m": 0.1,
+    "g": 5,
+    "m": 1,
 }
 run_SU2_spectrum(par)
 # %%
@@ -518,8 +546,8 @@ par = {
     "dynamics": {
         "time_evolution": True,
         "start": 0,
-        "stop": 20,
-        "delta_n": 0.02,
+        "stop": 5,
+        "delta_n": 0.05,
         "state": "PV",
         "logical_stag_basis": 2,
     },
@@ -532,7 +560,8 @@ par = {
         "measure_obs": True,
         "get_entropy": False,
         "get_PE": True,
-        "entropy_partition": [0, 1, 2, 3, 4, 5],
+        "get_SRE": True,
+        "entropy_partition": [0, 1, 2, 3, 4],
         "get_state_configs": False,
         "get_overlap": True,
     },
@@ -552,7 +581,7 @@ import matplotlib.pyplot as plt
 fig, ax1 = plt.subplots()
 ax2 = ax1.twinx()  # right y-axis sharing the same x-axis
 
-xticks = np.arange(10)
+xticks = np.arange(0, 5.1, 0.5)
 
 # left axis
 (l1,) = ax1.plot(res["time_steps"], res["overlap"], label="Fidelity", c="#1f77b4")
@@ -560,8 +589,11 @@ ax1.set_ylabel("Fidelity")  # left ylabel
 
 # right axis
 (l2,) = ax2.plot(res["time_steps"], res["PE"], label="PE2", c="#ff7f0e")
+(l3,) = ax2.plot(res["time_steps"], res["SRE1"], label="PE2", c="green")
+(l4,) = ax2.plot(res["time_steps"], res["SRE2"], label="PE2", c="green")
+(l5,) = ax2.plot(res["time_steps"], res["SRE3"], label="PE2", c="green")
 ax2.set_ylabel("Participation Renyi-2 Entropy PE2")  # right ylabel
-ax1.set(xticks=xticks, xlabel="time t", xlim=(-0.1, 10))
+ax1.set(xticks=xticks, xlabel="time t")
 
 # optional: set y-limits independently (edit as needed)
 # ax1.set_ylim(0, 1)
@@ -571,26 +603,27 @@ ax1.grid(True, which="both", linestyle="--", linewidth=0.5)
 
 fig.tight_layout()
 fig.savefig("PE2_Scar_SU2_PV.pdf")
+
 # %%
 par = {
     "model": {
-        "lvals": [6],
-        "has_obc": [True],
+        "lvals": [2, 2, 2],
+        "has_obc": [True, True, True],
         "spin": 0.5,
         "pure_theory": False,
         "background": 0,
-        "ham_format": "sparse",
+        "ham_format": "linear",
         "sectors": [6],
     },
     "hamiltonian": {
-        "n_eigs": 2,
+        "n_eigs": 1,
         "save_psi": False,
     },
     "momentum": {
         "get_momentum_basis": False,
         "unit_cell_size": [1, 1, 1],
         "TC_symmetry": False,
-        "momentum_k_vals": [1, 1, 1],
+        "momentum_k_vals": [0, 0, 0],
     },
     "observables": {
         "measure_obs": True,
@@ -599,10 +632,11 @@ par = {
         "get_state_configs": True,
         "get_overlap": False,
     },
-    "g": 10,
+    "g": 1,
     "m": 1,
+    "theta": 0,
 }
-run_SU2_spectrum(par)
+res = run_SU2_spectrum(par)
 
 # %%
 par = {

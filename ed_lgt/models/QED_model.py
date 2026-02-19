@@ -11,25 +11,34 @@ __all__ = ["QED_Model"]
 
 
 class QED_Model(QuantumModel):
-    def __init__(self, spin, pure_theory, get_only_bulk=False, **kwargs):
+    def __init__(self, spin, pure_theory, bg_list=None, get_only_bulk=False, **kwargs):
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
         self.pure_theory = pure_theory
+        self.background = int(max(np.abs(bg_list))) if bg_list is not None else 0
+        self.bg_list = bg_list if self.background != 0 else None
         self.staggered_basis = False if self.pure_theory else True
+        pure_label = "pure" if self.pure_theory else "with matter"
+        logger.info(f"----------------------------------------------------")
+        msg = f"({self.dim}+1)D QED MODEL {pure_label} j={spin}, bg={self.background}"
+        logger.info(msg)
         # -------------------------------------------------------------------------------
         # Acquire gauge invariant basis and states
         self.gauge_basis, self.gauge_states = QED_gauge_invariant_states(
             self.spin,
             self.pure_theory,
             lattice_dim=self.dim,
+            background=self.background,
             get_only_bulk=get_only_bulk,
         )
         # -------------------------------------------------------------------------------
         # Acquire operators
-        ops = QED_dressed_site_operators(self.spin, self.pure_theory, self.dim)
+        ops = QED_dressed_site_operators(
+            self.spin, self.pure_theory, self.dim, background=self.background
+        )
         # Initialize the operators, local dimension and lattice labels
-        self.project_operators(ops)
+        self.project_operators(ops, self.bg_list)
         # -------------------------------------------------------------------------------
         # GLOBAL SYMMETRIES
         if self.pure_theory:
@@ -93,6 +102,7 @@ class QED_Model(QuantumModel):
         self.default_params()
 
     def build_Hamiltonian(self, g, m=None, theta=0.0):
+        logger.info(f"----------------------------------------------------")
         logger.info("BUILDING HAMILTONIAN")
         # Hamiltonian Coefficients
         self.QED_Hamiltonian_couplings(g, m, theta)
@@ -174,7 +184,7 @@ class QED_Model(QuantumModel):
             )
             self.H.add_term(
                 h_terms["Ey_Bxz"].get_Hamiltonian(
-                    strength=-self.coeffs["theta"], add_dagger=True
+                    strength=self.coeffs["theta"], add_dagger=True
                 )
             )
             # YZ Plane
@@ -263,19 +273,20 @@ class QED_Model(QuantumModel):
                 "g": g,
                 "E": E,  # ELECTRIC FIELD coupling
                 "B": B,  # MAGNETIC FIELD coupling
-                "theta": -complex(0, theta * g),  # THETA TERM coupling
+                "theta": -theta * g,  # THETA TERM coupling
             }
-            if m is not None:
+            if not self.pure_theory and m is not None:
+                t = 1 / 2
                 coeffs |= {
+                    "tx_even": -complex(0, t),  # x HOPPING (EVEN SITES)
+                    "tx_odd": -complex(0, t),  # x HOPPING (ODD SITES)
+                    "ty_even": -t,  # y HOPPING (EVEN SITES)
+                    "ty_odd": t,  # y HOPPING (ODD SITES)
+                    "tz_even": -complex(0, t),  # z HOPPING (EVEN SITES)
+                    "tz_odd": complex(0, t),  # z HOPPING (ODD SITES)
                     "m": m,
-                    "tx_even": 0.5,  # HORIZONTAL HOPPING
-                    "tx_odd": 0.5,
-                    "ty_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
-                    "ty_odd": -0.5,  # VERTICAL HOPPING (ODD SITES)
-                    "tz_even": 0.5,  # VERTICAL HOPPING (EVEN SITES)
-                    "tz_odd": 0.5,  # VERTICAL HOPPING (ODD SITES)
-                    "m_even": m,
-                    "m_odd": -m,
+                    "m_odd": -m,  # EFFECTIVE MASS for ODD SITES
+                    "m_even": m,  # EFFECTIVE MASS for EVEN SITES
                 }
         else:
             # DICTIONARY WITH MODEL COEFFICIENTS

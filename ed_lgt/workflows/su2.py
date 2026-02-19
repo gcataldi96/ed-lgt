@@ -1,10 +1,8 @@
 from time import perf_counter
 import numpy as np
 import logging
-from itertools import product
-from ed_lgt.modeling import diagonalize_density_matrix, mixed_exp_val_data, QMB_state
+from ed_lgt.modeling import diagonalize_density_matrix
 from ed_lgt.models import SU2_Model
-from ed_lgt.tools import get_data_from_sim, get_Wannier_support, localize_Wannier
 
 logger = logging.getLogger(__name__)
 
@@ -13,8 +11,6 @@ __all__ = [
     "run_SU2_spectrum",
     "run_SU2_dynamics",
     "su2_get_momentum_params",
-    "su2_get_convolution_matrix",
-    "su2_get_convolution_gs_energy",
     "compare_SU2_models",
 ]
 
@@ -60,7 +56,7 @@ def compare_SU2_models(lvals, pure_theory, has_obc, g=0.1, m=0.1, atol=1e-10, ne
     model_gen.default_params()
     # ------------------------------------------------------------------------
     # Build SU2 Hamiltonians
-    model_base.build_Hamiltonian(g, m)
+    model_base.build_base_Hamiltonian(g, m)
     model_gen.build_gen_Hamiltonian(g, m)
     # ------------------------------------------------------------------------
     # 1) Ensure the symmetry sector basis is identical
@@ -98,14 +94,13 @@ def su2_build_model_and_hamiltonian(par: dict) -> SU2_Model:
     # Hamiltonian
     g = par["g"]
     m = par.get("m", None) if not model.pure_theory else None
-    if model.spin > 0.5:
-        model.build_gen_Hamiltonian(g, m)
-    else:
-        model.build_Hamiltonian(g, m)
+    model.build_Hamiltonian(g, m)
     return model
 
 
 def su2_prepare_observables(model: SU2_Model, par, n_points):
+    # Topological term
+    theta = par.get("theta", 0.0) if model.pure_theory else 0
     # Local observables
     local_obs = [f"T2_p{d}" for d in model.directions]
     if not model.pure_theory:
@@ -113,7 +108,7 @@ def su2_prepare_observables(model: SU2_Model, par, n_points):
     # Two-body observables
     twobody_obs, twobody_axes = [], []
     # plaquettes
-    if model.spin < 1 and model.dim in (2, 3):
+    if np.all([model.spin < 1, model.dim in (2, 3), not model.use_generic_model]):
         if model.dim == 2:
             plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
         else:
@@ -122,6 +117,12 @@ def su2_prepare_observables(model: SU2_Model, par, n_points):
                 ["C_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
                 ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
             ]
+            if np.abs(theta) > 1e-10:
+                plaquette_obs += [
+                    ["EzC_px,py", "C_py,mx", "C_my,px", "C_mx,my"],
+                    ["EyC_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
+                    ["ExC_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
+                ]
     else:
         plaquette_obs = []
     # register observables
@@ -141,14 +142,21 @@ def su2_prepare_observables(model: SU2_Model, par, n_points):
     get_rdm = _get(par, ["observables", "get_RDM"], False)
     if get_entropy or get_rdm:
         model._get_partition(partition)
-    res["entropy"] = np.zeros(n_points, dtype=float)
+        res["entropy"] = np.zeros(n_points, dtype=float)
+    get_overlap = _get(par, ["observables", "get_overlap"], False)
+    measure_obs = _get(par, ["observables", "measure_obs"], False)
+    get_state_configs = _get(par, ["observables", "get_state_configs"], False)
     # flags
     flags = dict(
-        measure_obs=_get(par, ["observables", "measure_obs"], False),
+        measure_obs=measure_obs,
         get_entropy=get_entropy,
         get_rdm=get_rdm,
-        get_state_configs=_get(par, ["observables", "get_state_configs"], False),
+        get_overlap=get_overlap,
+        get_state_configs=get_state_configs,
         partition_indices=partition,
+        local_obs=local_obs,
+        twobody_obs=twobody_obs,
+        plaquette_obs=plaquette_obs,
     )
     return res, flags
 
@@ -163,6 +171,9 @@ def su2_measure_on_states(
     overlap_state=None,
     dynamics=False,
 ):
+    logger.info(f"----------------------------------------------------")
+    logger.info(f"MEASURE OBSERVABLES on STATES")
+    logger.info(f"----------------------------------------------------")
     for ii in range(n_points):
         st = state_getter(ii)  # QMB_state-like
         if not dynamics:
@@ -198,16 +209,21 @@ def su2_measure_on_states(
                 res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "even")
                 res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "odd")
                 res["N_tot"][ii] = res["N_single"][ii] + 2.0 * res["N_pair"][ii]
+            for obs_names_list in flags["plaquette_obs"]:
+                obs = "_".join(obs_names_list)
+                res[obs][ii] = model.res[obs]
         # overlap
-        if overlap_state is not None and _get(
-            par, ["observables", "get_overlap"], False
-        ):
+        if overlap_state is not None and flags["get_overlap"]:
             res["overlap"][ii] = model.measure_fidelity(
                 overlap_state, ii, print_value=True, dynamics=dynamics
             )
+    return res
 
 
 def run_SU2_spectrum(par):
+    logger.info(f"----------------------------------------------------")
+    logger.info(f"RUN SU2 SPECTRUM")
+    logger.info(f"----------------------------------------------------")
     start_time = perf_counter()
     model = su2_build_model_and_hamiltonian(par)
     # diagonalize
@@ -223,13 +239,14 @@ def run_SU2_spectrum(par):
             res[f"psi{ii}"] = model.H.Npsi[ii].psi
     # overlap reference state (optional)
     overlap_state = None
-    if _get(par, ["observables", "get_overlap"], False):
+    get_overlap = _get(par, ["observables", "get_overlap"], False)
+    if get_overlap:
         name = _get(par, ["hamiltonian", "state"], None)
         config = model.overlap_QMB_state(name)
         overlap_state = model.get_qmb_state_from_configs([config])
         res["overlap"] = np.zeros(n_points, dtype=float)
     # measure observables
-    su2_measure_on_states(
+    res = su2_measure_on_states(
         model,
         par,
         res,
@@ -247,6 +264,9 @@ def run_SU2_spectrum(par):
 
 
 def run_SU2_dynamics(par):
+    logger.info(f"----------------------------------------------------")
+    logger.info(f"RUN SU2 DYNAMICS")
+    logger.info(f"----------------------------------------------------")
     start_time = perf_counter()
     model = su2_build_model_and_hamiltonian(par)
     # timeline
@@ -262,15 +282,14 @@ def run_SU2_dynamics(par):
     config = model.overlap_QMB_state(name)
     in_state = model.get_qmb_state_from_configs([config])
     # overlap reference state (optional)
-    overlap_state = (
-        in_state if _get(par, ["observables", "get_overlap"], False) else None
-    )
+    get_overlap = _get(par, ["observables", "get_overlap"], False)
+    overlap_state = in_state if get_overlap else None
     if overlap_state is not None:
         res["overlap"] = np.zeros(n_points, dtype=float)
     if par["dynamics"]["time_evolution"]:
         model.time_evolution_Hamiltonian(in_state, time_line)
     # measure observables
-    su2_measure_on_states(
+    res = su2_measure_on_states(
         model,
         par,
         res,
@@ -288,6 +307,9 @@ def run_SU2_dynamics(par):
 
 
 def su2_get_momentum_params(TC_symmetry: bool, n_sites: int):
+    logger.info(f"----------------------------------------------------")
+    logger.info(f"GET MOMENTUM PARAMS")
+    logger.info(f"----------------------------------------------------")
     if TC_symmetry:
         n_momenta = n_sites
         k_indices = np.arange(0, n_momenta, 1)
@@ -306,124 +328,3 @@ def su2_get_momentum_params(TC_symmetry: bool, n_sites: int):
         "TC_symmetry": TC_symmetry,
     }
     return momentum_params
-
-
-def su2_get_convolution_matrix(
-    model: SU2_Model, momentum_params: dict, band_params: dict
-) -> np.ndarray:
-    # ---------------------------------------------------------
-    k_indices = momentum_params["k_indices"]
-    n_momenta = momentum_params["n_momenta"]
-    k_unit_cell_size = momentum_params["k_unit_cell_size"]
-    TC_symmetry = momentum_params["TC_symmetry"]
-    # ---------------------------------------------------------
-    R0 = band_params["R0"]
-    band_number = band_params["band_number"]
-    sim_band_name = band_params["sim_band_name"]
-    g = band_params["g"]
-    m = band_params["m"]
-    # ---------------------------------------------------------
-    k1k2matrix = np.zeros((n_momenta, n_momenta), dtype=np.complex128)
-    for k1, k2 in product(k_indices, k_indices):
-        model.set_momentum_pair([k1], [k2], k_unit_cell_size, TC_symmetry)
-        model.default_params()
-        # Build the local hamiltonian
-        model.build_local_Hamiltonian(g, m, R0)
-        # Acquire the state vectors
-        state_idx_k1 = 1 if (model.zero_density and k1 == 0) else 0
-        state_idx_k2 = 1 if (model.zero_density and k2 == 0) else 0
-        state_idx_k1 += band_number
-        state_idx_k2 += band_number
-        psik1 = get_data_from_sim(sim_band_name, f"psi{state_idx_k1}", k1)
-        psik2 = get_data_from_sim(sim_band_name, f"psi{state_idx_k2}", k2)
-        # Measure the overlap with k1 & k2
-        k1k2matrix[k1, k2] = mixed_exp_val_data(
-            psik1,
-            psik2,
-            model.Hlocal.row_list,
-            model.Hlocal.col_list,
-            model.Hlocal.value_list,
-        )
-    return k1k2matrix
-
-
-def su2_get_convolution_gs_energy(
-    model: SU2_Model, momentum_params: dict, band_params: dict
-) -> complex:
-    # ---------------------------------------------------------
-    n_momenta = momentum_params["n_momenta"]
-    k_unit_cell_size = momentum_params["k_unit_cell_size"]
-    TC_symmetry = momentum_params["TC_symmetry"]
-    # ---------------------------------------------------------
-    R0 = band_params["R0"]
-    sim_band_name = band_params["sim_band_name"]
-    g = band_params["g"]
-    m = band_params["m"]
-    # ---------------------------------------------------------
-    if model.zero_density is True:
-        GS = get_data_from_sim(sim_band_name, "psi0", 0)
-        # Check Translational Hamiltonian
-        model.set_momentum_pair([0], [0], k_unit_cell_size, TC_symmetry)
-        model.default_params()
-        # Check the momentum bases
-        model.check_momentum_pair()
-        # Build the local hamiltonian
-        model.build_local_Hamiltonian(g, m, R0)
-        eg_single_block = mixed_exp_val_data(
-            GS,
-            GS,
-            model.Hlocal.row_list,
-            model.Hlocal.col_list,
-            model.Hlocal.value_list,
-        )
-        logger.info(f"E0 block {k_unit_cell_size}: {eg_single_block:.8f}")
-        logger.info(f"E0 tot {eg_single_block * n_momenta:.8f}")
-        return eg_single_block
-    else:
-        return -4.580269235030599 - 1.251803175199139e-18j
-
-
-def su2_get_Wannier_state(model: SU2_Model, momentum_params: dict, band_params: dict):
-    # -------------------------------------------------------------------------------
-    n_momenta = momentum_params["n_momenta"]
-    k_indices = momentum_params["k_indices"]
-    k_unit_cell_size = momentum_params["k_unit_cell_size"]
-    TC_symmetry = momentum_params["TC_symmetry"]
-    # -------------------------------------------------------------------------------
-    band_number = band_params["band_number"]
-    sim_band_name = band_params["sim_band_name"]
-    state_idx = 1 + band_number
-    k1k2matrix = band_params["k1k2matrix"]
-    gs_energy = band_params["gs_energy"]
-    # -------------------------------------------------------------------------------
-    # Acquire the optimal theta phases that localize the Wannier
-    Eprofile, theta_vals = localize_Wannier(
-        k1k2matrix, k_indices, gs_energy, center_mode=1
-    )
-    # Get the partition to the model according to the optimal support of the Wannier
-    w_supports = get_Wannier_support(Eprofile, tail_tol=0.1)
-    support_indices = w_supports["indices"]
-    model._get_partition(support_indices)
-    # -------------------------------------------------------------------------------
-    # Initialize the Wannier State
-    psi_wannier = np.zeros(model.sector_dim, dtype=np.complex128)
-    for kidx in k_indices:
-        # Load the momentum state forming the energy band
-        psik = get_data_from_sim(sim_band_name, f"psi{state_idx}", kidx)
-        # Set the corresponding momentum sector
-        model.set_momentum_sector(k_unit_cell_size, [kidx], TC_symmetry)
-        model.default_params()
-        # Build the projector from the momentum sector to the global one
-        Pk = model._basis_Pk_as_csr()
-        # Project the State from the momentum sector to the coordinate one
-        psik_exp = Pk @ psik
-        # Add it to the Wannier state with the corresponding theta phase
-        psi_wannier += np.exp(1j * theta_vals[kidx]) * psik_exp / np.sqrt(n_momenta)
-    # Mesure the norm of the state: it should be 1
-    wannier_norm = np.linalg.norm(psi_wannier)
-    logger.info(f"Wannier norm = {wannier_norm}")
-    # Promote the Wannier state as an item of the QMB state class
-    Wannier = QMB_state(psi=psi_wannier, lvals=model.lvals, loc_dims=model.loc_dims)
-    # Decompose it into the support and its negligible part
-    W_psimatrix = Wannier._get_psi_matrix(support_indices, model._partition_cache)
-    return W_psimatrix

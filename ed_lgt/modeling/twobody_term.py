@@ -219,7 +219,7 @@ def lattice_twobody_exp_val(psi, n_sites, sector_configs, sym_ops):
             # Compute the expectation value <O> for the pair (ii, jj)
             exp_value = exp_val_data(psi, row_list, col_list, value_list)
             # Assign the result symmetrically
-            corr[ii, jj] = exp_value
+            corr[ii, jj] = float(np.real(exp_value))
             # Mirror the value for (jj, ii)
-            corr[jj, ii] = exp_value
+            corr[jj, ii] = float(np.real(exp_value))
     return corr

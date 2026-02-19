@@ -183,13 +183,13 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=0):
                     factor = sigma_ops[f"S{nu}"].todense()[jj, ii]
                     # ------------------------------------------------------------------
                     op_list = ["Iz", "Iz", "Iz", f"Z{c1}_P", f"Z{c2}_dag", "Iz"]
-                    ops["EzC_px,py"] += qmb_op(in_ops, op_list) @ (factor * Ez)
+                    ops["EzC_px,py"] += 1j * qmb_op(in_ops, op_list) @ (factor * Ez)
                     # ------------------------------------------------------------------
                     op_list = ["Iz", "Iz", "Iz", f"Z{c1}_P", "P", f"Z{c2}_dag"]
-                    ops["EyC_px,pz"] += qmb_op(in_ops, op_list) @ (factor * Ey)
+                    ops["EyC_px,pz"] += -1j * qmb_op(in_ops, op_list) @ (factor * Ey)
                     # ------------------------------------------------------------------
                     op_list = ["Iz", "Iz", "Iz", "Iz", f"Z{c1}_P", f"Z{c2}_dag"]
-                    ops["ExC_py,pz"] += qmb_op(in_ops, op_list) @ (factor * Ex)
+                    ops["ExC_py,pz"] += 1j * qmb_op(in_ops, op_list) @ (factor * Ex)
                     # ------------------------------------------------------------------
         if not pure_theory:
             # Update Electric and Corner operators

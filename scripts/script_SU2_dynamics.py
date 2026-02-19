@@ -21,10 +21,7 @@ with run_sim() as sim:
     # Save parameters
     model.default_params()
     # Build Hamiltonian
-    if model.spin > 0.5:
-        model.build_gen_Hamiltonian(sim.par["g"], m)
-    else:
-        model.build_Hamiltonian(sim.par["g"], m)
+    model.build_Hamiltonian(sim.par["g"], m)
     """# Measure the parity on the initial state
     model.get_parity_inversion_operator(wrt_site=False)
     # elem = np.vdot(in_state, model.parityOP @ in_state)

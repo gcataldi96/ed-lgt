@@ -8,63 +8,87 @@ __all__ = [
 ]
 
 
-def zig_zag(lvals, d):
-    """
-    Given the 1d point at position d of the zigzag curve in a discrete lattice with arbitrary dimensions,
-    it provides the corresponding multidimensional coordinates of the point.
-
-    NOTE: d has to be smaller than the total number of lattice sites
-
-    Args:
-        lvals (list or tuple of int): The dimensions of the lattice in each direction (Lx, Ly, Lz, ...)
-
-        d (int): Point of a 1D curve covering the multi-dimensional lattice.
-
-    Returns:
-        tuple of int: Multi-dimensional coordinates of the 1D point of the ZigZag curve in the lattice (x, y, z, ...).
-    """
-    # Validate type of parameters
-    validate_parameters(lvals=lvals)
-    if not np.isscalar(d) or not isinstance(d, int):
-        raise TypeError(f"d must be a scalar integer, not {type(d)}")
-    tot_size = prod(lvals)
-    if d > tot_size - 1:
-        raise ValueError(
-            f"d must be a smaller than the total number of lattice sites {tot_size}, not {d}"
-        )
+def _lattice_strides(lvals):
+    """Return row-major (C-order) strides for a mixed-radix lattice index mapping."""
     lattice_dim = len(lvals)
-    coords = [0] * lattice_dim
-    for ii, p in zip(range(lattice_dim), reversed(range(lattice_dim))):
-        coords[p] = d // lvals[ii] ** p
-        d -= coords[p] * lvals[ii] ** p
+    strides = [1] * lattice_dim
+    for axis_index in range(1, lattice_dim):
+        strides[axis_index] = strides[axis_index - 1] * int(lvals[axis_index - 1])
+    return strides
+
+
+def zig_zag(lvals, index_1d):
+    """
+    Convert a linear site index into lattice coordinates.
+    The mapping is a mixed-radix (stride-based) conversion, consistent with row-major
+    ordering where the first axis ("x") is the fastest-changing coordinate.
+
+    Parameters
+    ----------
+    lvals : sequence of int
+        Lattice sizes per axis, e.g. "[Lx, Ly, Lz]".
+    index_1d : int
+        Linear index in "[0, prod(lvals) - 1]".
+
+    Returns
+    -------
+    tuple of int
+        Lattice coordinates "(x, y, z, ...)" with "0 <= coord[i] < lvals[i]".
+
+    Notes
+    -----
+    This is not a geometric "zig-zag curve" in the sense of path reflections; it is a
+    standard lattice linearization / delinearization based on strides.
+    """
+    validate_parameters(lvals=lvals)
+    if not isinstance(index_1d, (int, np.integer)):
+        raise TypeError(f"index_1d must be an integer, not {type(index_1d)}")
+    n_sites = prod(lvals)
+    if index_1d < 0 or index_1d >= n_sites:
+        raise ValueError(f"index_1d must be in [0, {n_sites - 1}], not {index_1d}")
+    strides = _lattice_strides(lvals)
+    coords = []
+    for axis_size, axis_stride in zip(lvals, strides):
+        coords.append((int(index_1d) // axis_stride) % int(axis_size))
     return tuple(coords)
 
 
 def inverse_zig_zag(lvals, coords):
     """
-    Inverse zigzag curve mapping (from d coords to the 1D points).
+    Convert lattice coordinates into a linear site index.
 
-    NOTE: Given the sizes of a multidimensional lattice, the d-dimensional coords
-    are supposed to start from 0 and have to be smaller than each lattice dimension
-    Correspondingly, the points of the zigzag curve start from 0.
+    The mapping is the inverse of :func:`zig_zag` and uses the same row-major convention.
 
-    Args:
-        lvals (list or tuple of int): The dimensions of the lattice in each direction (Lx, Ly, Lz, ...)
+    Parameters
+    ----------
+    lvals : sequence of int
+        Lattice sizes per axis, e.g. "[Lx, Ly, Lz]".
+    coords : sequence of int
+        Lattice coordinates "(x, y, z, ...)" with "0 <= coord[i] < lvals[i]".
 
-        coords (list or tuple of int): Multi-dimensional coordinates of the 1D point of the ZigZag curve in the lattice (x, y, z, ...).
+    Returns
+    -------
+    int
+        Linear index in "[0, prod(lvals) - 1]".
 
-    Returns:
-        int: 1D point of the zigzag curve
+    Raises
+    ------
+    ValueError
+        If any coordinate is outside its axis bounds, or if the dimensionality mismatches.
     """
-    # Validate type of parameters
     validate_parameters(lvals=lvals, coords=coords)
-    lattice_dim = len(lvals)
-    d = 0
     coords = tuple(coords)
-    for ii, c in zip(range(lattice_dim), "xyz"[:lattice_dim]):
-        if coords[ii] > (lvals[ii] - 1):
-            raise ValueError(
-                f"The {c} coord should be smaller than {lvals[ii]}, not {coords[ii]}"
-            )
-        d += coords[ii] * (lvals[ii - 1] ** ii)
-    return d
+    lattice_dim = len(lvals)
+    if len(coords) != lattice_dim:
+        raise ValueError(f"coords must have length {lattice_dim}, got {len(coords)}")
+    axis_names = "xyz"
+    for axis_index, (coord_value, axis_size) in enumerate(zip(coords, lvals)):
+        if coord_value < 0 or coord_value >= axis_size:
+            axis = axis_names[axis_index] if axis_index < 3 else f"axis{axis_index}"
+            msg = f"{axis}-coord must be in [0,{axis_size - 1}]: got {coord_value}"
+            raise ValueError(msg)
+    strides = _lattice_strides(lvals)
+    index_1d = 0
+    for coord_value, axis_stride in zip(coords, strides):
+        index_1d += int(coord_value) * int(axis_stride)
+    return int(index_1d)
