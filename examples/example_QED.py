@@ -52,8 +52,11 @@ def run_QED_simulation(par: dict) -> dict:
     local_obs = ["E2"]
     local_obs += [f"E2_{s}{d}" for d in model.directions for s in "mp"]
     if not model.pure_theory:
-        local_obs += ["N"]
-    for obs in local_obs:
+        local_obs += ["N", "N_zero"]
+    measure_obs = ["E2"]
+    if not model.pure_theory:
+        measure_obs += ["N"]
+    for obs in measure_obs:
         res[obs] = np.zeros(n_eigs, dtype=float)
     # LIST OF TWOBODY CORRELATORS
     twobody_obs = []
@@ -90,7 +93,7 @@ def run_QED_simulation(par: dict) -> dict:
     get_rdm = _get(par, ["observables", "get_RDM"], False)
     if get_entropy or get_rdm:
         model._get_partition(partition_indices)
-    res["entropy"] = np.zeros(model.H.n_eigs, dtype=float)
+        res["entropy"] = np.zeros(model.H.n_eigs, dtype=float)
     get_state_configs = _get(par, ["observables", "get_state_configs"], False)
     # -------------------------------------------------------------------------------
     # Main loop over eigenstates
@@ -139,8 +142,10 @@ def run_QED_simulation(par: dict) -> dict:
         # MEASURE OBSERVABLES
         if measure_obs:
             model.measure_observables(ii)
-            for obs in local_obs:
-                res[obs][ii] = np.mean(model.res[obs])
+            res["E2"][ii] = model.link_avg(obs_name="E2")
+            if not model.pure_theory:
+                res["N"][ii] += 0.5 * model.stag_avg(model.res["N"], "even")
+                res["N"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "odd")
             for obs_names_list in plaquette_obs:
                 obs = "_".join(obs_names_list)
                 res[obs][ii] = model.res[obs]
@@ -157,7 +162,7 @@ par = {
         "lvals": [4, 2],
         "has_obc": [True, True],
         "spin": 1,
-        "pure_theory": True,
+        "pure_theory": False,
         "ham_format": "sparse",
     },
     "hamiltonian": {
@@ -176,8 +181,8 @@ par = {
         "get_state_configs": True,
         "get_overlap": False,
     },
-    "g": 0.5,
-    "m": 1,
+    "g": 10,
+    "m": 10,
 }
 run_QED_simulation(par)
 # %%
@@ -219,7 +224,7 @@ par = {
         "spin": 1,
         "pure_theory": False,
         "ham_format": "sparse",
-        "bg_list": [0, 0, 0, 0, 0, 0],
+        "bg_list": [1, 0, 0, 0, 0, 0, 0, -1],
     },
     "hamiltonian": {
         "n_eigs": 1,
@@ -237,8 +242,39 @@ par = {
         "get_state_configs": True,
         "get_overlap": False,
     },
-    "g": 1,
+    "g": 10,
     "m": 1,
 }
 res = run_QED_simulation(par)
+for obs in res:
+    print(f"{obs} {res[obs]}")
+# %%
+mlist = np.logspace(-1, 2, 10)
+plot_res = {
+    "E2": np.zeros(len(mlist)),
+    "N": np.zeros(len(mlist)),
+}
+for ii, m in enumerate(mlist):
+    par["m"] = m
+    res = run_QED_simulation(par)
+    print(f"m {m} N {res['N']} E2 {res['E2']}")
+    plot_res["E2"][ii] = res["E2"]
+    plot_res["N"][ii] = res["N"]
+
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from matplotlib.colors import LogNorm
+
+fig, axs = plt.subplots(
+    1,
+    1,
+    sharex=True,
+    constrained_layout=True,
+)
+
+axs.plot(mlist, plot_res["E2"], "-o", label="E2")
+axs.plot(mlist, plot_res["N"], "-o", label="N")
+axs.set_xscale("log")
+fig.legend()
+
 # %%

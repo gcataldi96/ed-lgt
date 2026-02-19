@@ -157,6 +157,7 @@ def QED_dressed_site_operators(
             ops |= Qs
             # Psi Number operators
             ops["N"] = qmb_op(in_ops, ["N", "Iz", "Iz"])
+            ops["N_zero"] = qmb_op(in_ops, ["N_zero", "Iz", "Iz"])
     elif lattice_dim == 2:
         # Rishon Electric operators
         for op in ["E", "E2", "n", "P"]:
@@ -186,6 +187,7 @@ def QED_dressed_site_operators(
             ops |= Qs
             # Psi Number operators
             ops["N"] = qmb_op(in_ops, ["N", "Iz", "Iz", "Iz", "Iz"])
+            ops["N_zero"] = qmb_op(in_ops, ["N_zero", "Iz", "Iz", "Iz", "Iz"])
     elif lattice_dim == 3:
         # Rishon Electric operators
         for op in ["E", "E2", "n", "P"]:  # , "Ep1", "E0", "Em1"]:
@@ -247,6 +249,8 @@ def QED_dressed_site_operators(
             ops |= Qs
             # Psi Number operators
             ops["N"] = qmb_op(in_ops, ["N", "Iz", "Iz", "Iz", "Iz", "Iz", "Iz"])
+            op_list = ["N_zero", "Iz", "Iz", "Iz", "Iz", "Iz", "Iz"]
+            ops["N_zero"] = qmb_op(in_ops, op_list)
     # E_square operators
     ops["E2"] = 0
     for d in dimensions:

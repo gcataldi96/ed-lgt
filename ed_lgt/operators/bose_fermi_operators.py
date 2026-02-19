@@ -53,6 +53,8 @@ def fermi_operators(has_spin, colors=False, fermionic=True):
             for s in ["r", "g"]:
                 ops[f"psi_{s}_dag"] = ops[f"psi_{s}"].transpose()
                 ops[f"psi_{s}_dag_P"] = ops[f"psi_{s}_dag"] @ ops["P_psi"]
+    else:
+        ops["N_zero"] = ops["ID"] - ops["N"]
     return ops
 
 
