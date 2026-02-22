@@ -36,7 +36,7 @@ class SU2_Rishon:
         P_diag = []
         for s_size in range(self.largest_s_size):
             P_diag += [(-1) ** s_size] * (s_size + 1)
-        self.ops["P"] = diags(P_diag, 0, self.shape)
+        self.ops["P"] = diags(P_diag, 0, self.shape, dtype=np.float64, format="csr")
         self.ops["Iz"] = identity(self.size, dtype=float)
         # In the special case of s=1/2, the shape of rishon is simpler
         cf = 1 / (2 ** (0.25))
@@ -100,7 +100,7 @@ class SU2_Rishon_gen:
         P_diag = []
         for s_size in range(self.largest_s_size):
             P_diag += [(-1) ** s_size] * (s_size + 1)
-        self.ops["P"] = diags(P_diag, 0, self.shape)
+        self.ops["P"] = diags(P_diag, 0, self.shape, dtype=np.float64, format="csr")
         self.ops["Iz"] = identity(self.size, dtype=float)
         # ---------------------------------------------------------------------
         # Starting diagonals of the s=0 case for the red and green rishon

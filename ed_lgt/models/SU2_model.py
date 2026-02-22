@@ -147,6 +147,7 @@ class SU2_Model(QuantumModel):
         logger.info(f"----------------------------------------------------")
         logger.info("BUILDING (H)ardocore (G)luon J=1/2 HAMILTONIAN")
         logger.info(f"g={g}, m={m}, theta={theta}, lambda_noise={lambda_noise}")
+        logger.info(f"----------------------------------------------------")
         # Hamiltonian Coefficients
         self.SU2_Hamiltonian_couplings(g, m, theta)
         h_terms = {}
@@ -713,9 +714,11 @@ class SU2_Model(QuantumModel):
                     logger.info(f"Relative |HP-PH|={absnorm}")
                     raise ValueError(f"config {ii} {cfg} not symmetrized")
 
-    def print_state_config(self, config):
+    def print_state_config(self, config, amplitude=None):
         logger.info(f"----------------------------------------------------")
         logger.info(f"SINGLETS IN CONFIG {config}")
+        if amplitude is not None:
+            logger.info(f"Amplitude: {np.abs(amplitude)**2:.8f}")
         logger.info(f"----------------------------------------------------")
         for ii, cfg_idx in enumerate(config):
             msg = f"site {ii} state {cfg_idx}"

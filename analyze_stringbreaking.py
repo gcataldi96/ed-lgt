@@ -40,6 +40,41 @@ for density in ["fd", "zd"]:
 for ii, g in enumerate(gvals):
     for kk, m in enumerate(mvals):
         res["diff"][ii, kk] = res["fd"]["energy"][ii, kk] - res["zd"]["energy"][ii, kk]
+# diff (float)
+diff = res["fd"]["energy"] - res["zd"]["energy"]  # shape (glen, mlen)
+res["diff1"] = diff
+# sign map: +1 if positive, -1 if negative, (0 if |diff|<=atol)
+atol = 1e-13
+sign = np.sign(diff)
+sign[np.abs(diff) <= atol] = 0  # optional
+res["diff_sign"] = sign.astype(np.int8)
+from matplotlib.colors import ListedColormap, BoundaryNorm
+
+X = res["diff_sign"]  # {-1,0,+1}
+cmap = ListedColormap(["#2166ac", "#f7f7f7", "#b2182b"])  # blue, white, red
+norm = BoundaryNorm([-1.5, -0.5, 0.5, 1.5], cmap.N)
+fig, ax = plt.subplots(1, 1, constrained_layout=True)
+ax.set(
+    xlabel=r"m",
+    ylabel=r"$g^{2}$",
+    xticks=[-2, -1, 0, 1, 2],
+    yticks=[-2, -1, 0, 1, 2],
+)
+ax.xaxis.set_major_formatter(fake_log)
+ax.yaxis.set_major_formatter(fake_log)
+img = ax.imshow(X, origin="lower", extent=[-2, 2, -2, 2], cmap=cmap, norm=norm)
+cb = fig.colorbar(
+    img,
+    ax=ax,
+    ticks=[-1, 0, +1],
+    aspect=20,
+    location="right",
+    orientation="vertical",
+    pad=0.01,
+    label="$E_{N=6}-E_{N=4}$",
+)
+cb.set_ticklabels([r"fd lower", r"tie", r"zd lower"])
+plt.savefig("desity_SU2_nobg.pdf")
 # %%
 obs = "N_single"
 fig, ax = plt.subplots(1, 1, constrained_layout=True)
@@ -47,11 +82,12 @@ fig, ax = plt.subplots(1, 1, constrained_layout=True)
 X = res["diff"]
 # X = res["fd"][obs]
 img = plt.imshow(
-    X, cmap="seismic", origin="lower", extent=[-2, 2, -2, 2], vmin=-1, vmax=+1
-)
+    X, cmap="seismic", origin="lower", extent=[-2, 2, -2, 2]
+)  # , vmin=-1, vmax=+1
+
 ax.set(
     xlabel=r"m",
-    ylabel=r"g^{2}",
+    ylabel=r"$g^{2}$",
     xticks=[-2, -1, 0, 1, 2],
     yticks=[-2, -1, 0, 1, 2],
 )
@@ -66,6 +102,7 @@ cb = fig.colorbar(
     pad=0.01,
     label="$E_{N=6}-E_{N=4}$",
 )
+plt.savefig("density_SU2_phasediagram_nobg.pdf")
 # %%
 # ===================================================================
 # STRING BREAKING PHASE DIAGRAM

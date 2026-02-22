@@ -168,7 +168,12 @@ def run_SU2_spectrum(par: dict) -> dict:
             # ---------------------------------------------------------------------------
             # STATE CONFIGURATIONS
             if get_state_configs:
-                model.H.Npsi[ii].get_state_configurations(1e-3, model.sector_configs)
+                cfgs, vals = model.H.Npsi[ii].get_state_configurations(
+                    1e-2, model.sector_configs, return_configs=True
+                )
+                logger.info(f"State configurations for eigenstate {ii}:")
+                for cfg, val in zip(cfgs, vals):
+                    model.print_state_config(cfg, amplitude=val)
             if get_PE:
                 res["PE"][ii] = model.H.Npsi[ii].participation_renyi_entropy()
             if get_SRE:
@@ -502,11 +507,11 @@ def run_SU2_bg_groundstate(par: dict) -> dict:
 # %%
 par = {
     "model": {
-        "lvals": [10],
+        "lvals": [10, 3],
         "sectors": [10],
-        "has_obc": [False],
+        "has_obc": [True, True],
         "spin": 0.5,
-        "pure_theory": False,
+        "pure_theory": True,
         "background": 0,
         "ham_format": "sparse",
     },
@@ -521,14 +526,14 @@ par = {
     },
     "observables": {
         "measure_obs": True,
-        "get_entropy": True,
+        "get_entropy": False,
         "entropy_partition": [0, 1, 2],
         "get_state_configs": True,
         "get_overlap": False,
-        "get_PE": True,
-        "get_SRE": True,
+        "get_PE": False,
+        "get_SRE": False,
     },
-    "g": 5,
+    "g": 0.1,
     "m": 1,
 }
 run_SU2_spectrum(par)
@@ -608,9 +613,9 @@ fig.savefig("PE2_Scar_SU2_PV.pdf")
 par = {
     "model": {
         "lvals": [2, 2, 2],
-        "has_obc": [True, True, True],
-        "spin": 0.5,
-        "pure_theory": False,
+        "has_obc": [False, False, False],
+        "spin": 1,
+        "pure_theory": True,
         "background": 0,
         "ham_format": "linear",
         "sectors": [6],
@@ -632,9 +637,9 @@ par = {
         "get_state_configs": True,
         "get_overlap": False,
     },
-    "g": 1,
+    "g": 10,
     "m": 1,
-    "theta": 0,
+    "theta": 10,
 }
 res = run_SU2_spectrum(par)
 
