@@ -282,7 +282,9 @@ def commutator(A, B):
     """
     validate_parameters(spmatrix=A)
     validate_parameters(spmatrix=B)
-    return A * B - B * A
+    A = A.tocsr() if hasattr(A, "tocsr") else A
+    B = B.tocsr() if hasattr(B, "tocsr") else B
+    return A @ B - B @ A
 
 
 def anti_commutator(A, B):
@@ -302,7 +304,9 @@ def anti_commutator(A, B):
     """
     validate_parameters(spmatrix=A)
     validate_parameters(spmatrix=B)
-    return A * B + B * A
+    A = A.tocsr() if hasattr(A, "tocsr") else A
+    B = B.tocsr() if hasattr(B, "tocsr") else B
+    return A @ B + B @ A
 
 
 def check_commutator(A, B):
