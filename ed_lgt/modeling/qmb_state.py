@@ -258,7 +258,9 @@ class QMB_state:
         logger.debug(f"BOND DIMENSION \chi=2^{entropy}: {chi_min}<{chi_exact}")
         return entropy
 
-    def get_state_configurations(self, threshold=1e-2, sector_configs=None):
+    def get_state_configurations(
+        self, threshold=1e-2, sector_configs=None, return_configs=False
+    ):
         """
         List out |psi> configurations whose amplitudes exceed `threshold`.
 
@@ -312,9 +314,11 @@ class QMB_state:
             # rescale all the amplitudes to have the first one real and positive
             rescaled_amp = amp * np.exp(-1j * np.angle(vals[0]))
             square_amp = np.abs(amp) ** 2
-            coords = " ".join(f"{c:2d}" for c in config)
+            coords = " ".join(f"{c:>3d}" for c in config)
             msg = f"[{coords}] |psi|^2={square_amp:6f} ({amp:6f})"
             logger.info(msg)
+        if return_configs:
+            return cfgs, vals
 
     def participation_renyi_entropy(self, alpha: int = 2) -> float:
         """

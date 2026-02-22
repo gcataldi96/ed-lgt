@@ -37,20 +37,27 @@ def QED_build_model_and_hamiltonian(par: dict) -> QED_Model:
 
 def QED_prepare_observables(model: QED_Model, par, n_points):
     # Local observables
+    theta = par.get("theta", 0.0) if model.pure_theory else 0
     local_obs = [f"E2_p{d}" for d in model.directions]
     if not model.pure_theory:
         local_obs += ["N"]
     # Two-body observables
     twobody_obs, twobody_axes = [], []
     # plaquettes
-    if model.spin < 1 and model.dim in (2, 3):
-        if model.dim == 2:
-            plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
-        else:
-            plaquette_obs = [
-                ["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"],
-                ["C_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
-                ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
+    # LIST OF PLAQUETTE OPERATORS
+    if model.dim == 2:
+        plaquette_obs = [["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"]]
+    elif model.dim == 3:
+        plaquette_obs = [
+            ["C_px,py", "C_py,mx", "C_my,px", "C_mx,my"],
+            ["C_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
+            ["C_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
+        ]
+        if np.abs(theta) > 1e-10:
+            plaquette_obs += [
+                ["EzC_px,py", "C_py,mx", "C_my,px", "C_mx,my"],
+                ["EyC_px,pz", "C_pz,mx", "C_mz,px", "C_mx,mz"],
+                ["ExC_py,pz", "C_pz,my", "C_mz,py", "C_my,mz"],
             ]
     else:
         plaquette_obs = []
@@ -71,10 +78,12 @@ def QED_prepare_observables(model: QED_Model, par, n_points):
     get_rdm = _get(par, ["observables", "get_RDM"], False)
     if get_entropy or get_rdm:
         model._get_partition(partition)
-    res["entropy"] = np.zeros(n_points, dtype=float)
+        res["entropy"] = np.zeros(n_points, dtype=float)
     # flags
     flags = dict(
         measure_obs=_get(par, ["observables", "measure_obs"], False),
+        local_obs=local_obs,
+        plaquette_obs=plaquette_obs,
         get_entropy=get_entropy,
         get_rdm=get_rdm,
         get_state_configs=_get(par, ["observables", "get_state_configs"], False),
@@ -123,6 +132,9 @@ def QED_measure_on_states(
             res["E2"][ii] = model.link_avg(obs_name="E2")
             if not model.pure_theory:
                 res["N"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "even")
+            for obs_names_list in flags["plaquette_obs"]:
+                obs = "_".join(obs_names_list)
+                res[obs][ii] = model.res[obs]
         # overlap
         if overlap_state is not None and _get(
             par, ["observables", "get_overlap"], False

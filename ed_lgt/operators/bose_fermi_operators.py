@@ -28,6 +28,7 @@ def fermi_operators(has_spin, colors=False, fermionic=True):
     ops["N"] = ops["psi_dag"] * ops["psi"]
     ops["ID_psi"] = identity(2, dtype=float)
     ops["ID"] = identity(2, dtype=float)
+    ops["psi_dag_P"] = ops["psi_dag"] @ ops["P_psi"]
     if has_spin:
         # up & down MATTER OPERATORS
         ops["psi_down"] = qmb_op(ops, ["psi", "ID"])

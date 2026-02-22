@@ -21,19 +21,40 @@ __all__ = [
 
 def QED_rishon_operators(spin, pure_theory, U, fermionic=True):
     """
-    This function computes the QED Rishon modes adopted
-    for the U(1) Lattice Gauge Theory for the chosen spin representation of the Gauge field.
+    Build single-rishon operators for a truncated U(1) quantum link model.
 
-    Args:
-        spin (scalar, int): spin representation of the U(1) Gauge field,
-        corresponding to a gauge Hilbert space of dimension (2 spin +1)
+    The local basis is the electric-field eigenbasis with dimension "2*spin + 1"
+    and eigenvalues "E = -spin, ..., +spin" (in increasing order). The operator
+    "U" is implemented as a one-step shift in this basis (chosen so that it
+    raises "E" by one unit where defined).
 
-        pure_theory (bool): If true, the dressed site includes matter fields
+    If "fermionic=True", rishons are treated as fermionic modes via a local
+    parity operator "P = (-1)**n" and the convention::
 
-        U (str): which version of U you want to use to obtain rishons: 'ladder', 'spin'
+        Zp     = U @ P
+        Zm_dag = U
+        Zm     = Zm_dag.T
+        Zp_dag = Zp.T
 
-    Returns:
-        dict: dictionary with the rishon operators and the parity
+    Convenience composites used in corner/plaquette constructions are also
+    provided (e.g. "Zp_P", "P_Zm_dag").
+
+    Parameters
+    ----------
+    spin : int
+        Truncation parameter (local dimension "2*spin + 1").
+    pure_theory : bool
+        Included for API consistency and validation.
+    U : {"ladder", "spin"}
+        Shift amplitude convention: constant ("ladder") or spin-weighted ("spin").
+    fermionic : bool, optional
+        If True, include parity and enforce fermionic anticommutation checks.
+
+    Returns
+    -------
+    dict
+        Sparse operator dictionary with keys "P, U, Zp, Zm, Zp_dag, Zm_dag, Iz, E, E2"
+        and related composites.
     """
     validate_parameters(spin_list=[spin], pure_theory=pure_theory)
     if not isinstance(U, str):
@@ -45,52 +66,54 @@ def QED_rishon_operators(spin, pure_theory, U, fermionic=True):
     ops = {}
     # PARITY OPERATOR of RISHON MODES
     if fermionic:
-        ops["P"] = diags([(-1) ** i for i in range(size)], 0, shape)
+        ops["P"] = diags([(-1) ** i for i in range(size)], 0, shape, dtype=float)
     else:
-        ops["P"] = identity(size)
+        ops["P"] = identity(size, dtype=float)
     # Based on the U definition, define the diagonal entries of the rishon modes
     if U == "ladder":
-        zm_diag = [(-1) ** (i + 1) for i in range(size - 1)][::-1]
-        U_diag = np.ones(size - 1)
-        ops["U"] = diags(U_diag, -1, shape)
-        # RISHON MODES
-        ops["Zp"] = diags(np.ones(size - 1), 1, shape)
-        ops["Zm"] = diags(zm_diag, 1, shape)
+        S_diag = np.ones(size - 1, dtype=float)
     elif U == "spin":
-        sz_diag = np.arange(-spin, spin + 1)[::-1]
-        U_diag = (np.sqrt(spin * (spin + 1) - sz_diag[:-1] * (sz_diag[:-1] - 1))) / spin
-        zm_diag = [U_diag[i] * ((-1) ** (i + 1)) for i in range(size - 1)][::-1]
-        ops["U"] = diags(U_diag, -1, shape)
-        # RISHON MODES
-        ops["Zp"] = diags(np.ones(size - 1), 1, shape)
-        ops["Zm"] = diags(zm_diag, 1, shape)
+        # Treat local basis as m = -j,...,j (reversed)
+        sz_vals = np.arange(-spin, spin + 1, dtype=float)[::-1]
+        S_diag = (np.sqrt(spin * (spin + 1) - sz_vals[1:] * (sz_vals[1:] - 1))) / spin
     else:
-        raise ValueError(f"U can only be 'ladder', 'spin', not {U}")
+        raise ValueError(f"U can only be 'ladder' or 'spin', not {U!r}")
+    # Parallel transporter definition
+    Uop = diags(S_diag, -1, shape, dtype=float)  # raises E by +1
+    ops["U"] = Uop
+    # RISHON OPERATORS
+    ops["Zp"] = Uop @ ops["P"]  # Zp = S x P
+    ops["Zm_dag"] = Uop  # Zm_dag = S
     # DAGGER OPERATORS of RISHON MODES
-    for s in "pm":
-        ops[f"Z{s}_dag"] = ops[f"Z{s}"].transpose()
-    # PERFORM CHECKS
-    for s in "pm":
-        # CHECK RISHON MODES TO BEHAVE LIKE FERMIONS
-        # anticommute with parity
-        if norm(anti_comm(ops[f"Z{s}"], ops["P"])) > 1e-15:
-            raise ValueError(f"Z{s} is a Fermion and must anticommute with P")
+    ops["Zp_dag"] = ops["Zp"].transpose()  # (S x P)^T = P x S^T since P diagonal
+    ops["Zm"] = ops["Zm_dag"].transpose()
+    # USEFUL OPERATORS FOR THE CORNER TERMS
+    ops["Zm_P"] = ops["Zm"] @ ops["P"]
+    ops["Zp_P"] = ops["Zp"] @ ops["P"]
+    ops["P_Zm_dag"] = ops["P"] @ ops["Zm_dag"]
+    ops["P_Zp_dag"] = ops["P"] @ ops["Zp_dag"]
     # IDENTITY OPERATOR
-    ops["Iz"] = identity(size)
-    # Useful operators for Corners
-    ops["Zm_P"] = ops["Zm"] * ops["P"]
-    ops["Zp_P"] = ops["Zp"] * ops["P"]
-    ops["P_Zm_dag"] = ops["P"] * ops["Zm_dag"]
-    ops["P_Zp_dag"] = ops["P"] * ops["Zp_dag"]
+    ops["Iz"] = identity(size, dtype=float)
     # ELECTRIC FIELD OPERATORS
-    ops["n"] = diags(np.arange(size), 0, shape)
-    ops["E"] = ops["n"] - 0.5 * (size - 1) * identity(size)
+    ops["E"] = diags(np.arange(-spin, spin + 1, 1, dtype=float), 0, shape, dtype=float)
     ops["E2"] = ops["E"] ** 2
+    # In case with dynamical matter, check FERMIONIC RISHONS
+    if fermionic:
+        for key in ["Zp", "Zm", "Zp_dag", "Zm_dag"]:
+            # anticommute with parity
+            if norm(anti_comm(ops[key], ops["P"])) > 1e-15:
+                raise ValueError(f"{key} is a Fermion and must anticommute with P")
     return ops
 
 
 def QED_dressed_site_operators(
-    spin, pure_theory, lattice_dim, U="ladder", fermionic=True, background=0
+    spin,
+    pure_theory,
+    lattice_dim,
+    U="ladder",
+    fermionic=True,
+    background=0,
+    check_gauss_law=False,
 ):
     """
     This function generates the dressed-site operators of the QED Hamiltonian
@@ -135,11 +158,13 @@ def QED_dressed_site_operators(
         # Acquire also matter field operators
         tot_dim *= 2
         in_ops |= QED_matter_operators(has_spin=False, fermionic=fermionic)
+    if background > 0:
+        tot_dim *= 2 * background + 1
     # Dictionary for operators
     ops = {}
     if lattice_dim == 1:
         # Rishon Electric operators
-        for op in ["E", "E2", "n", "P"]:
+        for op in ["E", "E2", "P"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz"])
             ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", op])
         if not pure_theory:
@@ -147,20 +172,21 @@ def QED_dressed_site_operators(
             for op in ops.keys():
                 ops[op] = kron(in_ops["ID_psi"], ops[op])
             # Add Hopping operators
-            ops["Q_mx_dag"] = qmb_op(in_ops, ["psi_dag", "Zm", "Iz"])
-            ops["Q_px_dag"] = qmb_op(in_ops, ["psi_dag", "P", "Zp"])
+            ops["Q_mx_dag"] = qmb_op(in_ops, ["psi_dag_P", "Zm", "Iz"])
+            ops["Q_px_dag"] = qmb_op(in_ops, ["psi_dag_P", "P", "Zp"])
             # and their dagger operators
             Qs = {}
-            for op in ops:
-                dag_op = op.replace("_dag", "")
-                Qs[dag_op] = csr_matrix(ops[op].conj().transpose())
+            for op_name, op_mat in ops.items():
+                if op_name.endswith("_dag"):
+                    dag_name = op_name[:-4]  # drop "_dag"
+                    Qs[dag_name] = csr_matrix(op_mat.conj().transpose())
             ops |= Qs
             # Psi Number operators
             ops["N"] = qmb_op(in_ops, ["N", "Iz", "Iz"])
             ops["N_zero"] = qmb_op(in_ops, ["N_zero", "Iz", "Iz"])
     elif lattice_dim == 2:
         # Rishon Electric operators
-        for op in ["E", "E2", "n", "P"]:
+        for op in ["E", "E2", "P"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz"])
             ops[f"{op}_px"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz"])
@@ -175,22 +201,23 @@ def QED_dressed_site_operators(
             for op in ops.keys():
                 ops[op] = kron(in_ops["ID_psi"], ops[op])
             # Hopping operators
-            ops["Q_mx_dag"] = qmb_op(in_ops, ["psi_dag", "Zm", "Iz", "Iz", "Iz"])
-            ops["Q_my_dag"] = qmb_op(in_ops, ["psi_dag", "P", "Zm", "Iz", "Iz"])
-            ops["Q_px_dag"] = qmb_op(in_ops, ["psi_dag", "P", "P", "Zp", "Iz"])
-            ops["Q_py_dag"] = qmb_op(in_ops, ["psi_dag", "P", "P", "P", "Zp"])
+            ops["Q_mx_dag"] = qmb_op(in_ops, ["psi_dag_P", "Zm", "Iz", "Iz", "Iz"])
+            ops["Q_my_dag"] = qmb_op(in_ops, ["psi_dag_P", "P", "Zm", "Iz", "Iz"])
+            ops["Q_px_dag"] = qmb_op(in_ops, ["psi_dag_P", "P", "P", "Zp", "Iz"])
+            ops["Q_py_dag"] = qmb_op(in_ops, ["psi_dag_P", "P", "P", "P", "Zp"])
             # Add dagger operators
             Qs = {}
-            for op in ops:
-                dag_op = op.replace("_dag", "")
-                Qs[dag_op] = csr_matrix(ops[op].conj().transpose())
+            for op_name, op_mat in ops.items():
+                if op_name.endswith("_dag"):
+                    dag_name = op_name[:-4]  # drop "_dag"
+                    Qs[dag_name] = csr_matrix(op_mat.conj().transpose())
             ops |= Qs
             # Psi Number operators
             ops["N"] = qmb_op(in_ops, ["N", "Iz", "Iz", "Iz", "Iz"])
             ops["N_zero"] = qmb_op(in_ops, ["N_zero", "Iz", "Iz", "Iz", "Iz"])
     elif lattice_dim == 3:
         # Rishon Electric operators
-        for op in ["E", "E2", "n", "P"]:  # , "Ep1", "E0", "Em1"]:
+        for op in ["E", "E2", "P"]:  # , "Ep1", "E0", "Em1"]:
             ops[f"{op}_mx"] = qmb_op(in_ops, [op, "Iz", "Iz", "Iz", "Iz", "Iz"])
             ops[f"{op}_my"] = qmb_op(in_ops, ["Iz", op, "Iz", "Iz", "Iz", "Iz"])
             ops[f"{op}_mz"] = qmb_op(in_ops, ["Iz", "Iz", op, "Iz", "Iz", "Iz"])
@@ -267,24 +294,26 @@ def QED_dressed_site_operators(
         else:
             id_list = ["ID_psi"] + ["Iz" for _ in range(2 * lattice_dim)]
         ops["bg"] = qmb_op(in_ops, ["E"] + id_list)
-    # Define Gauss Law operators of hard-core lattice sites
-    if spin > 4 and lattice_dim < 3:
-        # GAUSS LAW OPERATORS
+    # -----------------------------------------------------------------------------
+    # # GAUSS LAW OPERATORS on hard-core lattice sites
+    if check_gauss_law:
         gauss_law_ops = {}
         for ii, site in enumerate(core_site_list):
-            gauss_law_ops[site] = -(
-                lattice_dim * (z_size - 1) + 0.5 * (1 - parity[ii])
-            ) * identity(tot_dim)
+            gauss_law_ops[site] = 0
             for d in dimensions:
-                for s in "mp":
-                    gauss_law_ops[site] += ops[f"n_{s}{d}"]
+                gauss_law_ops[site] += ops[f"E_p{d}"] - ops[f"E_m{d}"]
             if not pure_theory:
-                gauss_law_ops[site] += ops["N"]
+                stagger_offset = 0.5 * (1 - parity[ii])  # 0 even, 1 odd
+                gauss_law_ops[site] -= ops["N"] - stagger_offset * identity(tot_dim)
+            if background > 0:
+                gauss_law_ops[site] -= ops["bg"]
         QED_check_gauss_law(spin, pure_theory, lattice_dim, gauss_law_ops)
     return ops
 
 
-def QED_check_gauss_law(spin, pure_theory, lattice_dim, gauss_law_ops, threshold=1e-15):
+def QED_check_gauss_law(
+    spin, pure_theory, lattice_dim, gauss_law_ops, background=0, threshold=1e-15
+):
     """
     This function perform a series of checks to the gauge invariant dressed-site local basis
     of the QED Hamiltonian, in order to verify that Gauss Law is effectively satified.
@@ -318,10 +347,10 @@ def QED_check_gauss_law(spin, pure_theory, lattice_dim, gauss_law_ops, threshold
         threshold=threshold,
     )
     if not isinstance(gauss_law_ops, dict):
-        raise TypeError(f"pure_theory should be a DICT, not a {type(gauss_law_ops)}")
+        raise TypeError(f"gauss_law_ops should be a DICT, not a {type(gauss_law_ops)}")
     # This functions performs some checks on the QED gauge invariant basis
-    M, _ = QED_gauge_invariant_states(
-        spin, pure_theory, lattice_dim, get_only_bulk=True
+    gauge_basis, _ = QED_gauge_invariant_states(
+        spin, pure_theory, lattice_dim, get_only_bulk=True, background=background
     )
     if pure_theory:
         site_list = ["site"]
@@ -329,19 +358,22 @@ def QED_check_gauss_law(spin, pure_theory, lattice_dim, gauss_law_ops, threshold
         site_list = ["even", "odd"]
     for site in site_list:
         # True and the Effective dimensions of the gauge invariant dressed site
-        site_dim = M[site].shape[0]
-        eff_site_dim = M[site].shape[1]
+        site_dim = gauge_basis[site].shape[0]
+        eff_site_dim = gauge_basis[site].shape[1]
         # Check that the Matrix Basis behave like an isometry
-        if norm(M[site].transpose() * M[site] - identity(eff_site_dim)) > threshold:
-            raise ValueError(f"The gauge basis M on {site} sites is not an Isometry")
-        # Check that M*M^T is a Projector
-        Proj = M[site] * M[site].transpose()
+        projector = gauge_basis[site]
+        norm_Pdagger_P = norm(projector.T * projector - identity(eff_site_dim))
+        if norm_Pdagger_P > threshold:
+            logger.info(f"Norm of P^T*P - I: {norm_Pdagger_P}, expected 0")
+            msg = f"The gauge basis on {site} sites does not provide an Isometry"
+            raise ValueError(msg)
+        # Check that P*P^T is a Projector
+        Proj = gauge_basis[site] * gauge_basis[site].T
         if norm(Proj - Proj**2) > threshold:
-            raise ValueError(
-                f"Gauge basis on {site} sites must provide a projector P=M*M^T"
-            )
+            msg = f"Gauge basis on {site} sites must provide a projector P*P^T"
+            raise ValueError(msg)
         # Check that the basis is the one with ALL the states satisfying Gauss law
-        norm_GL = norm(gauss_law_ops[site] * M[site])
+        norm_GL = norm(gauss_law_ops[site] * gauge_basis[site])
         if norm_GL > threshold:
             logger.info(f"Norm of GL * Basis: {norm_GL}, expected 0")
             raise ValueError(f"Gauss Law not satisfied for {site} sites")
@@ -405,12 +437,11 @@ def QED_gauge_invariant_states(
             raise TypeError(f"spin must be SCALAR & INTEGER, not {type(spin)}")
     logger.info("----------------------------------------------------")
     logger.info(f"QED GAUGE INVARIANT STATES s={spin}, bg={background}")
-    rishon_size = int(2 * spin + 1)
-    single_rishon_configs = np.arange(rishon_size)
+    single_rishon_configs = np.arange(-spin, spin + 1, 1, dtype=int)
     # List of borders/corners of the lattice
     borders = get_lattice_borders_labels(lattice_dim)
     # List of configurations for each element of the dressed site
-    dressed_site_config_list = [single_rishon_configs for i in range(2 * lattice_dim)]
+    dressed_site_config_list = [single_rishon_configs for _ in range(2 * lattice_dim)]
     # Distinction between pure and full theory
     if pure_theory:
         core_labels = ["site"]
@@ -420,8 +451,7 @@ def QED_gauge_invariant_states(
         parity = [1, -1]
         # matter occupation (0/1)
         dressed_site_config_list.insert(0, np.arange(2))
-    # Add background charge as the (sum(physical_config) + q_bg)
-    # leftmost dof (outermost loop in product)
+    # Add background charge as the leftmost dof (outermost loop in product)
     if background > 0:
         background_values = np.arange(-background, background + 1, dtype=int)
         dressed_site_config_list.insert(0, background_values)
@@ -447,17 +477,28 @@ def QED_gauge_invariant_states(
             # Update row counter
             row_counter += 1
             # Split out the background charge if present
-            if background_offset == 1:
+            if background_offset:
                 q_bg = config[0]
-                physical_config = config[1:]  # matter (optional) + rishons
+                physical_config = config[1:]  # matter (optional) + gauge fields
             else:
                 q_bg = 0
-                physical_config = config  # matter (optional) + rishons
-            # Define Gauss Law
-            lhs_side = sum(physical_config) - q_bg
-            rhs_side = lattice_dim * (rishon_size - 1) + 0.5 * (1 - parity[ii])
-            # Enforce GAUSS LAW: sum(physical dofs) + q_bg == rhs
-            if lhs_side == rhs_side:
+                physical_config = config  # matter (optional) + gauge fields
+            if pure_theory:
+                matter_charge = 0
+                electric_fields_config = physical_config
+            else:
+                n_psi = int(physical_config[0])  # 0/1
+                stagger_offset = int(0.5 * (1 - parity[ii]))  # 0 even, 1 odd
+                matter_charge = n_psi - stagger_offset
+                electric_fields_config = physical_config[1:]
+            # Measure the divergence of the electric field for the given configuration
+            divergence_E = 0
+            for mu in range(lattice_dim):
+                E_m = electric_fields_config[mu]
+                E_p = electric_fields_config[mu + lattice_dim]
+                divergence_E += E_p - E_m
+            # Check Gauss Law: divergence of E must be equal to the total charge (matter + background)
+            if divergence_E == (matter_charge + q_bg):
                 # FIX row and col of the site basis
                 row[main_label].append(row_counter)
                 col_counter[main_label] += 1
@@ -466,7 +507,7 @@ def QED_gauge_invariant_states(
                 # Get the config labels: border classification should ignore background charge
                 # (and see exactly the same local structure as before, up to the same ordering)
                 border_labels = LGT_border_configs(
-                    physical_config, spin, pure_theory, get_only_bulk
+                    physical_config, 0, pure_theory, get_only_bulk
                 )
                 if border_labels:
                     # save the config state also in the specific subset for the specif border

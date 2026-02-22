@@ -49,7 +49,9 @@ class QED_Model(QuantumModel):
             global_sectors = [int(self.n_sites / 2)]
         # -------------------------------------------------------------------------------
         # LINK SYMMETRIES
-        link_ops = [[self.ops[f"E_p{d}"], self.ops[f"E_m{d}"]] for d in self.directions]
+        link_ops = [
+            [self.ops[f"E_p{d}"], -self.ops[f"E_m{d}"]] for d in self.directions
+        ]
         link_sectors = [0 for _ in self.directions]
         # -------------------------------------------------------------------------------
         # ELECTRIC-FLUX “NBODY” SYMMETRIES
@@ -296,3 +298,65 @@ class QED_Model(QuantumModel):
                 "B": -0.5 / g,
             }
         self.coeffs = coeffs
+
+    def overlap_QMB_state(self, name):
+        # MINIMAL STRING CONFIGURATIONS IN 3D QED WITH BACKGROUND charges
+        if len(self.lvals) == 3 and self.bg_list == [-1, 0, 0, 0, 0, 0, 0, 1]:
+            if name == "S1":
+                config_state = np.array([4, 9, 9, 3, 6, 0, 3, 10])
+            elif name == "S2":
+                config_state = np.array([3, 9, 6, 0, 9, 3, 3, 11])
+            elif name == "S3":
+                config_state = np.array([1, 7, 9, 3, 9, 2, 3, 10])
+            elif name == "S4":
+                config_state = np.array([4, 9, 9, 3, 7, 3, 0, 8])
+            elif name == "S5":
+                config_state = np.array([1, 6, 9, 2, 9, 3, 3, 11])
+            elif name == "S6":
+                config_state = np.array([3, 9, 7, 3, 9, 3, 2, 8])
+            else:
+                raise ValueError(f"Unknown String name: {name}")
+            return config_state
+        else:
+            raise NotImplementedError("Only 3D QED states are supported")
+
+    def print_state_config(self, config, amplitude=None):
+        logger.info(f"----------------------------------------------------")
+        msg = f"CONFIG {config}"
+        if amplitude is not None:
+            msg += f" |psi|^2={np.abs(amplitude)**2:.8f}"
+        logger.info(msg)
+        logger.info(f"----------------------------------------------------")
+        # Choose width (sign + digits).
+        max_abs = 1
+        max_abs = max(max_abs, int(abs(getattr(self, "spin", 1))))
+        max_abs = max(max_abs, int(abs(getattr(self, "background", 0))))
+        entry_width = len(str(max_abs)) + 2
+        logger.info(f"{'':>19s}{self._format_header(entry_width)}")
+        for ii, cfg_idx in enumerate(config):
+            loc_basis_state = self.gauge_states_per_site[ii][cfg_idx]
+            state_str = (
+                "["
+                + " ".join(f"{val:>{entry_width}d}" for val in loc_basis_state)
+                + " ]"
+            )
+            logger.info(f"SITE {ii:>2d} state {cfg_idx:>3d}: {state_str}")
+
+    def _local_state_labels(self) -> list[str]:
+        labels: list[str] = []
+        # Background first (only if present in your effective gauge states)
+        if getattr(self, "background", 0) > 0:
+            labels.append("bg")
+        # Matter occupation (only if not pure theory)
+        if not getattr(self, "pure_theory", True):
+            labels.append("M")
+        # Links: -x,-y,-z,+x,+y,+z up to dim
+        dim = int(getattr(self, "dim", 0))
+        dirs = "xyz"[:dim]
+        labels += [f"-{d}" for d in dirs] + [f"+{d}" for d in dirs]
+        return labels
+
+    def _format_header(self, entry_width: int) -> str:
+        labels = self._local_state_labels()
+        header = "[" + " ".join(f"{lab:>{entry_width}s}" for lab in labels) + " ]"
+        return header

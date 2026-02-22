@@ -278,12 +278,14 @@ class QuantumModel:
         else:
             self.loc_dims = loc_dims.copy()
         # -------------------------------------------------------------------------
+        self.gauge_states_per_site = []
         # build per-site background-sector column selections (if requested)
         sector_cols_per_site = None
         if (bg_sector_list is not None) and (self.gauge_basis is not None):
             if len(bg_sector_list) != self.n_sites:
                 raise ValueError("bg_sector_list must have length self.n_sites")
             sector_cols_per_site = [None] * self.n_sites
+            # For each site the specific GI states compatible with the given BG charge
             for ii in range(self.n_sites):
                 site_label = self.lattice_labels[ii]
                 bg_value = int(bg_sector_list[ii])
@@ -296,7 +298,15 @@ class QuantumModel:
                 # store cols (explicit list is safest; contiguous slicing is just an optimization)
                 sector_cols_per_site[ii] = cols
                 self.loc_dims[ii] = cols.size
-        logger.info(f"local dimensions: {self.loc_dims}")
+                # Save the selected states for each site
+                self.gauge_states_per_site.append(self.gauge_states[site_label][cols])
+        elif (bg_sector_list is None) and (self.gauge_basis is not None):
+            for ii in range(self.n_sites):
+                site_label = self.lattice_labels[ii]
+                self.gauge_states_per_site.append(self.gauge_states[site_label])
+        logger.info(f"====================================================")
+        logger.info("LOCAL DIMENSION per SITE")
+        logger.info(f"{self.loc_dims}")
         # Determine the maximum local dimension
         max_loc_dim = int(np.max(self.loc_dims))
         # -----------------------------------------------------------------------------
