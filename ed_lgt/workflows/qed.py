@@ -6,7 +6,7 @@ from ed_lgt.models import QED_Model
 
 logger = logging.getLogger(__name__)
 
-__all__ = ["run_QED_spectrum"]
+__all__ = ["run_QED_spectrum", "check_observables"]
 
 
 def _get(d, path, default=None):
@@ -40,7 +40,7 @@ def QED_prepare_observables(model: QED_Model, par, n_points):
     theta = par.get("theta", 0.0) if model.pure_theory else 0
     local_obs = [f"E2_p{d}" for d in model.directions]
     if not model.pure_theory:
-        local_obs += ["N"]
+        local_obs += ["N", "N_zero"]
     # Two-body observables
     twobody_obs, twobody_axes = [], []
     # plaquettes
@@ -68,8 +68,7 @@ def QED_prepare_observables(model: QED_Model, par, n_points):
     # allocate results
     res = {}
     res["E2"] = np.zeros(n_points, dtype=float)
-    for obs in local_obs:
-        res[obs] = np.zeros(n_points, dtype=float)
+    res["N"] = np.zeros(n_points, dtype=float)
     for names in plaquette_obs:
         res["_".join(names)] = np.zeros(n_points, dtype=float)
     # entropy/RDM config
@@ -131,7 +130,8 @@ def QED_measure_on_states(
             model.measure_observables(ii, dynamics=dynamics)
             res["E2"][ii] = model.link_avg(obs_name="E2")
             if not model.pure_theory:
-                res["N"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "even")
+                res["N"][ii] += 0.5 * model.stag_avg(model.res["N"], "even")
+                res["N"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "odd")
             for obs_names_list in flags["plaquette_obs"]:
                 obs = "_".join(obs_names_list)
                 res[obs][ii] = model.res[obs]
@@ -222,3 +222,15 @@ def run_QED_dynamics(par):
     res["total_time"] = tot_time
     logger.info(f"TIME SIMS {tot_time:.5f}")
     return res
+
+
+def check_observables(res: dict, ref: dict, atol=1e-10, tag=""):
+    for key, val in ref.items():
+        if val is None:
+            continue
+        if key not in res:
+            raise KeyError(f"{tag}: missing observable '{key}'")
+        got = float(res[key][0])
+        if not abs(got - float(val)) < atol:
+            logger.info(f"{tag}: {key} expected {val} got {got}")
+            raise ValueError(f"{tag}: FAIL on observable '{key}'")

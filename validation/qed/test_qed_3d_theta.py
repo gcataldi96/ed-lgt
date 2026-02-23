@@ -1,4 +1,4 @@
-from ed_lgt.workflows.qed import run_QED_spectrum
+from ed_lgt.workflows.qed import run_QED_spectrum, check_observables
 import logging
 
 logger = logging.getLogger(__name__)
@@ -29,20 +29,21 @@ def main():
             "get_state_configs": False,
             "get_overlap": False,
         },
-        "g": 2.3277777777777775,
+        "g": 2.3,
         "theta": 0.41,
     }
     res = run_QED_spectrum(par)
     ref = {
-        "energy": -0.0892347822873874,
-        "E2": 0.242194958774601,
+        "energy": -0.37555632787741716,
+        "E2": 0.548060559355979,
+        "C_px,py_C_py,mx_C_my,px_C_mx,my": 0.05641112744051553,
+        "C_px,pz_C_pz,mx_C_mz,px_C_mx,mz": 0.05641112744051553,
+        "C_py,pz_C_pz,my_C_mz,py_C_my,mz": 0.05641112744051553,
+        "EzC_px,py_C_py,mx_C_my,px_C_mx,my": 0.3875548826814126,
+        "EyC_px,pz_C_pz,mx_C_mz,px_C_mx,mz": 0.3875548826814126,
+        "ExC_py,pz_C_pz,my_C_mz,py_C_my,mz": 0.3875548826814126,
     }
-    atol = 1e-10
-    obs_list = ["energy", "E2"]
-    for obs in obs_list:
-        if not abs(res[obs][0] - ref[obs]) < atol:
-            logger.info(f"{obs} expected {ref[obs]} got {res[obs][0]}")
-            raise ValueError(f"QED spectrum test01: FAIL on observable {obs}")
+    check_observables(res, ref, atol=1e-10, tag="QED 3D theta term test01")
     logger.info("****************************************************")
     logger.info("")
     logger.info("QED 3D theta term spectrum test01: PASS")

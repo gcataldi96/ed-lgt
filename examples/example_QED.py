@@ -332,19 +332,17 @@ def run_QED_dynamics(par: dict) -> dict:
 
 # %%
 # 2+1 QED with matter
+bg_list = [-1, 0, 0, 0, 0, +1]
 par = {
     "model": {
-        "lvals": [2, 2, 2],
-        "has_obc": [True, True, True],
+        "lvals": [3, 2],
+        "has_obc": [True, True],
         "spin": 1,
-        "pure_theory": True,
+        "pure_theory": False,
         "ham_format": "sparse",
-        "bg_list": [-1, 0, 0, 0, 0, 0, 0, +1],
+        "bg_list": bg_list,
     },
-    "hamiltonian": {
-        "n_eigs": 1,
-        "save_psi": False,
-    },
+    "hamiltonian": {"n_eigs": 1, "save_psi": False},
     "momentum": {
         "get_momentum_basis": False,
         "unit_cell_size": [1, 1],
@@ -357,10 +355,12 @@ par = {
         "get_state_configs": True,
         "get_overlap": False,
     },
-    "g": 10,
+    "g": 1,
     "m": 1,
 }
-run_QED_simulation(par)
+res = run_QED_simulation(par)
+for obs in res:
+    print(f"{obs} {res[obs][0]}")
 # %%
 # TOPOLOGICAL 3+1 pure QED
 par = {
@@ -390,7 +390,9 @@ par = {
     "g": 2.3,
     "theta": 0.41,
 }
-run_QED_simulation(par)
+res = run_QED_simulation(par)
+for obs in res:
+    print(f"{obs} {res[obs][0]}")
 
 # %%
 # GROUNDSTATE 3+1 QED with matter and background charges

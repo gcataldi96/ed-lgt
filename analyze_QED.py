@@ -8,20 +8,165 @@ import matplotlib.lines as mlines
 
 textwidth_pt = 510.0
 columnwidth_pt = 246.0
+import numpy as np
+
+
+def topological_susceptibility_from_energy_density(
+    theta: np.ndarray,
+    energy_density: np.ndarray,
+    *,
+    poly_order: int = 4,
+    window: int = 11,
+    weights: str = "tricube",  # "uniform" or "tricube"
+    return_diagnostics: bool = False,
+):
+    """
+    Estimate the topological susceptibility chi(theta) = d^2 e(theta)/d theta^2
+    from discrete energy-density data e(theta) on a (possibly non-uniform) grid.
+
+    Uses a local polynomial least-squares fit in a sliding window and evaluates
+    the second derivative at the window center.
+
+    Parameters
+    ----------
+    theta
+        1D array of theta values, must be strictly increasing.
+    energy_density
+        1D array e(theta) of same shape as theta. Should be real.
+    poly_order
+        Polynomial order used in the local fit (>=2). Recommended: 3-5.
+    window
+        Number of points in each local fit window (odd recommended). Must satisfy
+        window >= poly_order + 1. Typical: 9-21.
+    weights
+        Weighting scheme inside the window:
+        - "uniform": all points equal weight
+        - "tricube": downweights points far from the center (LOESS-like)
+    return_diagnostics
+        If True, also returns a dict with residual RMS per point and the
+        effective window indices used.
+
+    Returns
+    -------
+    chi : np.ndarray
+        Estimated susceptibility values at each theta point (same shape).
+        Endpoints use one-sided windows.
+    diagnostics : dict (optional)
+        Contains "rms_residual", "left_index", "right_index".
+
+    Notes
+    -----
+    - If there is a cusp/branch change, chi(theta) may spike or be unstable
+      near that point; that is physics + finite-size effects, not necessarily a bug.
+    - For uniform grids and very smooth data, a finite-difference stencil is fine,
+      but this fit-based method is more robust to non-uniform spacing and noise.
+    """
+    theta = np.asarray(theta, dtype=np.float64)
+    e = np.asarray(energy_density, dtype=np.float64)
+
+    if theta.ndim != 1 or e.ndim != 1 or theta.size != e.size:
+        raise ValueError(
+            "theta and energy_density must be 1D arrays of the same length."
+        )
+    if theta.size < poly_order + 1:
+        raise ValueError("Not enough points for the requested polynomial order.")
+    if np.any(np.diff(theta) <= 0):
+        raise ValueError("theta must be strictly increasing.")
+    if poly_order < 2:
+        raise ValueError("poly_order must be >= 2 to compute a second derivative.")
+    if window < poly_order + 1:
+        raise ValueError("window must be >= poly_order + 1.")
+
+    n_points = theta.size
+    chi = np.empty(n_points, dtype=np.float64)
+
+    # Make window odd for symmetry when possible
+    if window % 2 == 0:
+        window += 1
+
+    half = window // 2
+
+    rms_residual = np.empty(n_points, dtype=np.float64)
+    left_index = np.empty(n_points, dtype=np.int64)
+    right_index = np.empty(n_points, dtype=np.int64)
+
+    for center_idx in range(n_points):
+        left = max(0, center_idx - half)
+        right = min(n_points, center_idx + half + 1)
+
+        # If we are near boundaries, enlarge on the other side to keep window size
+        missing = window - (right - left)
+        if missing > 0:
+            if left == 0:
+                right = min(n_points, right + missing)
+            elif right == n_points:
+                left = max(0, left - missing)
+
+        x = theta[left:right]
+        y = e[left:right]
+
+        x0 = theta[center_idx]
+        dx = x - x0
+
+        # Vandermonde-like design matrix for local polynomial in dx
+        # y ~= a0 + a1*dx + a2*dx^2 + ... + ap*dx^p
+        # Then y''(x0) = 2*a2
+        design = np.vstack([dx**pp for pp in range(poly_order + 1)]).T
+
+        if weights == "uniform":
+            w = np.ones_like(dx)
+        elif weights == "tricube":
+            max_abs = np.max(np.abs(dx))
+            if max_abs == 0.0:
+                w = np.ones_like(dx)
+            else:
+                u = np.abs(dx) / max_abs
+                w = (1.0 - u**3) ** 3
+        else:
+            raise ValueError("weights must be 'uniform' or 'tricube'.")
+
+        # Weighted least squares: solve (W A) a = (W y)
+        W = np.sqrt(w)
+        A_w = design * W[:, None]
+        y_w = y * W
+        coeffs, *_ = np.linalg.lstsq(A_w, y_w, rcond=None)
+
+        if coeffs.size < 3:
+            # should not happen with poly_order>=2, but keep safe
+            chi[center_idx] = np.nan
+        else:
+            chi[center_idx] = 2.0 * coeffs[2]
+
+        # Diagnostics: RMS residual in the window
+        y_fit = design @ coeffs
+        resid = y - y_fit
+        rms_residual[center_idx] = np.sqrt(np.mean(resid**2))
+        left_index[center_idx] = left
+        right_index[center_idx] = right - 1
+
+    if return_diagnostics:
+        diagnostics = dict(
+            rms_residual=rms_residual,
+            left_index=left_index,
+            right_index=right_index,
+        )
+        return chi, diagnostics
+
+    return chi
+
 
 # %%
-config_filename = f"su2_thetaterm/scan2"
+config_filename = f"su2_thetaterm/scan3"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["g", "theta"])
-
+obs_list = ["entropy", "energy", "E2", "plaq", "Q", "chi"]
 res = {
-    "entropy": np.zeros((len(vals["g"]), len(vals["theta"]))),
-    "E2": np.zeros((len(vals["g"]), len(vals["theta"]))),
-    "plaq": np.zeros((len(vals["g"]), len(vals["theta"]))),
-    "energy": np.zeros((len(vals["g"]), len(vals["theta"]))),
     "g": vals["g"],
     "theta": vals["theta"],
 }
+for obs in obs_list:
+    res[obs] = np.zeros((len(vals["g"]), len(vals["theta"])))
+
 for ii, g in enumerate(vals["g"]):
     for kk, theta in enumerate(vals["theta"]):
         res["entropy"][ii, kk] = get_sim(ugrid[ii][kk]).res["entropy"][0]
@@ -36,44 +181,66 @@ for ii, g in enumerate(vals["g"]):
         res["plaq"][ii, kk] += (
             get_sim(ugrid[ii][kk]).res["C_py,pz_C_pz,my_C_mz,py_C_my,mz"][0] / 3
         )
+        if kk > 0:
+            res["Q"][ii, kk] += (
+                get_sim(ugrid[ii][kk]).res["EzC_px,py_C_py,mx_C_my,px_C_mx,my"][0] / 3
+            )
+            res["Q"][ii, kk] += (
+                get_sim(ugrid[ii][kk]).res["EyC_px,pz_C_pz,mx_C_mz,px_C_mx,mz"][0] / 3
+            )
+            res["Q"][ii, kk] += (
+                get_sim(ugrid[ii][kk]).res["ExC_py,pz_C_pz,my_C_mz,py_C_my,mz"][0] / 3
+            )
+    res["chi"][ii, :] = -topological_susceptibility_from_energy_density(
+        res["theta"], res["energy"][ii, :]
+    )
 # save_dictionary(res, f"qed_thetaterm_ED1.pkl")
 # %%
 gindexmin = 0
-sm_gvals = cm.ScalarMappable(
-    cmap="magma",
-)
+sm_gvals = cm.ScalarMappable(cmap="magma")
 palette_gvals = sm_gvals.to_rgba(res["g"][gindexmin:])
 sm_theta = cm.ScalarMappable(cmap="seismic")
 palette_theta = sm_theta.to_rgba(res["theta"])
 fig, axs = plt.subplots(
-    3,
+    5,
     1,
-    figsize=(set_size(columnwidth_pt, subplots=(3, 1))),
+    figsize=(set_size(columnwidth_pt, subplots=(5, 1))),
     sharex=True,
     constrained_layout=True,
 )
 axs[-1].set_xlabel(r"coupling $\tilde{\theta}$")
-observables = ["E2", "plaq", "entropy"]
-obs_names = [r"casimir $E^{2}$", r"plaq $B^{2}$", r"entropy $S$"]
-for ax, obs, obs_name in zip(axs, observables, obs_names):
+observables = ["E2", "plaq", "Q", "entropy", "chi"]
+obs_names = [
+    r"casimir $E^{2}$",
+    r"plaq $B^{2}$",
+    r"top. charge $Q$",
+    r"entropy $S$",
+    r"susceptibility $\chi$",
+]
+for tt, ax in enumerate(axs):
+    if tt == 4:
+        ax.set(yscale="log")
+    obs, obs_name = observables[tt], obs_names[tt]
     for ii, g in enumerate(res["g"][gindexmin:]):
         ax.plot(
             res["theta"],
             res[obs][ii + gindexmin, :],
             "o-",
             color=palette_gvals[ii],
-            markersize=2,
+            markersize=1.5,
             markeredgecolor=palette_gvals[ii],
             markerfacecolor="black",
             markeredgewidth=0.5,
         )
     ax.set(ylabel=obs_name)
-    ax.grid(True, which="both", linestyle="--", linewidth=0.5)
+    ax.grid(True, which="both", linestyle="--", linewidth=0.4)
 cb = fig.colorbar(
     sm_gvals, ax=axs, aspect=50, location="top", orientation="horizontal", pad=0.005
 )
-cb.set_label(label=r"$g^{2}$", rotation=0, labelpad=-25, x=-0.04, y=+0.03)
+cb.set_label(label=r"$g^{2}$", rotation=0, labelpad=-20, x=-0.04, y=+0.03)
 plt.savefig(f"SU2thetaterm.pdf")
+
+
 # %%
 plaq1 = "C_px,py_C_py,mx_C_my,px_C_mx,my"
 plaq2 = "C_px,pz_C_pz,mx_C_mz,px_C_mx,mz"
