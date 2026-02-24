@@ -20,6 +20,9 @@ __all__ = [
     "SU2_singlet_canonical_vector",
     "can_form_singlet",
 ]
+S0 = S(0)
+S12 = S(1) / 2
+S1 = S(1)
 
 
 def couple_two_spins(j1, j2, get_singlet=False, M=None):
@@ -54,16 +57,19 @@ def couple_two_spins(j1, j2, get_singlet=False, M=None):
     SU2_states = []
     # Run over all the possible combinations of z-components of j1, j2, j3
     # searching for non-zero CG coefficients
+    Sj1, Sj2 = S(j1), S(j2)
     for m1, m2, j3 in product(m1values, m_values(j2), j3_values):
-        for m3 in m_values(j3):
-            # Compute the CG coefficient
-            CG = CG_coeff(S(j1), S(j2), S(j3), S(m1), S(m2), S(m3))
-            # Save the configuration if it exists
-            if CG != 0:
-                if M is not None:
-                    SU2_states.append([S(j2), S(m2), CG, S(j3), S(m3)])
-                else:
-                    SU2_states.append([S(j1), S(m1), S(j2), S(m2), CG, S(j3), S(m3)])
+        m3 = m1 + m2
+        if abs(m3) > j3:
+            continue
+        # Compute the CG coefficient
+        CG = CG_coeff(Sj1, Sj2, S(j3), S(m1), S(m2), S(m3))
+        # Save the configuration if it exists
+        if CG != 0:
+            if M is not None:
+                SU2_states.append([Sj2, S(m2), CG, S(j3), S(m3)])
+            else:
+                SU2_states.append([Sj1, S(m1), Sj2, S(m2), CG, S(j3), S(m3)])
     return SU2_states
 
 
@@ -391,10 +397,9 @@ def get_spin_Hilbert_spaces(max_spin_irrep_list, pure_theory, background=0):
     # For each single spin particle in the list
     for max_irrep in max_spin_irrep_list:
         # Create an array with all the spin irreps up to the max one
-        spin_irreps = np.arange(S(0), spin_space(max_irrep), 1) / 2
+        spin_irreps = np.arange(S0, spin_space(max_irrep), 1) / 2
         # For each spin dof save the list of allowed irreps
         spin_dof.append(spin_irreps)
-
     # run over each spin dof
     for spin_irreps in spin_dof:
         m_set = []
@@ -410,12 +415,12 @@ def get_spin_Hilbert_spaces(max_spin_irrep_list, pure_theory, background=0):
         j_list.append(j_set)
     if not pure_theory:
         # add the Hilbert space of 2 fermionic spin 1/2 particles (see docs)
-        j_list.insert(0, ["V", S(1) / 2, S(1) / 2, "P"])
-        m_list.insert(0, [S(0), S(1) / 2, -S(1) / 2, S(0)])
+        j_list.insert(0, ["V", S12, S12, "P"])
+        m_list.insert(0, [S0, S12, -S12, S0])
     if background != 0:
         m_set_bg = []
         j_set_bg = []
-        for irrep in np.arange(S(0), spin_space(background), 1) / 2:
+        for irrep in np.arange(S0, spin_space(background), 1) / 2:
             # save the values of z-component of the irrep
             m_set_bg += list(m_values(irrep))
             # save the irrep for each z-component

@@ -288,10 +288,12 @@ class QuantumModel:
             # For each site the specific GI states compatible with the given BG charge
             for ii in range(self.n_sites):
                 site_label = self.lattice_labels[ii]
-                bg_value = int(bg_sector_list[ii])
+                bg_value = float(bg_sector_list[ii])
                 # Extract the columns with that bg_value
                 bg_col = self.gauge_states[site_label][:, 0]
-                cols = np.flatnonzero(bg_col == bg_value).astype(np.int64)
+                cols = np.flatnonzero(
+                    np.isclose(bg_col, bg_value, rtol=0.0, atol=1e-12)
+                ).astype(np.int64)
                 if cols.size == 0:
                     msg = f"No GI states at site {ii} label={site_label} with bg {bg_value}"
                     raise ValueError(msg)
@@ -306,7 +308,7 @@ class QuantumModel:
                 self.gauge_states_per_site.append(self.gauge_states[site_label])
         logger.info(f"====================================================")
         logger.info("LOCAL DIMENSION per SITE")
-        logger.info(f"{self.loc_dims}")
+        format_loc_dims(self.loc_dims, self.lvals)
         # Determine the maximum local dimension
         max_loc_dim = int(np.max(self.loc_dims))
         # -----------------------------------------------------------------------------
@@ -1080,6 +1082,45 @@ def build_energy_block_ids(evals: np.ndarray, tol: float = 1e-10):
             b += 1
             block_id[kk] = b
     return block_id, (b + 1)
+
+
+def format_loc_dims(loc_dims: np.ndarray, lvals: list[int], pad: int = 3) -> str:
+    """
+    Pretty-print loc_dims according to lattice shape.
+
+    Assumes site indexing is consistent with a C-order reshape with x fastest:
+    - 2D: loc_dims.reshape(Ly, Lx)
+    - 3D: loc_dims.reshape(Lz, Ly, Lx)
+    If your internal site ordering differs (e.g. a space-filling curve), build an
+    index map first and reorder loc_dims before reshaping.
+    """
+    dim = len(lvals)
+    if dim == 1:
+        Lx = lvals[0]
+        arr = np.asarray(loc_dims).reshape(Lx)
+        logger.info(f"[{' '.join(f'{val:>{pad}d}' for val in arr)}]")
+    if dim == 2:
+        Lx, Ly = lvals
+        arr = np.asarray(loc_dims).reshape(Ly, Lx)
+        lines = []
+        for yy in range(Ly):
+            logger.info(f"[{' '.join(f'{val:>{pad}d}' for val in arr[yy])}]")
+    if dim == 3:
+        Lx, Ly, Lz = lvals
+        arr = np.asarray(loc_dims).reshape(Lz, Ly, Lx)  # [z, y, x]
+        block_sep = "   "  # spacing between z-layers
+        lines = []
+        # optional header indicating z layers
+        header = block_sep.join(
+            [f"z={zz}".ljust((pad + 1) * Lx - 1) for zz in range(Lz)]
+        )
+        lines.append(header)
+        for yy in range(Ly):
+            row_blocks = []
+            for zz in range(Lz):
+                layer = f"[{' '.join(f'{val:>{pad}d}' for val in arr[zz, yy])}]"
+                row_blocks.append(layer)
+            logger.info(f"{block_sep.join(row_blocks)}")
 
 
 """    

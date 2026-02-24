@@ -507,13 +507,13 @@ def run_SU2_bg_groundstate(par: dict) -> dict:
 # %%
 par = {
     "model": {
-        "lvals": [10, 3],
-        "sectors": [10],
+        "lvals": [3, 2],
+        "sectors": [6],
         "has_obc": [True, True],
-        "spin": 0.5,
+        "spin": 1,
         "pure_theory": True,
-        "background": 0,
         "ham_format": "sparse",
+        "bg_list": [1, 0, 0, 0, 0, 1],
     },
     "hamiltonian": {
         "n_eigs": 1,
@@ -545,13 +545,12 @@ par = {
         "has_obc": [False],
         "spin": 0.5,
         "pure_theory": False,
-        "background": 0,
         "ham_format": "sparse",
     },
     "dynamics": {
         "time_evolution": True,
         "start": 0,
-        "stop": 5,
+        "stop": 0.1,
         "delta_n": 0.05,
         "state": "PV",
         "logical_stag_basis": 2,
@@ -565,7 +564,7 @@ par = {
         "measure_obs": True,
         "get_entropy": False,
         "get_PE": True,
-        "get_SRE": True,
+        "get_SRE": False,
         "entropy_partition": [0, 1, 2, 3, 4],
         "get_state_configs": False,
         "get_overlap": True,

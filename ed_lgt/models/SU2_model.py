@@ -28,7 +28,7 @@ class SU2_Model(QuantumModel):
         self,
         spin,
         pure_theory,
-        background,
+        bg_list=None,
         sectors=None,
         use_generic_model=False,
         **kwargs,
@@ -37,21 +37,29 @@ class SU2_Model(QuantumModel):
         super().__init__(**kwargs)
         self.spin = spin
         self.pure_theory = pure_theory
-        self.background = background
+        self.background = max(bg_list) if bg_list is not None else 0
+        self.bg_list = bg_list if self.background != 0 else None
         self.use_generic_model = use_generic_model
         pure_label = "pure" if self.pure_theory else "with matter"
         logger.info(f"----------------------------------------------------")
-        msg = f"({self.dim}+1)D SU(2) MODEL {pure_label} j={spin}, bg={background}"
+        msg = f"({self.dim}+1)D SU(2) LGT {pure_label} j={spin}"
         logger.info(msg)
+        if self.bg_list is not None:
+            logger.info(f"background charges: {self.bg_list}")
         logger.info(f"----------------------------------------------------")
         # -------------------------------------------------------------------------------
         # Acquire gauge invariant basis and states
-        self.gauge_basis, self.gauge_states = SU2_gauge_invariant_states(
+        self.gauge_basis, self.singlet_states = SU2_gauge_invariant_states(
             self.spin,
             self.pure_theory,
             lattice_dim=self.dim,
             background=self.background,
         )
+        self.gauge_states = {}
+        for key in self.singlet_states:
+            self.gauge_states[key] = np.array(
+                [singlet.J_config for singlet in self.singlet_states[key]], dtype=object
+            )
         # -------------------------------------------------------------------------------
         # Acquire operators
         if self.spin < 1 and not self.use_generic_model:
@@ -70,7 +78,7 @@ class SU2_Model(QuantumModel):
                 background=self.background,
             )
         # Initialize the operators, local dimension and lattice labels
-        self.project_operators(ops)
+        self.project_operators(ops, bg_sector_list=self.bg_list)
         # -------------------------------------------------------------------------------
         # GLOBAL SYMMETRIES
         if self.pure_theory:
@@ -716,12 +724,37 @@ class SU2_Model(QuantumModel):
 
     def print_state_config(self, config, amplitude=None):
         logger.info(f"----------------------------------------------------")
-        logger.info(f"SINGLETS IN CONFIG {config}")
+        msg = f"CONFIG {config}"
         if amplitude is not None:
-            logger.info(f"Amplitude: {np.abs(amplitude)**2:.8f}")
+            msg += f" |psi|^2={np.abs(amplitude)**2:.8f}"
+        logger.info(msg)
         logger.info(f"----------------------------------------------------")
+        # Choose width (sign + digits).
+        max_abs = 1
+        max_abs = max(max_abs, int(abs(getattr(self, "spin", 1))))
+        max_abs = max(max_abs, int(abs(getattr(self, "background", 0))))
+        entry_width = len(str(max_abs)) + 2
+        logger.info(f"{'':>19s}{self._format_header(entry_width)}")
         for ii, cfg_idx in enumerate(config):
-            msg = f"site {ii} state {cfg_idx}"
-            lattice_label = self.lattice_labels[ii]
-            local_basis_state = self.gauge_states[lattice_label][cfg_idx]
-            local_basis_state.display_singlet(msg)
+            loc_basis_state = self.gauge_states_per_site[ii][cfg_idx]
+            state_str = "[" + " ".join(f"{val}" for val in loc_basis_state) + " ]"
+            logger.info(f"SITE {ii:>2d} state {cfg_idx:>3d}: {state_str}")
+
+    def _local_state_labels(self) -> list[str]:
+        labels: list[str] = []
+        # Background first (only if present in your effective gauge states)
+        if getattr(self, "background", 0) > 0:
+            labels.append("bg")
+        # Matter occupation (only if not pure theory)
+        if not getattr(self, "pure_theory", True):
+            labels.append("M")
+        # Links: -x,-y,-z,+x,+y,+z up to dim
+        dim = int(getattr(self, "dim", 0))
+        dirs = "xyz"[:dim]
+        labels += [f"-{d}" for d in dirs] + [f"+{d}" for d in dirs]
+        return labels
+
+    def _format_header(self, entry_width: int) -> str:
+        labels = self._local_state_labels()
+        header = "[" + " ".join(f"{lab:>{entry_width}s}" for lab in labels) + " ]"
+        return header
