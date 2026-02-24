@@ -12,7 +12,6 @@ def main():
             "has_obc": [False],
             "spin": 0.5,
             "pure_theory": False,
-            "background": 0,
             "ham_format": "sparse",
         },
         "hamiltonian": {
