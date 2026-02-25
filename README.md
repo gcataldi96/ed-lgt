@@ -1,147 +1,129 @@
-# Exact_Diagonalization
-Code for Exact Diagonalization of Quantum Many-Body Hamiltonians and Lattice Gauge Theories.
+# edlgt
 
-Read the whole Documentation on https://ed-su2.readthedocs.io/en/latest/
+Exact diagonalization tools for lattice gauge theories and quantum many-body Hamiltonians.
 
-# Setup
-1) Download from git the repository
+Documentation: https://ed-su2.readthedocs.io/en/latest/
 
-        git clone --recursive git@github.com:gcataldi96/ed-lgt.git
+`pip install edlgt` and `import edlgt`
 
-2) Create the Environment with all the needed python packages
+Supported Python: `>=3.10`
 
-        conda env create -f ed-lgt/environment.yml
-        conda activate ed
+## Installation
 
-3) Install the library
+### PyPI (recommended for users)
 
-        cd ed-lgt/
-        pip install -e .
+```bash
+pip install edlgt
+```
 
-Enjoy 👏
+Optional Simsio workflows (installs `simsio` from GitHub):
 
-# Configure Simsio Simulations
-Just in case you want to use Simsio to run simulations, do the following steps:
+```bash
+pip install "edlgt[simsio]"
+```
 
-1) (ignore it unless you create the repo for the first time) Add the simsio library as a submodule (it should be already there)
+### From source (development)
 
-        git submodule add https://github.com/rgbmrc/simsio.git
-        git add .
-        git commit -m "Add simsio submodule to the TTN code"
+```bash
+git clone --recursive https://github.com/gcataldi96/ed-lgt.git
+cd ed-lgt
+pip install -e .
+```
 
-2) Update and get all the submodules
-        
-        git submodule update
-        git submodule recursive
+Development tools:
 
-This is an example of a config file that should be created inside the folder *configs* (if this latter does not exist, create the directory):
+```bash
+pip install -e ".[dev]"
+```
 
-    ===:
-    template: |
-        n$enum:
-        <<<: common
-        g: $g
-    common:
-        dim: 2
-        lvals: [2,2]
-        pure: false
-        has_obc: false
-        DeltaN: 2
-        m: 1.0
-    n0:
-        <<<: common
-        g: j0
-    n1:
-        <<<: common
-        g: j1
+Development tools + Simsio:
 
-where j0 and j1 are two values of g that one would like to simulate. 
+```bash
+pip install -e ".[dev,simsio]"
+```
 
-If you want to create a larger set of simulations automatically, run a script like the following:
+## Quick Start
 
-    from simsio import gen_configs
-    import numpy as np
+Check the installation:
 
-    params = {"g": np.logspace(-1, 1, 10)}
-    gen_configs("template", params, "config_NAME_FILE")
+```bash
+python -c "import edlgt; print(edlgt.__version__)"
+```
 
-Then, in "config_NAME_FILE.yaml" it will add simulations like
+The best starting point is to run one of the example scripts and adapt it to your model:
 
-        ni:
-        <<<: common
-        g: j
+```bash
+python examples/example_QED_static.py
+python examples/example_QED_dynamics.py
+python examples/example_SU2_static.py
+python examples/example_SU2_dynamics.py
+```
 
-where 
+Minimal import example:
 
-$i$ is the $i^{th}$ simulation corresponding to the model with the g-parameter (which is not common to all the other simulations) equal to $j$.
+```python
+import edlgt
+from edlgt.models import QED_Model, SU2_Model
+from edlgt.modeling import diagonalize_density_matrix
+```
 
-# Run Simulations
-To run simulations, just type on the command shell the following command. On linux:
+## Optional Simsio Support
 
-    nohup bash -c "printf 'n%s\n' {0..N} | shuf | xargs -PA -i python script.py config_NAME_FILE {} B" &>/dev/null &
+`simsio` is not currently available on PyPI, so the `simsio` extra installs it from GitHub.
 
-On MAC:
+If you prefer to install it manually, use one of:
 
-    nohup bash -c "printf 'n%s\n' {0..N} | xargs -PA -I% python script.py config_NAME_FILE % B" &>/dev/null &
+```bash
+pip install -r requirements-simsio.txt
+```
 
-where 
+```bash
+pip install "git+https://github.com/rgbmrc/simsio.git"
+```
 
-1) N is the total number of simulations in the *config_file_name*,
+If you work from this repository and use the submodule, also make sure it is present:
 
-2) A is the number of processes in parallel 
+```bash
+git submodule update --init --recursive
+```
 
-3) B is the number of single-node threads per simulation
+## Performance Notes
 
-# Maintenance Checklists
+- For reproducible high-performance runs, prefer a dedicated Conda environment (for example with MKL).
+- The `pip` package stays backend-agnostic for portability.
+- After clearing caches, the first run can be slower because Numba recompiles kernels.
+- Benchmark Numba-heavy code on a warm run (run twice).
 
-## Commit / Push Checklist (day-to-day)
+## Project Layout
 
-- [ ] If you changed package code, run at least one relevant script/example (for example `examples/example_QED.py` or your target workflow)
-- [ ] If you changed Numba kernels, do a warm run (run twice) before judging performance
-- [ ] If you changed public APIs/import paths, check `import edlgt` and one representative import path
-- [ ] If you changed dependencies, update `pyproject.toml` and keep `requirements.txt` aligned
-- [ ] If you changed user-facing behavior, add a short note in `CHANGELOG.md` under `Unreleased`
-- [ ] Do not bump the version for normal commits/pushes (bump only for releases)
-- [ ] Avoid committing generated files (`dist/`, `__pycache__/`, large outputs, logs) unless intentional
-- [ ] Write a commit message that explains the change and why
+- `edlgt/`: library source code
+- `examples/`: example scripts for QED, SU2, DFL, Zn, etc.
+- `validation/`: validation scripts/tests
+- `docs/`: documentation sources
 
-Suggested local dev install (with optional simsio support when needed):
+## Citation
 
-    pip install -e ".[dev]"
-    # or
-    pip install -e ".[dev,simsio]"
+If you use `edlgt` in research, please cite the project using the metadata in `CITATION.cff`.
 
-## Release Checklist
+## Maintenance (for contributors)
 
-- [ ] Decide the next version (keep `0.x.y` while the API is still evolving)
-- [ ] Move relevant notes from `CHANGELOG.md` `Unreleased` into a new dated version section
+### Commit / Push Checklist
+
+- [ ] Run at least one relevant example/script when changing package code
+- [ ] Do a warm run before judging performance after Numba/kernel changes
+- [ ] Check `import edlgt` after public API/import-path changes
+- [ ] Keep `pyproject.toml` and `requirements*.txt` aligned when dependencies change
+- [ ] Add user-facing changes to `CHANGELOG.md` under `Unreleased`
+- [ ] Do not bump the version for normal commits/pushes (only for releases)
+- [ ] Avoid committing generated artifacts (`dist/`, `__pycache__/`, large logs/outputs)
+
+### Release Checklist
+
+- [ ] Update `CHANGELOG.md` and choose the next version
 - [ ] Bump version in `pyproject.toml`
-- [ ] Verify version from Python:
-
-        python -c "import edlgt; print(edlgt.__version__)"
-
-- [ ] Clean old build artifacts:
-
-        rm -rf dist build *.egg-info
-
-- [ ] Build source + wheel:
-
-        python -m build
-
-- [ ] Validate package metadata:
-
-        python -m twine check dist/*
-
-- [ ] Test local install from the built wheel (fresh env preferred)
-- [ ] Upload to TestPyPI first (recommended)
-- [ ] Test install from TestPyPI and run a smoke example
-- [ ] Upload to PyPI
-- [ ] Create a git tag (for example `v0.1.0`) and GitHub release notes
-
-Useful release commands:
-
-    python -m pip install -r requirements-dev.txt
-    python -m build
-    python -m twine check dist/*
-    python -m twine upload --repository testpypi dist/*
-    python -m twine upload dist/*
+- [ ] Clean build artifacts: `rm -rf dist build *.egg-info`
+- [ ] Build package: `python -m build`
+- [ ] Check metadata: `python -m twine check dist/*`
+- [ ] Test install in a fresh environment
+- [ ] Upload to TestPyPI, test install, then upload to PyPI
+- [ ] Tag the release in git (for example `v0.1.0`)

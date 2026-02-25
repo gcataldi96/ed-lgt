@@ -43,7 +43,7 @@ docs = [
   "sphinx-rtd-theme>=1.0",
 ]
 simsio = [
-  "simsio",
+  "simsio @ git+https://github.com/rgbmrc/simsio.git",
 ]
 
 [project.urls]

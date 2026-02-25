@@ -1,0 +1,4 @@
+# Optional add-on dependency for Simsio workflows.
+# This installs simsio directly from GitHub because it is not published on PyPI.
+simsio @ git+https://github.com/rgbmrc/simsio.git
+

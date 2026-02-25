@@ -10,7 +10,8 @@ it is in the `0.x` development phase.
 ### Added
 - Modern `pip` packaging via `pyproject.toml`
 - Runtime/dev/docs requirements files for maintainable installs
-- Optional `simsio` extra: `pip install "edlgt[simsio]"`
+- Optional `simsio` extra (GitHub-backed): `pip install "edlgt[simsio]"`
+- `requirements-simsio.txt` for direct GitHub installation of `simsio`
 - `edlgt.__version__` sourced from installed package metadata
 
 ### Changed
@@ -25,4 +26,3 @@ it is in the `0.x` development phase.
 
 ### Changed
 - Prepared the library for `pip` installation and wheel builds
-
