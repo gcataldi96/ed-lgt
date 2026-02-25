@@ -4,7 +4,7 @@
 Tools for a Quantum Many Body (QMB) State
 =========================================
 
-.. automodule:: ed_lgt.modeling.qmb_state
+.. automodule:: edlgt.modeling.qmb_state
    :synopsis: Fundamental tools to access and study a QMB state/wavefunction
    :noindex:
    :members:

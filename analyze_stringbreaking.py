@@ -1,7 +1,7 @@
 # %%
 from simsio import *
 import matplotlib.pyplot as plt
-from ed_lgt.tools import save_dictionary, fake_log, set_size
+from edlgt.tools import save_dictionary, fake_log, set_size
 
 textwidth_pt = 510.0
 textwidth_in = textwidth_pt / 72.27

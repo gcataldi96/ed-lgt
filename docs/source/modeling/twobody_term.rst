@@ -4,7 +4,7 @@
 TwoBodyTerm Class
 =====================
 
-.. autoclass:: ed_lgt.modeling.twobody_term.TwoBodyTerm
+.. autoclass:: edlgt.modeling.twobody_term.TwoBodyTerm
    :noindex:
    :members:
    :undoc-members:

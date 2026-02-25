@@ -91,3 +91,57 @@ where
 2) A is the number of processes in parallel 
 
 3) B is the number of single-node threads per simulation
+
+# Maintenance Checklists
+
+## Commit / Push Checklist (day-to-day)
+
+- [ ] If you changed package code, run at least one relevant script/example (for example `examples/example_QED.py` or your target workflow)
+- [ ] If you changed Numba kernels, do a warm run (run twice) before judging performance
+- [ ] If you changed public APIs/import paths, check `import edlgt` and one representative import path
+- [ ] If you changed dependencies, update `pyproject.toml` and keep `requirements.txt` aligned
+- [ ] If you changed user-facing behavior, add a short note in `CHANGELOG.md` under `Unreleased`
+- [ ] Do not bump the version for normal commits/pushes (bump only for releases)
+- [ ] Avoid committing generated files (`dist/`, `__pycache__/`, large outputs, logs) unless intentional
+- [ ] Write a commit message that explains the change and why
+
+Suggested local dev install (with optional simsio support when needed):
+
+    pip install -e ".[dev]"
+    # or
+    pip install -e ".[dev,simsio]"
+
+## Release Checklist
+
+- [ ] Decide the next version (keep `0.x.y` while the API is still evolving)
+- [ ] Move relevant notes from `CHANGELOG.md` `Unreleased` into a new dated version section
+- [ ] Bump version in `pyproject.toml`
+- [ ] Verify version from Python:
+
+        python -c "import edlgt; print(edlgt.__version__)"
+
+- [ ] Clean old build artifacts:
+
+        rm -rf dist build *.egg-info
+
+- [ ] Build source + wheel:
+
+        python -m build
+
+- [ ] Validate package metadata:
+
+        python -m twine check dist/*
+
+- [ ] Test local install from the built wheel (fresh env preferred)
+- [ ] Upload to TestPyPI first (recommended)
+- [ ] Test install from TestPyPI and run a smoke example
+- [ ] Upload to PyPI
+- [ ] Create a git tag (for example `v0.1.0`) and GitHub release notes
+
+Useful release commands:
+
+    python -m pip install -r requirements-dev.txt
+    python -m build
+    python -m twine check dist/*
+    python -m twine upload --repository testpypi dist/*
+    python -m twine upload dist/*

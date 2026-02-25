@@ -2,7 +2,7 @@
 from simsio import *
 from math import prod
 from matplotlib import pyplot as plt
-from ed_lgt.tools import save_dictionary, load_dictionary
+from edlgt.tools import save_dictionary, load_dictionary
 
 
 @plt.FuncFormatter

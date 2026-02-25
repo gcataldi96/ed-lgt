@@ -5,7 +5,7 @@ from matplotlib import pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import LogNorm
 from matplotlib.ticker import MultipleLocator, FuncFormatter
-from ed_lgt.tools import save_dictionary, first_derivative
+from edlgt.tools import save_dictionary, first_derivative
 from scipy import stats
 
 

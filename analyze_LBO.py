@@ -3,7 +3,7 @@ from simsio import *
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import LogNorm
-from ed_lgt.tools import save_dictionary, fake_log, load_dictionary
+from edlgt.tools import save_dictionary, fake_log, load_dictionary
 
 textwidth_pt = 510.0
 textwidth_in = textwidth_pt / 72.27
@@ -109,7 +109,7 @@ for ii, m in enumerate(vals["m"]):
 su2_res["effective_basis"] = eff_res
 su2_res["true"] = true_res
 # %%
-from ed_lgt.operators import spin_space
+from edlgt.operators import spin_space
 
 irrep_res = {}
 config_filename = f"LBO/su2_irrepbasis"

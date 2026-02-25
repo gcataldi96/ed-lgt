@@ -1,4 +1,4 @@
-from ed_lgt.workflows.su2 import run_SU2_spectrum
+from edlgt.workflows.su2 import run_SU2_spectrum
 import logging
 
 logger = logging.getLogger(__name__)

@@ -3,11 +3,11 @@ import numpy as np
 from itertools import product
 from time import perf_counter
 from simsio import SimsQuery, get_sim, uids_grid
-from ed_lgt.workflows import su2_get_momentum_params
-from ed_lgt.symmetries import build_sector_expansion_projector
-from ed_lgt.modeling import mixed_exp_val_data, QMB_state
-from ed_lgt.models import SU2_Model
-from ed_lgt.tools import (
+from edlgt.workflows import su2_get_momentum_params
+from edlgt.symmetries import build_sector_expansion_projector
+from edlgt.modeling import mixed_exp_val_data, QMB_state
+from edlgt.models import SU2_Model
+from edlgt.tools import (
     get_Wannier_support,
     localize_Wannier,
     choose_rank_by_frobenius,
@@ -482,3 +482,45 @@ params = {
 model, momentum_params, band_params = run_SU2_convolution(params)
 # %%
 MPO = su2_get_Wannier_MPO(model, momentum_params, band_params)
+"""# %%
+params = {
+    "model": {
+        "lvals": [14],
+        "sectors": [14],
+        "has_obc": [False],
+        "spin": 0.5,
+        "pure_theory": False,
+        "background": 0,
+        "ham_format": "sparse",
+    },
+    "hamiltonian": {
+        "n_eigs": 1,
+        "save_psi": False,
+    },
+    "momentum": {
+        "get_momentum_basis": False,
+        "unit_cell_size": [2],
+        "TC_symmetry": False,
+    },
+    "observables": {
+        "measure_obs": True,
+        "get_entropy": False,
+        "entropy_partition": [0],
+        "get_state_configs": True,
+        "get_overlap": False,
+    },
+    "TC_symmetry": True,
+    "sim_band_name": "scattering/band5_N0",
+    "g": 10,
+    "m": 10,
+    "support_tail": 1e-4,
+}
+# %%
+model, momentum_params, band_params = run_SU2_convolution(params)
+# %%
+MPO = su2_get_Wannier_MPO(params, momentum_params, band_params)
+
+# %%
+run_SU2_spectrum(params)"""
+
+# %%

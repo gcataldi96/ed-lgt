@@ -3,7 +3,7 @@ from simsio import *
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import LogNorm
-from ed_lgt.tools import set_size, plot_energy_bands
+from edlgt.tools import set_size, plot_energy_bands
 
 textwidth_pt = 510.0
 textwidth_in = textwidth_pt / 72.27

@@ -4,7 +4,7 @@
 Z2-Fermi-Hubbard LGT Model Class
 ================================
 
-.. autoclass:: ed_lgt.models.Z2_FermiHubbard_model.Z2_FermiHubbard_Model
+.. autoclass:: edlgt.models.Z2_FermiHubbard_model.Z2_FermiHubbard_Model
    :noindex:
    :members:
    :undoc-members:

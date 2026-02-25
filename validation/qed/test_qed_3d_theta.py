@@ -1,4 +1,4 @@
-from ed_lgt.workflows.qed import run_QED_spectrum, check_observables
+from edlgt.workflows.qed import run_QED_spectrum, check_observables
 import logging
 
 logger = logging.getLogger(__name__)

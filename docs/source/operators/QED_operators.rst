@@ -4,7 +4,7 @@
 QED Operators
 ==============
 
-.. automodule:: ed_lgt.operators.QED_operators
+.. automodule:: edlgt.operators.QED_operators
     :noindex:
     :members:
     :undoc-members:

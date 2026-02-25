@@ -3,8 +3,8 @@ from numba import njit
 import numpy as np
 from itertools import product
 from scipy.sparse import csr_matrix
-from ed_lgt.modeling import get_lattice_borders_labels, LGT_border_configs
-from ed_lgt.operators import (
+from edlgt.modeling import get_lattice_borders_labels, LGT_border_configs
+from edlgt.operators import (
     couple_two_spins,
     add_new_spin,
     SU2_singlet_canonical_vector,
@@ -12,7 +12,7 @@ from ed_lgt.operators import (
     get_SU2_singlets,
     SU2_gen_gauge_invariant_states,
 )
-from ed_lgt.tools import get_time
+from edlgt.tools import get_time
 from time import perf_counter
 import logging
 

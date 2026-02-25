@@ -3,7 +3,7 @@ from simsio import *
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import LogNorm
-from ed_lgt.tools import save_dictionary, set_size
+from edlgt.tools import save_dictionary, set_size
 import matplotlib.lines as mlines
 
 textwidth_pt = 510.0

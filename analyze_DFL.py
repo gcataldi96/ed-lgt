@@ -3,7 +3,7 @@ from simsio import *
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 from matplotlib.colors import LogNorm
-from ed_lgt.tools import (
+from edlgt.tools import (
     save_dictionary,
     load_dictionary,
     get_tline,

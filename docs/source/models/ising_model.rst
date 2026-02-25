@@ -4,7 +4,7 @@
 Ising Model Class
 ========================
 
-.. autoclass:: ed_lgt.models.ising_model.IsingModel
+.. autoclass:: edlgt.models.ising_model.IsingModel
    :noindex:
    :members:
    :undoc-members:

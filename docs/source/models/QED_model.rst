@@ -4,7 +4,7 @@
 QED LGT Model Class
 ========================
 
-.. autoclass:: ed_lgt.models.QED_model.QED_Model
+.. autoclass:: edlgt.models.QED_model.QED_Model
    :noindex:
    :members:
    :undoc-members:

@@ -4,7 +4,7 @@
 Bose Hubbard Model Class
 ========================
 
-.. autoclass:: ed_lgt.models.bosehubbard_model.BoseHubbard_Model
+.. autoclass:: edlgt.models.bosehubbard_model.BoseHubbard_Model
    :noindex:
    :members:
    :undoc-members:

@@ -4,7 +4,7 @@
 SU2 Yang Mills LGT Model Class
 ==============================
 
-.. autoclass:: ed_lgt.models.SU2_model.SU2_Model
+.. autoclass:: edlgt.models.SU2_model.SU2_Model
    :noindex:
    :members:
    :undoc-members:

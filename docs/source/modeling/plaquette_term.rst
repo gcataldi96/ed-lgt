@@ -4,7 +4,7 @@
 PlaquetteTerm Class
 =====================
 
-.. autoclass:: ed_lgt.modeling.plaquette_term.PlaquetteTerm
+.. autoclass:: edlgt.modeling.plaquette_term.PlaquetteTerm
    :noindex:
    :members:
    :undoc-members:

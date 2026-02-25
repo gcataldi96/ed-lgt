@@ -2,7 +2,7 @@
 import numpy as np
 from sympy import S
 from scipy.sparse import kron, csr_matrix
-from ed_lgt.operators import (
+from edlgt.operators import (
     SU2_dressed_site_operators,
     Z2_FermiHubbard_gauge_invariant_states,
     Z2_FermiHubbard_dressed_site_operators,
@@ -14,11 +14,11 @@ from ed_lgt.operators import (
     add_new_spin,
     group_sorted_spin_configs,
 )
-from ed_lgt.tools import check_hermitian
+from edlgt.tools import check_hermitian
 
 import logging
 from numba import njit
-from ed_lgt.tools import get_time
+from edlgt.tools import get_time
 
 
 logger = logging.getLogger(__name__)
@@ -64,14 +64,26 @@ a = make_factorial_array_numba(spin_list)
 
 # %%
 gauge_basis, gauge_states = SU2_gauge_invariant_states(
-    0.5, False, lattice_dim=1, background=0
+    s_max=0.5, pure_theory=False, lattice_dim=1, background=0.5
 )
+for ii, s in enumerate(gauge_states["site"]):
+    logger.info(f"{ii}")
+    s.display_singlet()
+    logger.info(f"{s.J_config}")
 # %%
-from ed_lgt.operators import SU2_dressed_site_operators, SU2_gauge_invariant_states
+from edlgt.operators import (
+    SU2_gen_dressed_site_operators,
+    SU2_gauge_invariant_states,
+    SU2_gen_dressed_site_operators,
+)
+from edlgt.modeling import qmb_operator as qmb_op
 
 
 def SU2_gauge_invariant_ops(spin, pure_theory, lattice_dim):
-    in_ops = SU2_dressed_site_operators(spin, pure_theory, lattice_dim)
+    if spin < 1:
+        in_ops = SU2_dressed_site_operators(spin, pure_theory, lattice_dim)
+    else:
+        in_ops = SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim)
     gauge_basis, _ = SU2_gauge_invariant_states(spin, pure_theory, lattice_dim)
     ops = {}
     for op in in_ops.keys():
@@ -79,11 +91,7 @@ def SU2_gauge_invariant_ops(spin, pure_theory, lattice_dim):
     return ops
 
 
-ops = SU2_gauge_invariant_ops(spin=1 / 2, pure_theory=False, lattice_dim=1)
-from ed_lgt.modeling import qmb_operator as qmb_op
-
-
-def decode_two_site_entries(rc_list, d_loc, data):
+def decode_two_site_entries(rc_list, d_loc, data, T2px, T2mx):
     """
     rc_list: iterable of (row, col) ints for a 2-site block (size d_loc^2).
     d_loc  : local dimension per site.
@@ -95,7 +103,11 @@ def decode_two_site_entries(rc_list, d_loc, data):
     for ii, (row, col) in enumerate(rc_list):
         r1, r2 = divmod(row, d_loc)
         c1, c2 = divmod(col, d_loc)
-        if np.any(
+        if not np.all(
+            [np.isclose(T2px[r1] - T2mx[r2], 0), np.isclose(T2px[c1] - T2mx[c2], 0)]
+        ):
+            continue
+        """if np.any(
             [
                 r1 == 0 and r2 in [1, 3, 5],
                 (r1 == 1 and r2 in [0, 2, 4]),
@@ -110,19 +122,67 @@ def decode_two_site_entries(rc_list, d_loc, data):
                 (c1 == 4 and c2 in [1, 3, 5]),
                 (c1 == 5 and c2 in [0, 2, 4]),
             ]
-        ):
-            continue
+        ):"""
+        # continue
         out.append((int(r1), int(r2), int(c1), int(c2), data[ii]))
     return out
 
 
-# %%
+def get_gauge_invariant_1D_hopping_entries(spin, atol=1e-12):
+    """
+    Build the gauge-invariant two-site hopping operator P in the gauge basis,
+    filter by link constraint (T2px == T2mx per pair of sites), and return a list of
+    nonzero entries as:
+        entries = [((f1,f2), (i1,i2), amp), ...]
+    where f1,f2,i1,i2 are *local basis indices* in the gauge-invariant site basis.
+    """
+    ops = SU2_gauge_invariant_ops(spin, pure_theory=False, lattice_dim=1)
+    loc_dim = ops["T2_px"].shape[0]
+    # Build hopping operator
+    if spin < 1:
+        hop_hamiltonian = -1j * qmb_op(ops, ["Qpx_dag", "Qmx"])
+        hop_hamiltonian += 1j * qmb_op(ops, ["Qpx", "Qmx_dag"])
+    else:
+        hop_hamiltonian = -1j * qmb_op(ops, ["Q1_px_dag", "Q2_mx"])
+        hop_hamiltonian -= 1j * qmb_op(ops, ["Q2_px_dag", "Q1_mx"])
+        hop_hamiltonian += 1j * qmb_op(ops, ["Q1_px", "Q2_mx_dag"])
+        hop_hamiltonian += 1j * qmb_op(ops, ["Q2_px", "Q1_mx_dag"])
+    T2px = ops["T2_px"].diagonal()
+    T2mx = ops["T2_mx"].diagonal()
+    coo = hop_hamiltonian.tocoo()
+    decoded = decode_two_site_entries(
+        zip(coo.row, coo.col), d_loc=loc_dim, data=coo.data, T2px=T2px, T2mx=T2mx
+    )
+    # decoded: list[(r1,r2,c1,c2,amp)] with row=(r1,r2), col=(c1,c2)
+    # interpret row as "final", col as "initial" (consistent with your earlier usage)
+    entries = []
+    for r1, r2, c1, c2, amp in decoded:
+        if abs(amp) <= atol:
+            continue
+        entries.append(((r1, r2), (c1, c2), complex(amp)))
+    return entries, loc_dim
+
+
+spin = 1
+ops = SU2_gauge_invariant_ops(spin, pure_theory=False, lattice_dim=1)
+loc_dim = ops["T2_px"].shape[0]
 logger.info("-- HOPPING -----")
-P = -complex(0, 1) * qmb_op(ops, ["Qpx_dag", "Qmx"])
-P += complex(0, 1) * qmb_op(ops, ["Qpx", "Qmx_dag"])
+if spin < 1:
+    P = -complex(0, 1) * qmb_op(ops, ["Qpx_dag", "Qmx"])
+    P += complex(0, 1) * qmb_op(ops, ["Qpx", "Qmx_dag"])
+else:
+    P = -complex(0, 1) * qmb_op(ops, ["Q1_px_dag", "Q2_mx"])
+    P -= complex(0, 1) * qmb_op(ops, ["Q2_px_dag", "Q1_mx"])
+    P += complex(0, 1) * qmb_op(ops, ["Q1_px", "Q2_mx_dag"])
+    P += complex(0, 1) * qmb_op(ops, ["Q2_px", "Q1_mx_dag"])
+
+T2px = ops["T2_px"].diagonal()
+T2mx = ops["T2_mx"].diagonal()
 coo = P.tocoo()
 rows, cols, data = coo.row, coo.col, coo.data
-P_lista = decode_two_site_entries(zip(rows, cols), d_loc=6, data=data)
+P_lista = decode_two_site_entries(
+    zip(rows, cols), d_loc=loc_dim, data=data, T2px=T2px, T2mx=T2mx
+)
 for ii in range(len(P_lista)):
     logger.info(f"{P_lista[ii][:-1]} : {P_lista[ii][-1]}")
 check_hermitian(P)
@@ -176,47 +236,49 @@ for ii in range(len(CPC_lista)):
 # %%
 for ii, singlet in enumerate(gauge_states["site"]):
     logger.info(f" {ii} ")
-    singlet.display_singlets()
+    singlet.display_singlet()
     logger.info(f" ")
 
 # %%
 for ii, singlet in enumerate(gauge_states["site_mx_my"]):
     logger.info(f" {ii} ")
-    singlet.display_singlets()
+    singlet.display_singlet()
     logger.info(f" ")
 # %%
 for ii, singlet in enumerate(gauge_states["site_px_py"]):
     logger.info(f" {ii} ")
-    singlet.display_singlets()
+    singlet.display_singlet()
     logger.info(f" ")
 # %%
 for ii, singlet in enumerate(gauge_states["site_mx_py"]):
     logger.info(f" {ii} ")
-    singlet.display_singlets()
+    singlet.display_singlet()
     logger.info(f" ")
 # %%
 for ii, singlet in enumerate(gauge_states["site_px_my"]):
     logger.info(f" {ii} ")
-    singlet.display_singlets()
+    singlet.display_singlet()
     logger.info(f" ")
 # %%
 for ii, singlet in enumerate(gauge_states["site_my"]):
     logger.info(f" {ii} ")
-    singlet.display_singlets()
+    singlet.display_singlet()
     logger.info(f" ")
 # %%
 for ii, singlet in enumerate(gauge_states["site_py"]):
     logger.info(f" {ii} ")
-    singlet.display_singlets()
+    singlet.display_singlet()
     logger.info(f" ")
 # %%
-from ed_lgt.operators import QED_dressed_site_operators, QED_gauge_invariant_states
+from edlgt.operators import QED_dressed_site_operators, QED_gauge_invariant_states
 
 
-def QED_gauge_invariant_ops(spin, pure_theory, lattice_dim, get_only_bulk):
-    in_ops = QED_dressed_site_operators(spin, pure_theory, lattice_dim)
+def QED_gauge_invariant_ops(spin, pure_theory, lattice_dim, background, get_only_bulk):
+    in_ops = QED_dressed_site_operators(
+        spin, pure_theory, lattice_dim, background=background
+    )
     gauge_basis, _ = QED_gauge_invariant_states(
-        spin, pure_theory, lattice_dim, get_only_bulk
+        spin, pure_theory, lattice_dim, background, get_only_bulk
     )
     ops = {}
     if pure_theory:
@@ -234,21 +296,24 @@ def QED_gauge_invariant_ops(spin, pure_theory, lattice_dim, get_only_bulk):
 # %%
 lattice_dim = 2
 spin = 1
-pure_theory = True
-get_only_bulk = True
+pure_theory = False
+get_only_bulk = False
+background = 0
 in_ops = QED_dressed_site_operators(
-    spin=spin, pure_theory=pure_theory, lattice_dim=lattice_dim
+    spin=spin, pure_theory=pure_theory, lattice_dim=lattice_dim, background=background
 )
-s, b = QED_gauge_invariant_states(
+gauge_basis, gauge_states = QED_gauge_invariant_states(
     spin=spin,
     pure_theory=pure_theory,
     lattice_dim=lattice_dim,
+    background=background,
     get_only_bulk=get_only_bulk,
 )
 ops = QED_gauge_invariant_ops(
     spin=spin,
     pure_theory=pure_theory,
     lattice_dim=lattice_dim,
+    background=background,
     get_only_bulk=get_only_bulk,
 )
 
@@ -462,24 +527,24 @@ sorted_states = group_sorted_spin_configs(
     psi_vacuum=None,
 )
 for s in sorted_states:
-    s.display_singlets()
+    s.display_singlet()
 
 singlets = get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None)
 
 # %%
 for ii, s in enumerate(gauge_states["site"]):
     logger.info(f"{ii}")
-    s.display_singlets()
+    s.display_singlet()
 logger.info("TTTTTTTTTTTTTTTTTTTTTTTTTT")
 logger.info("")
 for ii, s in enumerate(gauge_states["site_mx"]):
     logger.info(f"{ii}")
-    s.display_singlets()
+    s.display_singlet()
 logger.info("TTTTTTTTTTTTTTTTTTTTTTTTTT")
 logger.info("")
 for ii, s in enumerate(gauge_states["site_px"]):
     logger.info(f"{ii}")
-    s.display_singlets()
+    s.display_singlet()
 # %%
 in_ops = SU2_dressed_site_operators(spin=1 / 2, pure_theory=False, lattice_dim=1)
 # %%
@@ -492,14 +557,14 @@ logger.info(ops["E_square"].shape)
 # logger.info(8 * ops["E_square"] / 3)
 # %%
 for s in gauge_states["site"]:
-    s.display_singlets()
+    s.display_singlet()
 # %%
 logger.info(gauge_basis["site"])
 
 # %%
 # %%
 import numpy as np
-from ed_lgt.symmetries import (
+from edlgt.symmetries import (
     get_state_configs,
     momentum_basis_k0,
 )

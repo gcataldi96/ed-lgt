@@ -4,7 +4,7 @@
 LocalTerm Class
 =================
 
-.. autoclass:: ed_lgt.modeling.local_term.LocalTerm
+.. autoclass:: edlgt.modeling.local_term.LocalTerm
    :noindex:
    :members:
    :undoc-members:

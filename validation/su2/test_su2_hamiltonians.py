@@ -1,4 +1,4 @@
-from ed_lgt.workflows.su2 import compare_SU2_models
+from edlgt.workflows.su2 import compare_SU2_models
 import logging
 
 logger = logging.getLogger(__name__)

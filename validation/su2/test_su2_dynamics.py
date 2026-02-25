@@ -1,6 +1,6 @@
 import os
 import numpy as np
-from ed_lgt.workflows.su2 import run_SU2_dynamics  # adjust to your module
+from edlgt.workflows.su2 import run_SU2_dynamics  # adjust to your module
 import logging
 
 logger = logging.getLogger(__name__)
