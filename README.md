@@ -103,7 +103,17 @@ git submodule update --init --recursive
 
 ## Citation
 
-If you use `edlgt` in research, please cite the project using the metadata in `CITATION.cff`.
+If you use `edlgt` in research, please cite it using the metadata in:
+
+- `CITATION.cff`
+- `CITATION.bib`
+
+When Zenodo DOIs are available, use:
+
+- the concept DOI for general software citation
+- the version DOI for exact reproducibility
+
+Current Zenodo concept DOI (all versions): `10.5281/zenodo.11145317`
 
 ## Maintenance (for contributors)
 
