@@ -1,3 +1,10 @@
+"""SU(2) rishon-mode operator builders.
+
+The module provides two implementations of the local SU(2) rishon algebra:
+one specialized for the currently supported ``spin=1/2`` case and one more
+general constructor used for extended truncations.
+"""
+
 import numpy as np
 from scipy.sparse import diags, identity, csr_matrix
 from scipy.sparse.linalg import norm
@@ -16,6 +23,20 @@ __all__ = ["SU2_Rishon", "SU2_Rishon_gen"]
 
 
 class SU2_Rishon:
+    """Construct the hardcoded SU(2) rishon algebra for ``spin=1/2``.
+
+    Parameters
+    ----------
+    spin : scalar
+        Rishon spin truncation. The current implementation supports only
+        ``spin = 1/2``.
+
+    Attributes
+    ----------
+    ops : dict
+        Dictionary of sparse rishon operators and SU(2) generators.
+    """
+
     def __init__(self, spin):
         if not np.isscalar(spin):
             raise TypeError(f"s must be SCALAR & (semi)INTEGER, not {type(spin)}")
@@ -29,6 +50,7 @@ class SU2_Rishon:
         self.SU2_check_rishon_algebra()
 
     def construct_rishons(self):
+        """Populate :attr:`ops` with rishon, parity, and SU(2) generator operators."""
         # Define dictionary for operators
         self.ops = {}
         # ---------------------------------------------------------------------
@@ -56,6 +78,7 @@ class SU2_Rishon:
         self.ops |= SU2_generators(self.s)
 
     def SU2_check_rishon_algebra(self):
+        """Validate commutation/anticommutation relations of the rishon algebra."""
         check_m(2 * comm(self.ops["Zr"], self.ops["Tx"]), self.ops["Zg"])
         check_m(2 * comm(self.ops["Zg"], self.ops["Tx"]), self.ops["Zr"])
         check_m(comm(self.ops["Zr"], self.ops["Ty"]), -complex(0, 0.5) * self.ops["Zg"])
@@ -80,6 +103,19 @@ class SU2_Rishon:
 
 
 class SU2_Rishon_gen:
+    """Construct SU(2) rishon operators for a generic spin truncation.
+
+    Parameters
+    ----------
+    spin : scalar
+        Maximum SU(2) irrep used in the rishon construction.
+
+    Attributes
+    ----------
+    ops : dict
+        Dictionary of sparse rishon operators and SU(2) generators.
+    """
+
     def __init__(self, spin):
         # Check spin
         validate_parameters(spin_list=[spin])
@@ -93,6 +129,7 @@ class SU2_Rishon_gen:
         self.SU2_check_rishon_algebra()
 
     def construct_rishons(self):
+        """Populate :attr:`ops` with the generic rishon operator set."""
         # Define dictionary for operators
         self.ops = {}
         # ---------------------------------------------------------------------
@@ -155,6 +192,7 @@ class SU2_Rishon_gen:
         self.ops |= SU2_generators(self.s)
 
     def SU2_check_rishon_algebra(self):
+        """Validate the generic SU(2) rishon algebra relations."""
         logger.info("CHECK SU2 RISHON ALGEBRA")
         check_m(2 * comm(self.ops["Zr"], self.ops["Tx"]), self.ops["Zg"])
         check_m(2 * comm(self.ops["Zg"], self.ops["Tx"]), self.ops["Zr"])
@@ -170,7 +208,23 @@ class SU2_Rishon_gen:
 
     @staticmethod
     def chi_function(s, color, m):
-        """This function computes the factor for SU2 rishon entries"""
+        """Return the coefficient used in the generic SU(2) rishon matrices.
+
+        Parameters
+        ----------
+        s : scalar
+            Intermediate spin irrep.
+        color : str
+            Rishon color label, ``"r"`` or ``"g"``.
+        m : scalar
+            Magnetic quantum number.
+
+        Returns
+        -------
+        float
+            Coefficient entering the diagonal construction of the rishon
+            operators.
+        """
         validate_parameters(spin_list=[s], sz_list=[m])
         if color == "r":
             return np.sqrt((s + m + 1) / np.sqrt((2 * s + 1) * (2 * s + 2)))

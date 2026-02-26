@@ -4,8 +4,10 @@
 QED Operators
 ==============
 
+Operator factories and local gauge-invariant bases for U(1) lattice gauge
+models.
+
 .. automodule:: edlgt.operators.QED_operators
-    :noindex:
     :members:
-    :undoc-members:
+    :member-order: bysource
     :show-inheritance:

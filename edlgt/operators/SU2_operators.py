@@ -1,3 +1,5 @@
+"""Operator factories and gauge-invariant local bases for SU(2) lattice models."""
+
 import numpy as np
 from itertools import product
 from sympy import S
@@ -24,6 +26,24 @@ __all__ = [
 
 
 def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=0):
+    """Build SU(2) dressed-site operators using the hardcoded rishon construction.
+
+    Parameters
+    ----------
+    spin : float
+        Maximum rishon spin representation.
+    pure_theory : bool
+        If ``True``, exclude matter fields.
+    lattice_dim : int
+        Number of spatial lattice dimensions (1, 2, or 3).
+    background : int, optional
+        Maximum background-charge irrep included at each site.
+
+    Returns
+    -------
+    dict
+        Dictionary of dressed-site operators used by the SU(2) model builders.
+    """
     validate_parameters(
         spin_list=[spin], pure_theory=pure_theory, lattice_dim=lattice_dim
     )
@@ -273,6 +293,24 @@ def SU2_dressed_site_operators(spin, pure_theory, lattice_dim, background=0):
 
 
 def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=0):
+    """Build SU(2) dressed-site operators using the generalized rishon construction.
+
+    Parameters
+    ----------
+    spin : float
+        Maximum rishon spin representation.
+    pure_theory : bool
+        If ``True``, exclude matter fields.
+    lattice_dim : int
+        Number of spatial lattice dimensions (1, 2, or 3).
+    background : int, optional
+        Maximum background-charge irrep included at each site.
+
+    Returns
+    -------
+    dict
+        Dictionary of dressed-site operators for the generalized SU(2) model.
+    """
     validate_parameters(
         spin_list=[spin], pure_theory=pure_theory, lattice_dim=lattice_dim
     )
@@ -548,6 +586,25 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=0)
 
 
 def SU2_gauge_invariant_states(s_max, pure_theory, lattice_dim, background=0):
+    """Construct local SU(2) gauge-invariant basis states and basis matrices.
+
+    Parameters
+    ----------
+    s_max : float
+        Maximum spin irrep used for the rishon Hilbert spaces.
+    pure_theory : bool
+        If ``True``, exclude matter fields.
+    lattice_dim : int
+        Number of spatial lattice dimensions.
+    background : int, optional
+        Maximum background-charge irrep included at the site.
+
+    Returns
+    -------
+    tuple
+        ``(gauge_basis, gauge_states)`` dictionaries for bulk and border site
+        classes.
+    """
     validate_parameters(
         spin_list=[s_max], pure_theory=pure_theory, lattice_dim=lattice_dim
     )
@@ -622,6 +679,29 @@ def SU2_gauge_invariant_states(s_max, pure_theory, lattice_dim, background=0):
 def SU2_check_gauss_law(
     gauge_basis: csr_matrix, gauss_law_op: csr_matrix, threshold=1e-14
 ):
+    """Validate an SU(2) gauge-invariant basis against a Gauss-law operator.
+
+    Parameters
+    ----------
+    gauge_basis : scipy.sparse.csr_matrix
+        Basis matrix whose columns span the candidate gauge-invariant subspace.
+    gauss_law_op : scipy.sparse.csr_matrix
+        Local Gauss-law operator.
+    threshold : float, optional
+        Numerical tolerance used in the checks.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If inputs are not sparse matrices.
+    ValueError
+        If the basis is not isometric/projective or does not lie in the
+        Gauss-law kernel.
+    """
     if not isspmatrix(gauge_basis):
         raise TypeError(f"gauge_basis should be csr_matrix, not {type(gauge_basis)}")
     if not isspmatrix(gauss_law_op):

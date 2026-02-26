@@ -1,3 +1,5 @@
+"""Single-site bosonic and fermionic operator factories."""
+
 import numpy as np
 from scipy.sparse import csr_matrix, diags
 from scipy.sparse import identity
@@ -10,12 +12,21 @@ __all__ = [
 
 
 def fermi_operators(has_spin, colors=False, fermionic=True):
-    """
-    This functions define the matter field operators of the QED Hamiltonian.
-    They are related to spinless Dirac Fermions occupying lattice sites
+    """Build single-site fermionic matter operators.
 
-    Returns:
-        dict: dictionary with single site matter field operators
+    Parameters
+    ----------
+    has_spin : bool
+        If ``True``, build two-component (up/down) matter operators.
+    colors : bool, optional
+        If ``True``, provide ``r/g`` aliases for the two matter components.
+    fermionic : bool, optional
+        If ``True``, include fermionic parity operators/sign strings.
+
+    Returns
+    -------
+    dict
+        Dictionary of single-site matter operators.
     """
     ops = {}
     # Define the MATTER FIELDS OPERATORS
@@ -60,6 +71,18 @@ def fermi_operators(has_spin, colors=False, fermionic=True):
 
 
 def bose_operators(n_max):
+    """Build bosonic ladder and number operators with onsite cutoff ``n_max``.
+
+    Parameters
+    ----------
+    n_max : int
+        Maximum onsite occupation number.
+
+    Returns
+    -------
+    dict
+        Dictionary containing ``b``, ``b_dagger``, ``N``, and ``N2``.
+    """
     ops = {}
     entries = np.arange(1, n_max + 1, 1)
     entries = np.sqrt(entries)

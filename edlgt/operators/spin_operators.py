@@ -1,3 +1,5 @@
+"""Spin and SU(2)-generator matrix constructors."""
+
 import numpy as np
 from scipy.sparse import diags, block_diag, identity, csr_matrix
 import logging
@@ -15,33 +17,29 @@ __all__ = [
 
 
 def spin_space(spin):
-    """
-    Returns the size of the Hilbert space for a given spin,
-    which can be an integer or half-integer to reflect physical spins.
-    """
+    """Return the Hilbert-space dimension of a spin irrep."""
     validate_parameters(spin_list=[spin])
     return int(2 * spin + 1)
 
 
 def m_values(spin):
-    """
-    Given the spin value s, it returns an array with the possible spin-z components
-    sorted in DESCENDING order
-    """
+    """Return the allowed ``m`` quantum numbers for a spin irrep (descending)."""
     validate_parameters(spin_list=[spin])
     return np.arange(-spin, spin + 1)[::-1]
 
 
 def get_spin_operators(spin):
-    """
-    This function computes the spin (sparse) matrices:
-    [Sz, Sp=S+, Sm=S-, Sx, Sy, S2=Casimir] in any arbitrary spin representation
+    """Construct sparse spin matrices for an arbitrary spin representation.
 
-    Args:
-        spin (scalar, real): spin value, assumed to be integer or half-integer
+    Parameters
+    ----------
+    spin : scalar
+        Spin value (integer or half-integer).
 
-    Returns:
-        dict: dictionary with the spin matrices
+    Returns
+    -------
+    dict
+        Sparse matrices ``Sz``, ``Sp``, ``Sm``, ``Sx``, ``Sy``, and ``S2``.
     """
     validate_parameters(spin_list=[spin])
     # Size of the spin matrix
@@ -62,9 +60,7 @@ def get_spin_operators(spin):
 
 
 def get_Pauli_operators():
-    """
-    Returns the Pauli matrices, commonly used for spin-1/2 particles.
-    """
+    """Return Pauli-operator matrices in the package normalization."""
     shape = (2, 2)
     ops = {}
     ops["Sz"] = diags([1, -1], 0, shape)
@@ -76,22 +72,20 @@ def get_Pauli_operators():
 
 
 def SU2_generators(spin, matter=False):
-    """
-    This function computes the generators of the group for the SU2 Lattice Gauge Theory:
-    [Tz, Tp=T+, Tm=T-, Tx, Ty, T2=Casimir] in any arbitrary spin-representation.
-    They are obtained as the block diagonal costructution of increasing the usual
-    Sz, Sp=S+, Sm=S-, Sx, Sy, S2=Casimir computed via "get_spin_operators".
-    The size of each diagonal block is 2s+1 for s going from 0 to "spin" with half-integer steps.
+    """Construct SU(2) generators for rishon or matter sectors.
 
-    Args:
-        spin (scalar, real): spin value, assumed to be integer or half-integer
+    Parameters
+    ----------
+    spin : scalar
+        Maximum spin irrep used in the block-diagonal construction.
+    matter : bool, optional
+        If ``True``, build the generators acting on the matter sector;
+        otherwise build the rishon-sector generators.
 
-        matter (bool, optional):
-            if true, it yields the SU2 generators of flavorless SU(2) 1/2 particles
-            if false it yields the SU2 generators of Rishon modes in the LGT
-
-    Returns:
-        dict: dictionary with the spin matrices
+    Returns
+    -------
+    dict
+        Dictionary of sparse SU(2) generators and related composites.
     """
     validate_parameters(spin_list=[spin], matter=matter)
     largest_spin_size = int(2 * spin + 1)

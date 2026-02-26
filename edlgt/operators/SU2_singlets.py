@@ -1,3 +1,5 @@
+"""SU(2) singlet construction utilities and helper data structures."""
+
 import numpy as np
 from numba import njit
 from itertools import product
@@ -26,20 +28,22 @@ S1 = S(1)
 
 
 def couple_two_spins(j1, j2, get_singlet=False, M=None):
-    """
-    This function computes SU(2) states obtained by combining two spins j1, j2
-    and computing Clebsh-Gordan coefficients CG. The possible outcomes j3,m3 are
-    the ones with non null CG
+    """Couple two SU(2) spins and return nonzero Clebsch-Gordan contributions.
 
-    Args:
-        j1 (integer/half-integer): spin of the 1st particle
-        j2 (integer/half-integer): spin of the 2nd particle
-        get_singlet (bool, optional): if true, look only at the (j1, j2)-combinations providing an SU(2) singlet.
-            Defaults to False.
-        M (integer/half-integer, optional): spin-z component of the 1st particle. Defaults to None.
+    Parameters
+    ----------
+    j1, j2 : scalar
+        Input spin irreps (integer or half-integer values).
+    get_singlet : bool, optional
+        If ``True``, keep only couplings whose total spin is zero.
+    M : scalar, optional
+        If provided, fix the ``m`` component of the first spin to ``M``.
 
-    Returns:
-        list: [(j1, m1,) j2, m2, CG, j3, m3]
+    Returns
+    -------
+    list
+        List of coupling configurations with nonzero Clebsch-Gordan
+        coefficients.
     """
     if M is not None:
         validate_parameters(spin_list=[j1, j2], sz_list=[M], get_singlet=get_singlet)
@@ -74,6 +78,8 @@ def couple_two_spins(j1, j2, get_singlet=False, M=None):
 
 
 class SU2_singlet:
+    """Representation of one SU(2)-singlet multiplet in coupled-spin form."""
+
     def __init__(
         self,
         J_config,
@@ -83,47 +89,31 @@ class SU2_singlet:
         psi_vacuum=None,
         background=0,
     ):
-        """
-        This class collects a configuration of a set of angular momenta Js
-        (and their corresponding Z-momentum) that form an SU(2) singlet state
-        with a certain Clebsh-Gordon coeffiicient.
-        The set of momenta is typically referred to SU(2) gauge fields,
-        but it can eventually include a matter state (in first position)
-        describing Flavorless Color 1/2 Dirac fermions with 4 possible states:
+        """Initialize an SU(2)-singlet descriptor.
 
-        - (J,M)=(0,0)
+        Parameters
+        ----------
+        J_config : list
+            Total-spin labels for the constituent degrees of freedom.
+        M_configs : list
+            Allowed sets of magnetic quantum numbers producing the singlet.
+        CG_values : list
+            Lists of intermediate Clebsch-Gordan coefficients associated with
+            each ``M`` configuration.
+        pure_theory : bool, optional
+            If ``False``, matter degrees of freedom are included in the first
+            entries of the configuration.
+        psi_vacuum : bool, optional
+            Distinguishes the two matter ``J=0`` singlets when matter is present.
+        background : int, optional
+            Background-charge sector information used for labeling.
 
-        - (J,M)=(1/2,1/2)
-
-        - (J,M)=(1/2,-1/2)
-
-        - (J,M)=(1/2,0)
-
-        Args:
-            J_config (list): list of Total angular momentum J of a set of particles/entities
-
-            M_configs (list): list of possible sets of angular z-momentum
-                (each set has the same length of J_config) of the J_config that allows for a singlet.
-
-            CG_values (list): list of intermediate Clebsh-Gordon coefficients, to be multiplied
-                together for the overall CG coefficient of the J configuration.
-
-            pure_theory (bool, optional): If False, the theory also involves Flavorless Color 1/2 Dirac fermions.
-                Defaults to True.
-
-            psi_vacuum (bool, optional): If it used, it specifies which type of 0 singlet the matter state
-                is corresponding to. Defaults to None.
-
-            background (bool, optional): If True, it adds an extra charge (j=0,1/2) to the combination of the sites.
-
-        Raises:
-            TypeError: If the input arguments are of incorrect types or formats.
-
-            ValueError: If M_configs and CG_values do not have the same # of entries
-
-            ValueError: If any of M config is NOT made of len(J_config)
-
-            ValueError: If any entry of M_config does not have len(J_config)-1 CGs,
+        Raises
+        ------
+        TypeError
+            If inputs are not in the expected formats.
+        ValueError
+            If configuration lengths are inconsistent.
         """
         # CHECK ON TYPES
         validate_parameters(
@@ -166,16 +156,7 @@ class SU2_singlet:
             self.JM_configs.append(self.J_config + m)
 
     def display_singlet(self, msg: str | None = None):
-        """
-        Print the list of singlets (s1 ... sN) in the following way:
-            Js   J1, J2, J3, ... JN
-
-            s1 [ m1, m2, m3, ... mN] CG1
-
-            s2 [ m1, m2, m3, ... mN] CG2
-
-            s3 [ m1, m2, m3, ... mN] CG3
-        """
+        """Log the singlet components and their Clebsch-Gordan coefficients."""
         if msg is not None:
             msg_len = len(msg)
             line = "=" * int(np.ceil((52 - 2 - msg_len) / 2))
@@ -189,24 +170,23 @@ class SU2_singlet:
 
 @get_time
 def get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None, background=0):
-    """
-    This function aims to identify all possible SU(2) singlet states that can be
-    formed from a given set (list) of spin representations.
-    Singlet states are those where the total spin equals zero, meaning they are
-    invariant under SU(2) transformations (rotationally invariant).
+    """Enumerate all SU(2) singlets compatible with a list of spin irreps.
 
-    Args:
-        spin_list (list): list of spin representations to be coupled in order to get a singlet
+    Parameters
+    ----------
+    spin_list : list
+        Spin irreps to be coupled.
+    pure_theory : bool, optional
+        If ``True``, consider only gauge degrees of freedom.
+    psi_vacuum : bool, optional
+        Matter-sector selector used when ``pure_theory=False``.
+    background : int, optional
+        Background-charge sector information.
 
-        pure_theory (bool, optional): if True, only gauge fields
-
-        psi_vacuum (bool, optional): If True, the first element of spin_list is the vacuum of matter.
-            If False, the first element of spin_list is the pair (up & down) of matter. Default to None.
-
-        background (bool, optional): If True, it adds an extra charge (j=0,1/2) to the combination of the sites.
-
-    Returns:
-        list: instances of SU2_singlet; if there is no singlet, just None
+    Returns
+    -------
+    list or None
+        List of :class:`SU2_singlet` objects, or ``None`` if no singlet exists.
     """
     # CHECK ON TYPES
     validate_parameters(
@@ -237,26 +217,22 @@ def get_SU2_singlets(spin_list, pure_theory=True, psi_vacuum=None, background=0)
 
 @get_time
 def add_new_spin(previous_configs, new_spin, get_singlet):
-    """
-    Couples a list of spin configurations with a new spin and determines the resulting configurations.
-    Overall, this function is a wrapper of the previous function "couple_two_spins".
+    """Couple an additional spin to a list of intermediate coupling configurations.
 
-    Args:
-        previous_configs (list): The current list of spin-configurations.
-            Each spin-configuration is a list whose last two terms corresponds to:
+    Parameters
+    ----------
+    previous_configs : list
+        Intermediate coupling configurations produced by
+        :func:`couple_two_spins` / previous recursive steps.
+    new_spin : scalar
+        Spin irrep to add (integer or half-integer value).
+    get_singlet : bool
+        If ``True``, keep only resulting singlet configurations.
 
-            - spin_config[-2]= J1 total spin associated to the spin-configuration
-
-            - spin_config[-1]= M1 correspinding z-component of the total spin of the given configuration
-
-            These two variables will be combined with the new_spin to obtain a new configuation
-
-        new_spin (half/integer): The new spin to be coupled with each configuration in previous_config.
-
-        get_singlet (bool): Specify if the resulting configuration must be a singlet.
-
-    Returns:
-        list: Updated list of spin configurations after coupling with new_spin.
+    Returns
+    -------
+    list
+        Updated list of coupling configurations.
     """
     updated_configs = []
     for config in previous_configs:
@@ -273,23 +249,25 @@ def add_new_spin(previous_configs, new_spin, get_singlet):
 def group_sorted_spin_configs(
     spin_configs, spin_list, pure_theory, psi_vacuum, background=0
 ):
-    """
-    Groups and sorts spin-configurations based on their total spin and individual spin z-components.
+    """Group intermediate coupling configurations into singlet multiplets.
 
-    Args:
-        spin_configs (list of lists): The list of spin-configurations to sort and group.
+    Parameters
+    ----------
+    spin_configs : list
+        Intermediate coupling configurations.
+    spin_list : list
+        Original list of spin irreps.
+    pure_theory : bool
+        If ``True``, consider only gauge degrees of freedom.
+    psi_vacuum : bool
+        Matter-sector selector used when ``pure_theory=False``.
+    background : int, optional
+        Background-charge sector information.
 
-        spin_list (list): list of spin representations giving rise to all the spin-configs
-
-        pure_theory (bool, optional): if True, only gauge fields
-
-        psi_vacuum (bool, optional): If True, the first element of spin_list is the vacuum of matter.
-            If False, the first element of spin_list is the pair (up & down) of matter. Default to None.
-
-        background (bool, optional): If True, it adds an extra charge (j=0,1/2) to the combination of the sites.
-
-    Returns:
-        list: List of grouped and sorted spin configurations.
+    Returns
+    -------
+    list
+        List of grouped :class:`SU2_singlet` objects.
     """
     validate_parameters(
         spin_list=spin_list, pure_theory=pure_theory, psi_vacuum=psi_vacuum
@@ -349,46 +327,23 @@ def group_sorted_spin_configs(
 
 @get_time
 def get_spin_Hilbert_spaces(max_spin_irrep_list, pure_theory, background=0):
-    """
-    This function generates the Hilbert spaces for quantum systems characterized
-    by their spin degrees of freedom.
-    For each degree of freedom, it calculates the possible spin states (J)
-    and their corresponding magnetic quantum numbers (M),
-    spanning from the singlet state J,M=0 up to the maximum spin representation provided.
-    The function supports both pure gauge field configurations and mixed systems including
-    Fermionic particles by adjusting the `pure_theory` flag.
-    In non-pure theory mode, additional states are included to represent the vacuum and fermion pairs.
+    """Build local spin Hilbert spaces used in singlet construction.
 
-    Args:
-        max_spin_irrep_list (list): List of the maximal spin-irrep of each degree of freedom (dof) in the system.
-            For each d.o.f, the Hilbert space will span from the smallest=0-irrep to the maximal irrep.
+    Parameters
+    ----------
+    max_spin_irrep_list : list
+        Maximum spin irrep kept for each degree of freedom.
+    pure_theory : bool
+        If ``False``, prepend the matter Hilbert space used by the SU(2)
+        dressed-site construction.
+    background : int, optional
+        If nonzero, prepend the background-charge Hilbert space.
 
-        pure_theory (bool, optional): Defaults to True. If False, it will add Fermionic spin 1/2 particles,
-            whose Hilbert space is 4dimensional and can be characterized by the following values of
-            spin and its z-component:
-
-            - J = [0, 1 / 2, 1 / 2, 0]
-
-            - M = [0, 1 / 2, -1 / 2, 0]
-
-            Where the first J=0 is referred to the absence of spin particles V=vacuum,
-            while the second J=0 is referred to the case of a pair of particles with opposite spin P=pair
-
-        background (bool, optional): If True, it adds an extra charge (j=0,1/2) to the combination of the sites.
-
-    Returns:
-        - j_list: A list of lists, where each sublist represents the possible J values (total spin values) for a dof.
-        - m_list: A list of lists parallel to j_list, representing the corresponding M values (magnetic quantum numbers) for each J value.
-
-        Each list has len = len(max_spin_irrep_list)
-        The length of each internal list is exactly the sum of (2s+1) for s from 0 to the coorresponding max_spin
-
-    Example:
-        if spins=[1,1], we will get
-            - J=[[0, 1/2, 1/2, 1, 1, 1],
-                 [0, 1/2, 1/2, 1, 1, 1]]
-            - M=[[0, 1/2, -1/2, 1, 0, -1],
-                 [0, 1/2, -1/2, 1, 0, -1]]
+    Returns
+    -------
+    tuple
+        ``(j_list, m_list)`` with per-degree-of-freedom lists of spin irreps and
+        magnetic quantum numbers.
     """
     validate_parameters(spin_list=max_spin_irrep_list, pure_theory=pure_theory)
     spin_dof = []
@@ -433,26 +388,22 @@ def get_spin_Hilbert_spaces(max_spin_irrep_list, pure_theory, background=0):
 
 @get_time
 def SU2_singlet_canonical_vector(spin_list, singlet, background=False):
-    """
-    Constructs the canonical state vector representing a specific SU2 singlet configuration
-    within the total Hilbert space formed by the tensor product of individual spin Hilbert spaces.
-    Each spin space is defined (via "get_spin_Hilbert_spaces") up to the maximum irrep given in spin_list.
-    This function calculates the state vector in the composite system space that corresponds to
-    the combination of individual spin degrees of freedom forming the specified singlet state.
+    """Construct the canonical basis vector of a specific SU(2) singlet.
 
-    Args:
-        spin_list (list of (half)integers): List of the maximal spin irreps for each degree of freedom (dof)
-            in the system. The Hilbert space for each dof spans from the singlet state
-            up to the maximal irrep specified in this list.
+    Parameters
+    ----------
+    spin_list : list
+        Maximum spin irreps for each degree of freedom.
+    singlet : SU2_singlet
+        Singlet descriptor returned by :func:`get_SU2_singlets`.
+    background : bool or int, optional
+        Background-charge flag/sector forwarded to
+        :func:`get_spin_Hilbert_spaces`.
 
-        singlet (SU2_singlet): An instance of the SU2_singlet class representing the specific singlet state
-            for which the canonical state vector is to be constructed. This singlet should be compatible
-            with the spin configurations defined by spin_list.
-
-    Returns:
-        np.ndarray: A one-dimensional array representing the normalized canonical state vector of the
-            specified singlet in the total Hilbert space. The length of this vector equals the product
-            of the dimensions of the individual spin Hilbert spaces defined by spin_list.
+    Returns
+    -------
+    numpy.ndarray
+        Normalized canonical state vector for the requested singlet.
     """
     validate_parameters(spin_list=spin_list)
     if not isinstance(singlet, SU2_singlet):
@@ -481,9 +432,7 @@ def SU2_singlet_canonical_vector(spin_list, singlet, background=False):
 
 @njit
 def check_singlet_recursive(spins):
-    """
-    Recursively checks if a zero total spin (singlet) can be formed.
-    """
+    """Recursively test whether a set of spins can yield total spin zero."""
     if len(spins) == 1:
         # Base case: one spin cannot form a singlet alone
         return spins[0] == 0
@@ -505,14 +454,18 @@ def check_singlet_recursive(spins):
 
 @njit
 def can_form_singlet(spins):
-    """
-    Checks if a given configuration of spins can potentially form an SU(2) singlet.
+    """Check whether a spin configuration can form an SU(2) singlet.
 
-    Parameters:
-    - spins (np.ndarray): An array of spins.
+    Parameters
+    ----------
+    spins : numpy.ndarray
+        Array of spins (encoded as integers or doubled half-integers depending on
+        the calling code).
 
-    Returns:
-    - bool: True if the spins can form a singlet, False otherwise.
+    Returns
+    -------
+    bool
+        ``True`` if a singlet is possible, ``False`` otherwise.
     """
     if len(spins) < 2:
         return False  # Need at least two spins to form a singlet

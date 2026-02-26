@@ -38,14 +38,14 @@ def nbody_term(
     sector_configs : ndarray
         Shape (N, n_sites), int32 — basis configurations in the (symmetry) sector.
     momentum_basis : dict | ndarray | None
-        If dict, must contain CSC/CSR arrays:
-            {
-              "n_rows", "n_cols",
-              "L_col_ptr", "L_row_idx", "L_data",
-              "R_row_ptr", "R_col_idx", "R_data"
-            }
-        If ndarray (legacy), shape (N, Bdim) complex128/float64.
-        If None, compute in real-space sector (no momentum projection).
+        Momentum-projection data.
+        If a dictionary is provided, it must contain the sparse left/right
+        projection arrays with keys ``"L_col_ptr"``, ``"L_row_idx"``,
+        ``"L_data"``, ``"R_row_ptr"``, ``"R_col_idx"``, and ``"R_data"``
+        (``"n_rows"``/``"n_cols"`` may also be present).
+        If an ndarray is provided (legacy path), it is interpreted as a dense
+        projection basis of shape ``(N, Bdim)``.
+        If ``None``, the operator is built in the real-space symmetry sector.
 
     Returns
     -------

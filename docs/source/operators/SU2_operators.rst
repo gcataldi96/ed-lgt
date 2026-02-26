@@ -4,8 +4,11 @@
 SU2 Operators
 ==============
 
+Operator factories and local gauge-invariant bases for SU(2) lattice gauge
+models.
+
 .. automodule:: edlgt.operators.SU2_operators
-    :synopsis: Functions providing dressed site operators for a truncated SU(2) Yang Mills LGT in arbitrary lattice dimensions and for 
-    :noindex:
+    :synopsis: Dressed-site SU(2) operator factories and gauge-invariant bases
     :members:
+    :member-order: bysource
     :show-inheritance:

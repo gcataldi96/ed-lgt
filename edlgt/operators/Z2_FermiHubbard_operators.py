@@ -1,3 +1,5 @@
+"""Operator factories and local gauge-invariant bases for the Z2 Fermi-Hubbard model."""
+
 import numpy as np
 from scipy.sparse import csr_matrix, kron, identity as ID
 from itertools import product
@@ -17,6 +19,19 @@ __all__ = [
 
 
 def Z2_FermiHubbard_gauge_invariant_states(lattice_dim):
+    """Construct local gauge-invariant basis states for the Z2 Fermi-Hubbard model.
+
+    Parameters
+    ----------
+    lattice_dim : int
+        Number of spatial lattice dimensions.
+
+    Returns
+    -------
+    tuple
+        ``(gauge_basis, gauge_states)`` dictionaries for bulk and border site
+        classes.
+    """
     if not np.isscalar(lattice_dim) or not isinstance(lattice_dim, int):
         raise TypeError(
             f"lattice_dim must be SCALAR & INTEGER, not {type(lattice_dim)}"
@@ -76,15 +91,17 @@ def Z2_FermiHubbard_gauge_invariant_states(lattice_dim):
 
 
 def Z2_FermiHubbard_dressed_site_operators(lattice_dim=2):
-    """
-    This function generates the dressed-site operators of the
-    Hubbard Hamiltonian coupled with a Z2 gauge field, in any lattice dimension.
+    """Build dressed-site operators for the Z2 Fermi-Hubbard model.
 
-    Args:
-        lattice_dim: (int) lattice dimensions
+    Parameters
+    ----------
+    lattice_dim : int, optional
+        Number of spatial lattice dimensions.
 
-    Returns:
-        dict: dictionary with all the operators of the QED (pure or full) Hamiltonian
+    Returns
+    -------
+    dict
+        Dictionary of dressed-site operators used by the model builder.
     """
     if not np.isscalar(lattice_dim) and not isinstance(lattice_dim, int):
         raise TypeError(

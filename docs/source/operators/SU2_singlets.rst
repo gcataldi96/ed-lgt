@@ -4,8 +4,10 @@
 SU2 Singlets
 ==============
 
+Utilities to construct, group, and inspect SU(2)-singlet spin combinations and
+their canonical basis vectors.
+
 .. automodule:: edlgt.operators.SU2_singlets
-    :noindex:
     :members:
-    :undoc-members:
+    :member-order: bysource
     :show-inheritance:

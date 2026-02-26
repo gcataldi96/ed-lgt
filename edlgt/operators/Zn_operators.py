@@ -1,3 +1,11 @@
+"""Operator factories and local gauge-invariant bases for Zn models.
+
+The module contains utilities to build link/rishon operators, dressed-site
+operators, and local gauge-invariant bases used by the model-building layer.
+It also includes helper routines for basis changes and a specialized magnetic
+basis construction for 2D corner operators.
+"""
+
 # %%
 import numpy as np
 from numpy.linalg import eig, eigh
@@ -23,13 +31,19 @@ __all__ = [
 
 
 def check_Zn_Gauss_law_magnetic_basis(L, cutoff):
-    """
-    This function constructs the Gauss Law operator of a Z_{L} in the Magnetic Basis and look at how it mixes the states within a truncation of the Magnetic Basis itself (from a n-representation L to a n-representation cutoff).
+    """Inspect Gauss-law mixing after truncating the magnetic basis.
 
-    Args:
-        L (scalar, int): Initial value of the n-representation of the Electric Basis of the Z_{L} group
+    Parameters
+    ----------
+    L : int
+        Link cutoff in the electric basis of the ``Z_L`` theory.
+    cutoff : int
+        Truncation used in the magnetic basis.
 
-        cutoff (scalar, int): value of the n-representation at which we perform the trunctation of the Magnetic Basis
+    Notes
+    -----
+    This is a diagnostic helper that prints the ratio between off-diagonal and
+    diagonal blocks of the reordered Gauss-law projector.
     """
     # Dimension of the gauge link Hilbert space (in the Electric Basis)
     link_size = 2 * L + 1
@@ -92,6 +106,18 @@ def check_Zn_Gauss_law_magnetic_basis(L, cutoff):
 
 
 def change_of_basis(N):
+    """Return the discrete Fourier transform used for the magnetic basis.
+
+    Parameters
+    ----------
+    N : int
+        Electric-basis cutoff parameter (link dimension is ``2*N + 1``).
+
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        Fourier-transform matrix from electric to magnetic basis.
+    """
     prefactor = 1 / np.sqrt(2 * np.pi)
     basis_size = int(2 * N + 1)
     F = np.zeros((basis_size, basis_size), dtype=complex)
@@ -102,19 +128,21 @@ def change_of_basis(N):
 
 
 def Zn_rishon_operators(n, pure_theory):
-    """
-    This function constructs the Operators (E,U) of a Zn Lattice Gauge Theory
-    in the Electric Basis (where E is diagonal) and provides the corresponding
-    Rishon Operators that are suitable for a dressed site description.
+    """Construct link/rishon operators for a ``Z_n`` quantum link theory.
 
-    Args:
-        n (int): dimension of the gauge link Hilbert space
+    Parameters
+    ----------
+    n : int
+        Gauge-link Hilbert-space dimension.
+    pure_theory : bool
+        If ``True``, build only gauge-link operators. If ``False``, build the
+        rishon conventions used by dressed-site constructions with matter.
 
-        pure_theory (bool): if True, it only provides gauge link operators.
-            If False, it also provides matter field operators and requires n to be even.
-
-    Returns:
-        dict: dictionary with Zn operators
+    Returns
+    -------
+    dict
+        Dictionary containing electric-field, shift, parity, and rishon
+        operators (plus convenience composites for corner terms).
     """
     if not all([np.isscalar(n), isinstance(n, int)]):
         raise TypeError(f"n must be SCALAR & INTEGER, not {type(n)}")
@@ -174,18 +202,19 @@ def Zn_rishon_operators(n, pure_theory):
 
 
 def Zn_dressed_site_operators(n, pure_theory=False):
-    """
-    This function generates the dressed-site operators of the 2D Zn Hamiltonian
-    (pure or with matter fields) for any possible value n of Zn
-    (the larger n the larger the gauge link Hilbert space) in the Electric Basis
+    """Build 2D dressed-site operators for ``Z_n`` gauge theories.
 
-    Args:
-        n (int): dimension of the gauge link Hilbert space
+    Parameters
+    ----------
+    n : int
+        Gauge-link Hilbert-space dimension.
+    pure_theory : bool, optional
+        If ``True``, exclude matter fields and build pure-gauge operators only.
 
-        pure_theory (bool, optional): If true, the dressed site includes matter fields. Defaults to False.
-
-    Returns:
-        dict: dictionary with all the operators of the QED (pure or full) Hamiltonian
+    Returns
+    -------
+    dict
+        Dictionary of dressed-site operators used by the ``Z_n`` models.
     """
     if not np.isscalar(n) and not isinstance(n, int):
         raise TypeError(f"n must be SCALAR & INTEGER, not {type(n)}")
@@ -238,28 +267,27 @@ def Zn_dressed_site_operators(n, pure_theory=False):
 
 
 def Zn_gauge_invariant_states(n, pure_theory, lattice_dim):
-    """
-    This function generates the gauge invariant basis of a Zn LGT
-    in a d-dimensional lattice where gauge (and matter) degrees of
-    freedom are merged in a compact-site notation by exploiting
-    a rishon-based quantum link model.
+    """Construct local gauge-invariant basis states for ``Z_n`` dressed sites.
 
-    NOTE: In presence of matter, the gague invariant basis is different for even
-    and odd sites due to the staggered fermion solution
+    Parameters
+    ----------
+    n : int
+        Gauge-link Hilbert-space dimension.
+    pure_theory : bool
+        If ``True``, build only the pure-gauge local basis.
+    lattice_dim : int
+        Number of spatial lattice dimensions.
 
-    NOTE: The function provides also a restricted basis for sites
-    on the borderd of the lattice where not all the configurations
-    are allowed (the external rishons/gauge fields do not contribute)
+    Returns
+    -------
+    tuple
+        ``(gauge_basis, gauge_states)`` dictionaries keyed by bulk/border site
+        labels (for example ``"site"``, ``"even_mx"``, ``"odd_px_py"``).
 
-    Args:
-        n (scalar, int): size of the Zn Gauge field, corresponding to a gauge Hilbert space of dimension n
-
-        pure_theory (bool,optional): if True, the theory does not involve matter fields
-
-        lattice_dim (int, optional): number of spatial dimensions. Defaults to 2.
-
-    Returns:
-        (dict, dict): dictionaries with the basis and the states
+    Notes
+    -----
+    With matter, the local gauge-invariant basis depends on site parity
+    (``even``/``odd``) because of the staggered-fermion convention.
     """
     if not all([np.isscalar(n), isinstance(n, int)]):
         raise TypeError(f"n must be SCALAR & INTEGER, not {type(n)}")
@@ -333,6 +361,22 @@ def Zn_gauge_invariant_states(n, pure_theory, lattice_dim):
 
 
 def Zn_gauge_invariant_ops(n, pure_theory, lattice_dim):
+    """Project dressed-site operators onto the local gauge-invariant basis.
+
+    Parameters
+    ----------
+    n : int
+        Gauge-link Hilbert-space dimension.
+    pure_theory : bool
+        If ``True``, use the pure-gauge local basis.
+    lattice_dim : int
+        Number of spatial lattice dimensions.
+
+    Returns
+    -------
+    dict
+        Gauge-invariant operators represented in the projected local basis.
+    """
     in_ops = Zn_dressed_site_operators(n, pure_theory)
     basis, states = Zn_gauge_invariant_states(n, pure_theory, lattice_dim)
     E_ops = {}
@@ -343,29 +387,23 @@ def Zn_gauge_invariant_ops(n, pure_theory, lattice_dim):
 
 
 def Zn_border_configs(config, n, pure_theory=False):
-    """
-    This function fixes the value of the electric field on
-    lattices with open boundary conditions (has_obc=True).
+    """Classify a dressed-site configuration into OBC border/corner labels.
 
-    For integer spin representation, the offset of E is naturally
-    the central value assumed by the rishon number.
+    Parameters
+    ----------
+    config : list or tuple
+        Dressed-site occupation configuration. With matter, the first entry is
+        the matter occupation followed by rishon occupations.
+    n : int
+        Gauge-link Hilbert-space dimension.
+    pure_theory : bool, optional
+        If ``True``, ``config`` contains only rishon occupations.
 
-    For semi-integer spin representation, there is some freedom
-    in the choice of the offset one possible solution is the one
-    corresponding to the first negative value of the electric field
-
-    Args:
-        config (list of ints): configuration of internal rishons in
-        the single dressed site basis, ordered as follows:
-        [n_matter, n_mx, n_my, n_px, n_py]
-
-        spin (int): chosen spin representation for U(1)
-
-        pure_theory (bool): True if the theory does not include matter
-
-    Returns:
-        list of strings: list of configs corresponding to a border/corner of the lattice
-        with a fixed value of the electric field
+    Returns
+    -------
+    list
+        Border/corner labels (for example ``"mx"``, ``"px_py"``) compatible
+        with the configuration under open boundary conditions.
     """
     if not isinstance(config, list) and not isinstance(config, tuple):
         raise TypeError(f"config should be a LIST, not a {type(config)}")
@@ -400,6 +438,22 @@ def Zn_border_configs(config, n, pure_theory=False):
 
 
 def get_lambda_subspace(vals, vecs, atol=1e-10):
+    """Group eigenvectors by approximately degenerate eigenvalues.
+
+    Parameters
+    ----------
+    vals : ndarray
+        Eigenvalues.
+    vecs : ndarray
+        Eigenvectors stored column-wise.
+    atol : float, optional
+        Absolute tolerance used to merge nearly equal eigenvalues.
+
+    Returns
+    -------
+    tuple
+        ``(subspaces_vals, subspaces_vecs)`` lists grouped by eigenvalue.
+    """
     subspaces_vals = []
     subspaces_vecs = []
     for ii, llambda in enumerate(vals):
@@ -419,6 +473,27 @@ def get_lambda_subspace(vals, vecs, atol=1e-10):
 
 
 def Zn_corner_magnetic_basis(n, pure_theory):
+    """Construct a simultaneous-label magnetic basis for 2D corner operators.
+
+    Parameters
+    ----------
+    n : int
+        Gauge-link Hilbert-space dimension.
+    pure_theory : bool
+        If ``True``, build the pure-gauge basis; otherwise include matter.
+
+    Returns
+    -------
+    dict
+        Dictionary containing ``"config"`` (corner eigenvalue labels) and
+        ``"basis"`` arrays for the constructed magnetic basis.
+
+    Notes
+    -----
+    This is a specialized diagnostic/helper routine used to study corner
+    operators in 2D. It prints intermediate sector information while building
+    the basis.
+    """
     # Obtain the gauge invariant operators
     ops = Zn_gauge_invariant_ops(n, pure_theory, lattice_dim=2)
     # ACQUIRE BASIS AND GAUGE INVARIANT STATES FOR ANY POSSIBLE TYPE OF LATTICE

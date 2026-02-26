@@ -1,3 +1,5 @@
+"""Operator factories and gauge-invariant local bases for U(1) (QED) models."""
+
 import numpy as np
 from numpy.linalg import matrix_rank
 from itertools import product
@@ -42,19 +44,20 @@ def QED_rishon_operators(spin, pure_theory, U, fermionic=True):
     Parameters
     ----------
     spin : int
-        Truncation parameter (local dimension "2*spin + 1").
+        Truncation parameter (local dimension ``2*spin + 1``).
     pure_theory : bool
         Included for API consistency and validation.
-    U : {"ladder", "spin"}
-        Shift amplitude convention: constant ("ladder") or spin-weighted ("spin").
+    U : str
+        Shift amplitude convention. Supported values are ``"ladder"`` and
+        ``"spin"``.
     fermionic : bool, optional
         If True, include parity and enforce fermionic anticommutation checks.
 
     Returns
     -------
     dict
-        Sparse operator dictionary with keys "P, U, Zp, Zm, Zp_dag, Zm_dag, Iz, E, E2"
-        and related composites.
+        Sparse operator dictionary including ``P``, ``U``, rishon creation and
+        annihilation operators, and electric-field operators.
     """
     validate_parameters(spin_list=[spin], pure_theory=pure_theory)
     if not isinstance(U, str):
@@ -115,24 +118,32 @@ def QED_dressed_site_operators(
     background=0,
     check_gauss_law=False,
 ):
-    """
-    This function generates the dressed-site operators of the QED Hamiltonian
-    in d spatial dimensions for d=1,2,3 (pure or with matter fields)
-    for any possible trunctation of the spin representation of the gauge fields.
+    """Build dressed-site QED operators for 1D, 2D, or 3D lattices.
 
-    Args:
-        spin (scalar, int): spin representation of the U(1) Gauge field, corresponding
-            to a gauge Hilbert space of dimension (2 spin +1)
+    Parameters
+    ----------
+    spin : int
+        Gauge-link spin truncation (local link dimension ``2*spin + 1``).
+    pure_theory : bool
+        If ``True``, build the pure-gauge operator set (no matter fields).
+    lattice_dim : int
+        Number of spatial lattice dimensions (supported: 1, 2, 3).
+    U : str, optional
+        Rishon-shift convention passed to :func:`QED_rishon_operators`
+        (typically ``"ladder"`` or ``"spin"``).
+    fermionic : bool, optional
+        If ``True``, use fermionic matter/rishon parity conventions.
+    background : int, optional
+        Maximum absolute static background charge included at each site. ``0``
+        disables the background degree of freedom.
+    check_gauss_law : bool, optional
+        If ``True``, run internal consistency checks on the constructed local
+        Gauss-law operators.
 
-        pure_theory (bool): If true, the dressed site includes matter fields
-
-        lattice_dim (int): number of lattice spatial dimensions
-
-        U (str): which version of U you want to use to obtain rishons: 'ladder', 'spin', 'cyclic'
-
-
-    Returns:
-        dict: dictionary with all the operators of the QED (pure or full) Hamiltonian
+    Returns
+    -------
+    dict
+        Dictionary of dressed-site operators used by the QED model builders.
     """
     validate_parameters(
         spin_list=[spin], pure_theory=pure_theory, lattice_dim=lattice_dim
@@ -314,31 +325,33 @@ def QED_dressed_site_operators(
 def QED_check_gauss_law(
     spin, pure_theory, lattice_dim, gauss_law_ops, background=0, threshold=1e-15
 ):
-    """
-    This function perform a series of checks to the gauge invariant dressed-site local basis
-    of the QED Hamiltonian, in order to verify that Gauss Law is effectively satified.
+    """Validate a local QED gauge-invariant basis against Gauss-law constraints.
 
-    Args:
-        spin (scalar, int): spin representation of the U(1) Gauge field,
-        corresponding to a gauge Hilbert space of dimension (2 spin +1)
+    Parameters
+    ----------
+    spin : int
+        Gauge-link spin truncation.
+    pure_theory : bool
+        If ``True``, check the pure-gauge local basis.
+    lattice_dim : int
+        Number of spatial lattice dimensions.
+    gauss_law_ops : dict
+        Dictionary of local Gauss-law operators keyed by site type.
+    background : int, optional
+        Maximum absolute static background charge included in the local basis.
+    threshold : float, optional
+        Numerical tolerance used in the consistency checks.
 
-        pure_theory (bool): If True, the local basis describes gauge
-        invariant states in absence of matter. Defaults to False.
+    Returns
+    -------
+    None
 
-        lattice_dim (int): number of lattice spatial dimensions
-
-        gauss_law_ops (dict): It contains the Gauss Law operators (for each type of lattice site)
-
-        threshold (scalar & real, optional): numerical threshold for checks. Defaults to 1e-15.
-
-    Raises:
-        TypeError: If the input arguments are of incorrect types or formats.
-
-        ValueError: if the gauge basis M does not behave as an Isometry: M^T*M=1
-
-        ValueError: if the gauge basis does not generate a Projector P=M*M^T
-
-        ValueError: if the QED gauss law is not satisfied
+    Raises
+    ------
+    TypeError
+        If input argument types are invalid.
+    ValueError
+        If the basis is not isometric/projective or does not satisfy Gauss law.
     """
     validate_parameters(
         spin_list=[spin],
@@ -389,40 +402,28 @@ def QED_check_gauss_law(
 def QED_gauge_invariant_states(
     spin, pure_theory, lattice_dim, background=0, get_only_bulk=False
 ):
-    """
-    This function generates the gauge invariant basis of a QED LGT
-    in a d-dimensional lattice where gauge (and matter) degrees of
-    freedom are merged in a compact-site notation by exploiting
-    a rishon-based quantum link model.
-
-    NOTE: In presence of matter, the gague invariant basis is different for even
-    and odd sites due to the staggered fermion solution
-
-    NOTE: The function provides also a restricted basis for sites
-    on the borderd of the lattice where not all the configurations
-    are allowed (the external rishons/gauge fields do not contribute)
+    """Construct local gauge-invariant QED basis states and basis matrices.
 
     Parameters
     ----------
-    spin (scalar, int): spin representation of the U(1) Gauge field,
-        corresponding to a gauge Hilbert space of dimension (2 spin +1)
-
-    pure_theory (bool,optional): if True, the theory does not involve matter fields
-
-    lattice_dim (int): number of spatial dimensions. Defaults to 2.
-
-    background : (int, optional)
-        Maximum absolute value of the static background charge q_bg included at the site.
-        If background == 0, no background degree of freedom is added.
-        If background > 0, q_bg ranges in {-background, ..., +background}.
+    spin : int
+        Gauge-link spin truncation.
+    pure_theory : bool
+        If ``True``, exclude matter fields.
+    lattice_dim : int
+        Number of spatial dimensions.
+    background : int, optional
+        Maximum absolute static background charge included at the site.
+    get_only_bulk : bool, optional
+        If ``True``, keep only bulk-compatible site subsets when classifying
+        border/corner configurations.
 
     Returns
     -------
-        gauge_basis : dict[str, scipy.sparse.csr_matrix]
-            Sparse basis matrices mapping from the full dressed-site product basis
-            (rows) to the gauge-invariant subspace (columns), for bulk and border subsets.
-        gauge_states : dict[str, np.ndarray]
-            Arrays of gauge-invariant configurations (same ordering as columns of gauge_basis).
+    tuple
+        ``(gauge_basis, gauge_states)`` dictionaries. ``gauge_basis`` stores
+        sparse basis matrices (full local basis -> gauge-invariant subspace) and
+        ``gauge_states`` stores the corresponding local configurations.
     """
     if not isinstance(pure_theory, bool):
         raise TypeError(f"pure_theory should be a BOOL, not a {type(pure_theory)}")
