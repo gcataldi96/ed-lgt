@@ -4,11 +4,10 @@
 Z2-Fermi-Hubbard LGT Model Class
 ================================
 
-.. autoclass:: edlgt.models.Z2_FermiHubbard_model.Z2_FermiHubbard_Model
-   :noindex:
-   :members:
-   :undoc-members:
-   :show-inheritance:
+Z2 Fermi-Hubbard lattice gauge model with gauge-invariant local-basis
+projection and abelian symmetry sectors.
 
-.. seealso::
-   :ref:`quantum_model Module <quantum_model>`
+.. autoclass:: edlgt.models.Z2_FermiHubbard_model.Z2_FermiHubbard_Model
+   :members:
+   :member-order: bysource
+   :show-inheritance:

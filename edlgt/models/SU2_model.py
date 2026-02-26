@@ -1,3 +1,5 @@
+"""SU(2) lattice gauge-theory model helpers."""
+
 import numpy as np
 from numba import typed
 from scipy.sparse import csr_matrix, identity
@@ -24,6 +26,8 @@ __all__ = ["SU2_Model"]
 
 
 class SU2_Model(QuantumModel):
+    """SU(2) lattice gauge model with hardcoded and generalized operator sets."""
+
     def __init__(
         self,
         spin,
@@ -33,6 +37,23 @@ class SU2_Model(QuantumModel):
         use_generic_model=False,
         **kwargs,
     ):
+        """Initialize the SU(2) model and construct its symmetry sector.
+
+        Parameters
+        ----------
+        spin : float
+            Gauge-link spin representation.
+        pure_theory : bool
+            If ``True``, exclude matter fields.
+        bg_list : list, optional
+            Optional background-charge specification.
+        sectors : list, optional
+            Global symmetry-sector labels (used when matter is present).
+        use_generic_model : bool, optional
+            If ``True``, force the generalized operator construction.
+        **kwargs
+            Arguments forwarded to :class:`~edlgt.models.quantum_model.QuantumModel`.
+        """
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
@@ -146,12 +167,26 @@ class SU2_Model(QuantumModel):
             raise ValueError("No configurations found for the given symmetry sectors")
 
     def build_Hamiltonian(self, g, m=None, theta=0.0, lambda_noise=0.0):
+        """Dispatch to the hardcoded or generalized SU(2) Hamiltonian builder."""
         if self.spin < 1 and not self.use_generic_model:
             self.build_base_Hamiltonian(g, m, theta, lambda_noise)
         else:
             self.build_gen_Hamiltonian(g, m)
 
     def build_base_Hamiltonian(self, g, m=None, theta=0.0, lambda_noise=0.0):
+        """Assemble the hardcoded low-spin SU(2) Hamiltonian.
+
+        Parameters
+        ----------
+        g : float
+            Gauge coupling.
+        m : float, optional
+            Bare mass parameter.
+        theta : float, optional
+            Topological-angle parameter.
+        lambda_noise : float, optional
+            Optional Gauss-law-violating noise strength.
+        """
         logger.info(f"----------------------------------------------------")
         logger.info("BUILDING (H)ardocore (G)luon J=1/2 HAMILTONIAN")
         logger.info(f"g={g}, m={m}, theta={theta}, lambda_noise={lambda_noise}")
@@ -302,6 +337,15 @@ class SU2_Model(QuantumModel):
         self.H.build(self.ham_format)
 
     def build_gen_Hamiltonian(self, g, m=None):
+        """Assemble the generalized SU(2) Hamiltonian.
+
+        Parameters
+        ----------
+        g : float
+            Gauge coupling.
+        m : float, optional
+            Bare mass parameter.
+        """
         logger.info(f"----------------------------------------------------")
         logger.info(f"BUILDING generalized HAMILTONIAN with g={g}, m={m}")
         # Hamiltonian Coefficients
@@ -404,6 +448,7 @@ class SU2_Model(QuantumModel):
         self.H.build(self.ham_format)
 
     def check_symmetries(self):
+        """Check link-symmetry constraints on measured observables."""
         # CHECK LINK SYMMETRIES
         for ax in self.directions:
             check_link_symmetry(
@@ -415,6 +460,18 @@ class SU2_Model(QuantumModel):
             )
 
     def overlap_QMB_state(self, name):
+        """Return predefined benchmark SU(2) basis configurations.
+
+        Parameters
+        ----------
+        name : str
+            Label of a reference configuration.
+
+        Returns
+        -------
+        numpy.ndarray
+            Configuration in the model basis.
+        """
         # POLARIZED AND BARE VACUUM in 1D
         if len(self.lvals) == 1:
             if name == "V":
@@ -472,36 +529,47 @@ class SU2_Model(QuantumModel):
         return np.array(config_state)
 
     def SU2_Hamiltonian_couplings(self, g, m=None, theta=0.0):
-        """
-        This function provides the couplings of the SU2 Yang-Mills Hamiltonian
-        starting from the gauge coupling g and the bare mass parameter m
+        """Set SU(2) Hamiltonian couplings from physical parameters.
 
-        Args:
-            pure_theory (bool): True if the theory does not include matter
+        Parameters
+        ----------
+        g : float
+            Gauge coupling.
+        m : float, optional
+            Bare mass parameter (used when matter fields are present).
+        theta : float, optional
+            Topological-angle parameter.
 
-            g (scalar): gauge coupling
+        Returns
+        -------
+        None
+            Couplings are stored in ``self.coeffs``.
 
-            m (scalar, optional): bare mass parameter
+        Notes
+        -----
+        In the current convention, the Hamiltonian is rescaled so that the
+        hopping term is dimensionless (as used in the project implementation and
+        in PRX Quantum 5, 040309).
 
-        Returns:
-            dict: dictionary of Hamiltonian coefficients
+        The rescaling summary used in the code is:
 
-        # NOTE: in the actual version of the coefficients, we rescale the Hamiltonian
-        in such a way that the hopping term is dimensionless as in
-        https://doi.org/10.1103/PRXQuantum.5.040309.
-        To do so, we need to multiply
-        - the hopping by 4*np.sqrt(2) (the original coupling is 1/2) --> 2*np.sqrt(2)
-        - the electric by 8/3 (the original was g_{0}^{2}/2) --> 8g^{2}/3, g^{2}=(3/2np.sqrt(2))*g_{0}^{2}
-        - the magnetic by 3 ()
-        - the other convention here is g is intended to be g^{2}
-        NOTE: for the DFL project use
-        E = 8 * g / 3
-        B = -3 / g
-        t = 2 * np.sqrt(2)
-        NOTE: for string breaking
-        E=g
-        B=-1
-        t=1
+        - hopping: original coupling ``1/2`` -> ``2 * sqrt(2)``
+        - electric term: original ``g0^2 / 2`` -> ``8 g^2 / 3``
+        - magnetic term: rescaled convention factor applied in the model
+        - the symbol ``g`` in this implementation is used as the rescaled
+          coupling (effectively a ``g^2`` convention)
+
+        DFL-project convention (reference values often used in scripts):
+
+        - ``E = 8 * g / 3``
+        - ``B = -3 / g``
+        - ``t = 2 * sqrt(2)``
+
+        String-breaking convention (alternative reference choice):
+
+        - ``E = g``
+        - ``B = -1``
+        - ``t = 1``
         """
         if self.dim == 1:
             E = 8 * g / 3
@@ -532,6 +600,17 @@ class SU2_Model(QuantumModel):
             }
 
     def build_local_Hamiltonian(self, g, m, R0):
+        """Build a local effective Hamiltonian around one 1D site.
+
+        Parameters
+        ----------
+        g : float
+            Gauge coupling.
+        m : float
+            Bare mass parameter.
+        R0 : int
+            Central lattice site.
+        """
         logger.info(f"----------------------------------------------------")
         logger.info(f"BUILDING local HAMILTONIAN around {R0}")
         # -------------------------------------------------------------------------------
@@ -596,6 +675,7 @@ class SU2_Model(QuantumModel):
         )
 
     def get_mask(self, sites_list):
+        """Build a boolean mask selecting the given sites."""
         mask = np.zeros(self.lvals, dtype=bool)
         for site in sites_list:
             mask[site] = True
@@ -616,10 +696,10 @@ class SU2_Model(QuantumModel):
 
         Returns
         -------
-        loc_perm[s]: int
-            New local basis index (ignoring global phase).
-        loc_phase[s]: int8
-            Phase (+1 or -1) for each local state.
+        tuple
+            ``(loc_perm, loc_phase)`` where ``loc_perm`` contains the mapped
+            local basis indices and ``loc_phase`` contains the corresponding
+            phases (``+1`` or ``-1``).
         """
         if self.dim > 1:
             raise ValueError(f"Does not work in D={self.dim}>1")
@@ -637,6 +717,7 @@ class SU2_Model(QuantumModel):
         return loc_perm, loc_phase
 
     def get_parity_inversion_operator(self, wrt_site):
+        """Construct the parity inversion operator in the current sector."""
         # INVERSION SYMMETRY
         if self.dim < 1:
             raise NotImplementedError(f"Cannot apply PARITY in D={self.dim}>1")
@@ -658,6 +739,7 @@ class SU2_Model(QuantumModel):
         self.parityOP = csr_matrix((d, (r, c)), shape=shape)
 
     def check_parity_inversion_operator(self):
+        """Validate algebraic and dynamical properties of the parity operator."""
         if self.momentum_basis is not None:
             # Build the projector from the momentum sector to the global one
             Pk = self._basis_Pk_as_csr()
@@ -723,6 +805,7 @@ class SU2_Model(QuantumModel):
                     raise ValueError(f"config {ii} {cfg} not symmetrized")
 
     def print_state_config(self, config, amplitude=None):
+        """Log a readable per-site decomposition of an SU(2) basis configuration."""
         logger.info(f"----------------------------------------------------")
         msg = f"CONFIG {config}"
         if amplitude is not None:
@@ -741,6 +824,7 @@ class SU2_Model(QuantumModel):
             logger.info(f"SITE {ii:>2d} state {cfg_idx:>3d}: {state_str}")
 
     def _local_state_labels(self) -> list[str]:
+        """Return column labels used by :meth:`print_state_config`."""
         labels: list[str] = []
         # Background first (only if present in your effective gauge states)
         if getattr(self, "background", 0) > 0:
@@ -755,6 +839,7 @@ class SU2_Model(QuantumModel):
         return labels
 
     def _format_header(self, entry_width: int) -> str:
+        """Format the header row for :meth:`print_state_config`."""
         labels = self._local_state_labels()
         header = "[" + " ".join(f"{lab:>{entry_width}s}" for lab in labels) + " ]"
         return header

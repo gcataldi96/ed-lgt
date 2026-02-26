@@ -4,11 +4,10 @@
 Bose Hubbard Model Class
 ========================
 
-.. autoclass:: edlgt.models.bosehubbard_model.BoseHubbard_Model
-   :noindex:
-   :members:
-   :undoc-members:
-   :show-inheritance:
+Bose-Hubbard lattice model with optional particle-number symmetry-sector
+reduction.
 
-.. seealso::
-   :ref:`quantum_model Module <quantum_model>`
+.. autoclass:: edlgt.models.bosehubbard_model.BoseHubbard_Model
+   :members:
+   :member-order: bysource
+   :show-inheritance:

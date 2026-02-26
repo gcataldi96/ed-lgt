@@ -4,11 +4,10 @@
 SU2 Yang Mills LGT Model Class
 ==============================
 
-.. autoclass:: edlgt.models.SU2_model.SU2_Model
-   :noindex:
-   :members:
-   :undoc-members:
-   :show-inheritance:
+SU(2) lattice gauge-theory model helper with hardcoded and generalized
+operator constructions.
 
-.. seealso::
-   :ref:`quantum_model Module <quantum_model>`
+.. autoclass:: edlgt.models.SU2_model.SU2_Model
+   :members:
+   :member-order: bysource
+   :show-inheritance:

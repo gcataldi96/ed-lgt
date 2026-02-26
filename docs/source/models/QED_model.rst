@@ -4,11 +4,10 @@
 QED LGT Model Class
 ========================
 
-.. autoclass:: edlgt.models.QED_model.QED_Model
-   :noindex:
-   :members:
-   :undoc-members:
-   :show-inheritance:
+U(1) lattice gauge-theory model helper with optional matter fields and
+symmetry-sector construction.
 
-.. seealso::
-   :ref:`quantum_model Module <quantum_model>`
+.. autoclass:: edlgt.models.QED_model.QED_Model
+   :members:
+   :member-order: bysource
+   :show-inheritance:

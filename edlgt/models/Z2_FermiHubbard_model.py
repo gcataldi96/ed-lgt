@@ -1,3 +1,5 @@
+"""Z2 Fermi-Hubbard lattice gauge model."""
+
 import numpy as np
 from edlgt.operators import (
     Z2_FermiHubbard_dressed_site_operators,
@@ -14,7 +16,20 @@ __all__ = ["Z2_FermiHubbard_Model"]
 
 
 class Z2_FermiHubbard_Model(QuantumModel):
+    """Z2 Fermi-Hubbard model with gauge-invariant local basis reduction."""
+
     def __init__(self, sectors, ham_format, **kwargs):
+        """Initialize the Z2 Fermi-Hubbard model.
+
+        Parameters
+        ----------
+        sectors : list
+            Global symmetry-sector labels.
+        ham_format : str
+            Hamiltonian representation format.
+        **kwargs
+            Arguments forwarded to :class:`~edlgt.models.quantum_model.QuantumModel`.
+        """
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.ham_format = ham_format
@@ -44,6 +59,13 @@ class Z2_FermiHubbard_Model(QuantumModel):
         self.default_params()
 
     def build_Hamiltonian(self, coeffs):
+        """Assemble the Z2 Fermi-Hubbard Hamiltonian.
+
+        Parameters
+        ----------
+        coeffs : dict
+            Coupling dictionary (for example ``U``, ``t``, ``h``, ``J``).
+        """
         logger.info("BUILDING HAMILTONIAN")
         # Hamiltonian Coefficients
         self.coeffs = coeffs
@@ -106,6 +128,7 @@ class Z2_FermiHubbard_Model(QuantumModel):
         self.H.build(self.ham_format)
 
     def check_symmetries(self):
+        """Check link-symmetry constraints on measured observables."""
         # CHECK LINK SYMMETRIES
         for ax in self.directions:
             check_link_symmetry(

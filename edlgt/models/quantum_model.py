@@ -1,3 +1,11 @@
+"""High-level quantum lattice model workflow utilities.
+
+This module defines :class:`QuantumModel`, a convenience class that combines
+local operator projection, symmetry-sector construction, Hamiltonian assembly,
+diagonalization, dynamics, and observable measurements for lattice gauge and
+spin models.
+"""
+
 import numpy as np
 from scipy.sparse import csc_matrix, isspmatrix, csr_matrix, identity
 from scipy.sparse.linalg import expm, norm
@@ -33,6 +41,8 @@ __all__ = ["QuantumModel"]
 
 
 class QuantumModel:
+    """High-level container orchestrating model building and measurements."""
+
     def __init__(
         self,
         lvals: list[int],
@@ -40,6 +50,20 @@ class QuantumModel:
         ham_format="sparse",
         basis_projector: np.ndarray | None = None,
     ):
+        """Initialize a lattice quantum model container.
+
+        Parameters
+        ----------
+        lvals : list
+            Lattice dimensions.
+        has_obc : list
+            Boundary-condition flags per axis (``True`` for open boundaries).
+        ham_format : str, optional
+            Preferred Hamiltonian representation (for example ``"sparse"``).
+        basis_projector : numpy.ndarray, optional
+            Optional site-local projector used to reduce the effective local
+            Hilbert space uniformly on all sites.
+        """
         # Lattice parameters
         self.lvals = lvals
         self.dim = len(self.lvals)
@@ -68,6 +92,13 @@ class QuantumModel:
         self.res = {}
 
     def default_params(self):
+        """Initialize default keyword arguments and the Hamiltonian container.
+
+        Returns
+        -------
+        None
+            Updates ``self.def_params`` and (when possible) creates ``self.H``.
+        """
         if self.momentum_basis is not None and self.sector_configs is not None:
             pair_mode = self.momentum_basis.get("pair_mode", False)
             if pair_mode:
@@ -105,6 +136,28 @@ class QuantumModel:
         k_vals: list[int],
         TC_symmetry: bool = False,
     ):
+        """Build and store a momentum-sector projector.
+
+        Parameters
+        ----------
+        k_unit_cell_size : list
+            Translation unit-cell size used to define momentum sectors.
+        k_vals : list
+            Target momentum quantum numbers (one per lattice dimension).
+        TC_symmetry : bool, optional
+            Whether to include translation-charge symmetry reduction in the
+            momentum basis construction.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If symmetry-sector configurations are missing, OBC are present, or
+            the momentum shape is inconsistent with the lattice dimension.
+        """
         logger.info(k_vals)
         if self.sector_configs is None:
             raise ValueError("symmetry sector_configs not defined yet")
@@ -150,14 +203,25 @@ class QuantumModel:
         k_unit_cell_size: list[int],
         TC_symmetry: bool,
     ):
-        """
-        Build *two* momentum projectors P_{kL} and P_{kR} to enable rectangular
-        projections P_{kL}^\dagger O P_{kR}.
+        """Build two momentum projectors for rectangular ``k_L``-``k_R`` blocks.
 
-        Notes:
-          - Does not resize the main Hamiltonian container; this is for projected
-            blocks and expectation values across different k's.
-          - Keeps self.momentum_basis=None to signal "pair mode".
+        Parameters
+        ----------
+        k_left, k_right : list
+            Left and right momentum quantum numbers.
+        k_unit_cell_size : list
+            Translation unit-cell size.
+        TC_symmetry : bool
+            Whether to include translation-charge symmetry reduction.
+
+        Returns
+        -------
+        None
+
+        Notes
+        -----
+        This prepares rectangular projections of the form ``P_kL^dagger O P_kR``
+        and stores them in ``self.momentum_basis`` in pair mode.
         """
         if self.sector_configs is None:
             raise ValueError("symmetry sector_configs not defined yet")
@@ -205,6 +269,18 @@ class QuantumModel:
         logger.info(msg)
 
     def check_momentum_pair(self):
+        """Validate orthonormality/orthogonality of the stored momentum pair basis.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If either projector is not orthonormal or two distinct momentum
+            sectors are not orthogonal.
+        """
         N = self.sector_configs.shape[0]
         B_L = self.momentum_basis["L_col_ptr"].shape[0] - 1
         B_R = int(self.momentum_basis["R_col_idx"].max()) + 1
@@ -231,7 +307,7 @@ class QuantumModel:
         normR2 = norm(G_R - identity(B_R))
         normMIX = norm(MIX)
         logger.info(f"norm: (PL^dag @ PL) -1: {normL2}")
-        logger.info(f"norm: (PL^dag @ PL) -1: {normR2}")
+        logger.info(f"norm: (PR^dag @ PR) -1: {normR2}")
         logger.info(f"norm: (PL^dag @ PR): {normMIX}")
         if normL2 > 1e-12:
             raise ValueError("PL is not a projector")
@@ -239,22 +315,25 @@ class QuantumModel:
             raise ValueError("RL is not a projector")
         k1 = self.momentum_basis["k_left"]
         k2 = self.momentum_basis["k_right"]
-        if k1 != k2 and normMIX > 1e-12:
+        if (not np.array_equal(k1, k2)) and normMIX > 1e-12:
             raise ValueError("The two basis are not orthogonal")
 
     def project_operators(self, ops_dict: dict[str, csr_matrix], bg_sector_list=None):
-        """
-        Compute the local basis of each site and the corresponding lattice labels.
-        Project a dictionary of operators into a gauge-invariant or optimal subspace of each
-        lattice site.
+        """Project local operators into the effective per-site basis.
 
-        Parameters:
-            ops_dict (dict): Dictionary of operators (each one a scipy.sparse.csr_matrix).
+        Parameters
+        ----------
+        ops_dict : dict
+            Dictionary of bare local operators.
+        bg_sector_list : list, optional
+            Optional per-site background-sector labels used to restrict the
+            gauge-invariant basis on each site.
 
-        Returns:
-            dict: New dictionary of projected operators (np.ndarray) with shape (n_sites, max_loc_dim, max_loc_dim).
-            The keys are the same as the input dictionary and contains the effective matrix
-            for each site, accounting for the possibility of different local Hilbert spaces among the sites.
+        Returns
+        -------
+        None
+            Stores projected operators in ``self.ops`` and local dimensions in
+            ``self.loc_dims``.
         """
         if self.gauge_basis is not None:
             lattice_labels, loc_dims = lattice_base_configs(
@@ -355,6 +434,34 @@ class QuantumModel:
         nbody_sites_list=None,
         nbody_sym_type: str | None = None,
     ):
+        """Build symmetry-sector configurations from abelian constraints.
+
+        Parameters
+        ----------
+        global_ops : list or None
+            Generators for global abelian symmetries.
+        global_sectors : list or None, optional
+            Target sectors for global symmetries.
+        global_sym_type : str, optional
+            Global symmetry type flag passed to symmetry-sector routines.
+        link_ops : list or None
+            Link-symmetry generators.
+        link_sectors : list or None, optional
+            Target sectors for link symmetries.
+        nbody_ops : list or None
+            Optional n-body symmetry generators.
+        nbody_sectors : list or None, optional
+            Target sectors for n-body symmetries.
+        nbody_sites_list : object, optional
+            Site patterns for n-body symmetries.
+        nbody_sym_type : str or None, optional
+            Symmetry type flag for n-body constraints.
+
+        Returns
+        -------
+        None
+            Stores the resulting sector configurations in ``self.sector_configs``.
+        """
         logger.info(f"----------------------------------------------------")
         # ================================================================================
         # GLOBAL ABELIAN SYMMETRIES
@@ -413,12 +520,14 @@ class QuantumModel:
             )
 
     def diagonalize_Hamiltonian(self, n_eigs, format, print_results=False):
+        """Diagonalize the model Hamiltonian and cache energies/eigenstates."""
         # DIAGONALIZE THE HAMILTONIAN
         self.H.diagonalize(n_eigs, format, self.loc_dims, print_results)
         self.n_eigs = self.H.n_eigs
         self.res["energy"] = self.H.Nenergies
 
     def time_evolution_Hamiltonian(self, initial_state, time_line):
+        """Evolve an initial state with the current Hamiltonian."""
         self.H.time_evolution(initial_state, time_line, self.loc_dims)
 
     # ---- Momentum-basis wrappers (no copies) ----
@@ -439,9 +548,17 @@ class QuantumModel:
         return csr_matrix((mb["R_data"], mb["R_col_idx"], mb["R_row_ptr"]), shape=shape)
 
     def _project_state_with_basis(self, state_realspace):
-        """
-        Compute psi_k = B^† psi (M-vector) using the stored CSR arrays.
-        Always returns complex128 (safe for both Γ and finite-k).
+        """Project a state into the stored momentum basis.
+
+        Parameters
+        ----------
+        state_realspace : numpy.ndarray
+            State coefficients in the symmetry-sector basis.
+
+        Returns
+        -------
+        numpy.ndarray
+            Momentum-basis coefficients (complex128).
         """
         if self.momentum_basis is None:
             # no momentum sector → identity map
@@ -470,15 +587,27 @@ class QuantumModel:
         return psi_out
 
     def momentum_basis_projection(self, operator):
-        """
-        Project an operator A onto the momentum sector: A' = B^† A B.
-        If operator == "H": project self.H.Ham in-place and return it.
-        Else 'operator' can be a scipy.sparse matrix (CSR/CSC/COO) or ndarray.
-        Returns the projected sparse matrix (CSR).
+        """Project an operator into the currently stored momentum basis.
+
+        Parameters
+        ----------
+        operator : str or numpy.ndarray or scipy.sparse.spmatrix
+            Operator to project. If ``"H"``, projects ``self.H.Ham`` in place.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix or None
+            Projected operator. Returns ``None`` when projecting ``"H"`` in
+            place.
+
+        Raises
+        ------
+        ValueError
+            If no momentum basis has been set.
         """
         if self.momentum_basis is None:
             raise ValueError("Basis projector B is not set.")
-        B_csc = self._basis_as_csc()
+        B_csc = self._basis_Pk_as_csc()
         # 1) pick A
         if isinstance(operator, str) and operator == "H":
             A = self.H.Ham
@@ -500,33 +629,19 @@ class QuantumModel:
             return A_proj.tocsr()
 
     def _get_partition(self, keep_indices):
-        """
-        Build (and cache) all of the bits needed for a given bipartition of the system.
+        """Build and cache metadata for a subsystem/environment bipartition.
 
-        Args:
-            keep_indices:
-                List or tuple of site-indices (0..n_sites-1) that you want to keep
-                in the “subsystem".
-                The complement of these indices form the “environment”.
-        Returns:
-            A dict with keys:
+        Parameters
+        ----------
+        keep_indices : list or tuple
+            Lattice-site indices kept in the subsystem.
 
-            - "subsys": (N_states x len(keep_indices)) array
-                The full list of subsystem configurations, one row per symmetry-sector state.
-
-            - "env": (N_states x (n_sites-len(keep_indices))) array
-              The full list of environment configurations, complementary to “subsys”.
-
-            - "uniq_sub": (n_unique_sub x len(keep_indices)) array
-                Unique configurations of the subsystem.
-
-            - "uniq_env": (n_unique_env x (n_sites-len(keep_indices))) array
-                Unique configurations of the environment.
-
-        Caching behavior:
-        -----------------
-        We store everything, keyed by the sorted tuple of keep_indices.  That way
-        if you ever re-ask for the same cut, we do zero work—just a dict lookup.
+        Returns
+        -------
+        dict
+            Cached partition metadata. For symmetry-sector calculations this
+            includes subsystem/environment configuration maps and unique
+            configurations; otherwise only dimensions and index lists are stored.
         """
         key = tuple(sorted(keep_indices))
         logger.info("----------------------------------------------------")
@@ -594,10 +709,18 @@ class QuantumModel:
     def build_projector_from_sector_to_fullspace(
         self, indices: list[int]
     ) -> csc_matrix:
-        """
-        Build the projector that promotes any object living an subsystem (selecting keep_indices)
-        where symmetry sectors are selected, to the full subsystem space where the symmetry sectors
-        are not selected.
+        """Build a projector from a symmetry-reduced subsystem basis to the full basis.
+
+        Parameters
+        ----------
+        indices : list
+            Subsystem site indices.
+
+        Returns
+        -------
+        scipy.sparse.csc_matrix
+            Column projector from the symmetry-sector subsystem basis to the full
+            subsystem computational basis.
         """
         unique_subsys_configs = self._get_partition(indices)["unique_subsys_configs"]
         subsys_dim = unique_subsys_configs.shape[0]
@@ -617,6 +740,27 @@ class QuantumModel:
         return P
 
     def get_qmb_state_from_configs(self, configs):
+        """Build an equal-weight state from explicit sector configurations.
+
+        Parameters
+        ----------
+        configs : sequence or list
+            Collection of basis configurations compatible with
+            ``self.sector_configs``.
+
+        Returns
+        -------
+        numpy.ndarray
+            Normalized state vector in the symmetry-sector basis.
+
+        Raises
+        ------
+        NotImplementedError
+            If a momentum sector is active.
+        ValueError
+            If one configuration is not compatible with the current symmetry
+            sector.
+        """
         if self.momentum_basis is not None:
             raise NotImplementedError("cannot get state configs within momentum sector")
         # INITIALIZE the STATE
@@ -640,6 +784,25 @@ class QuantumModel:
         dynamics: bool = False,
         print_value: bool = False,
     ):
+        """Compute fidelity with an eigenstate or a time-evolved state.
+
+        Parameters
+        ----------
+        state : numpy.ndarray
+            Reference state vector.
+        index : int
+            Index of the comparison state.
+        dynamics : bool, optional
+            If ``True``, compare against ``self.H.psi_time[index]`` instead of
+            ``self.H.Npsi[index]``.
+        print_value : bool, optional
+            If ``True``, log the fidelity value.
+
+        Returns
+        -------
+        float
+            Fidelity ``|<ref|state>|^2``.
+        """
         if not isinstance(state, np.ndarray):
             raise TypeError(f"state must be np.array not {type(state)}")
         if len(state) != self.H.Ham.shape[0]:
@@ -655,12 +818,28 @@ class QuantumModel:
         return fidelity
 
     def compute_expH(self, beta):
+        """Return ``exp(-beta H)`` as a sparse CSC matrix."""
         return csc_matrix(expm(-beta * self.H.Ham))
 
     def get_thermal_beta(self, state, threshold):
+        """Estimate an effective thermal ``beta`` for a reference state."""
         return self.H.get_beta(state, threshold)
 
     def canonical_avg(self, local_obs, beta):
+        """Compute the canonical-ensemble average of a local observable.
+
+        Parameters
+        ----------
+        local_obs : str
+            Observable key in ``self.ops``.
+        beta : float
+            Inverse temperature.
+
+        Returns
+        -------
+        float
+            Canonical average per lattice site.
+        """
         logger.info("----------------------------------------------------")
         logger.info("CANONICAL ENSEMBLE")
         op_matrix = LocalTerm(
@@ -697,7 +876,7 @@ class QuantumModel:
 
         Parameters
         ----------
-        local_obs_list : list[str]
+        local_obs_list : list
             Keys of local observables. Each key must be present in ``self.ops``.
         state : numpy.ndarray
             Reference state vector used to define the energy shell.
@@ -709,10 +888,10 @@ class QuantumModel:
 
         Returns
         -------
-        tuple[numpy.ndarray, dict]
+        tuple
             ``(psi_thermal, ME_avg)`` where ``psi_thermal`` is the normalized
-            coherent superposition of shell eigenstates and ``ME_avg`` maps
-            observable names to microcanonical averages.
+            coherent superposition of shell eigenstates and ``ME_avg`` is a
+            dictionary mapping observable names to microcanonical averages.
         """
         # Defaults for optional dicts
         if special_norms is None:
@@ -788,33 +967,25 @@ class QuantumModel:
         staggered_avgs: dict | None = None,
         tol_deg: float = 1e-10,
     ):
-        """
-        Compute the diagonal ensemble averages for a set of local observables.
-        In the diagonal ensemble, the full Hamiltonian is assumed to be diagonalized and the
-        expectation value of an observable O is computed as a weighted sum over all eigenstates:
+        """Compute diagonal-ensemble averages for several local observables.
 
-            ⟨O⟩_diag = Σ_i p_i ⟨E_i|O|E_i⟩,
+        Parameters
+        ----------
+        local_obs_list : list
+            Observable keys in ``self.ops``.
+        state : numpy.ndarray
+            Reference state used to compute diagonal weights.
+        special_norms : dict, optional
+            Optional observable-specific normalization arrays.
+        staggered_avgs : dict, optional
+            Optional observable-specific staggered averaging labels.
+        tol_deg : float, optional
+            Tolerance used to group degenerate eigenvalues into blocks.
 
-        where the weights p_i are given by the fidelity (overlap squared) between the
-        initial state and each eigenstate.
-
-        This function generalizes the computation to a list of local observables, avoiding
-        redundant computation of the fidelity weights and allowing for special normalization
-        or staggered averaging for each observable.
-
-        Args:
-            local_obs_list (list of str): List of keys corresponding to local observables.
-                For each key, self.ops[obs] should provide the corresponding operator.
-            state (np.ndarray): The reference quantum state (vector) used to compute the energy
-                and the fidelity weights.
-            special_norms (dict, optional): Dictionary mapping observable keys to a special
-                normalization array. If provided for an observable, the expectation value is computed
-                as a weighted dot product with that norm.
-            staggered_avgs (dict, optional): Dictionary mapping observable keys to a staggered
-                averaging function (e.g. one that averages only over even or odd sites).
-
-        Returns:
-            dict: A dictionary mapping each observable key to its diagonal ensemble average.
+        Returns
+        -------
+        dict
+            Dictionary of diagonal-ensemble averages keyed as ``DE_<obs>``.
         """
         logger.info("----------------------------------------------------")
         logger.info("DIAGONAL ENSEMBLE AVERAGE (MULTI-OBSERVABLE)")
@@ -906,6 +1077,27 @@ class QuantumModel:
         nbody_dist=[],
         twobody_axes=None,
     ):
+        """Instantiate observable objects and cache them in ``self.obs_list``.
+
+        Parameters
+        ----------
+        local_obs : list, optional
+            Names of local observables.
+        twobody_obs : list, optional
+            List of two-body operator-name pairs.
+        plaquette_obs : list, optional
+            List of plaquette operator-name lists.
+        nbody_obs : list, optional
+            List of n-body operator-name lists.
+        nbody_dist : list, optional
+            Relative distances for each n-body observable.
+        twobody_axes : list, optional
+            Axis labels for each two-body observable.
+
+        Returns
+        -------
+        None
+        """
         logger.info("----------------------------------------------------")
         logger.info("BUILDING OBSERVABLES")
         self.local_obs = local_obs
@@ -956,6 +1148,20 @@ class QuantumModel:
             )
 
     def measure_observables(self, index, dynamics=False):
+        """Measure all observables stored in ``self.obs_list`` on one state.
+
+        Parameters
+        ----------
+        index : int
+            Eigenstate or time-step index.
+        dynamics : bool, optional
+            If ``True``, measure on ``self.H.psi_time[index]``.
+
+        Returns
+        -------
+        None
+            Results are stored in ``self.res``.
+        """
         state = self.H.Npsi[index] if not dynamics else self.H.psi_time[index]
         for obs in self.local_obs:
             self.obs_list[obs].get_expval(state)
@@ -976,13 +1182,18 @@ class QuantumModel:
             self.res[obs] = self.obs_list[obs].obs
 
     def link_avg(self, obs_name):
-        """Compute the average value of a link observable.
+        """Average a directional link observable over all valid lattice links.
 
-        Args:
-            obs_name (str): The name of the observable.
+        Parameters
+        ----------
+        obs_name : str
+            Base observable name. Directional components are expected in
+            ``self.res`` as ``f"{obs_name}_p<dir>"``.
 
-        Returns:
-            float: The average value of the link observable.
+        Returns
+        -------
+        float
+            Average over all valid directed links.
         """
         avg = 0
         tmp = 0
@@ -1001,18 +1212,20 @@ class QuantumModel:
         return avg / tmp
 
     def stag_avg(self, arr_flat: np.ndarray, staggered_avg=None):
-        """
-        Compute the average of arr_flat over either all sites, or only the "even"
-        or "odd" checkerboard sites, *using* your custom zig-zag flattening.
+        """Average a lattice quantity on all, even, or odd staggered sites.
 
         Parameters
         ----------
-        arr_flat : 1D np.ndarray, length = prod(lvals)
-            Your data, flattened in zig-zag order.
-        lvals : tuple of ints, e.g. (Nx, Ny)
-            The original lattice shape.
-        staggered_avg : None, "even", or "odd"
-            Which checkerboard parity to average over.  None => average everything.
+        arr_flat : numpy.ndarray
+            Data flattened in the model zig-zag site ordering.
+        staggered_avg : str or None, optional
+            ``None`` for the full average, or ``"even"`` / ``"odd"`` for a
+            staggered sublattice average.
+
+        Returns
+        -------
+        float
+            Requested average value.
         """
         if staggered_avg is None:
             return np.mean(arr_flat)
@@ -1033,15 +1246,27 @@ def apply_projection(
     projector: np.ndarray | csr_matrix | csr_matrix,
     operator: np.ndarray | csr_matrix | csr_matrix,
 ):
-    """
-    Project an operator onto the subspace defined by a projector.
+    """Project an operator onto the subspace spanned by a column projector.
 
-    Given:
-      - projector (np.ndarray or csr_matrix): a (N, k) matrix
-      - operator (np.ndarray or csr_matrix): a (N, N) operator
+    Parameters
+    ----------
+    projector : numpy.ndarray or scipy.sparse.csr_matrix
+        Projector-like matrix of shape ``(N, k)``.
+    operator : numpy.ndarray or scipy.sparse.csr_matrix
+        Operator of shape ``(N, N)``.
 
-    Returns:
-      - O_eff: the effective operator $O_eff = P^{\dagger}\cdot O \cdot P$
+    Returns
+    -------
+    numpy.ndarray or scipy.sparse.spmatrix
+        Effective operator ``P^dagger O P`` in the same dense/sparse family as
+        the inputs.
+
+    Raises
+    ------
+    ValueError
+        If the shapes are incompatible.
+    TypeError
+        If dense and sparse input types are mixed.
     """
     # Check the shape of the projector
     if projector.shape[0] != operator.shape[0]:
@@ -1054,21 +1279,24 @@ def apply_projection(
         return projector.conj().transpose() @ operator @ projector
     else:
         logger.info(f"{type(operator)} {type(projector)}")
-        return TypeError(f"Operator & projector must be both np.ndarray or csr_matrix")
+        raise TypeError("Operator and projector must be both dense or both sparse.")
 
 
 def build_energy_block_ids(evals: np.ndarray, tol: float = 1e-10):
-    """
-    Assign a block id to each eigenstate such that states with energies
-    within `tol` are put in the same degenerate block.
-    NOTE: it assumes evals to be sorted in ascending order
+    """Group sorted eigenvalues into degenerate blocks.
+
+    Parameters
+    ----------
+    evals : numpy.ndarray
+        Sorted eigenvalues.
+    tol : float, optional
+        Energies separated by less than ``tol`` are treated as degenerate.
 
     Returns
     -------
-    block_id : (N,) int32
-        block_id[i] is the degenerate-manifold label of eigenstate i.
-    n_blocks : int
-        Total number of blocks.
+    tuple
+        ``(block_id, n_blocks)`` where ``block_id`` labels each eigenstate's
+        degenerate block.
     """
     E = np.real_if_close(np.asarray(evals))
     N = E.shape[0]
@@ -1085,14 +1313,20 @@ def build_energy_block_ids(evals: np.ndarray, tol: float = 1e-10):
 
 
 def format_loc_dims(loc_dims: np.ndarray, lvals: list[int], pad: int = 3) -> str:
-    """
-    Pretty-print loc_dims according to lattice shape.
+    """Log local Hilbert-space dimensions arranged on the lattice geometry.
 
-    Assumes site indexing is consistent with a C-order reshape with x fastest:
-    - 2D: loc_dims.reshape(Ly, Lx)
-    - 3D: loc_dims.reshape(Lz, Ly, Lx)
-    If your internal site ordering differs (e.g. a space-filling curve), build an
-    index map first and reorder loc_dims before reshaping.
+    Parameters
+    ----------
+    loc_dims : numpy.ndarray
+        Per-site local dimensions.
+    lvals : list
+        Lattice dimensions.
+    pad : int, optional
+        Field width used for alignment in the log output.
+
+    Returns
+    -------
+    None
     """
     dim = len(lvals)
     if dim == 1:
@@ -1121,61 +1355,3 @@ def format_loc_dims(loc_dims: np.ndarray, lvals: list[int], pad: int = 3) -> str
                 layer = f"[{' '.join(f'{val:>{pad}d}' for val in arr[zz, yy])}]"
                 row_blocks.append(layer)
             logger.info(f"{block_sep.join(row_blocks)}")
-
-
-"""    
-def microcanonical_avg(self, local_obs, state):
-    logger.info("----------------------------------------------------")
-    logger.info("MICRO-CANONICAL ENSEMBLE")
-    op_matrix = LocalTerm(
-        operator=self.ops[local_obs], op_name=local_obs, **self.def_params
-    ).get_Hamiltonian(1)
-    # Get the expectation value of the energy of the reference state
-    Eq = QMB_state(state).expectation_value(self.H.Ham)
-    logger.info(f"Energy ref {Eq}")
-    E2q = QMB_state(state).expectation_value(self.H.Ham @ self.H.Ham)
-    # Get the corresponding variance
-    DeltaE = np.sqrt(E2q - (Eq**2))
-    logger.info(f"delta E {DeltaE}")
-    # Check that Eq is contained in the set of eigvals:
-    if Eq + DeltaE > max(self.H.Nenergies):
-        msg = f"Need more eigvals to cover the Energy shell: {Eq+DeltaE} > {max(self.H.Nenergies)}"
-        raise ValueError(msg)
-    # Initialize a state as the superposition of all the eigenstates within
-    # an energy shell of amplitude Delta E around Eq
-    psi_thermal = np.zeros(self.H.Ham.shape[0], dtype=np.complex128)
-    list_states = []
-    for ii in range(self.n_eigs):
-        if np.abs(self.H.Nenergies[ii] - Eq) < DeltaE:
-            list_states.append(ii)
-            psi_thermal += self.H.Npsi[ii].psi
-    norm = len(list_states)
-    psi_thermal /= np.sqrt(norm)
-    # Compute the microcanonical average of the local observable
-    microcanonical_avg = 0
-    for ii, state_indx in enumerate(list_states):
-        microcanonical_avg += self.H.Npsi[state_indx].expectation_value(op_matrix)
-    microcanonical_avg /= norm * self.n_sites
-    logger.info(f"Microcanonical avg: {microcanonical_avg}")
-    logger.info("----------------------------------------------------")
-    return psi_thermal, microcanonical_avg
-
-def diagonal_avg(self, local_obs, state):
-    logger.info("----------------------------------------------------")
-    logger.info("DIAGONAL ENSEMBLE")
-    # check that the hamiltonian has been already fully diagonalized:
-    if self.n_eigs != self.H.Ham.shape[0]:
-        msg = f"Need all H eigvals {self.H.Ham.shape[0]}, not only {self.n_eigs}"
-        raise ValueError(msg)
-    op_matrix = LocalTerm(
-        operator=self.ops[local_obs], op_name=local_obs, **self.def_params
-    ).get_Hamiltonian(1)
-    diagonal_avg = 0
-    for ii in range(self.n_eigs):
-        prob = self.measure_fidelity(state, ii, False)
-        exp_val = self.H.Npsi[ii].expectation_value(op_matrix) / self.n_sites
-        diagonal_avg += prob * exp_val
-    logger.info(f"Diagonal avg: {diagonal_avg}")
-    logger.info("----------------------------------------------------")
-    return diagonal_avg
-"""

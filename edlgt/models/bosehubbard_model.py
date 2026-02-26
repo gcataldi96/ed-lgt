@@ -1,3 +1,5 @@
+"""Bose-Hubbard model helper built on top of :class:`edlgt.models.QuantumModel`."""
+
 import numpy as np
 from edlgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
 from edlgt.operators import bose_operators
@@ -7,7 +9,20 @@ __all__ = ["BoseHubbard_Model"]
 
 
 class BoseHubbard_Model(QuantumModel):
+    """Bose-Hubbard lattice model with particle-number symmetry reduction."""
+
     def __init__(self, n_max, sectors, **kwargs):
+        """Initialize the Bose-Hubbard model.
+
+        Parameters
+        ----------
+        n_max : int
+            Maximum onsite boson occupation.
+        sectors : list
+            Global particle-number sector labels.
+        **kwargs
+            Arguments forwarded to :class:`~edlgt.models.quantum_model.QuantumModel`.
+        """
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         # Initialize specific attributes for BOSE HUBBARD model
@@ -27,6 +42,13 @@ class BoseHubbard_Model(QuantumModel):
         self.default_params()
 
     def build_Hamiltonian(self, coeffs):
+        """Assemble the Bose-Hubbard Hamiltonian.
+
+        Parameters
+        ----------
+        coeffs : dict
+            Coupling dictionary containing at least ``"t"`` and ``"U"``.
+        """
         # Hamiltonian Coefficients
         self.coeffs = coeffs
         # CONSTRUCT THE HAMILTONIAN

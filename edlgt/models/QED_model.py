@@ -1,3 +1,5 @@
+"""U(1) lattice gauge-theory (QED) model helpers."""
+
 import numpy as np
 from numba import typed
 from edlgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm
@@ -11,7 +13,26 @@ __all__ = ["QED_Model"]
 
 
 class QED_Model(QuantumModel):
+    """QED lattice gauge model with optional matter fields."""
+
     def __init__(self, spin, pure_theory, bg_list=None, get_only_bulk=False, **kwargs):
+        """Initialize the QED model and construct its symmetry sector.
+
+        Parameters
+        ----------
+        spin : float
+            Gauge-link spin representation.
+        pure_theory : bool
+            If ``True``, build the pure-gauge theory (no matter fields).
+        bg_list : list, optional
+            Optional background-charge configuration used during local-basis
+            projection.
+        get_only_bulk : bool, optional
+            Restrict gauge-invariant local states to bulk-compatible ones when
+            supported by the operator factory.
+        **kwargs
+            Arguments forwarded to :class:`~edlgt.models.quantum_model.QuantumModel`.
+        """
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
@@ -104,6 +125,17 @@ class QED_Model(QuantumModel):
         self.default_params()
 
     def build_Hamiltonian(self, g, m=None, theta=0.0):
+        """Assemble the QED Hamiltonian.
+
+        Parameters
+        ----------
+        g : float
+            Gauge coupling.
+        m : float, optional
+            Bare fermion mass (used only when matter is present).
+        theta : float, optional
+            Topological-angle coupling parameter.
+        """
         logger.info(f"----------------------------------------------------")
         logger.info("BUILDING HAMILTONIAN")
         # Hamiltonian Coefficients
@@ -235,6 +267,7 @@ class QED_Model(QuantumModel):
         self.H.build(format=self.ham_format)
 
     def check_symmetries(self):
+        """Check link-symmetry constraints on measured electric fields."""
         # CHECK LINK SYMMETRIES
         for ax in self.directions:
             check_link_symmetry(
@@ -246,19 +279,23 @@ class QED_Model(QuantumModel):
             )
 
     def QED_Hamiltonian_couplings(self, g, m=None, theta=0.0, magnetic_basis=False):
-        """
-        This function provides the QED Hamiltonian coefficients
-        starting from the gauge coupling g and the bare mass parameter m
+        """Set QED Hamiltonian couplings from physical parameters.
 
-        Args:
-            pure_theory (bool): True if the theory does not include matter
+        Parameters
+        ----------
+        g : float
+            Gauge coupling.
+        m : float, optional
+            Bare mass parameter (used only with matter).
+        theta : float, optional
+            Topological-angle parameter.
+        magnetic_basis : bool, optional
+            If ``True``, use the alternative magnetic-basis normalization.
 
-            g (scalar): gauge coupling
-
-            m (scalar, optional): bare mass parameter
-
-        Returns:
-            dict: dictionary of Hamiltonian coefficients
+        Returns
+        -------
+        None
+            Stores couplings in ``self.coeffs``.
         """
         if not magnetic_basis:
             if self.dim == 1:
@@ -300,6 +337,18 @@ class QED_Model(QuantumModel):
         self.coeffs = coeffs
 
     def overlap_QMB_state(self, name):
+        """Return predefined benchmark basis configurations for selected labels.
+
+        Parameters
+        ----------
+        name : str
+            Label of a predefined reference configuration.
+
+        Returns
+        -------
+        numpy.ndarray
+            Configuration in the model symmetry-sector basis.
+        """
         # MINIMAL STRING CONFIGURATIONS IN 3D QED WITH BACKGROUND charges
         if len(self.lvals) == 3 and self.bg_list == [-1, 0, 0, 0, 0, 0, 0, 1]:
             if name == "S1":
@@ -321,6 +370,7 @@ class QED_Model(QuantumModel):
             raise NotImplementedError("Only 3D QED states are supported")
 
     def print_state_config(self, config, amplitude=None):
+        """Log a readable per-site decomposition of a QED basis configuration."""
         logger.info(f"----------------------------------------------------")
         msg = f"CONFIG {config}"
         if amplitude is not None:
@@ -343,6 +393,7 @@ class QED_Model(QuantumModel):
             logger.info(f"SITE {ii:>2d} state {cfg_idx:>3d}: {state_str}")
 
     def _local_state_labels(self) -> list[str]:
+        """Return column labels used by :meth:`print_state_config`."""
         labels: list[str] = []
         # Background first (only if present in your effective gauge states)
         if getattr(self, "background", 0) > 0:
@@ -357,6 +408,7 @@ class QED_Model(QuantumModel):
         return labels
 
     def _format_header(self, entry_width: int) -> str:
+        """Format the header row for :meth:`print_state_config`."""
         labels = self._local_state_labels()
         header = "[" + " ".join(f"{lab:>{entry_width}s}" for lab in labels) + " ]"
         return header

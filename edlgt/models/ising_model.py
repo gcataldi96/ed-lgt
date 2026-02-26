@@ -1,3 +1,5 @@
+"""Ising spin model built on top of :class:`edlgt.models.quantum_model.QuantumModel`."""
+
 import numpy as np
 from edlgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
 from edlgt.operators import get_Pauli_operators
@@ -7,7 +9,10 @@ __all__ = ["IsingModel"]
 
 
 class IsingModel(QuantumModel):
+    """Nearest-neighbor Ising model with a transverse field."""
+
     def __init__(self, **kwargs):
+        """Initialize the Ising model and site-local Pauli operators."""
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         # Initialize specific attributes for IsingModel
@@ -18,6 +23,18 @@ class IsingModel(QuantumModel):
         self.get_local_site_dimensions()
 
     def build_Hamiltonian(self, coeffs):
+        """Assemble the Ising Hamiltonian.
+
+        Parameters
+        ----------
+        coeffs : dict
+            Coupling dictionary with at least ``"J"`` and ``"h"``.
+
+        Returns
+        -------
+        None
+            Adds terms directly to ``self.H.Ham``.
+        """
         # Hamiltonian Coefficients
         self.coeffs = coeffs
         # CONSTRUCT THE HAMILTONIAN

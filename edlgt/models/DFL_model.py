@@ -1,3 +1,5 @@
+"""Digital Flux Lattice (DFL) SU(2)-based model helpers."""
+
 import numpy as np
 from edlgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm
 from edlgt.modeling import check_link_symmetry, staggered_mask
@@ -15,7 +17,24 @@ __all__ = ["DFL_Model"]
 
 
 class DFL_Model(QuantumModel):
+    """DFL model built from SU(2) dressed-site operators."""
+
     def __init__(self, spin, pure_theory, background, ham_format, **kwargs):
+        """Initialize the DFL model.
+
+        Parameters
+        ----------
+        spin : float
+            Gauge-link spin representation.
+        pure_theory : bool
+            If ``True``, exclude matter fields.
+        background : int or list
+            Background-charge specification passed to the gauge-basis builder.
+        ham_format : str
+            Hamiltonian representation format.
+        **kwargs
+            Arguments forwarded to :class:`~edlgt.models.quantum_model.QuantumModel`.
+        """
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
         self.spin = spin
@@ -53,6 +72,15 @@ class DFL_Model(QuantumModel):
         # Rather than for SU2, here we do not select the symmetry sector
 
     def build_Hamiltonian(self, g, m=None):
+        """Assemble the standard DFL Hamiltonian.
+
+        Parameters
+        ----------
+        g : float
+            Gauge coupling.
+        m : float, optional
+            Bare mass parameter.
+        """
         logger.info("BUILDING HAMILTONIAN")
         # Hamiltonian Coefficients
         self.DFL_Hamiltonian_couplings(g, m)
@@ -136,6 +164,15 @@ class DFL_Model(QuantumModel):
         self.H.build(format=self.ham_format)
 
     def build_gen_Hamiltonian(self, g, m=None):
+        """Assemble the generalized DFL Hamiltonian.
+
+        Parameters
+        ----------
+        g : float
+            Gauge coupling.
+        m : float, optional
+            Bare mass parameter.
+        """
         logger.info("BUILDING generalized HAMILTONIAN")
         # Hamiltonian Coefficients
         self.DFL_Hamiltonian_couplings(g, m)
@@ -234,33 +271,24 @@ class DFL_Model(QuantumModel):
         self.H.build(self.ham_format)
 
     def DFL_Hamiltonian_couplings(self, g, m=None):
-        """
-        This function provides the couplings of the SU2 Yang-Mills Hamiltonian
-        starting from the gauge coupling g and the bare mass parameter m
+        """Set DFL Hamiltonian couplings from physical parameters.
 
-        Args:
-            pure_theory (bool): True if the theory does not include matter
+        Parameters
+        ----------
+        g : float
+            Gauge coupling.
+        m : float, optional
+            Bare mass parameter.
 
-            g (scalar): gauge coupling
+        Returns
+        -------
+        None
+            Stores couplings in ``self.coeffs``.
 
-            m (scalar, optional): bare mass parameter
-
-        Returns:
-            dict: dictionary of Hamiltonian coefficients
-
-        # NOTE: in the actual version of the coefficients, we rescale the Hamiltonian
-        in such a way that the hopping term is dimensionless as in
-        https://doi.org/10.1103/PRXQuantum.5.040309.
-        To do so, we need to multiply
-        - the hopping by 4*np.sqrt(2) (the original coupling is 1/2) --> 2*np.sqrt(2)
-        - the electric by 8/3 (the original was g_{0}^{2}/2) --> 8g^{2}/3, g^{2}=(3/2np.sqrt(2))*g_{0}^{2}
-        - the magnetic by 3 ()
-        - the other convention here is g is intended to be g^{2}
-
-        NOTE: for the DFL project use
-        E = 8 * g / 3
-        B = -3 / g
-        t = 2 * np.sqrt(2)
+        Notes
+        -----
+        The conventions used here follow the DFL normalization used in the
+        project code and may differ from other SU(2) Hamiltonian conventions.
         """
         if self.dim == 1:
             E = g / 2
@@ -289,6 +317,7 @@ class DFL_Model(QuantumModel):
             }
 
     def check_symmetries(self):
+        """Check link-symmetry constraints on measured observables."""
         # CHECK LINK SYMMETRIES
         for ax in self.directions:
             check_link_symmetry(
@@ -300,6 +329,19 @@ class DFL_Model(QuantumModel):
             )
 
     def get_background_charges_configs(self, logical_stag_basis):
+        """Generate 1D background-charge-compatible reference configurations.
+
+        Parameters
+        ----------
+        logical_stag_basis : int
+            Period used to alternate logical staggering sectors.
+
+        Returns
+        -------
+        tuple
+            ``(A, BG)`` arrays containing basis-state labels and corresponding
+            background sectors.
+        """
         # NOTE! It works only in 1D
         if len(self.lvals) > 1:
             raise ValueError("SU2 background configs works only in 1D")
@@ -358,6 +400,18 @@ class DFL_Model(QuantumModel):
         return A, BG
 
     def get_string_breaking_configs(self, finite_density=0):
+        """Populate predefined string-breaking configurations for benchmark lattices.
+
+        Parameters
+        ----------
+        finite_density : int, optional
+            Finite-density setting selecting one of the predefined datasets.
+
+        Returns
+        -------
+        None
+            Stores configurations in ``self.string_cfgs`` and related counters.
+        """
         logger.info(f"finite density {finite_density}")
         if self.lvals == [5, 2]:
             self.n_min_strings = 5
@@ -547,6 +601,7 @@ class DFL_Model(QuantumModel):
             raise ValueError(msg)
 
     def print_state_config(self, config):
+        """Log a human-readable decomposition of a DFL basis configuration."""
         logger.info(f"----------------------------------------------------")
         logger.info(f"SINGLETS IN CONFIG {config}")
         logger.info(f"----------------------------------------------------")

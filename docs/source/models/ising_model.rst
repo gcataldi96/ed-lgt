@@ -4,11 +4,9 @@
 Ising Model Class
 ========================
 
-.. autoclass:: edlgt.models.ising_model.IsingModel
-   :noindex:
-   :members:
-   :undoc-members:
-   :show-inheritance:
+Spin-1/2 Ising model with nearest-neighbor interactions and a local field.
 
-.. seealso::
-   :ref:`quantum_model Module <quantum_model>`
+.. autoclass:: edlgt.models.ising_model.IsingModel
+   :members:
+   :member-order: bysource
+   :show-inheritance:
