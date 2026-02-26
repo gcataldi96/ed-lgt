@@ -41,14 +41,14 @@ def set_size(width_pt, fraction=1, subplots=(1, 1), height_factor=1.0):
         Reference width in points.
     fraction : float, optional
         Fraction of the width to occupy. Default is ``1``.
-    subplots : tuple[int, int], optional
+    subplots : tuple, optional
         Number of subplot rows and columns. Default is ``(1, 1)``.
     height_factor : float, optional
         Additional multiplier applied to the computed height.
 
     Returns
     -------
-    tuple[float, float]
+    tuple
         Figure dimensions ``(width_in, height_in)`` in inches.
 
     Notes

@@ -7,16 +7,22 @@
 Modeling
 ========
 
-This module contains the main functions to build a Quantum Many-Body (QMB) Hamiltonian with Local, TwoBody and Plaquette Interactions.
-In addition, in qmb_state, it provides all the tools to access a QMB state, such as entanglment entropy, (reduced) density matrix, expectation values, single site configurations.
+This section contains the core building blocks used to assemble quantum
+many-body (QMB) Hamiltonians (local, two-body, and plaquette interactions) and
+to analyze QMB states (expectation values, reduced density matrices,
+entanglement entropy, and basis-state configurations). It also includes base
+classes and lattice masks used by the term builders.
 
 .. toctree::
     :maxdepth: 2
     :caption: Contents:
 
-    qmb_state
-    qmb_operations
+    qmb_term
     local_term
     twobody_term
     plaquette_term
+    nbody_term
+    qmb_operations
+    qmb_hamiltonian
+    qmb_state
     masks

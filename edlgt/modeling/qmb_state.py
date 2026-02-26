@@ -1,3 +1,10 @@
+"""Utilities to analyze and manipulate quantum many-body states.
+
+This module provides the :class:`QMB_state` class and several helper functions
+for expectation values, reduced density matrices, entanglement measures, support
+extraction, and density-matrix post-processing.
+"""
+
 import numpy as np
 from numba import njit, prange
 from scipy.linalg import eigh as array_eigh, svd
@@ -32,6 +39,8 @@ _SPARSE_DENSITY_THRESH = 1e-4  # fraction nonzero
 
 
 class QMB_state:
+    """Container and analysis methods for a quantum many-body state vector."""
+
     def __init__(
         self,
         psi: np.ndarray,
@@ -40,13 +49,24 @@ class QMB_state:
         symmetry_sector=True,
         debug_mode=False,
     ):
-        """
-        Args:
-            psi (np.ndarray): QMB states
+        """Initialize a many-body state.
 
-            lvals (list, optional): list of the lattice spatial dimensions
+        Parameters
+        ----------
+        psi : numpy.ndarray
+            State vector coefficients.
+        lvals : list, optional
+            Lattice dimensions.
+        loc_dims : int or list or numpy.ndarray, optional
+            Local Hilbert-space dimensions per site.
+        symmetry_sector : bool, optional
+            If ``True``, treat ``psi`` as living in a symmetry-reduced basis.
+        debug_mode : bool, optional
+            If ``True``, perform additional internal consistency checks.
 
-            loc_dims (list of ints, np.ndarray of ints, or int): list of lattice site dimensions
+        Returns
+        -------
+        None
         """
         validate_parameters(psi=psi, lvals=lvals, loc_dims=loc_dims)
         self.psi = psi
@@ -57,15 +77,17 @@ class QMB_state:
         self._psi_matrix_cache: dict[tuple[int, ...], np.ndarray | csr_matrix] = {}
 
     def normalize(self, threshold=1e-14):
-        """
-        Normalizes the quantum state vector to unit norm, if it is not already.
-        If the norm is off by more than the specified threshold, the state vector is scaled down.
+        """Normalize the state vector to unit norm if needed.
 
-        Args:
-            threshold (float, optional): The tolerance level for the norm check. Defaults to 1e-14.
+        Parameters
+        ----------
+        threshold : float, optional
+            Tolerance used to decide whether renormalization is required.
 
-        Returns:
-            float: The norm of the state before normalization.
+        Returns
+        -------
+        float
+            Norm of the state before normalization.
         """
         norm = get_norm(self.psi)
         if np.abs(norm - 1) > threshold:
@@ -73,36 +95,45 @@ class QMB_state:
         return norm
 
     def truncate(self, threshold=1e-14):
-        """
-        Truncates small components of the state vector based on a threshold.
+        """Set state-vector entries below a threshold to zero.
 
-        Args:
-            threshold (float, optional): Components smaller than this value are set to zero. Defaults to 1e-14.
+        Parameters
+        ----------
+        threshold : float, optional
+            Absolute-value threshold.
 
-        Returns:
-            np.ndarray: The truncated state vector.
+        Returns
+        -------
+        numpy.ndarray
+            Truncated state vector.
         """
         return truncation(self.psi, threshold)
 
     def expectation_value(self, operator, component: str = "real"):
-        """
-        Calculates the expectation value of the given operator with the current quantum state.
-        The operator can be provided in one of the following formats:
-            - As a tuple of nonzero elements: (row_list, col_list, value_list).
-            - As a dense matrix (np.ndarray).
-            - As a sparse matrix (e.g., scipy.sparse.csc_matrix or csr_matrix).
+        """Compute an expectation value on the current state.
 
-        Args:
-            operator (tuple or np.ndarray or sparse_matrix): The operator to apply.
-                - If a tuple, it should contain (row_list, col_list, value_list), where:
-                    * row_list (np.ndarray): Row indices of nonzero elements.
-                    * col_list (np.ndarray): Column indices of nonzero elements.
-                    * value_list (np.ndarray): Values corresponding to (row, col) pairs.
-                - If a dense matrix, it should be a NumPy array (np.ndarray).
-                - If a sparse matrix, it should be a scipy sparse matrix.
+        Parameters
+        ----------
+        operator : tuple or numpy.ndarray or scipy.sparse.spmatrix
+            Operator to apply. Supported formats are:
 
-        Returns:
-            float: The real part of the expectation value.
+            - ``(row_list, col_list, value_list)`` sparse triplets,
+            - dense NumPy matrix,
+            - SciPy sparse matrix.
+        component : str, optional
+            Output component selector: ``"real"`` or ``"imag"``.
+
+        Returns
+        -------
+        float
+            Selected component of the expectation value.
+
+        Raises
+        ------
+        TypeError
+            If ``operator`` has an unsupported format.
+        ValueError
+            If matrix dimensions are incompatible with the state.
         """
         if isinstance(operator, tuple) and len(operator) == 3:
             # Case 1: Operator as (row_list, col_list, value_list)
@@ -167,7 +198,7 @@ class QMB_state:
                 norm_matrix = np.sum(np.abs(A) ** 2)
                 assert np.allclose(norm_vec, norm_matrix, rtol=1e-12, atol=1e-12)
             # ---------------------------------------------------------------------------------
-            # According to the size and sparity of psi_matrix, convert it to sparse
+            # According to the size and sparsity of psi_matrix, convert it to sparse
             total = psi_matrix.size
             nnz = np.count_nonzero(psi_matrix)
             density = nnz / total
@@ -178,19 +209,20 @@ class QMB_state:
         return self._psi_matrix_cache[key]
 
     def reduced_density_matrix(self, keep_indices, partitions_dict: dict) -> np.ndarray:
-        """
-        Computes the reduced density matrix of the quantum state for specified lattice sites.
-        Optionally handles different symmetry sectors.
+        """Compute the reduced density matrix for a subsystem.
 
-        Args:
-            keep_indices (list of ints): list of lattice indices to be involved in the partition
+        Parameters
+        ----------
+        keep_indices : list[int]
+            Lattice sites retained in the subsystem.
+        partitions_dict : dict
+            Partition metadata/cache used to build the subsystem-environment
+            factorization.
 
-            sector_configs:
-                An (N_states x n_sites) array of basis configurations within your
-                symmetry sector. Rows are full-system configurations. Default to be None
-
-        Returns:
-            np.ndarray: The reduced density matrix in dense format.
+        Returns
+        -------
+        numpy.ndarray
+            Reduced density matrix in dense format.
         """
         logger.info("----------------------------------------------------")
         logger.info(f"RED. DENSITY MATRIX OF SITES {keep_indices}")
@@ -211,20 +243,20 @@ class QMB_state:
             return RDM
 
     def entanglement_entropy(self, keep_indices, partitions_dict: dict):
-        """
-        This function computes the bipartite entanglement entropy of a portion of a QMB state psi
-        related to a lattice model with dimension lvals where single sites
-        have local hilbert spaces of dimensions loc_dims
+        """Compute the bipartite entanglement entropy of a subsystem.
 
-        Args:
-            keep_indices (list of ints): list of lattice indices to be involved in the partition
+        Parameters
+        ----------
+        keep_indices : list[int]
+            Lattice sites retained in the subsystem.
+        partitions_dict : dict
+            Partition metadata/cache used to build the subsystem-environment
+            factorization.
 
-            sector_configs:
-                An (N_states x n_sites) array of basis configurations within your
-                symmetry sector. Rows are full-system configurations. Default to be None
-
-        Returns:
-            float: bipartite entanglement entropy of the lattice subsystem
+        Returns
+        -------
+        float
+            Von Neumann entanglement entropy (base-2 logarithm convention).
         """
         logger.debug("computing SVD of psi_matrix")
         # Call of initialize the partition
@@ -261,19 +293,22 @@ class QMB_state:
     def get_state_configurations(
         self, threshold=1e-2, sector_configs=None, return_configs=False
     ):
-        """
-        List out |psi> configurations whose amplitudes exceed `threshold`.
+        """List or return basis configurations with large amplitudes.
 
-        If `sector_configs` is provided, it must be an (MxL) array of all
-        symmetry-sector configurations, and we simply look up rows from it.
-        Otherwise we reconstruct each configuration via `index_to_config`.
+        Parameters
+        ----------
+        threshold : float, optional
+            Minimum probability threshold used to keep configurations.
+        sector_configs : numpy.ndarray, optional
+            If provided, lookup table mapping basis indices to configurations.
+        return_configs : bool, optional
+            If ``True``, return the selected configurations and amplitudes.
 
-        Args:
-            threshold (float): minimum absolute amplitude to keep
-            sector_configs (ndarray or None): if present, shape (M,L)
-                mapping each state-index → its L-site configuration.
-
-        Prints to the logger each surviving configuration in order of descending |amplitude|.
+        Returns
+        -------
+        tuple or None
+            If ``return_configs=True``, returns ``(cfgs, vals)``. Otherwise
+            returns ``None`` and logs the selected configurations.
         """
         logger.info("----------------------------------------------------")
         logger.info("STATE CONFIGURATIONS")
@@ -290,7 +325,7 @@ class QMB_state:
                 break
             relax_steps += 1
             new_threshold = current_threshold / 10
-            msg = f"No configs above threshold {current_threshold:.3e}; relaxe to {new_threshold:.3e}."
+            msg = f"No configs above threshold {current_threshold:.3e}; relax to {new_threshold:.3e}."
             logger.info(msg)
             current_threshold = new_threshold
         # 2) collect indices & values
@@ -312,7 +347,6 @@ class QMB_state:
         # 5) print
         for _, config, amp in zip(idx, cfgs, vals):
             # rescale all the amplitudes to have the first one real and positive
-            rescaled_amp = amp * np.exp(-1j * np.angle(vals[0]))
             square_amp = np.abs(amp) ** 2
             coords = " ".join(f"{c:>3d}" for c in config)
             msg = f"[{coords}] |psi|^2={square_amp:6f} ({amp:6f})"
@@ -321,51 +355,29 @@ class QMB_state:
             return cfgs, vals
 
     def participation_renyi_entropy(self, alpha: int = 2) -> float:
-        """
-        Compute the participation Rényi entropy (order ``alpha``) of the state in the
-        current basis.
-
-        The participation Rényi entropy quantifies how delocalized the probability
-        distribution ``P_i = |psi_i|^2`` is over the basis states. It is defined as
-
-        - For ``alpha != 1``:
-        ``PE_alpha = (1 / (1 - alpha)) * log( sum_i P_i**alpha )``
-
-        - In the limit ``alpha -> 1`` it approaches the Shannon entropy
-        ``-sum_i P_i log P_i`` (not implemented here).
+        """Compute the participation Renyi entropy of the state in the current basis.
 
         Parameters
         ----------
-        alpha:
-            Rényi order. Must satisfy ``alpha > 0`` and ``alpha != 1``.
-            The default ``alpha=2`` gives the commonly used inverse participation
-            ratio (IPR) form:
-            ``PE_2 = -log( sum_i P_i**2 )``.
+        alpha : int, optional
+            Renyi order. Must satisfy ``alpha > 0`` and ``alpha != 1``.
+            The default ``alpha=2`` corresponds to the inverse-participation-ratio
+            form.
 
         Returns
         -------
         float
-            The participation Rényi entropy of order ``alpha`` (natural logarithm).
-
-        Notes
-        -----
-        - The result depends on the basis in which ``self.psi`` is represented
-        (e.g. full computational basis, symmetry sector basis, momentum basis, ...).
-        - This function assumes ``self.psi`` is normalized to 1. If not, probabilities
-        do not sum to 1 and the quantity is not an entropy.
-        - Numerical stability: a small epsilon is added inside the logarithm to
-        avoid ``log(0)`` when underflow or exact zeros occur.
+            Participation Renyi entropy computed with the natural logarithm.
 
         Raises
         ------
         ValueError
             If ``alpha <= 0`` or ``alpha == 1``.
 
-        Examples
-        --------
-        Uniform state on a D-dimensional basis (``P_i = 1/D``) has
-        ``PE_alpha = log(D)`` for any ``alpha``.
-        A basis state (one-hot probability) has ``PE_alpha = 0``.
+        Notes
+        -----
+        The result depends on the basis used to represent ``self.psi`` and assumes
+        the state is normalized.
         """
         if alpha <= 0 or alpha == 1:
             raise ValueError(f"alpha must be > 0 and != 1. Got alpha={alpha}.")
@@ -383,32 +395,27 @@ class QMB_state:
         sector_configs: np.ndarray,
         prob_threshold: float = 1e-2,
     ):
-        """
-        Compute the Rényi-2 stabilizer entropy using a truncated support in a sector basis.
+        """Compute the Renyi-2 stabilizer entropy on a truncated sector-basis support.
 
         Parameters
         ----------
-        sector_configs:
-            2D uint array (D_sector, n_sites). Basis configurations for the symmetry sector.
-            Row i corresponds to basis index i of self.psi.
-        prob_threshold:
-            Keep basis configurations with |psi[i]|^2 > prob_threshold.
-            This controls the support size K (and therefore the cost).
+        sector_configs : numpy.ndarray
+            Sector-basis configurations of shape ``(n_configs, n_sites)``. Row
+            ``i`` corresponds to basis index ``i`` of ``self.psi``.
+        prob_threshold : float, optional
+            Tail tolerance used in :func:`extract_support` to choose the
+            truncated support.
 
         Returns
         -------
-        SRE2:
-            float. The (normalized) Rényi-2 stabilizer entropy estimate from the support.
+        float
+            Renyi-2 stabilizer entropy estimate computed from the retained
+            support.
 
         Notes
         -----
-        - This implementation uses the identity that the sum over all Z-strings for a fixed
-          X-string can be performed analytically, reducing the problem to overlaps of
-          probabilities between shifted configurations.
-        - This function does NOT require the X-strings to commute with symmetries. It only
-          counts strings that act within the support (and therefore contribute on the support).
-        - The dominant cost is O(K^2 * n_sites) to build candidate strings, plus
-          O(n_strings * K * n_sites) to accumulate contributions.
+        The dominant cost scales with the support size, so lowering
+        ``prob_threshold`` increases runtime and memory use.
         """
         logger.info("----------------------------------------------------")
         logger.info("STABILIZER RENYI-ENTROPY SRE2 on support.")
@@ -457,12 +464,38 @@ class QMB_state:
 
 
 def truncation(array, threshold=1e-14):
+    """Set array entries below a threshold to zero.
+
+    Parameters
+    ----------
+    array : numpy.ndarray
+        Input array.
+    threshold : float, optional
+        Absolute-value threshold.
+
+    Returns
+    -------
+    numpy.ndarray
+        Thresholded array.
+    """
     validate_parameters(array=array, threshold=threshold)
     return np.where(np.abs(array) > threshold, array, 0)
 
 
 @njit(cache=True)
 def get_norm(psi: np.ndarray):
+    """Compute the Euclidean norm of a complex state vector.
+
+    Parameters
+    ----------
+    psi : numpy.ndarray
+        Complex vector.
+
+    Returns
+    -------
+    float
+        Euclidean norm of ``psi``.
+    """
     psi_norm = 0.0
     for ii in range(psi.shape[0]):
         psi_norm += psi[ii].real * psi[ii].real + psi[ii].imag * psi[ii].imag
@@ -470,6 +503,19 @@ def get_norm(psi: np.ndarray):
 
 
 def get_sorted_indices(data):
+    """Return indices that sort entries by descending magnitude.
+
+    Parameters
+    ----------
+    data : numpy.ndarray
+        Input array.
+
+    Returns
+    -------
+    numpy.ndarray
+        Indices that sort ``data`` by descending absolute value. Ties are
+        broken using the real part.
+    """
     abs_data = np.abs(data)
     real_data = np.real(data)
     # Lexsort by real part first (secondary key), then by absolute value (primary key)
@@ -478,11 +524,25 @@ def get_sorted_indices(data):
 
 
 def diagonalize_density_matrix(rho: np.ndarray | csr_matrix):
+    """Diagonalize a (dense or sparse) Hermitian density matrix.
+
+    Parameters
+    ----------
+    rho : numpy.ndarray or scipy.sparse.csr_matrix
+        Density matrix to diagonalize.
+
+    Returns
+    -------
+    tuple
+        ``(rho_eigvals, rho_eigvecs)`` from Hermitian diagonalization.
+    """
     # Diagonalize a density matrix which is HERMITIAN COMPLEX MATRIX
     if isinstance(rho, np.ndarray):
         rho_eigvals, rho_eigvecs = array_eigh(rho)
     elif isspmatrix(rho):
         rho_eigvals, rho_eigvecs = array_eigh(rho.toarray())
+    else:
+        raise TypeError("rho must be a NumPy array or SciPy sparse matrix.")
     return rho_eigvals, rho_eigvecs
 
 
@@ -497,12 +557,19 @@ def get_projector_for_efficient_density_matrix(
     the given threshold. If fewer than 2 eigenvectors pass, the threshold is relaxed
     until at least 2 are selected.
 
-    Args:
-        rho (np.ndarray): Reduced density matrix (shape (N, N)).
-        threshold (float): Initial threshold for eigenvalue significance.
+    Parameters
+    ----------
+    rho_eigvals : numpy.ndarray
+        Eigenvalues of the density matrix.
+    rho_eigvecs : numpy.ndarray
+        Corresponding eigenvectors (columns).
+    threshold : float
+        Initial threshold for eigenvalue significance.
 
-    Returns:
-        np.ndarray: Projector matrix P of shape (N, k), where k is the number of selected eigenvectors.
+    Returns
+    -------
+    numpy.ndarray
+        Projector matrix ``P`` of shape ``(N, k)`` built from selected eigenvectors.
     """
     # Sort eigenvalues and eigenvectors in descending order.
     # Note: np.argsort sorts in ascending order; we reverse to get descending order.
@@ -533,6 +600,26 @@ def build_psi_matrix(
     subsys_dim: int,
     env_dim: int,
 ):
+    """Build the subsystem-environment matrix representation of a state vector.
+
+    Parameters
+    ----------
+    psi : numpy.ndarray
+        State coefficients in the basis used by the partition maps.
+    subsys_config_index : numpy.ndarray
+        Row indices (subsystem configurations) for each basis state.
+    env_config_index : numpy.ndarray
+        Column indices (environment configurations) for each basis state.
+    subsys_dim : int
+        Number of subsystem basis states.
+    env_dim : int
+        Number of environment basis states.
+
+    Returns
+    -------
+    numpy.ndarray
+        Dense matrix ``psi_matrix`` with shape ``(subsys_dim, env_dim)``.
+    """
     # rows = subsystem, cols = environment
     psi_matrix = np.zeros((subsys_dim, env_dim), dtype=np.complex128)
     for ii in prange(psi.shape[0]):
@@ -542,18 +629,19 @@ def build_psi_matrix(
 
 @njit(cache=True)
 def exp_val_data(psi, row_list, col_list, value_list):
-    """
-    Compute the expectation value directly from the nonzero elements of the operator
-    without constructing the full sparse matrix.
+    """Compute ``<psi|O|psi>`` from a sparse triplet operator representation.
 
-    Args:
-        psi (np.ndarray): The quantum state.
-        row_list (np.ndarray): Row indices of nonzero elements in the operator.
-        col_list (np.ndarray): Column indices of nonzero elements in the operator.
-        value_list (np.ndarray): Nonzero values of the operator.
+    Parameters
+    ----------
+    psi : numpy.ndarray
+        State coefficients.
+    row_list, col_list, value_list : numpy.ndarray
+        Sparse triplet representation of the operator.
 
-    Returns:
-        complex: The computed expectation value.
+    Returns
+    -------
+    complex
+        Expectation value ``<psi|O|psi>``.
     """
     exp_val = 0.0 + 0.0j
     psi_dag = np.conjugate(psi)
@@ -567,19 +655,21 @@ def exp_val_data(psi, row_list, col_list, value_list):
 
 @njit(cache=True)
 def mixed_exp_val_data(psi1, psi2, row_list, col_list, value_list):
-    """
-    Compute a mixed expectation value directly from the nonzero elements of the operator
-    without constructing the full sparse matrix.
+    """Compute a mixed expectation value from sparse triplet data.
 
-    Args:
-        psi1 (np.ndarray): The first quantum state (bra).
-        psi2 (np.ndarray): The second quantum state (ket).
-        row_list (np.ndarray): Row indices of nonzero elements in the operator.
-        col_list (np.ndarray): Column indices of nonzero elements in the operator.
-        value_list (np.ndarray): Nonzero values of the operator.
+    Parameters
+    ----------
+    psi1 : numpy.ndarray
+        Bra-state coefficients.
+    psi2 : numpy.ndarray
+        Ket-state coefficients.
+    row_list, col_list, value_list : numpy.ndarray
+        Sparse triplet representation of the operator.
 
-    Returns:
-        float: The computed expectation value.
+    Returns
+    -------
+    complex
+        Mixed expectation value ``<psi1|O|psi2>``.
     """
     exp_val = 0.0 + 0.0j
     psi1_dag = np.conjugate(psi1)
@@ -589,6 +679,25 @@ def mixed_exp_val_data(psi1, psi2, row_list, col_list, value_list):
 
 
 def _select_component(exp_val: complex, component: str) -> float:
+    """Select the real or imaginary component of an expectation value.
+
+    Parameters
+    ----------
+    exp_val : complex
+        Complex expectation value.
+    component : str
+        Component selector, ``"real"`` or ``"imag"``.
+
+    Returns
+    -------
+    float
+        Selected component.
+
+    Raises
+    ------
+    ValueError
+        If ``component`` is not supported.
+    """
     if component == "real":  # <(A + A†)/2>
         return float(np.real(exp_val))
     if component == "imag":  # <(A - A†)/(2i)>
@@ -608,32 +717,31 @@ def extract_support(
 
     Parameters
     ----------
-    psi:
+    psi : numpy.ndarray
         1D complex array of shape (n_configs,). State coefficients in the sector basis.
-    loc_dims:
+    loc_dims : numpy.ndarray
         1D int array of shape (n_sites,). Local dimensions per site.
-    sector_configs:
+    sector_configs : numpy.ndarray
         2D uint array of shape (n_configs, n_sites). Basis configurations for the sector.
         Row i corresponds to basis index i of psi.
-    prob_threshold:
+    prob_threshold : float, optional
         Tail tolerance delta in [0,1). The support is chosen such that the cumulative
         probability mass kept is at least (1 - delta).
-    sort_for_encoding:
+    sort_for_encoding : bool, optional
         If True, sort the support by the same encoding order used by the X-string code:
         "rightmost site is fastest digit" (i.e. consistent with compute_strides).
 
     Returns
     -------
-    support_indices:
-        1D int64 array, indices in the sector basis that are kept.
-    support_coeffs:
-        1D complex128 array, psi[support_indices].
-    support_configs:
-        2D uint16 array, sector_configs[support_indices].
-    support_keys:
-        1D int64 array, encoded keys for support_configs, sorted ascending if sort_for_encoding=True.
-    discarded_weight:
-        float. Probability mass discarded: 1 - sum(support_probs).
+    tuple
+        ``(support_indices, support_coeffs, support_configs, support_keys, discarded_weight)``
+        where:
+
+        - ``support_indices`` is a 1D int64 array of kept basis indices,
+        - ``support_coeffs`` are the corresponding coefficients,
+        - ``support_configs`` are the kept basis configurations,
+        - ``support_keys`` are encoded configuration keys,
+        - ``discarded_weight`` is the discarded probability mass.
 
     Notes
     -----

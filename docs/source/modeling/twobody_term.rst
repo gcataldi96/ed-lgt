@@ -4,11 +4,10 @@
 TwoBodyTerm Class
 =====================
 
-.. autoclass:: edlgt.modeling.twobody_term.TwoBodyTerm
-   :noindex:
-   :members:
-   :undoc-members:
-   :show-inheritance:
+Nearest-neighbor two-body Hamiltonian contributions and correlator
+measurements on lattice models.
 
-.. seealso::
-   :ref:`qmb_operations Module <qmb_operations>`
+.. autoclass:: edlgt.modeling.twobody_term.TwoBodyTerm
+   :members:
+   :member-order: bysource
+   :show-inheritance:

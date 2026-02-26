@@ -37,7 +37,7 @@ def r_values(energy):
 
     Returns
     -------
-    tuple[numpy.ndarray, numpy.ndarray]
+    tuple
         ``(r_array, delta_E)`` where:
 
         - ``delta_E[i] = E[i+1] - E[i]`` for the sorted spectrum,

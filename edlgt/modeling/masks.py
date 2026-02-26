@@ -1,3 +1,10 @@
+"""Boolean masks for selecting lattice regions and staggered sublattices.
+
+This module provides convenience functions to build masks for borders, corners,
+staggered subsets, and open-boundary-condition decompositions of hypercubic
+lattices.
+"""
+
 import numpy as np
 from itertools import product
 from edlgt.tools import validate_parameters
@@ -9,17 +16,19 @@ __all__ = ["border_mask", "staggered_mask", "corner_mask", "obc_mask"]
 
 
 def staggered_mask(lvals, stag_label):
-    """
-    This function provides a d-dimensional array of bools
-    corresponding to the sites of the lattice (of size lvals)
-    that are respectively site=even or site=odd
+    """Build a mask selecting even or odd staggered lattice sites.
 
-    Args:
-        lvals (tuple of ints): lattice size
+    Parameters
+    ----------
+    lvals : tuple
+        Lattice shape (one entry per lattice axis).
+    stag_label : str
+        ``"even"`` or ``"odd"``.
 
-        stag_label (str): It can be "even" or "odd"
-    Returns:
-        ndarray: mask array of shape=lvals
+    Returns
+    -------
+    numpy.ndarray
+        Boolean mask of shape ``lvals``.
     """
     # Check on parameters
     validate_parameters(lvals=lvals, stag_label=stag_label)
@@ -34,20 +43,21 @@ def staggered_mask(lvals, stag_label):
 
 
 def border_mask(lvals, border, stag_label=None):
-    """
-    This function generate the mask d-dimensional array of booleans
-    corresponding to specific sites on a certain lattice border.
-    Eventually, it can also take into account the staggerization of
-    the lattice, acting only on even or odd sites.
+    """Build a mask selecting one lattice border.
 
-    Args:
-        lvals (tuple of ints): lattice size
+    Parameters
+    ----------
+    lvals : tuple
+        Lattice shape (one entry per lattice axis).
+    border : str
+        Border label (e.g. ``"mx"``, ``"px"``, ``"my"``, ``"py"``).
+    stag_label : str, optional
+        Optional staggered filter (``"even"`` or ``"odd"``).
 
-        border (str): one of [mx, px, my, py, mz, pz]
-
-        stag_label (str, optional): It can be "even" or "odd". Defaults to None.
-    Returns:
-        ndarray: mask array of shape=lvals
+    Returns
+    -------
+    numpy.ndarray
+        Boolean mask of shape ``lvals``.
     """
     # Check on parameters
     validate_parameters(lvals=lvals, site_label=border, stag_label=stag_label)
@@ -87,7 +97,7 @@ def border_mask(lvals, border, stag_label=None):
             mask[:, :, -1] = True
         else:
             raise ValueError(f"Expected one of {allowed_borders}: got {border}")
-    if stag_label == None:
+    if stag_label is None:
         return mask
     else:
         # Apply a staggered mask in addition
@@ -96,24 +106,21 @@ def border_mask(lvals, border, stag_label=None):
 
 
 def corner_mask(lvals, borders, stag_label=None):
-    """
-    This function generates a d-dimensional boolean mask array identifying
-    the corner sites of a lattice based on specified borders. Corner sites
-    are those where the indices reach the specified borders in each dimension.
+    """Build a mask selecting corners defined by a set of borders.
 
-    Args:
-        lvals (tuple of ints): Lattice size, with one entry per dimension.
+    Parameters
+    ----------
+    lvals : tuple
+        Lattice shape (one entry per lattice axis).
+    borders : list[str]
+        Border labels that define the corner(s).
+    stag_label : str, optional
+        Optional staggered filter (``"even"`` or ``"odd"``).
 
-        borders (list of str): List of borders in the form of ["mx", "my", ...]
-            specifying the minimum (m) or maximum (p) border in each dimension.
-
-        stag_label (str, optional): Can be "even" or "odd" to further staggerize
-            the mask by setting only even or odd sites within the specified corners
-            to True. Defaults to None.
-
-    Returns:
-        ndarray: Boolean mask array of shape `lvals`, where True represents the
-                 corner sites defined by the borders and staggerization, if any.
+    Returns
+    -------
+    numpy.ndarray
+        Boolean mask of shape ``lvals``.
     """
     mask = np.ones(lvals, dtype=bool)
     for border in borders:
@@ -122,27 +129,19 @@ def corner_mask(lvals, borders, stag_label=None):
 
 
 def obc_mask(lvals, stag_label=None):
-    """
-    This function generates a dictionary of boolean masks for a lattice with
-    open boundary conditions (OBC), differentiating between the core, border,
-    and corner regions of the lattice.
+    """Build a dictionary of masks for OBC lattice regions.
 
-    Args:
-        lvals (tuple of ints): Lattice size, with one entry per dimension.
+    Parameters
+    ----------
+    lvals : tuple
+        Lattice shape (one entry per lattice axis).
+    stag_label : str, optional
+        Optional staggered filter applied to every mask.
 
-        stag_label (str, optional): Can be "even" or "odd" to staggerize each
-            mask in the dictionary, setting only even or odd sites to True.
-            Defaults to None.
-
-    Returns:
-        dict: A dictionary containing the following keys:
-            - "core": Mask of the core region (all sites except borders and corners).
-            - Border masks: Masks for each specified border (e.g., "mx", "px", "my").
-            - Corner masks: Masks for each unique pair of borders, representing the
-                            corners (e.g., "mx,my" for the bottom-left corner in 2D).
-
-            Each mask is an ndarray of shape `lvals`, with True representing the
-            sites in the corresponding region (core, border, or corner).
+    Returns
+    -------
+    dict
+        Dictionary containing masks for the core, borders, and corners.
     """
     masks = {}
     masks["core"] = np.zeros(lvals, dtype=bool)

@@ -1,3 +1,10 @@
+"""Two-body lattice interaction terms and correlation measurements.
+
+This module provides :class:`TwoBodyTerm`, a ``QMBTerm`` subclass for
+constructing nearest-neighbor two-body Hamiltonian contributions and measuring
+two-point correlators on lattice models.
+"""
+
 import numpy as np
 from math import prod
 from numba import njit, prange
@@ -17,18 +24,25 @@ __all__ = ["TwoBodyTerm"]
 
 
 class TwoBodyTerm(QMBTerm):
+    """Nearest-neighbor two-body term along a selected lattice axis."""
+
     def __init__(self, axis, op_list, op_names_list, **kwargs):
-        """
-        This function provides methods for computing twobody Hamiltonian terms
-        in a d-dimensional lattice model along a certain axis.
+        """Initialize a two-body term definition.
 
-        Args:
-            axis (str): axis along which the 2Body Term is performed
+        Parameters
+        ----------
+        axis : str
+            Lattice axis along which neighboring pairs are selected.
+        op_list : list
+            Two local operators defining the two-body term.
+        op_names_list : list
+            Human-readable names corresponding to ``op_list``.
+        **kwargs
+            Additional keyword arguments forwarded to ``QMBTerm``.
 
-            op_list (list of 2 scipy.sparse.matrices): list of the two operators
-                involved in the 2Body Term
-
-            op_name_list (list of 2 str): list of the names of the two operators
+        Returns
+        -------
+        None
         """
         # CHECK ON TYPES
         validate_parameters(
@@ -45,24 +59,33 @@ class TwoBodyTerm(QMBTerm):
             self.axis = axis
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
-        """
-        The function calculates the TwoBody Hamiltonian by summing up 2body terms
-        for each lattice site, potentially with some sites excluded based on the mask.
-        The result is scaled by the strength parameter before being returned.
-        Eventually, it is possible to sum also the dagger part of the Hamiltonian.
+        """Build the two-body Hamiltonian contribution.
 
-        Args:
-            strength (scalar): Coupling of the Hamiltonian term.
+        Parameters
+        ----------
+        strength : scalar
+            Coupling constant multiplying the two-body term.
+        add_dagger : bool, optional
+            If ``True``, add the Hermitian conjugate of the constructed term.
+        mask : numpy.ndarray, optional
+            Boolean lattice mask selecting the sites where the term is applied.
 
-            add_dagger (bool, optional): If true, it add the hermitian conjugate
-                of the resulting Hamiltonian. Defaults to False.
+        Returns
+        -------
+        scipy.sparse.spmatrix or tuple
+            Return type depends on the current workflow:
 
-            mask (np.ndarray, optional): 2D array with bool variables specifying
-                (if True) where to apply the local term. Defaults to None.
+            - if ``self.sector_configs is None``: sparse matrix Hamiltonian term;
+            - otherwise: ``(row_list, col_list, value_list)`` as three NumPy arrays in the
+              symmetry-reduced basis.
 
-        Returns:
-            scipy.sparse: TwoBody Hamiltonian term ready to be used for exact diagonalization/
-                expectation values.
+        Raises
+        ------
+        TypeError
+            If ``strength`` is not scalar.
+        NotImplementedError
+            If ``add_dagger=True`` is requested in an unsupported momentum-basis
+            pair mode.
         """
         # CHECK ON TYPES
         if not np.isscalar(strength):
@@ -135,12 +158,22 @@ class TwoBodyTerm(QMBTerm):
             return row_list, col_list, value_list
 
     def get_expval(self, psi):
-        """
-        The function calculates the expectation value (and it variance) of the
-        TwoBody Hamiltonian and its average over all the lattice sites.
+        """Compute the two-point correlator matrix for the selected operator pair.
 
-        Args:
-            psi (numpy.ndarray): QMB state where the expectation value has to be computed
+        Parameters
+        ----------
+        psi : QMB_state
+            Quantum many-body state used for the measurement.
+
+        Returns
+        -------
+        None
+            The correlator matrix is stored in ``self.corr``.
+
+        Raises
+        ------
+        TypeError
+            If ``psi`` is not a ``QMB_state`` instance.
         """
         # Check on parameters
         if not isinstance(psi, QMB_state):
@@ -170,6 +203,12 @@ class TwoBodyTerm(QMBTerm):
             )
 
     def print_nearest_neighbors(self):
+        """Log nearest-neighbor correlator values along the configured axis.
+
+        Returns
+        -------
+        None
+        """
         for ii in range(prod(self.lvals)):
             # Compute the corresponding coords
             coords = zig_zag(self.lvals, ii)

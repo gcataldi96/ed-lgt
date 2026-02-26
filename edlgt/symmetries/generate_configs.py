@@ -35,16 +35,20 @@ def index_to_config(qmb_index, loc_dims):
 
 @njit
 def config_to_index(config, loc_dims):
-    """
-    This function generate the QMB index out the the indices of the single lattices sites.
-    The latter ones can display local Hilbert space with different dimension.
-    The order of the sites must match the order of the dimensionality of the local basis
-    Args:
-        config (np.ndarray of ints): list of numbered state of the lattice sites
-        loc_dims (list of ints, np.ndarray of ints, or int): list of lattice site dimensions
-            (in the same order as they are stored in the loc_states!)
-    Returns:
-        int: QMB index
+    """Convert a site configuration into a linear many-body basis index.
+
+    Parameters
+    ----------
+    config : numpy.ndarray
+        One-dimensional array of local basis labels, one per site.
+    loc_dims : numpy.ndarray
+        One-dimensional array of local Hilbert-space dimensions in the same site
+        order as ``config``.
+
+    Returns
+    -------
+    int
+        Linear QMB basis index.
     """
     qmb_index = 0
     multiplier = 1

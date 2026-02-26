@@ -1,3 +1,10 @@
+"""N-body interaction terms on hypercubic lattices.
+
+This module defines :class:`NBodyTerm`, which applies an ordered list of local
+operators to a site and its displaced neighbors, then sums the resulting term
+over the lattice.
+"""
+
 import numpy as np
 from math import prod
 from scipy.sparse import isspmatrix, csr_matrix
@@ -15,18 +22,24 @@ __all__ = ["NBodyTerm"]
 
 class NBodyTerm(QMBTerm):
     def __init__(self, op_list, op_names_list, distances, **kwargs):
-        """
-        This class provides methods for computing N-body terms in a d-dimensional lattice model.
-        The N-body term can be applied to a set of lattice sites starting from a specific site
-        and following a set of distances between operators.
+        """Initialize an N-body lattice term.
 
-        Args:
-            op_list (list of scipy.sparse.matrices): List of the operators involved in the N-body term.
+        Parameters
+        ----------
+        op_list : list
+            Operators participating in the N-body term.
+        op_names_list : list[str]
+            Labels corresponding to ``op_list``.
+        distances : list[tuple]
+            Relative lattice displacements between consecutive operators. Its
+            length must be ``len(op_list) - 1``.
+        **kwargs
+            Additional arguments forwarded to :class:`~edlgt.modeling.qmb_term.QMBTerm`.
 
-            op_names_list (list of str): List of the names of the operators.
-
-            distances (list of tuples): List of distances (in terms of lattice coordinates) between operators.
-            The length of list should be len(op_list)-1
+        Raises
+        ------
+        ValueError
+            If ``len(distances) != len(op_list) - 1``.
         """
         # CHECK ON TYPES
         validate_parameters(op_list=op_list, op_names_list=op_names_list)
@@ -41,20 +54,28 @@ class NBodyTerm(QMBTerm):
         logger.info("N_bodyterm_" + "_".join(op_names_list))
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
-        """
-        The function calculates the N-body Hamiltonian by summing up N-body terms for each lattice site.
-        The operators are applied at lattice sites defined by `start_site` and `distances`. The result
-        is scaled by the strength parameter before being returned.
+        """Assemble the lattice-summed N-body Hamiltonian term.
 
-        Args:
-            strength (scalar): Coupling of the Hamiltonian term.
+        Parameters
+        ----------
+        strength : scalar
+            Coupling constant multiplying the term.
+        add_dagger : bool, optional
+            If ``True``, add the Hermitian conjugate of the assembled term.
+        mask : numpy.ndarray, optional
+            Boolean mask selecting the starting sites where the term is applied.
 
-            add_dagger (bool, optional): If true, adds the Hermitian conjugate of the Hamiltonian term. Defaults to False.
+        Returns
+        -------
+        scipy.sparse.spmatrix
+            Sparse Hamiltonian contribution.
 
-            mask (np.ndarray, optional): Array with bool variables specifying where to apply the N-body term. Defaults to None.
-
-        Returns:
-            scipy.sparse: N-body Hamiltonian term ready for diagonalization/expectation values.
+        Raises
+        ------
+        TypeError
+            If ``strength`` is not scalar.
+        NotImplementedError
+            If called without a symmetry-sector basis.
         """
         if not np.isscalar(strength):
             raise TypeError(f"strength must be SCALAR, not {type(strength)}")
@@ -92,16 +113,22 @@ class NBodyTerm(QMBTerm):
         return H_nbody
 
     def get_expval(self, psi):
-        """
-        The function calculates the expectation value of the N-body Hamiltonian terms
-        that were added to the Hamiltonian. The result is stored in self.obs, which is a 1D array
-        where each entry corresponds to the expectation value of one N-body term.
+        """Compute site-resolved expectation values of the N-body term.
 
-        Args:
-            psi (numpy.ndarray): QMB state where the expectation value has to be computed
+        Parameters
+        ----------
+        psi : edlgt.modeling.qmb_state.QMB_state
+            Quantum state used to evaluate the term.
 
-        Raises:
-            TypeError: If the input arguments are of incorrect types or formats.
+        Returns
+        -------
+        None
+            Results are stored in ``self.obs`` as a 1D NumPy array.
+
+        Raises
+        ------
+        TypeError
+            If ``psi`` is not a :class:`~edlgt.modeling.qmb_state.QMB_state`.
         """
         # Check on parameters
         if not isinstance(psi, QMB_state):
@@ -138,16 +165,18 @@ class NBodyTerm(QMBTerm):
         self.obs = np.array(self.obs)
 
     def get_nbody_neighbors(self, coords):
-        """
-        Compute the neighboring sites for the N-body term based on the provided distances.
+        """Compute the ordered lattice sites touched by the N-body pattern.
 
-        Args:
-            coords (tuple): Coordinates of the starting site.
+        Parameters
+        ----------
+        coords : tuple
+            Coordinates of the starting site.
 
-        Returns:
-            tuple: (neighbor_coords, neighbor_sites) where
-                - neighbor_coords: List of coordinates of neighboring sites.
-                - neighbor_sites: List of lattice indices for neighboring sites.
+        Returns
+        -------
+        tuple
+            ``(neighbor_coords, neighbor_sites)``. If the pattern exits the
+            lattice under open boundaries, returns ``(None, None)``.
         """
         neighbor_coords = [coords]
         # Iterate through each distance and compute the new coordinates

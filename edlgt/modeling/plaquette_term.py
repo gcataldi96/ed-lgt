@@ -1,7 +1,8 @@
-"""
-:class:`PlaquetteTerm` computes plaquette terms on a D>=2 lattice model,
-providing methods for their calculation and visualization.
-Plaquette terms are used to compute properties relevant to lattice gauge theories.
+"""Plaquette interaction terms and plaquette observables on lattice models.
+
+This module provides :class:`PlaquetteTerm`, a ``QMBTerm``
+subclass for constructing four-body plaquette Hamiltonian contributions and for
+measuring plaquette expectation values on quantum many-body states.
 """
 
 import numpy as np
@@ -22,17 +23,36 @@ __all__ = ["PlaquetteTerm"]
 
 
 class PlaquetteTerm(QMBTerm):
+    """Four-body plaquette term on a lattice.
+
+    The class supports both:
+
+    - direct sparse-matrix construction (no symmetry-sector reduction), and
+    - symmetry-sector workflows where Hamiltonian contributions are returned as
+      ``(rows, cols, vals)`` triplets.
+    """
+
     def __init__(self, axes, op_list, op_names_list, print_plaq=True, **kwargs):
-        """
-        This function introduce all the fundamental information to define a Plaquette Hamiltonian
-        Term and possible eventual measures of it.
+        """Initialize a plaquette term definition.
 
-        Args:
-            axes (list of str): list of 2 axes along which the Plaquette term should be applied
+        Parameters
+        ----------
+        axes : list
+            Two lattice axes defining the plaquette plane (for example
+            ``["x", "y"]``).
+        op_list : list
+            Operators used to build the plaquette term.
+        op_names_list : list
+            Human-readable names corresponding to ``op_list``.
+        print_plaq : bool, optional
+            If ``True``, print plaquette values when calling
+            :meth:`get_expval`.
+        **kwargs
+            Additional keyword arguments forwarded to :class:`QMBTerm`.
 
-            op_list (list of 2 scipy.sparse.matrices): list of the two operators involved in the 2Body Term
-
-            op_names_list (list of 2 str): list of the names of the two operators
+        Returns
+        -------
+        None
         """
         validate_parameters(
             axes=axes,
@@ -50,24 +70,33 @@ class PlaquetteTerm(QMBTerm):
         logger.info(f"PlaqTerm {axes_name}: {' '.join(op_names_list)}")
 
     def get_Hamiltonian(self, strength, add_dagger=False, mask=None):
-        """
-        The function calculates the Plaquette Hamiltonian by summing up 4body terms for each lattice site,
-        potentially with some sites excluded based on the mask.
-        The result is scaled by the strength parameter before being returned.
-        Eventually, it is possible to sum also the dagger part of the Hamiltonian.
+        """Build the plaquette Hamiltonian contribution.
 
-        Args:
-            strength (scalar): Coupling of the Hamiltonian term.
+        The plaquette term is summed over all lattice sites where a plaquette is
+        defined (and where ``mask`` allows it), then multiplied by ``strength``.
 
-            add_dagger (bool, optional): If true, it add the hermitian conjugate of
-                the resulting Hamiltonian. Defaults to False.
+        Parameters
+        ----------
+        strength : scalar
+            Coupling constant multiplying the plaquette term.
+        add_dagger : bool, optional
+            If ``True``, add the Hermitian conjugate of the constructed term.
+        mask : numpy.ndarray, optional
+            Boolean mask controlling where the local term is applied.
 
-            mask (np.ndarray, optional): 2D array with bool variables specifying
-                (if True) where to apply the local term. Defaults to None.
+        Returns
+        -------
+        scipy.sparse.csr_matrix or tuple
+            Return type depends on the current workflow:
 
-        Returns:
-            scipy.sparse: Plaquette Hamiltonian term ready to be used for exact
-            diagonalization/expectation values.
+            - if ``self.sector_configs is None``: sparse matrix Hamiltonian term;
+            - otherwise: ``(row_list, col_list, val_list)`` as three NumPy arrays in the
+              symmetry-reduced basis.
+
+        Raises
+        ------
+        TypeError
+            If ``strength`` is not scalar or ``add_dagger`` is invalid.
         """
         if not np.isscalar(strength):
             raise TypeError(f"strength must be scalar, not {type(strength)}")
@@ -134,17 +163,37 @@ class PlaquetteTerm(QMBTerm):
         return row_list, col_list, val_list
 
     def get_expval(self, psi, component: str = "real", stag_label: str | None = None):
-        """
-        The function calculates the expectation value (and it variance) of the Plaquette Hamiltonian
-        and its average over all the lattice sites.
+        """Compute plaquette expectation values site by site and aggregate statistics.
 
-        Args:
-            psi (numpy.ndarray): QMB state where the expectation value has to be computed
+        Parameters
+        ----------
+        psi : QMB_state
+            Quantum many-body state on which the expectation values are
+            evaluated.
+        component : str, optional
+            Component of the plaquette operator to measure. Allowed values are
+            ``"real"`` (Hermitian part) and ``"imag"`` (anti-Hermitian part).
+        stag_label : str, optional
+            Optional staggered-site selector passed through the common validation
+            logic. Allowed values are ``"even"`` and ``"odd"``. If ``None``,
+            all plaquettes are considered.
 
-            stag_label (str, optional): if odd/even, then the expectation value is performed only on that kind of sites. Defaults to None.
+        Returns
+        -------
+        None
+            Results are stored on the instance attributes ``obs``, ``var``,
+            ``avg``, and ``std``.
 
-        Raises:
-            TypeError: If the input arguments are of incorrect types or formats.
+        Raises
+        ------
+        TypeError
+            If ``psi`` is not a ``QMB_state`` instance.
+        ValueError
+            If ``component`` is not ``"real"`` or ``"imag"``.
+
+        Notes
+        -----
+        In symmetry-sector mode, variances are currently not computed.
         """
         # Check on parameters
         if not isinstance(psi, QMB_state):
@@ -214,6 +263,26 @@ class PlaquetteTerm(QMBTerm):
             logger.info(f"{format(self.avg, '.10f')} +/- {format(self.std, '.10f')}")
 
     def print_Plaquette(self, sites_list, value):
+        """Log a formatted ASCII representation of a plaquette value.
+
+        Parameters
+        ----------
+        sites_list : list
+            List of four coordinate labels describing the plaquette corners.
+        value : float
+            Plaquette value to print.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        TypeError
+            If ``sites_list`` is not a list or ``value`` is not a float.
+        ValueError
+            If ``sites_list`` does not contain exactly four entries.
+        """
         if not isinstance(sites_list, list):
             raise TypeError(f"sites_list should be a LIST, not a {type(sites_list)}")
         if len(sites_list) != 4:

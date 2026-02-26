@@ -43,7 +43,7 @@ def zig_zag(lvals, d):
 
     Returns
     -------
-    tuple[int, ...]
+    tuple
         Coordinate tuple ``(x, y, z, ...)`` corresponding to ``d``.
 
     Raises

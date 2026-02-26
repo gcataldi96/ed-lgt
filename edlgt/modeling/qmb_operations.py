@@ -1,3 +1,10 @@
+"""Helpers to assemble lattice operators in the full many-body Hilbert space.
+
+This module provides low-level functions used by term classes to construct
+local, two-body, and four-body sparse operators on a lattice, including support
+for site-dependent basis projections (e.g. gauge bases).
+"""
+
 import numpy as np
 from scipy.sparse import csr_matrix, identity, kron
 from edlgt.tools import validate_parameters
@@ -25,25 +32,26 @@ def qmb_operator(
     get_real=False,
     get_imag=False,
 ):
-    """
-    This function performs the QMB operation of an arbitrary long list
-    of operators of arbitrary dimensions.
+    """Build a many-body sparse operator from an ordered list of site operators.
 
-    Args:
-        ops (dict): dictionary storing all the single site operators
+    Parameters
+    ----------
+    ops : dict
+        Dictionary mapping operator names to single-site sparse matrices.
+    op_names_list : list
+        Ordered list of operator names to tensor together, one per lattice site,
+        following the project site ordering convention.
+    add_dagger : bool, optional
+        If ``True``, symmetrize by adding the Hermitian conjugate.
+    get_real : bool, optional
+        If ``True``, return only the Hermitian (real) part.
+    get_imag : bool, optional
+        If ``True``, return only the anti-Hermitian-derived imaginary part.
 
-        op_names_list (list): list of the names of the operators involved in the qmb operator
-        the list is assumed to be stored according to the zig-zag order on the lattice
-
-        strength (scalar): real/complex coefficient applied in front of the operator
-
-        add_dagger (bool, optional): if true, yields the hermitian conjugate. Defaults to False.
-
-        get_real (bool, optional):  if true, yields only the real part. Defaults to False.
-
-        get_imag (bool, optional): if true, yields only the imaginary part. Defaults to False.
-    Returns:
-        csr_matrix: QMB sparse operator
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        Sparse many-body operator in the full Hilbert space.
     """
     # Validate type of parameters
     validate_parameters(
@@ -73,29 +81,27 @@ def local_op(
     staggered_basis=False,
     gauge_basis=None,
 ):
-    """
-    This function compute the single local operator term on the lattice where the operator
-    acts on a specific site (the rest is occupied by identities).
+    """Construct a single-site operator embedded in the full lattice Hilbert space.
 
-    Args:
-        operator (scipy.sparse): A single site sparse operator matrix.
+    Parameters
+    ----------
+    operator : scipy.sparse.spmatrix
+        Single-site operator.
+    op_site : int
+        Site index where the operator acts.
+    lvals : list[int]
+        Lattice sizes along each axis.
+    has_obc : list[bool]
+        Boundary-condition flags for each axis (``True`` for OBC).
+    staggered_basis : bool, optional
+        Whether a staggered basis is used.
+    gauge_basis : dict, optional
+        Site-label-dependent basis projectors.
 
-        op_site (scalar int): position of the site along a certain 1D ordering in the 2D lattice
-
-        lvals (list): Dimensions (# of sites) of a d-dimensional lattice
-
-        has_obc (list of bool): true for OBC, false for PBC along each direction
-
-        staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
-
-        gauge_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
-            (corners, borders, lattice core, even/odd sites). Defaults to None.
-
-    Raises:
-        TypeError: If the input arguments are of incorrect types or formats.
-
-    Returns:
-        scipy.sparse.matrix: QMB Hamiltonian in sparse form
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        Embedded local operator.
     """
     # Validate type of parameters
     validate_parameters(
@@ -121,29 +127,27 @@ def two_body_op(
     staggered_basis=False,
     gauge_basis=None,
 ):
-    """
-    This function compute the single twobody operator term on the lattice with 2 operators
-    acting on two specific lattice sites (the rest is occupied by identities).
+    """Construct a two-site operator embedded in the full lattice Hilbert space.
 
-    Args:
-        op_list (list of 2 scipy.sparse.matrices): list of the 4 operators involved in the Plaquette Term
+    Parameters
+    ----------
+    op_list : list
+        Two single-site operators.
+    op_sites_list : list[int]
+        Two site indices where the operators act.
+    lvals : list[int]
+        Lattice sizes along each axis.
+    has_obc : list[bool]
+        Boundary-condition flags for each axis.
+    staggered_basis : bool, optional
+        Whether a staggered basis is used.
+    gauge_basis : dict, optional
+        Site-label-dependent basis projectors.
 
-        op_sites_list (list of 2 int): list of the positions of two operators in the 1D chain ordering 2d lattice sites
-
-        lvals (list): Dimensions (# of sites) of a d-dimensional lattice
-
-        has_obc (list of bool): true for OBC, false for PBC along each direction
-
-        staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
-
-        gauge_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
-            (corners, borders, lattice core, even/odd sites). Defaults to None.
-
-    Raises:
-        TypeError: If the input arguments are of incorrect types or formats.
-
-    Returns:
-        scipy.sparse.matrix: QMB Hamiltonian in sparse form
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        Embedded two-body operator.
     """
     # Validate type of parameters
     validate_parameters(
@@ -170,31 +174,29 @@ def four_body_op(
     gauge_basis=None,
     get_real=False,
 ):
-    """
-    This function compute the single plaquette operator term on the lattice with 4 operators
-    acting on 4 specific lattice sites (the rest is occupied by identities).
+    """Construct a four-site (plaquette-like) operator in the full Hilbert space.
 
-    Args:
-        op_list (list of 4 scipy.sparse.matrices): list of the 4 operators involved in the Plaquette Term
+    Parameters
+    ----------
+    op_list : list
+        Four single-site operators.
+    op_sites_list : list[int]
+        Four site indices where the operators act.
+    lvals : list[int]
+        Lattice sizes along each axis.
+    has_obc : list[bool]
+        Boundary-condition flags for each axis.
+    staggered_basis : bool, optional
+        Whether a staggered basis is used.
+    gauge_basis : dict, optional
+        Site-label-dependent basis projectors.
+    get_real : bool, optional
+        If ``True``, return only the Hermitian (real) part.
 
-        op_sites_list (list of 4 int): list of the positions of two operators in the 1D chain ordering 2d lattice sites
-
-        lvals (list): Dimensions (# of sites) of a d-dimensional lattice
-
-        has_obc (list of bool): true for OBC, false for PBC along each direction
-
-        staggered_basis (bool, optional): Whether the lattice has staggered basis. Defaults to False.
-
-        gauge_basis (dict, optional): Dictionary of Basis Projectors (sparse matrices) for lattice sites
-            (corners, borders, lattice core, even/odd sites). Defaults to None.
-
-        get_real (bool, optional): If true, it yields the real part of the operator. Defaults to False.
-
-    Raises:
-        TypeError: If the input arguments are of incorrect types or formats.
-
-    Returns:
-        scipy.sparse.matrix: QMB Hamiltonian in sparse form
+    Returns
+    -------
+    scipy.sparse.csr_matrix
+        Embedded four-body operator.
     """
     # Validate type of parameters
     validate_parameters(
@@ -216,25 +218,29 @@ def four_body_op(
 def construct_operator_list(
     op_list, op_sites_list, lvals, has_obc, staggered_basis, gauge_basis
 ):
-    """
-    Constructs a dictionary of operators and a list of their names for a quantum many-body lattice.
-    Each operator is placed at specified positions on the lattice, and its basis is projected according to the site's characteristics.
+    """Create per-site operator labels/matrices for a lattice operator product.
 
-    Args:
-        op_list (list of scipy.sparse matrices): Single-site operators to be placed on the lattice.
+    Parameters
+    ----------
+    op_list : list
+        Operators to place on the lattice.
+    op_sites_list : list[int]
+        Lattice sites where the operators in ``op_list`` act.
+    lvals : list[int]
+        Lattice sizes along each axis.
+    has_obc : list[bool]
+        Boundary-condition flags for each axis.
+    staggered_basis : bool
+        Whether a staggered basis is used.
+    gauge_basis : dict or None
+        Site-label-dependent basis projectors, or ``None`` for a uniform basis.
 
-        op_sites_list (list of ints): Indices in the lattice where each operator from 'operators' should be placed.
-
-        lvals (list of ints): Dimensions of the lattice, representing the number of sites in each dimension.
-
-        has_obc (list of bool): true for OBC, false for PBC along each direction
-
-        staggered_basis (bool): Indicates if a staggered basis is used for the lattice.
-
-        gauge_basis (dict): A dictionary containing the basis projectors for each site, keyed by site labels.
-
-    Returns:
-        tuple: A tuple containing a dictionary of operators keyed by their names and a list of operator names.
+    Returns
+    -------
+    tuple
+        ``(ops_dict, op_names_list)`` where ``ops_dict`` is a dictionary of
+        projected operators and ``op_names_list`` is the ordered list of names
+        passed to :func:`qmb_operator`.
     """
     # Validate type of parameteres
     validate_parameters(
@@ -276,20 +282,23 @@ def construct_operator_list(
 
 
 def apply_basis_projection(op, op_name, basis_label, gauge_basis):
-    """
-    Applies basis projection to an operator for a specific lattice site and updates its name.
+    """Project a single-site operator into a site-dependent basis if needed.
 
-    Args:
-        op (scipy.sparse matrix): The operator to be projected.
+    Parameters
+    ----------
+    op : scipy.sparse.spmatrix
+        Operator to project.
+    op_name : str
+        Base operator name.
+    basis_label : str
+        Site label used to select the projector.
+    gauge_basis : dict or None
+        Dictionary of projectors keyed by ``basis_label``.
 
-        op_name (str): The name of the operator.
-
-        basis_label (str): The label identifying the basis projection applicable to the lattice site.
-
-        gauge_basis (dict of scipy.sparse matrices): Dictionary containing the basis projectors for each site, keyed by site labels.
-
-    Returns:
-        tuple: A tuple containing the projected operator and its updated name.
+    Returns
+    -------
+    tuple
+        Projected operator and its (possibly updated) name.
     """
     # Validate type of parameteres
     validate_parameters(

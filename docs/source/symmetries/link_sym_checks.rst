@@ -4,7 +4,6 @@
 Local (Link) Abelian Symmetries
 ======================================
 
-.. automodule:: edlgt.symmetries.link_sym_checks
-   :synopsis: Fundamental functions to generate the state configurations of an arbitrary number of twobody (link) abelian symmetries of a QMB Hamiltonian
-   :noindex:
+.. automodule:: edlgt.symmetries.link_abelian_sym
+   :synopsis: Generate and filter configurations for link Abelian symmetries.
    :members:

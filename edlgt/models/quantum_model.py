@@ -683,36 +683,36 @@ class QuantumModel:
         special_norms: dict | None = None,
         staggered_avgs: dict | None = None,
     ):
-        """
-        Compute the microcanonical ensemble averages for a set of local observables.
+        """Compute microcanonical averages for multiple local observables.
 
-        The microcanonical ensemble is defined as an equal probability incoherent mixture
-        of eigenstates whose energies lie within an energy shell [Eq - ΔE, Eq + ΔE], where Eq
-        is the expectation value of energy for the reference state and ΔE is its corresponding
-        energy uncertainty.
-        The shell is defined by energy *density*:
-            e_q = <H>/L,  Δe = sqrt(<H^2> - <H>^2)/L,
-        and we include all eigenstates with |e_i - e_q| < Δe.
-        For each observable, the expectation value is computed for every
-        eigenstate in the shell and then averaged.
+        The energy shell is defined using the energy density of the reference
+        state and its uncertainty:
 
-        Args:
-            local_obs_list (list of str): List of keys corresponding to local observables.
-                For each observable key, self.ops[obs] should give the corresponding operator.
-            state (np.ndarray): The reference quantum state (vector) used to compute the energy.
-            special_norms (dict): A dictionary mapping observable keys to a special
-                normalization array. If provided for an observable, the expectation value is computed
-                as a weighted dot product with that norm.
-            staggered_avgs (dict): A dictionary mapping observable keys to a staggered
-                averaging function (e.g. a function that averages only over even or odd sites).
-                If provided for an observable, its measured expectation values will be averaged using
-                that function.
+        - ``e_q = <H> / L``
+        - ``delta_e = sqrt(<H^2> - <H>^2) / L``
 
-        Returns:
-            tuple:
-                psi_thermal (np.ndarray): The coherent superposition (normalized) of all eigenstates
-                    in the energy shell.
-                ME_avg (dict): A dictionary mapping each observable key to its microcanonical average.
+        All eigenstates satisfying ``abs(e_i - e_q) < delta_e`` are included.
+        For each observable in ``local_obs_list``, the expectation value is
+        measured on every state in the shell and then averaged.
+
+        Parameters
+        ----------
+        local_obs_list : list[str]
+            Keys of local observables. Each key must be present in ``self.ops``.
+        state : numpy.ndarray
+            Reference state vector used to define the energy shell.
+        special_norms : dict, optional
+            Optional mapping from observable key to a custom normalization array.
+        staggered_avgs : dict, optional
+            Optional mapping from observable key to a staggered-averaging label
+            or rule used by the local observable measurement.
+
+        Returns
+        -------
+        tuple[numpy.ndarray, dict]
+            ``(psi_thermal, ME_avg)`` where ``psi_thermal`` is the normalized
+            coherent superposition of shell eigenstates and ``ME_avg`` maps
+            observable names to microcanonical averages.
         """
         # Defaults for optional dicts
         if special_norms is None:

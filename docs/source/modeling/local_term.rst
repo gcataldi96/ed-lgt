@@ -4,11 +4,10 @@
 LocalTerm Class
 =================
 
-.. autoclass:: edlgt.modeling.local_term.LocalTerm
-   :noindex:
-   :members:
-   :undoc-members:
-   :show-inheritance:
+Single-site Hamiltonian contributions and local-observable measurements on a
+lattice.
 
-.. seealso::
-   :ref:`qmb_operations Module <qmb_operations>`
+.. autoclass:: edlgt.modeling.local_term.LocalTerm
+   :members:
+   :member-order: bysource
+   :show-inheritance:

@@ -1,3 +1,11 @@
+"""Local lattice terms and local-observable measurements.
+
+This module provides :class:`LocalTerm`, a ``QMBTerm`` subclass for building
+single-site Hamiltonian contributions and measuring local observables across a
+lattice. It also includes a helper to validate link-symmetry relations between
+two measured local observables.
+"""
+
 import numpy as np
 from math import prod
 from .lattice_mappings import zig_zag, inverse_zig_zag
@@ -15,17 +23,23 @@ __all__ = ["LocalTerm", "check_link_symmetry"]
 
 
 class LocalTerm(QMBTerm):
+    """Single-site term on a lattice model."""
+
     def __init__(self, operator: np.ndarray, op_name: str, **kwargs):
-        """
-        This function provides methods for computing local Hamiltonian terms in
-        a d-dimensional lattice model.
+        """Initialize a local term definition.
 
-        Args:
-            operator (scipy.sparse): A single site sparse operator matrix.
+        Parameters
+        ----------
+        operator : scipy.sparse.spmatrix
+            Single-site operator.
+        op_name : str
+            Human-readable operator name.
+        **kwargs
+            Additional keyword arguments forwarded to ``QMBTerm``.
 
-            op_name (str): Operator name
-
-            **kwargs: Additional keyword arguments for QMBTerm.
+        Returns
+        -------
+        None
         """
         logger.info(f"LocalTerm: {op_name}")
         # Validate type of parameters
@@ -40,23 +54,28 @@ class LocalTerm(QMBTerm):
 
     @get_time
     def get_Hamiltonian(self, strength, mask=None):
-        """
-        The function calculates the Local Hamiltonian by summing up local terms
-        for each lattice site, potentially with some sites excluded based on the mask.
-        The result is scaled by the strength parameter before being returned.
+        """Build the local Hamiltonian contribution.
 
-        Args:
-            strength (scalar): Coupling of the Hamiltonian term.
+        Parameters
+        ----------
+        strength : scalar
+            Coupling constant multiplying the local term.
+        mask : numpy.ndarray, optional
+            Boolean lattice mask selecting the sites where the term is applied.
 
-            mask (np.ndarray, optional): d-dimensional array with bool variables
-                specifying (if True) where to apply the local term. Defaults to None.
+        Returns
+        -------
+        scipy.sparse.spmatrix or tuple
+            Return type depends on the current workflow:
 
-        Raises:
-            TypeError: If the input arguments are of incorrect types or formats.
+            - if ``self.sector_configs is None``: sparse matrix Hamiltonian term;
+            - otherwise: ``(r_list, c_list, v_list)`` as three NumPy arrays in the
+              symmetry-reduced basis.
 
-        Returns:
-            scipy.sparse: Local Hamiltonian term ready to be used for exact diagonalization/
-                expectation values.
+        Raises
+        ------
+        TypeError
+            If ``strength`` is not scalar.
         """
         # CHECK ON TYPES
         if not np.isscalar(strength):
@@ -98,24 +117,35 @@ class LocalTerm(QMBTerm):
             return r_list, c_list, v_list
 
     def get_expval(self, psi, stag_label=None, print_values=True, get_variance=False):
-        """
-        The function calculates the expectation value <O> and the variance <O^2> - <O>^2
-        of the Local Hamiltonian and is averaged over all the lattice sites.
+        """Compute local expectation values (and optionally variances) on all sites.
 
-        Args:
-            psi (instance of QMB_state class): QMB state where the expectation value has to be computed
+        Parameters
+        ----------
+        psi : QMB_state
+            Quantum many-body state used for the measurement.
+        stag_label : str, optional
+            Optional staggered-site selector (``"even"`` or ``"odd"``).
+        print_values : bool, optional
+            If ``True``, log per-site values and final averages.
+        get_variance : bool, optional
+            If ``True``, also compute local variances when supported.
 
-            stag_label (str, optional): if odd/even, then the expectation value
-                is performed only on that kind of sites. Defaults to None.
+        Returns
+        -------
+        None
+            Results are stored on the instance attributes ``obs``, ``var`` (if
+            requested), ``avg``, and ``std``.
 
-        Raises:
-            TypeError: If the input arguments are of incorrect types or formats.
+        Raises
+        ------
+        TypeError
+            If ``psi`` is not a ``QMB_state`` instance.
 
-        Notes:
-            - The exp value <O> is computed for each site using matrix-vector multiplication.
-            - The variance <O^2> - <O>^2 is also computed for each site.
-            For local operators, without momentum basis, squaring the non-zero entries
-            in `v_list` (the matrix elements of O) is sufficient to compute O^2.
+        Notes
+        -----
+        For local operators without momentum basis, squaring the non-zero matrix
+        entries is sufficient to compute the variance contribution. In momentum
+        basis, the variance requires constructing a dedicated operator.
         """
         # Check on parameters
         if not isinstance(psi, QMB_state):
@@ -208,6 +238,30 @@ class LocalTerm(QMBTerm):
 
 
 def check_link_symmetry(axis, loc_op1, loc_op2, value=0, sign=1):
+    """Check a link-symmetry relation between two measured local observables.
+
+    Parameters
+    ----------
+    axis : str
+        Lattice axis along which neighboring sites are paired.
+    loc_op1, loc_op2 : LocalTerm
+        Local-term objects whose ``obs`` arrays are compared.
+    value : float, optional
+        Expected value of ``loc_op1.obs[i] + sign * loc_op2.obs[j]``.
+    sign : int, optional
+        Relative sign used in the comparison (typically ``+1`` or ``-1``).
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If ``loc_op1`` or ``loc_op2`` is not a ``LocalTerm`` instance.
+    ValueError
+        If the symmetry relation is violated beyond the tolerance.
+    """
     if not isinstance(loc_op1, LocalTerm):
         raise TypeError(f"loc_op1 should be instance of LocalTerm, not {type(loc_op1)}")
     if not isinstance(loc_op2, LocalTerm):

@@ -4,11 +4,10 @@
 PlaquetteTerm Class
 =====================
 
-.. autoclass:: edlgt.modeling.plaquette_term.PlaquetteTerm
-   :noindex:
-   :members:
-   :undoc-members:
-   :show-inheritance:
+Plaquette Hamiltonian contribution and plaquette-observable measurements on
+lattice models.
 
-.. seealso::
-   :ref:`qmb_operations Module <qmb_operations>`
+.. autoclass:: edlgt.modeling.plaquette_term.PlaquetteTerm
+   :members:
+   :member-order: bysource
+   :show-inheritance:

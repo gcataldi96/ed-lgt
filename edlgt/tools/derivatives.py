@@ -24,8 +24,9 @@ def first_derivative(x, f, dx):
 
     Returns
     -------
-    tuple[numpy.ndarray, numpy.ndarray]
-        ``(x_interior, df_dx)`` where both arrays have length ``len(x) - 2``.
+    tuple
+        ``(x_interior, df_dx)`` as two NumPy arrays, both of length
+        ``len(x) - 2``.
 
     Notes
     -----
@@ -63,8 +64,9 @@ def second_derivative(x, f, dx):
 
     Returns
     -------
-    tuple[numpy.ndarray, numpy.ndarray]
-        ``(x_interior, d2f_dx2)`` where both arrays have length ``len(x) - 2``.
+    tuple
+        ``(x_interior, d2f_dx2)`` as two NumPy arrays, both of length
+        ``len(x) - 2``.
 
     Notes
     -----

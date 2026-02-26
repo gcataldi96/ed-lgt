@@ -1,3 +1,10 @@
+"""Hamiltonian assembly, diagonalization, and dynamics for QMB models.
+
+This module provides the :class:`QMB_hamiltonian` container used to collect
+Hamiltonian contributions, build dense/sparse/linear representations, compute
+spectral properties, and evolve states in time.
+"""
+
 import numpy as np
 from numba import njit, prange
 from scipy.linalg import eigh as array_eigh
@@ -15,14 +22,17 @@ __all__ = ["QMB_hamiltonian", "get_entropy_partition"]
 
 
 class QMB_hamiltonian:
-    def __init__(self, lvals, size):
-        """
-        Initialize the Hamiltonian class.
+    """Container for a quantum many-body Hamiltonian and derived quantities."""
 
-        Args:
-            Ham: The Hamiltonian, which can be a dense NumPy array, a sparse matrix (csc_matrix),
-                 or a LinearOperator.
-            lvals: Additional lattice values or parameters.
+    def __init__(self, lvals, size):
+        """Initialize an empty Hamiltonian accumulator.
+
+        Parameters
+        ----------
+        lvals : list or tuple
+            Lattice dimensions.
+        size : int
+            Hilbert-space dimension of the Hamiltonian.
         """
         validate_parameters(lvals=lvals)
         self.lvals = lvals
@@ -33,14 +43,19 @@ class QMB_hamiltonian:
         self.value_list = np.array([], dtype=get_numeric_dtype())
 
     def add_term(self, term):
-        """
-        Add a term to the Hamiltonian.
+        """Add a Hamiltonian contribution to the internal sparse triplet lists.
 
-        Args:
-            term: The term to add, which can be:
-                  - A dense NumPy array (np.ndarray).
-                  - A sparse matrix (scipy.sparse.csc_matrix or csr_matrix).
-                  - Non-zero elements in the form of (row_list, col_list, value_list).
+        Parameters
+        ----------
+        term : tuple or numpy.ndarray or scipy.sparse.spmatrix
+            Hamiltonian contribution provided as a sparse triplet
+            ``(row_list, col_list, value_list)``, a dense matrix, or a SciPy
+            sparse matrix.
+
+        Raises
+        ------
+        TypeError
+            If ``term`` has an unsupported format.
         """
         if isinstance(term, tuple) and len(term) == 3:
             # Case 1: term is (row_list, col_list, value_list)
@@ -68,11 +83,12 @@ class QMB_hamiltonian:
         )
 
     def build(self, format):
-        """
-        Construct the Hamiltonian as a sparse matrix or LinearOperator.
+        """Build the Hamiltonian representation from accumulated triplets.
 
-        Args:
-            format (str): Target type ('dense', 'sparse', or 'linear').
+        Parameters
+        ----------
+        format : str
+            Target representation: ``"dense"``, ``"sparse"``, or ``"linear"``.
         """
         logger.info(f"Construct {format} Hamiltonian")
 
@@ -119,11 +135,17 @@ class QMB_hamiltonian:
         self.Ham_type = format
 
     def convert_hamiltonian(self, format):
-        """
-        Convert the Hamiltonian to the specified representation type.
+        """Convert the Hamiltonian to another representation type.
 
-        Args:
-            format (str): Target type ('dense', 'sparse', or 'linear').
+        Parameters
+        ----------
+        format : str
+            Target representation: ``"dense"``, ``"sparse"``, or ``"linear"``.
+
+        Raises
+        ------
+        ValueError
+            If ``format`` is not supported.
         """
         logger.info(f"CONVERT HAMILTONIAN from {self.Ham_type} to {format}")
         if format == self.Ham_type:
@@ -146,6 +168,30 @@ class QMB_hamiltonian:
         self.Ham_type = format
 
     def diagonalize(self, n_eigs, format, loc_dims, print_results=True):
+        """Diagonalize the Hamiltonian and store eigenvalues/eigenstates.
+
+        Parameters
+        ----------
+        n_eigs : int or str
+            Number of eigenpairs to compute, or ``"full"`` for full
+            diagonalization.
+        format : str
+            Hamiltonian representation to use for diagonalization.
+        loc_dims : list or numpy.ndarray
+            Local Hilbert-space dimensions used to build :class:`QMB_state`
+            objects for eigenvectors.
+        print_results : bool, optional
+            If ``True``, log energies and energy densities.
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        ValueError
+            If ``n_eigs`` is invalid.
+        """
         # Ensure Hamiltonian is Hermitian and check sparsity
         # check_hermitian(self.Ham)
         validate_parameters(loc_dims=loc_dims)
@@ -201,8 +247,22 @@ class QMB_hamiltonian:
         time_line: np.ndarray,
         loc_dims: np.ndarray,
     ):
-        """
-        Perform time evolution using sparse method (for sparse / linear operators).
+        """Evolve an initial state along a time grid using the current Hamiltonian.
+
+        Parameters
+        ----------
+        initial_state : numpy.ndarray
+            Initial state vector.
+        time_line : numpy.ndarray
+            Time samples at which the evolved state is returned.
+        loc_dims : numpy.ndarray
+            Local Hilbert-space dimensions used to wrap evolved states into
+            :class:`QMB_state` objects.
+
+        Returns
+        -------
+        None
+            Evolved states are stored in ``self.psi_time``.
         """
         # Save local dimensions
         self.loc_dims = loc_dims
@@ -274,14 +334,22 @@ class QMB_hamiltonian:
         ]
 
     def partition_function(self, beta):
-        """
-        Computes the partition function Z for a given inverse temperature beta.
+        """Compute the partition function for inverse temperature ``beta``.
 
-        Args:
-            beta (float): Inverse temperature.
+        Parameters
+        ----------
+        beta : float
+            Inverse temperature.
 
-        Returns:
-            float: The computed partition function.
+        Returns
+        -------
+        float
+            Partition function ``Z``.
+
+        Raises
+        ------
+        ValueError
+            If the computed partition function is non-positive.
         """
         if self.n_eigs == self.Ham.shape[0]:
             Z = np.sum(np.exp(-beta * self.Nenergies))
@@ -292,36 +360,54 @@ class QMB_hamiltonian:
         return Z
 
     def free_energy(self, beta):
-        """
-        Calculates the free energy F of the system at a specified inverse temperature beta.
+        """Compute the free energy at inverse temperature ``beta``.
 
-        Args:
-            beta (float): Inverse temperature.
+        Parameters
+        ----------
+        beta : float
+            Inverse temperature.
 
-        Returns:
-            float: The computed free energy.
+        Returns
+        -------
+        float
+            Free energy.
         """
         Z = self.partition_function(beta)
         F = -1 / beta * np.log(Z)
         return F
 
     def thermal_average(self, beta):
-        """
-        Calculates the thermal average of the Hamiltonian at a given inverse temperature beta.
+        """Compute the thermal average energy at inverse temperature ``beta``.
 
-        Args:
-            beta (float): Inverse temperature.
+        Parameters
+        ----------
+        beta : float
+            Inverse temperature.
 
-        Returns:
-            float: The thermal average of the energy.
+        Returns
+        -------
+        float
+            Thermal average energy.
         """
         Z = self.partition_function(beta)
         if self.n_eigs == self.Ham.shape[0]:
-            return self.Nenergies.dot(np.exp(-beta * self.Nenergies))
+            return self.Nenergies.dot(np.exp(-beta * self.Nenergies)) / Z
         else:
             return np.real(self.Ham.dot(expm(-beta * self.Ham)).trace()) / Z
 
     def F_prime(self, beta):
+        """Compute the derivative used in the Newton solve for ``beta``.
+
+        Parameters
+        ----------
+        beta : float
+            Inverse temperature.
+
+        Returns
+        -------
+        float
+            Derivative-like quantity used by :meth:`get_beta`.
+        """
         Z = self.partition_function(beta)
         if self.n_eigs == self.Ham.shape[0]:
             exph2 = np.square(self.Nenergies).dot(np.exp(-beta * self.Nenergies)) / Z
@@ -330,30 +416,26 @@ class QMB_hamiltonian:
         return -exph2 - self.thermal_average(beta) ** 2
 
     def get_beta(self, state, threshold=1e-10, max_iter=1000):
-        """
-        Uses the Newton-Raphson method to estimate the inverse temperature beta that minimizes
-        the free energy difference for a given quantum state.
-        The function iteratively adjusts beta based on the gradient of the free energy
-        difference until it converges to a minimum.
+        """Estimate an effective inverse temperature for a reference state.
 
-        Args:
-            state (np.ndarray): The quantum state for which to optimize beta.
+        Parameters
+        ----------
+        state : numpy.ndarray
+            Reference state vector.
+        threshold : float, optional
+            Convergence tolerance for the Newton iteration.
+        max_iter : int, optional
+            Maximum number of Newton iterations.
 
-            threshold (float, optional): Convergence threshold for the Newton-Raphson iteration. Defaults to 1e-10.
+        Returns
+        -------
+        float
+            Estimated inverse temperature ``beta``.
 
-            max_iter (int, optional): Maximum number of iterations to prevent infinite loops. Defaults to 1000.
-
-        Returns:
-            float: The estimated beta that minimizes the free energy difference for the given state.
-
-        Raises:
-            ValueError: If the Newton-Raphson method fails to converge within the maximum number of iterations.
-
-        Notes:
-            This method relies on the derivative of the free energy, computed as F',
-            It adjusts beta using the formula:
-            beta_new = beta_old - (F(beta_old) / F'(beta))
-            where F is the difference in free energy and F' is its derivative with respect to beta.
+        Notes
+        -----
+        The method solves for the root of the difference between the thermal
+        average energy and the energy of ``state``.
         """
         iter_count = 0
         accuracy = 1
@@ -390,22 +472,25 @@ class QMB_hamiltonian:
         return beta
 
     def get_r_value(self):
-        """
-        Compute the r-value for a list of energies.
+        """Compute adjacent-gap ratio statistics from the stored spectrum.
 
-        Args:
-            energies (np.ndarray): Array of eigenvalues.
+        Returns
+        -------
+        numpy.ndarray
+            Array of local adjacent-gap ratios.
 
-        Returns:
-            r_value: average r value
+        Raises
+        ------
+        ValueError
+            If the Hamiltonian has not been fully diagonalized.
         """
         # Check Hamiltonian type and compute the time evolution
         if self.Ham_type == "dense":
             # Check if Hamiltonian is already diagonalized
             if not hasattr(self, "Nenergies") or not hasattr(self, "Npsi"):
-                return ValueError("The hamiltonian has to be fully diagonalized")
+                raise ValueError("The Hamiltonian has to be fully diagonalized.")
         else:
-            return ValueError("The hamiltonian has to be fully diagonalized")
+            raise ValueError("The Hamiltonian has to be fully diagonalized.")
         # Compute level spacings
         delta_E = np.diff(np.sort(self.Nenergies))
         # Compute r-values
@@ -424,19 +509,29 @@ class QMB_hamiltonian:
         return r_array
 
     def print_energy(self, en_state):
+        """Log the energy density of a selected eigenstate index.
+
+        Parameters
+        ----------
+        en_state : int
+            Eigenstate index in ``self.Nenergies``.
+        """
         logger.info("====================================================")
         logger.info(f"{en_state} ENERGY: {round(self.Nenergies[en_state],16)}")
 
     def get_sparsity(self):
+        """Log the current sparsity estimated from accumulated triplets."""
         sparsity = len(self.row_list) / (self.shape[0] ** 2)
         logger.info(f"SPARSITY: {round(sparsity,16)}")
 
 
 def is_sorted(array1D):
+    """Return ``True`` if a 1D array is non-decreasing."""
     return np.all(array1D[:-1] <= array1D[1:])
 
 
 def get_sorted_indices(data):
+    """Return indices that sort entries by descending magnitude."""
     abs_data = np.abs(data)
     real_data = np.real(data)
     # Lexsort by real part first (secondary key), then by absolute value (primary key)
@@ -445,6 +540,25 @@ def get_sorted_indices(data):
 
 
 def get_entropy_partition(lvals, option="half"):
+    """Return lattice-site indices used for a standard bipartition.
+
+    Parameters
+    ----------
+    lvals : list or tuple
+        Lattice dimensions.
+    option : str, optional
+        Partition preset. Currently only ``"half"`` is implemented.
+
+    Returns
+    -------
+    list[int]
+        Site indices belonging to the selected subsystem.
+
+    Raises
+    ------
+    NotImplementedError
+        If ``option`` is not implemented.
+    """
     if option == "half":
         if len(lvals) == 1:
             partition_indices = list(np.arange(0, int(lvals[0] / 2), 1))
@@ -459,6 +573,20 @@ def get_entropy_partition(lvals, option="half"):
 
 @njit(cache=True)
 def build_csr_numba(N, row_list, col_list, data_list):
+    """Build CSR arrays from COO-style triplets.
+
+    Parameters
+    ----------
+    N : int
+        Matrix dimension (square matrix).
+    row_list, col_list, data_list : numpy.ndarray
+        COO-style nonzero entries.
+
+    Returns
+    -------
+    tuple
+        ``(indptr, indices, data)`` CSR arrays.
+    """
     nnz = row_list.shape[0]
     indptr = np.zeros(N + 1, np.int32)
     # 1) count nonzeros per row
@@ -485,6 +613,20 @@ def build_csr_numba(N, row_list, col_list, data_list):
 def csr_spmv(
     indptr: np.ndarray, indices: np.ndarray, data: np.ndarray, x: np.ndarray
 ) -> np.ndarray:
+    """Multiply a CSR matrix by a vector.
+
+    Parameters
+    ----------
+    indptr, indices, data : numpy.ndarray
+        CSR arrays.
+    x : numpy.ndarray
+        Input vector.
+
+    Returns
+    -------
+    numpy.ndarray
+        Product ``H @ x``.
+    """
     N = indptr.shape[0] - 1
     Hpsi = np.zeros(N, dtype=np.complex128)
     for ii in prange(N):
@@ -499,11 +641,19 @@ def csr_spmv(
 def csr_matmat(
     indptr: np.ndarray, indices: np.ndarray, data: np.ndarray, X: np.ndarray
 ) -> np.ndarray:
-    """
-    Compute Y = H @ X where H is in CSR form (indptr, indices, data)
-    and X is (N, nvec).  Returns Y of shape (N, nvec).
+    """Multiply a CSR matrix by a dense matrix (multiple vectors).
 
-    Parallel over rows of H (and therefore rows of Y).
+    Parameters
+    ----------
+    indptr, indices, data : numpy.ndarray
+        CSR arrays.
+    X : numpy.ndarray
+        Dense matrix whose columns are vectors.
+
+    Returns
+    -------
+    numpy.ndarray
+        Product ``H @ X``.
     """
     N = indptr.shape[0] - 1
     nvec = X.shape[1]
@@ -525,8 +675,17 @@ def csr_matmat(
 def compute_trace_iH(
     row_list: np.ndarray, col_list: np.ndarray, data_list: np.ndarray
 ) -> complex:
-    """
-    Sum data_list[ii] whenever row_list[ii] == col_list[ii].
+    """Compute ``trace(-i H)`` directly from triplet data.
+
+    Parameters
+    ----------
+    row_list, col_list, data_list : numpy.ndarray
+        COO-style nonzero entries of ``H``.
+
+    Returns
+    -------
+    complex
+        ``trace(-i H)``.
     """
     tr = 0.0 + 0.0j
     nnz = row_list.shape[0]
@@ -543,17 +702,23 @@ def exact_time_evolution(
     eigenvectors: np.ndarray,
     initial_state: np.ndarray,
 ):
-    """
-    Perform time evolution of a quantum state assuming the knowledge of the whole energy spectrum
+    """Time evolve a state from a full eigendecomposition.
 
-    Args:
-        tline (ndarray): set of time steps where to measure the time evolution
-        eigenvalues (ndarray): Array of eigenvalues of the Hamiltonian.
-        eigenvectors (ndarray): 2D array of eigenvectors of the Hamiltonian (columns are eigenvectors).
-        initial_state (ndarray): Initial state vector.
+    Parameters
+    ----------
+    tline : numpy.ndarray
+        Time samples.
+    eigenvalues : numpy.ndarray
+        Hamiltonian eigenvalues.
+    eigenvectors : numpy.ndarray
+        Hamiltonian eigenvectors stored by columns.
+    initial_state : numpy.ndarray
+        Initial state vector.
 
-    Returns:
-        ndarray: Array of time-evolved states with shape (n_steps, len(initial_state)).
+    Returns
+    -------
+    numpy.ndarray
+        Time-evolved states with shape ``(n_steps, psi_dim)``.
     """
     psi_dim = len(initial_state)
     n_eigs = len(eigenvalues)
@@ -578,9 +743,19 @@ def exact_time_evolution(
 
 @njit(cache=True, parallel=True)
 def compute_overlap_with_eigenstates(eigenvectors: np.ndarray, state: np.ndarray):
-    """
-    overlaps[i] = <E_i | psi(0)> = sum_j conj(evecs[j,i]) * initial_state[j]
-    Parallelized over i.
+    """Compute overlaps between a state and an eigenbasis.
+
+    Parameters
+    ----------
+    eigenvectors : numpy.ndarray
+        Eigenvectors stored by columns.
+    state : numpy.ndarray
+        State vector.
+
+    Returns
+    -------
+    numpy.ndarray
+        Overlaps ``<E_i|state>``.
     """
     psi_dim = eigenvectors.shape[0]
     n_eigs = eigenvectors.shape[1]
@@ -601,10 +776,16 @@ def csr_spmv_lin(
     x: np.ndarray,
     out: np.ndarray,
 ):
-    """
-    Parallel CSR sparse-matrix-vector multiply for A = -i * H.
-    indptr, indices, data define the CSR structure of H.
-    The result out = -1j * H @ x.
+    """Compute ``out = -1j * H @ x`` for a CSR matrix ``H``.
+
+    Parameters
+    ----------
+    indptr, indices, data : numpy.ndarray
+        CSR arrays defining ``H``.
+    x : numpy.ndarray
+        Input vector.
+    out : numpy.ndarray
+        Output buffer written in place.
     """
     N = indptr.shape[0] - 1
     for ii in prange(N):
@@ -622,10 +803,21 @@ def runge_kutta4_time_evolution(
     data: np.ndarray,
     time_line: np.ndarray,
 ) -> np.ndarray:
-    """
-    Fully-parallel RK4 integrator for dpsi/dt = -i H psi.
-    Uses csr_spmv_lin to compute -i*H@psi in parallel.
-    Returns array of shape (len(time_line), N) containing psi at each time.
+    """Integrate ``dpsi/dt = -i H psi`` with a parallel RK4 scheme.
+
+    Parameters
+    ----------
+    initial_state : numpy.ndarray
+        Initial state vector.
+    indptr, indices, data : numpy.ndarray
+        CSR arrays defining ``H``.
+    time_line : numpy.ndarray
+        Time grid.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of states with shape ``(len(time_line), N)``.
     """
     N = initial_state.shape[0]
     steps = len(time_line)

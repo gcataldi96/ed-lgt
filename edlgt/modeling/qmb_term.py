@@ -1,3 +1,9 @@
+"""Base classes and shared utilities for lattice Hamiltonian terms.
+
+This module defines :class:`QMBTerm`, the common base class used by local,
+two-body, plaquette, and n-body term builders in :mod:`edlgt.modeling`.
+"""
+
 import numpy as np
 from edlgt.tools import validate_parameters
 from edlgt.dtype_config import coerce_numeric_array
@@ -9,6 +15,8 @@ __all__ = ["QMBTerm"]
 
 
 class QMBTerm:
+    """Base class for Hamiltonian-term builders on a lattice."""
+
     def __init__(
         self,
         lvals: list[int],
@@ -20,6 +28,28 @@ class QMBTerm:
         sector_configs: np.ndarray = None,
         momentum_basis=None,
     ):
+        """Initialize geometry and operator metadata for a lattice term.
+
+        Parameters
+        ----------
+        lvals : list[int]
+            Lattice dimensions.
+        has_obc : list[bool]
+            Boundary-condition flags per axis (``True`` for open boundaries).
+        operator : numpy.ndarray, optional
+            Single operator associated with the term.
+        op_name : str, optional
+            Name of ``operator``.
+        op_list : list, optional
+            List of operators for multi-operator terms.
+        op_names_list : list, optional
+            Names corresponding to ``op_list``.
+        sector_configs : numpy.ndarray, optional
+            Symmetry-sector basis configurations. If provided, symmetry-reduced
+            operators are prepared when possible.
+        momentum_basis : object, optional
+            Optional momentum-basis metadata used by some derived classes.
+        """
         # Validate type of parameters
         validate_parameters(lvals=lvals, has_obc=has_obc)
         # Lattice Geometry
@@ -41,12 +71,33 @@ class QMBTerm:
         self.momentum_basis = momentum_basis
 
     def get_symmetry_operator(self):
+        """Prepare symmetry-sector operators from the provided operator data.
+
+        Notes
+        -----
+        This method stores the processed operators in ``self.sym_ops`` only when
+        ``self.sector_configs`` is available.
+        """
         if self.sector_configs is not None:
             # Construct the symmetry operators
             sym_op_list = [self.op] if self.op is not None else self.op_list
             self.sym_ops = coerce_numeric_array(sym_op_list, name="symmetry operators")
 
     def get_staggered_conditions(self, coords, stag_label):
+        """Check whether a site satisfies a staggered-sublattice selection.
+
+        Parameters
+        ----------
+        coords : tuple
+            Lattice coordinates of the site.
+        stag_label : str or None
+            ``"even"``, ``"odd"``, or ``None`` (no filtering).
+
+        Returns
+        -------
+        bool
+            ``True`` if the site satisfies the requested staggered condition.
+        """
         # Compute the staggered factor
         stag = (-1) ** (sum(coords))
         stag_conditions = [
@@ -57,6 +108,20 @@ class QMBTerm:
         return any(stag_conditions)
 
     def get_mask_conditions(self, coords, mask):
+        """Check whether a site passes an optional boolean mask.
+
+        Parameters
+        ----------
+        coords : tuple
+            Lattice coordinates of the site.
+        mask : numpy.ndarray or None
+            Boolean lattice mask. If ``None``, all sites are accepted.
+
+        Returns
+        -------
+        bool
+            ``True`` if the site should be included.
+        """
         # CHECK MASK CONDITION ON THE SITE
         mask_conditions = (
             True if mask is None or all([mask is not None, mask[coords]]) else False
