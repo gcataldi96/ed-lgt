@@ -1,3 +1,10 @@
+"""Local/link Abelian symmetry filters for many-body configurations.
+
+This module provides checks and configuration generators for symmetry sectors
+defined by link-local two-site constraints, as commonly used in lattice gauge
+models with open or periodic geometries.
+"""
+
 from edlgt.tools import get_time
 import numpy as np
 import logging
@@ -15,27 +22,25 @@ __all__ = [
 
 @njit(cache=True)
 def check_link_sym(config, sym_op_diags, sym_sectors, pair_list):
-    """
-    This function checks if a given QMB state configuration concurrently belongs
-    to a set of twobody abelian symmetry sectors of Zn.
+    """Check whether a configuration satisfies link Abelian symmetry sectors.
 
-    Args:
-        config (np.array): 1D array corresponding to a single QMB state configuration
+    Parameters
+    ----------
+    config : ndarray
+        Single many-body configuration.
+    sym_op_diags : ndarray
+        Link-symmetry generator diagonals with shape
+        ``(n_dirs, 2, loc_dim)`` for uniform local spaces.
+    sym_sectors : ndarray
+        Target sector value for each lattice direction.
+    pair_list : sequence
+        For each lattice direction, a 2-column integer array listing the site
+        pairs constrained by that symmetry.
 
-        sym_op_diags (np.array): 3D array with shape (number_of_lattice_directions, 2, loc_dim),
-            where each "lattice direction" contains 2 operators,
-            and each operator is represented by its diagonal
-            of length equal to the local dimension = loc_dim
-
-        sym_sectors (np.array): 1D array with shape (number_of_lattice_directions,)
-            containing the sector values for each lattice direction.
-
-        pair_list (typed.List() of np.arrays): for each lattice direction the 2D array has
-            shape (number_of_site_pairs_per_direction, 2),
-            specifying the pair of site indices.
-
-    Returns:
-        bool: True if the config belongs to the chosen sector, False otherwise
+    Returns
+    -------
+    bool
+        ``True`` if ``config`` belongs to the chosen sector.
     """
     check = True
     num_lattice_directions = sym_op_diags.shape[0]
@@ -58,26 +63,25 @@ def check_link_sym(config, sym_op_diags, sym_sectors, pair_list):
 
 @njit(cache=True)
 def check_link_sym_sitebased(config, sym_op_diags, sym_sectors, pair_list):
-    """
-    Checks if a given QMB state configuration belongs to a set of two-body symmetry sectors,
-    NOTE: In this case, operators acting differently on different lattice sites
-    (as in Lattice Gauge Theories within the dressed site formalism).
+    """Site-based version of :func:`check_link_sym` for nonuniform local bases.
 
-    Args:
-        config (np.array of np.uint8): 1D array for a single QMB state configuration.
+    Parameters
+    ----------
+    config : ndarray
+        Single many-body configuration.
+    sym_op_diags : ndarray
+        Site-resolved diagonals with shape
+        ``(n_dirs, 2, n_sites, max(loc_dims))``.
+    sym_sectors : ndarray
+        Target sector value for each lattice direction.
+    pair_list : sequence
+        For each lattice direction, a 2-column integer array listing the site
+        pairs constrained by that symmetry.
 
-        sym_op_diags (np.array of floats): 4D array with
-            shape=(num_directions, 2, n_sites, max(loc_dims))
-            where each "lattice direction" contains 2 operators, and each
-            operator is represented by its diagonal on each lattice site.
-
-        sym_sectors (np.array of floats): 1D array with sector values for each lattice direction.
-
-        pair_list (list of np.array of np.uint8): Each 2D array specifies the pair
-            of site indices along the corresponding lattice direction.
-
-    Returns:
-        bool: True if the config belongs to the chosen sector, False otherwise.
+    Returns
+    -------
+    bool
+        ``True`` if ``config`` belongs to the chosen sector.
     """
     check = True
     num_lattice_directions = len(pair_list)
@@ -101,26 +105,24 @@ def check_link_sym_sitebased(config, sym_op_diags, sym_sectors, pair_list):
 
 @get_time
 def link_abelian_sector(loc_dims, sym_op_diags, sym_sectors, pair_list):
-    """
-    This function returns the QMB state configurations (and the corresponding 1D indices)
-    that belongs to the intersection of multiple link symmetry sectors
+    """Generate configurations belonging to a link Abelian symmetry sector.
 
-    Args:
-        loc_dims (np.array): 1D array of single-site local dimensions.
-            For Exact Diagonlization (ED) purposes, each local dimension is always smaller that 2^{8}-1
-            For this reason, loc_dims.dtype = np.uint8
+    Parameters
+    ----------
+    loc_dims : ndarray
+        Local Hilbert-space dimensions.
+    sym_op_diags : ndarray
+        Link-symmetry generator diagonals (uniform or site-based representation).
+    sym_sectors : ndarray or sequence
+        Target sector values for the link generators.
+    pair_list : sequence
+        Pair list describing which site pairs are checked in each direction.
 
-        sym_op_diags (np.array of floats): Array with (diagonals of) operators generating the link
-            symmetries of the model.
-            If len(shape)=3, then it handles the case of different local Hilbert spaces,
-            and, for each operator, its diagonal is evaluated on each site Hilbert basis
-
-        sym_sectors (np.array of floats): 1D array with sector values for each operator.
-            NOTE: sym_sectors.shape[0] = sym_op_diags.shape[0]
-
-
-    Returns:
-        (np.array of ints, np.array of ints): 1D array of indices and 2D array of QMB state configurations
+    Returns
+    -------
+    tuple
+        ``(sector_indices, sector_configs)`` with linear basis indices and the
+        corresponding site configurations.
     """
     if not isinstance(sym_sectors, np.ndarray):
         sym_sectors = np.array(sym_sectors, dtype=float)
@@ -138,6 +140,24 @@ def link_abelian_sector(loc_dims, sym_op_diags, sym_sectors, pair_list):
 
 @njit(parallel=True, cache=True)
 def link_sector_configs(loc_dims, link_op_diags, link_sectors, pair_list):
+    """Enumerate configurations satisfying site-based link symmetry constraints.
+
+    Parameters
+    ----------
+    loc_dims : ndarray
+        Local Hilbert-space dimensions.
+    link_op_diags : ndarray
+        Site-resolved link-symmetry generator diagonals.
+    link_sectors : ndarray
+        Target sector values for the link generators.
+    pair_list : sequence
+        Pair list describing which site pairs are checked in each direction.
+
+    Returns
+    -------
+    ndarray
+        Filtered configuration table.
+    """
     # Total number of configs
     sector_dim = 1
     for dim in loc_dims:

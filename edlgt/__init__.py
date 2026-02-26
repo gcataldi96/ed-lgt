@@ -1,3 +1,5 @@
+"""Top-level package for ed-lgt."""
+
 import logging
 from importlib.metadata import PackageNotFoundError, version
 from .dtype_config import (

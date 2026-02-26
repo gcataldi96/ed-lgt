@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "edlgt"
-version = "0.1.0"
+version = "0.1.1"
 description = "Exact diagonalization tools for lattice gauge theories and quantum many-body Hamiltonians"
 readme = "README.md"
 requires-python = ">=3.10"

@@ -1,3 +1,9 @@
+"""Public operator factories and local basis utilities.
+
+The legacy ``SU2_spin_network_operators`` module is intentionally not re-exported
+from this package namespace.
+"""
+
 from . import (
     SU2_operators,
     SU2_singlets,

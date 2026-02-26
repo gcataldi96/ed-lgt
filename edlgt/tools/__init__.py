@@ -1,3 +1,5 @@
+"""Public utility functions and helpers used across the library."""
+
 from . import (
     checks,
     derivatives,
@@ -5,6 +7,7 @@ from . import (
     measures,
     numba_functions,
     wannier,
+    tensor_networks,
     magic,
     plotting,
 )

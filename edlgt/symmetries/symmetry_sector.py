@@ -1,3 +1,10 @@
+"""Combined symmetry-sector configuration builders.
+
+This module combines global, link, and optional string/n-body constraints to
+construct symmetry-reduced configuration tables used by the Hamiltonian and
+observable builders.
+"""
+
 from edlgt.tools import get_time
 import math
 import numpy as np
@@ -69,6 +76,34 @@ def symmetry_sector_configs(
     string_op_diags=None,
     string_sectors=None,
 ):
+    """Build configurations satisfying combined global and link symmetries.
+
+    Parameters
+    ----------
+    loc_dims : ndarray
+        Local Hilbert-space dimensions.
+    glob_op_diags : ndarray
+        Site-resolved diagonals of global symmetry generators.
+    glob_sectors : ndarray or sequence
+        Target sector values for global symmetries.
+    sym_type_flag : str
+        Global symmetry type (typically ``"U"`` or ``"Z"``).
+    link_op_diags : ndarray
+        Site-resolved diagonals of link symmetry generators.
+    link_sectors : ndarray or sequence
+        Target sector values for link symmetries.
+    pair_list : sequence
+        Link pair definitions, grouped by lattice direction.
+    string_op_diags : ndarray, optional
+        Site-resolved diagonals for additional string constraints.
+    string_sectors : ndarray, optional
+        Target values for the string constraints.
+
+    Returns
+    -------
+    ndarray
+        Configurations satisfying all requested constraints.
+    """
     if not isinstance(link_sectors, np.ndarray):
         link_sectors = np.array(link_sectors, dtype=float)
     if not isinstance(glob_sectors, np.ndarray):
@@ -108,6 +143,21 @@ def symmetry_sector_configs(
 
 
 def get_symmetry_sector_generators(op_list: list, action: str):
+    """Extract site-resolved diagonals of symmetry generators.
+
+    Parameters
+    ----------
+    op_list : list
+        Operators grouped according to ``action``.
+    action : str
+        One of ``"global"``, ``"link"``, or ``"nbody"``.
+
+    Returns
+    -------
+    ndarray
+        Array of real diagonals formatted for the corresponding symmetry
+        routines.
+    """
     if action == "global":
         # Generators of Global Abelian Symmetry sector
         n_sites = op_list[0].shape[0]
@@ -150,17 +200,22 @@ def check_link_sym_partial(config, sym_op_diags, sym_sectors, pair_list):
     The function does not remove already checked pairs, allowing
     a simpler implementation without redundancy management.
 
-    Args:
-        config (np.array of np.uint16): Partial QMB configuration array.
-        sym_op_diags (np.array of floats): 4D array with shape=(lattice_dim, 2, n_sites, max(loc_dims)).
-            Each "lattice direction" contains 2 operators, and each operator
-            is represented by its diagonal on each lattice site.
-        sym_sectors (np.array of floats): 1D array with sector values for each lattice direction.
-        pair_list (list of np.array of np.uint16): List of 2D arrays specifying pairs of site indices
-            along the corresponding lattice direction.
+    Parameters
+    ----------
+    config : ndarray
+        Partial configuration (prefix of a full many-body configuration).
+    sym_op_diags : ndarray
+        Site-resolved diagonals of link symmetry generators.
+    sym_sectors : ndarray
+        Target sector values for the link generators.
+    pair_list : sequence
+        Per-direction arrays of site-index pairs.
 
-    Returns:
-        bool: True if the partial config satisfies the link symmetries, False otherwise.
+    Returns
+    -------
+    bool
+        ``True`` if the partial configuration does not violate any fully
+        specified link constraint.
     """
     num_sites = config.shape[0]
     num_lattice_directions = len(pair_list)
@@ -504,6 +559,32 @@ def get_link_sector_configs(
     nbody_sites_list=None,
     nbody_sym_type: str | None = "U",
 ):
+    """Build configurations satisfying link symmetries and optional n-body constraints.
+
+    Parameters
+    ----------
+    loc_dims : ndarray
+        Local Hilbert-space dimensions.
+    link_op_diags : ndarray
+        Site-resolved diagonals of link symmetry generators.
+    link_sectors : ndarray or sequence
+        Target sector values for link symmetries.
+    pair_list : sequence
+        Per-direction arrays of site-index pairs.
+    nbody_op_diags : ndarray, optional
+        Site-resolved diagonals of additional n-body generators.
+    nbody_sectors : ndarray or sequence, optional
+        Target sector values for the n-body generators.
+    nbody_sites_list : sequence, optional
+        Site-index lists for each n-body symmetry generator.
+    nbody_sym_type : str or None, optional
+        ``"U"`` or ``"Z"`` for additive/multiplicative n-body constraints.
+
+    Returns
+    -------
+    ndarray
+        Configurations satisfying the requested constraints.
+    """
     logger.debug("GETTING LINK SECTOR CONFIGURATIONS")
     if not isinstance(link_sectors, np.ndarray):
         link_sectors = np.array(link_sectors, dtype=float)

@@ -1,10 +1,13 @@
 .. _symmetry_sector:
 
-======================================
-Local (Link) Abelian Symmetries
-======================================
+===========================
+Combined Symmetry Sectors
+===========================
+
+High-level helpers to build configuration tables satisfying combined global,
+link, and optional additional constraints.
 
 .. automodule:: edlgt.symmetries.symmetry_sector
-   :synopsis: Generation of the state configuration of a symmetry sector out of the intersection of multiple Abelian (local and global) symmetry sector of the Hamiltonian
-   :noindex:
+   :synopsis: Combined global/link symmetry-sector configuration builders.
    :members:
+   :member-order: bysource

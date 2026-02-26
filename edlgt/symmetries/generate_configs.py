@@ -1,3 +1,11 @@
+"""Configuration encoding and symmetry-sector basis expansion helpers.
+
+This module provides low-level utilities to convert between linear many-body
+basis indices and site-resolved configurations, generate all configurations for
+a product Hilbert space, and build projectors between symmetry-reduced and full
+bases.
+"""
+
 import numpy as np
 from numba import njit, prange
 from scipy.sparse import csc_matrix
@@ -21,8 +29,19 @@ __all__ = [
 
 @njit
 def index_to_config(qmb_index, loc_dims):
-    """
-    Convert a linear QMB index to a configuration based on local dimensions.
+    """Convert a linear many-body basis index to a site configuration.
+
+    Parameters
+    ----------
+    qmb_index : int
+        Linear basis index.
+    loc_dims : ndarray
+        Local Hilbert-space dimensions, one per site.
+
+    Returns
+    -------
+    ndarray
+        Configuration array with one local basis label per site.
     """
     num_sites = len(loc_dims)
     config = np.zeros(num_sites, dtype=np.uint8)
@@ -61,18 +80,18 @@ def config_to_index(config, loc_dims):
 
 @njit(parallel=True, cache=True)
 def get_state_configs(loc_dims):
-    """
-    This function creates all the possible QMB state configurations of a system made
-    by L units/sites, each one living in a Hilbert space of dimension loc_dim.
+    """Enumerate all product-basis configurations for a set of local dimensions.
 
-    Args:
-        loc_dims (np.array): 1D array of single-site local dimensions.
-            For Exact Diagonlization (ED) purposes, each local dimension is always smaller that 2^{8}-1
-            For this reason, loc_dims.dtype = np.uint8
+    Parameters
+    ----------
+    loc_dims : ndarray
+        One-dimensional array of local Hilbert-space dimensions.
 
-    Returns:
-        np.array: matrix configs, with shape=(prod(loc_dims), len(loc_dims)) and dtype = np.uint8
-            Each row is a possible configuration of the QMB state.
+    Returns
+    -------
+    ndarray
+        Array of shape ``(prod(loc_dims), len(loc_dims))`` with dtype
+        ``np.uint8``. Each row is one many-body configuration.
     """
     # Total number of configs
     total_configs = 1
@@ -94,6 +113,20 @@ def get_state_configs(loc_dims):
 
 @njit
 def config_to_index_linsearch(config, unique_configs):
+    """Find a configuration index by linear search in a sorted/unsorted table.
+
+    Parameters
+    ----------
+    config : ndarray
+        Configuration to search for.
+    unique_configs : ndarray
+        Candidate configuration table, one configuration per row.
+
+    Returns
+    -------
+    int
+        Row index if found, otherwise ``-1``.
+    """
     # Linear search (not the most efficient case)
     for idx in range(unique_configs.shape[0]):
         # Comparing each element; break early if any mismatch found
@@ -109,6 +142,20 @@ def config_to_index_linsearch(config, unique_configs):
 
 @njit(cache=True)
 def config_to_index_binarysearch(config, unique_configs):
+    """Find a configuration index by binary search in a sorted table.
+
+    Parameters
+    ----------
+    config : ndarray
+        Configuration to search for.
+    unique_configs : ndarray
+        Lexicographically sorted configuration table, one row per config.
+
+    Returns
+    -------
+    int
+        Row index if found, otherwise ``-1``.
+    """
     low = 0
     high = len(unique_configs) - 1
     while low <= high:
@@ -131,6 +178,25 @@ def subenv_map_to_unique_indices(
     unique_subsys_configs: np.ndarray,  # (subsys_dim, |S|)
     unique_env_configs: np.ndarray,  # (env_dim, |E|)
 ):
+    """Map subsystem/environment configurations to indices in unique tables.
+
+    Parameters
+    ----------
+    subsystem_configs : ndarray
+        Subsystem configurations, one row per sector basis state.
+    environment_configs : ndarray
+        Environment configurations, one row per sector basis state.
+    unique_subsys_configs : ndarray
+        Unique subsystem configurations used as lookup table.
+    unique_env_configs : ndarray
+        Unique environment configurations used as lookup table.
+
+    Returns
+    -------
+    tuple
+        ``(subsys_map, env_map)`` integer arrays with lookup indices for each
+        sector basis state.
+    """
     sector_dim = subsystem_configs.shape[0]
     subsys_map = np.empty(sector_dim, dtype=np.int64)
     env_map = np.empty(sector_dim, dtype=np.int64)
@@ -146,6 +212,19 @@ def subenv_map_to_unique_indices(
 
 @njit(cache=True)
 def compare_configs(config1, config2):
+    """Lexicographically compare two configurations.
+
+    Parameters
+    ----------
+    config1, config2 : ndarray
+        Configuration arrays of equal length.
+
+    Returns
+    -------
+    int
+        ``-1`` if ``config1 < config2``, ``1`` if ``config1 > config2``, and
+        ``0`` if they are equal.
+    """
     # Custom function to compare configurations element-wise
     for i in range(len(config1)):
         if config1[i] < config2[i]:
@@ -156,7 +235,7 @@ def compare_configs(config1, config2):
 
 
 @njit
-def get_translated_state_indices(config, sector_configs, logical_unit_size):
+def get_translated_state_indices(config, sector_configs, logical_unit_size=1):
     """Generate all translations of a given configuration of a 1d QMB system,
     considering logical units in translation."""
     # Get the size of the QMB system
@@ -181,6 +260,20 @@ def get_translated_state_indices(config, sector_configs, logical_unit_size):
 
 @njit
 def get_reference_indices(sector_configs):
+    """Select translation-inequivalent reference configurations in 1D.
+
+    Parameters
+    ----------
+    sector_configs : ndarray
+        Sorted sector configurations, one row per basis state.
+
+    Returns
+    -------
+    tuple
+        ``(ref_indices, norm)`` where ``ref_indices`` are independent
+        configuration indices and ``norm`` contains the number of unique
+        translations for each reference.
+    """
     sector_dim = sector_configs.shape[0]
     normalization = np.zeros(sector_dim, dtype=np.int32)
     independent_indices = np.zeros(sector_dim, dtype=np.bool_)
@@ -208,12 +301,21 @@ def get_reference_indices(sector_configs):
 def build_sector_expansion_projector_old(
     sector_configs: np.ndarray, local_dims: np.ndarray
 ) -> csc_matrix:
-    """
-    sector_configs: (sector_dim, n_sites) int64 — allowed configs of a system with n_sites, each entry in [0, local_dims[j]-1]
-    local_dims: (n_sites,) int64 — local dims for sites in the SAME order as sector_configs columns
+    """Build the full-space expansion projector from sector configurations.
 
-    Returns:
-      projector: CSC matrix of shape (prod(local_dims), sector_dim) with one 1 per column.
+    Parameters
+    ----------
+    sector_configs : ndarray
+        Allowed configurations in the reduced sector, one row per basis state.
+    local_dims : ndarray
+        Local Hilbert-space dimensions in the same site order as
+        ``sector_configs`` columns.
+
+    Returns
+    -------
+    scipy.sparse.csc_matrix
+        Projector of shape ``(prod(local_dims), sector_dim)`` with one nonzero
+        entry per column.
     """
     logger.info("----------------------------------------------------")
     logger.info("Projector from symmetry-sector to full space")
@@ -234,11 +336,19 @@ def build_sector_expansion_projector_old(
 def build_sector_expansion_projector(
     sector_configs: np.ndarray, local_dims: np.ndarray
 ) -> np.ndarray:
-    """
-    Compute row indices for each symmetry-sector configuration.
+    """Build a dense expansion projector from sector to full basis.
 
-    sector_configs: (sector_dim, n_sites) int64
-    local_dims:     (n_sites,)           int32/int64
+    Parameters
+    ----------
+    sector_configs : ndarray
+        Allowed configurations in the reduced sector, one row per basis state.
+    local_dims : ndarray
+        Local Hilbert-space dimensions in the same site order.
+
+    Returns
+    -------
+    ndarray
+        Dense binary projector of shape ``(prod(local_dims), sector_dim)``.
     """
     sector_dim = sector_configs.shape[0]
     D_full = np.prod(local_dims)

@@ -1,3 +1,5 @@
+"""Public symmetry-sector construction and symmetry-adapted operator utilities."""
+
 from . import (
     generate_configs,
     global_abelian_sym,

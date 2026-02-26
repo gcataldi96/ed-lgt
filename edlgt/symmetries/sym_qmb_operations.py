@@ -1,3 +1,10 @@
+"""Sparse operator-application kernels inside symmetry-reduced bases.
+
+This module builds triplet-form sparse data (row, column, value) for local and
+few-body operators acting on symmetry-sector configuration tables. It also
+supports optional momentum-basis projection through precomputed sparse factors.
+"""
+
 import numpy as np
 from numba import njit, prange
 from edlgt.dtype_config import coerce_numeric_array
@@ -37,7 +44,7 @@ def nbody_term(
         Shape (M,), int32 — the lattice sites the operator acts on.
     sector_configs : ndarray
         Shape (N, n_sites), int32 — basis configurations in the (symmetry) sector.
-    momentum_basis : dict | ndarray | None
+    momentum_basis : object, optional
         Momentum-projection data.
         If a dictionary is provided, it must contain the sparse left/right
         projection arrays with keys ``"L_col_ptr"``, ``"L_row_idx"``,
@@ -49,8 +56,9 @@ def nbody_term(
 
     Returns
     -------
-    row_list, col_list, value_list : ndarrays
-        Triplet arrays for the projected operator.
+    tuple
+        ``(row_list, col_list, value_list)`` triplet arrays for the projected
+        operator.
     """
     # normalize site-count & sanity-check
     M = int(len(op_sites_list))
@@ -137,19 +145,21 @@ def nbody_term(
 def nbody_data_4sites(
     op_list: np.ndarray, op_sites_list: np.ndarray, sector_configs: np.ndarray
 ):
-    """
-    Compute the nonzero elements of an 4-body-operator.
+    """Build sparse triplets for a four-site operator in a symmetry basis.
 
-    Args:
-        sector_configs (np.ndarray): Array of sector configurations for lattice sites.
-        op_list (np.ndarray): List of 4-operator matrices acting on the lattice sites.
-        op_sites_list (list of ints): List of 4 site indices where the operator acts.
+    Parameters
+    ----------
+    op_list : ndarray
+        Site-resolved operator matrices.
+    op_sites_list : ndarray
+        Four site indices on which the operator acts.
+    sector_configs : ndarray
+        Symmetry-sector configurations, one row per basis state.
 
-    Returns:
-        (row_list, col_list, value_list):
-        - row_list (np.ndarray of ints): The row indices of nonzero elements.
-        - col_list (np.ndarray of ints): The column indices of nonzero elements.
-        - value_list (np.ndarray of complex): The nonzero values of the operator elements.
+    Returns
+    -------
+    tuple
+        ``(row_list, col_list, value_list)`` sparse triplet arrays.
     """
     N = sector_configs.shape[0]
     n_sites = sector_configs.shape[1]
@@ -243,19 +253,21 @@ def nbody_data_4sites(
 def nbody_data_2sites(
     op_list: np.ndarray, op_sites_list: np.ndarray, sector_configs: np.ndarray
 ):
-    """
-    Compute the nonzero elements of an nbody-operator.
+    """Build sparse triplets for a two-site operator in a symmetry basis.
 
-    Args:
-        sector_configs (np.ndarray): Array of sector configurations for lattice sites.
-        op_list (np.ndarray): List of 2 operator matrices acting on the lattice sites.
-        op_sites_list (list of ints): List of 2 site indices where the operator acts.
+    Parameters
+    ----------
+    op_list : ndarray
+        Site-resolved operator matrices.
+    op_sites_list : ndarray
+        Two site indices on which the operator acts.
+    sector_configs : ndarray
+        Symmetry-sector configurations, one row per basis state.
 
-    Returns:
-        (row_list, col_list, value_list):
-        - row_list (np.ndarray of ints): The row indices of nonzero elements.
-        - col_list (np.ndarray of ints): The column indices of nonzero elements.
-        - value_list (np.ndarray of complex): The nonzero values of the operator elements.
+    Returns
+    -------
+    tuple
+        ``(row_list, col_list, value_list)`` sparse triplet arrays.
     """
     N = sector_configs.shape[0]
     n_sites = sector_configs.shape[1]
@@ -343,24 +355,22 @@ def nbody_data_2sites(
 def localbody_data_par2(
     op: np.ndarray, op_site_list: list[int], sector_configs: np.ndarray
 ):
-    """
-    Efficiently processes a diagonal operator that acts on several sites at once.
-    For each configuration (each row in sector_configs), the function sums the
-    contributions from all sites in op_site_list. Only configurations where the
-    total contribution is nonzero are kept.
+    """Build sparse triplets for a diagonal operator summed over several sites.
 
-    Args:
-        op (np.ndarray): A diagonal operator matrix that is used for each site.
-            (It is assumed that op[site] returns the diagonal matrix for that site.)
-        op_site_list (list[int]): List of site indices where the operator acts.
-        sector_configs (np.ndarray): Array of sector configurations for lattice sites
-            (shape (num_configs, num_sites)), with type np.uint8.
+    Parameters
+    ----------
+    op : ndarray
+        Site-resolved diagonal operator matrices.
+    op_site_list : list
+        Site indices on which the operator contributes.
+    sector_configs : ndarray
+        Symmetry-sector configurations, one row per basis state.
 
-    Returns:
-        tuple:
-            - row_list (np.ndarray of ints): The indices of configurations (rows) with nonzero contribution.
-            - col_list (np.ndarray of ints): Identical to row_list (since the operator is diagonal).
-            - value_list (np.ndarray of complex): The computed (summed) diagonal values for those configurations.
+    Returns
+    -------
+    tuple
+        ``(row_list, col_list, value_list)`` sparse triplet arrays for the
+        diagonal operator restricted to nonzero entries.
     """
     sector_dim = sector_configs.shape[0]
     # Start with every configuration.
@@ -390,19 +400,22 @@ def localbody_data_par2(
 
 @njit(parallel=True, cache=True)
 def localbody_data_par(op: np.ndarray, op_site: int, sector_configs: np.ndarray):
-    """
-    Efficiently process a diagonal operator on a given sector of configurations.
+    """Build sparse triplets for a diagonal single-site operator.
 
-    Args:
-        op (np.ndarray): A single-site diagonal operator matrix.
-        op_sites_list (int): site index where the operator acts.
-        sector_configs (np.ndarray): Array of sector configurations for lattice sites.
+    Parameters
+    ----------
+    op : ndarray
+        Site-resolved diagonal operator matrices.
+    op_site : int
+        Site index where the operator acts.
+    sector_configs : ndarray
+        Symmetry-sector configurations, one row per basis state.
 
-    Returns:
-        (row_list, col_list, value_list):
-            - row_list (np.ndarray of ints): The row indices of diagonal elements.
-            - col_list (np.ndarray of ints): Same as row_list (since diagonal).
-            - value_list (np.ndarray of complex): The diagonal elements of the operator.
+    Returns
+    -------
+    tuple
+        ``(row_list, col_list, value_list)`` sparse triplet arrays for the
+        diagonal operator restricted to nonzero entries.
     """
     sector_dim = sector_configs.shape[0]
     # Initialize row_list and col_list as the diagonal indices

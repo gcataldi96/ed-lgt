@@ -1,3 +1,10 @@
+"""Translation symmetry and momentum-basis construction utilities.
+
+This module builds translation orbits and sparse momentum-basis projectors for
+symmetry-sector configuration tables, and provides momentum-projected sparse
+operator kernels for one-, two-, and four-site factorized operators.
+"""
+
 import numpy as np
 from numba import njit, prange
 from .generate_configs import config_to_index_binarysearch
@@ -136,6 +143,18 @@ def decode_mixed_index(idx: int, bases: np.ndarray, out: np.ndarray) -> None:
 
 @njit(cache=True)
 def check_normalization(basis: np.ndarray) -> bool:
+    """Check whether all columns of a basis matrix are normalized.
+
+    Parameters
+    ----------
+    basis : ndarray
+        Basis matrix with basis vectors stored as columns.
+
+    Returns
+    -------
+    bool
+        ``True`` if every column has unit norm.
+    """
     for ii in range(basis.shape[1]):
         if not np.isclose(np.linalg.norm(basis[:, ii]), 1):
             return False
@@ -144,6 +163,18 @@ def check_normalization(basis: np.ndarray) -> bool:
 
 @njit(cache=True)
 def check_orthogonality(basis: np.ndarray) -> bool:
+    """Check whether the columns of a basis matrix are mutually orthogonal.
+
+    Parameters
+    ----------
+    basis : ndarray
+        Basis matrix with basis vectors stored as columns.
+
+    Returns
+    -------
+    bool
+        ``True`` if all distinct column pairs are orthogonal.
+    """
     for ii in range(basis.shape[1]):
         for jj in range(ii + 1, basis.shape[1]):
             if not np.isclose(np.vdot(basis[:, ii], basis[:, jj]), 0, atol=1e-10):
@@ -1039,6 +1070,31 @@ def get_momentum_basis(
     k_vals: np.ndarray,
     TC_symmetry: bool = False,
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Construct a sparse momentum-basis projector representation.
+
+    Parameters
+    ----------
+    sector_configs : ndarray
+        Symmetry-sector configurations, one row per basis state.
+    lvals : list
+        Lattice lengths along each spatial direction.
+    unit_cell_size : ndarray
+        Translation step (logical unit-cell size) per spatial direction.
+    k_vals : ndarray
+        Momentum quantum numbers (one per spatial direction, or the effective
+        translation-combined symmetry momentum in ``TC_symmetry`` mode).
+    TC_symmetry : bool, optional
+        If ``True``, use the translation-combined (TC) symmetry construction.
+
+    Returns
+    -------
+    tuple
+        Sparse left/right representations of the momentum-basis projector
+        ``B``:
+        ``(L_col_ptr, L_row_idx, L_data, R_row_ptr, R_col_idx, R_data)``,
+        where the first three arrays encode the CSC representation of ``B`` and
+        the last three arrays encode the CSR representation of ``B``.
+    """
     lvals = np.ascontiguousarray(lvals, dtype=np.int32)
     unit_cell_size = np.ascontiguousarray(unit_cell_size, dtype=np.int32)
     k_vals = np.ascontiguousarray(k_vals, dtype=np.int32)
@@ -1105,14 +1161,26 @@ def nbody_data_momentum_1site(
     R_col_idx: np.ndarray,  # (nnz_B,)  int32   -- cols for each CSR entry
     R_data: np.ndarray,  # (nnz_B,)  float64 or complex128 -- B[row, col]
 ):
-    """
-    Build triplets (row_list, col_list, value_list) of the 1-site operator projected as:
-        H^(k) = B^† H B
-    Here we only construct the nonzero pattern and values for the given 1-site term.
+    """Build sparse triplets for a one-site operator in the momentum basis.
 
-    CHANGES vs dense version:
-      - Replace 'precompute_nonzero_csr(B)' by direct iteration over CSC (for columns) and CSR (for rows)
-      - Replace dense access to B[j1,prow] and B[j2,pcol] by L_data[...] and R_data[...] respectively
+    Parameters
+    ----------
+    op_list : ndarray
+        One-site factorized operator data (shape ``(1, n_sites, d_loc, d_loc)``).
+    op_sites_list : ndarray
+        Site index of the operator action (shape ``(1,)``).
+    sector_configs : ndarray
+        Symmetry-sector configurations, one row per basis state.
+    L_col_ptr, L_row_idx, L_data : ndarray
+        CSC representation of the momentum-basis projector ``B``.
+    R_row_ptr, R_col_idx, R_data : ndarray
+        CSR representation of the same projector ``B``.
+
+    Returns
+    -------
+    tuple
+        ``(row_list, col_list, value_list)`` triplets for the projected
+        operator ``B^† H B``.
     """
     n_sites = sector_configs.shape[1]
     Ldim = L_col_ptr.size - 1  # number of momentum columns (dim of projected space)
@@ -1231,15 +1299,26 @@ def nbody_data_momentum_2sites(
     R_col_idx: np.ndarray,  # (nnz_B,),  int32   -- projected cols pcol with B[j, pcol] != 0
     R_data: np.ndarray,  # (nnz_B,),  complex128/float64 -- B[j, pcol]
 ):
-    """
-    Project a 2-site factorized operator into the momentum sector:
+    """Build sparse triplets for a two-site operator in the momentum basis.
 
-        H^(K) = B^H * H * B
+    Parameters
+    ----------
+    op_list : ndarray
+        Two-site factorized operator data (shape ``(2, n_sites, d_loc, d_loc)``).
+    op_sites_list : ndarray
+        Two site indices where the operator acts.
+    sector_configs : ndarray
+        Symmetry-sector configurations, one row per basis state.
+    L_col_ptr, L_row_idx, L_data : ndarray
+        CSC representation of the momentum-basis projector ``B``.
+    R_row_ptr, R_col_idx, R_data : ndarray
+        CSR representation of the same projector ``B``.
 
-    This is your original routine with the *only* changes being:
-      • iterate real-space j1 for a projected row `prow` via CSC of B
-      • iterate projected columns for a real-space row j2 via CSR of B
-      • compute values with amp_L = conj(L_data[idx1]) and amp_R = R_data[tt]
+    Returns
+    -------
+    tuple
+        ``(row_list, col_list, value_list)`` triplets for the projected
+        operator ``B^H H B``.
     """
     N, n_sites = sector_configs.shape
     Ldim = L_col_ptr.shape[0] - 1
@@ -1369,15 +1448,26 @@ def nbody_data_momentum_4sites(
     R_col_idx: np.ndarray,  # (nnz_B,),  int32
     R_data: np.ndarray,  # (nnz_B,),  complex128/float64
 ):
-    """
-    Project a 4-site factorized operator into the momentum sector:
+    """Build sparse triplets for a four-site operator in the momentum basis.
 
-        H^(K) = B^H * H * B
+    Parameters
+    ----------
+    op_list : ndarray
+        Four-site factorized operator data (shape ``(4, n_sites, d_loc, d_loc)``).
+    op_sites_list : ndarray
+        Four site indices where the operator acts.
+    sector_configs : ndarray
+        Symmetry-sector configurations, one row per basis state.
+    L_col_ptr, L_row_idx, L_data : ndarray
+        CSC representation of the momentum-basis projector ``B``.
+    R_row_ptr, R_col_idx, R_data : ndarray
+        CSR representation of the same projector ``B``.
 
-    Exactly your original routine, except:
-      • replace precompute_nonzero_csr(momentum_basis) with CSC traversal
-      • replace precompute_nonzero_csr(momentum_basis.T) with CSR traversal
-      • value uses amp_L = conj(L_data[idx1]) and amp_R = R_data[tt]
+    Returns
+    -------
+    tuple
+        ``(row_list, col_list, value_list)`` triplets for the projected
+        operator ``B^H H B``.
     """
     N, n_sites = sector_configs.shape
     Ldim = L_col_ptr.shape[0] - 1

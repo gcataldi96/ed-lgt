@@ -1,3 +1,5 @@
+"""Public modeling-layer terms, states, and Hamiltonian utilities."""
+
 from . import (
     local_term,
     twobody_term,
@@ -26,8 +28,7 @@ from .masks import *
 
 # All modules have an __all__ defined
 __all__ = local_term.__all__.copy()
-
-__all__ = qmb_operations.__all__.copy()
+__all__ += qmb_operations.__all__.copy()
 __all__ += qmb_state.__all__.copy()
 __all__ += qmb_hamiltonian.__all__.copy()
 __all__ += lattice_geometry.__all__.copy()
