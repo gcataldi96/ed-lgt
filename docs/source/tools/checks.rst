@@ -4,11 +4,10 @@
 Checks
 ========================================
 
+Utilities for input validation and sparse-matrix consistency checks used across
+the library.
+
 .. automodule:: edlgt.tools.checks
-   :synopsis: Utility functions for quantum many-body operators and matrices.
-   :noindex:
+   :synopsis: Validation and sparse-matrix diagnostic helpers.
    :members:
-
-
-.. seealso::
-    :ref:`checks Module <checks>`
+   :member-order: bysource

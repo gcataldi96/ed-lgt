@@ -1,8 +1,21 @@
+"""Post-processing helpers for spectral and correlation-based observables.
+
+This module collects lightweight analysis utilities used in scripts and example
+workflows, including:
+
+- level-spacing statistics (`r_values`),
+- distance-resolved correlator summaries (`analyze_correlator`),
+- structure-factor evaluation on 2D lattices (`structure_factor`),
+- simple charge/density combinations from two occupancies.
+
+Only a subset of functions is exported as public API via ``__all__``.
+"""
+
 import numpy as np
 from math import prod
 from itertools import product
 from scipy.linalg import eigh
-from .mappings_1D_2D import zig_zag
+from .lattice_mappings import zig_zag
 
 __all__ = [
     "structure_factor",
@@ -14,6 +27,27 @@ __all__ = [
 
 
 def r_values(energy):
+    """Compute adjacent-gap ratios from a spectrum.
+
+    Parameters
+    ----------
+    energy : array-like
+        One-dimensional array of energy eigenvalues. The input is sorted
+        internally before computing level spacings.
+
+    Returns
+    -------
+    tuple[numpy.ndarray, numpy.ndarray]
+        ``(r_array, delta_E)`` where:
+
+        - ``delta_E[i] = E[i+1] - E[i]`` for the sorted spectrum,
+        - ``r_array[i]`` is the ratio between adjacent spacings.
+
+    Notes
+    -----
+    The first entry of ``r_array`` is set to ``1`` by convention because it has
+    no left neighbor spacing.
+    """
     energy = np.sort(energy)
     delta_E = np.zeros(energy.shape[0] - 1)
     r_array = np.zeros(energy.shape[0] - 1)
@@ -30,6 +64,27 @@ def r_values(energy):
 
 
 def analyze_correlator(corr):
+    """Average a 2D correlator by Euclidean distance.
+
+    Parameters
+    ----------
+    corr : numpy.ndarray
+        Correlator array indexed as ``corr[x1, y1, x2, y2]``.
+
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape ``(n_distances, 3)`` with columns:
+
+        1. distance ``r``,
+        2. mean absolute correlator value at that distance,
+        3. standard error of the mean (computed from the sample variance).
+
+    Notes
+    -----
+    Distances are rounded to 3 decimal places before grouping to avoid small
+    floating-point differences splitting equivalent distances.
+    """
     # Get the dimensions of the lattice
     dim1, dim2 = corr.shape[0], corr.shape[1]
     # Initialize dictionaries to store correlator values for each distance
@@ -66,6 +121,25 @@ def analyze_correlator(corr):
 
 
 def structure_factor(corr, lvals):
+    """Compute the 2D static structure factor on a rectangular lattice.
+
+    Parameters
+    ----------
+    corr : numpy.ndarray
+        Correlator array indexed as ``corr[x1, y1, x2, y2]``.
+    lvals : sequence[int]
+        Lattice dimensions ``[Lx, Ly]``.
+
+    Returns
+    -------
+    numpy.ndarray
+        Complex array of shape ``(Lx, Ly)`` containing the structure factor on
+        the discrete Brillouin-zone grid.
+
+    Notes
+    -----
+    This routine calls :func:`single_structure_factor` for each momentum point.
+    """
     # DEFINE THE BRILLUOIN ZONE
     Lx = lvals[0]
     Ly = lvals[1]
@@ -84,24 +158,48 @@ def single_structure_factor(lvals, kx, ky, corr):
     Ly = lvals[1]
     n_sites = Lx * Ly
     counter = 0
-    sum = 0.0
+    sf_sum = 0.0
     for i in range(n_sites):
         for j in range(n_sites):
             if i != j:
                 counter += 1
                 # get the coordinates of the lattice points
-                ix, iy = zig_zag(Lx, Ly, i)
-                jx, jy = zig_zag(Lx, Ly, j)
+                ix, iy = zig_zag([Lx, Ly], i)
+                jx, jy = zig_zag([Lx, Ly], j)
                 exp_factor = kx * (ix - jx) + ky * (iy - jy)
-                sum += np.exp(complex(0.0, 1.0) * exp_factor) * corr[ix, iy, jx, jy]
-    return sum / counter
+                sf_sum += np.exp(complex(0.0, 1.0) * exp_factor) * corr[ix, iy, jx, jy]
+    return sf_sum / counter
 
 
 def get_density(N_plus, N_minus):
+    """Return the density-like combination used by the project conventions.
+
+    Parameters
+    ----------
+    N_plus, N_minus : float or numpy.ndarray
+        Inputs combined element-wise if arrays are provided.
+
+    Returns
+    -------
+    float or numpy.ndarray
+        ``N_plus - N_minus + 2``.
+    """
     return N_plus - N_minus + 2
 
 
 def get_charge(N_plus, N_minus):
+    """Return the charge-like combination used by the project conventions.
+
+    Parameters
+    ----------
+    N_plus, N_minus : float or numpy.ndarray
+        Inputs combined element-wise if arrays are provided.
+
+    Returns
+    -------
+    float or numpy.ndarray
+        ``N_plus + N_minus - 2``.
+    """
     return N_plus + N_minus - 2
 
 

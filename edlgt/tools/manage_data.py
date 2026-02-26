@@ -1,3 +1,13 @@
+"""Utilities for saving and loading dictionaries, tabular text data, and sparse matrices.
+
+This module provides lightweight I/O helpers used by examples and scripts:
+
+- store Python dictionaries with ``pickle``,
+- append data series to a simple comma-separated text file format,
+- read tabular text files back into NumPy arrays,
+- export sparse matrices to a human-readable ``.dat`` file.
+"""
+
 import os
 import pickle
 import numpy as np
@@ -13,13 +23,23 @@ __all__ = [
 
 
 def save_dictionary(dictionary, filename):
-    """
-    This function save the information of a Python dictionary into a .pkl file
+    """Serialize a Python dictionary to a pickle file.
 
-    Args:
-        dictionary (dict): dictionary to be saved
+    Parameters
+    ----------
+    dictionary : dict
+        Dictionary to save.
+    filename : str
+        Output file path (typically with ``.pkl`` extension).
 
-        filename (str): name of the file where to save the dictionary
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If ``dictionary`` or ``filename`` has an invalid type.
     """
     # Validate type of parameters
     validate_parameters(dictionary=dictionary, filename=filename)
@@ -29,11 +49,22 @@ def save_dictionary(dictionary, filename):
 
 
 def load_dictionary(filename):
-    """
-    This function loads the information of a Python dictionary from a .pkl file
+    """Load a dictionary from a pickle file.
 
-    Args:
-        filename (str): name of the file where the dictionary is saved
+    Parameters
+    ----------
+    filename : str
+        Path to a pickle file created by :func:`save_dictionary` (or compatible).
+
+    Returns
+    -------
+    dict
+        Deserialized dictionary.
+
+    Raises
+    ------
+    TypeError
+        If ``filename`` has an invalid type.
     """
     # Validate type of parameters
     validate_parameters(filename=filename)
@@ -42,21 +73,38 @@ def load_dictionary(filename):
 
 
 def save_data_in_textfile(data_file, x_data, new_data):
-    """
-    This function stores a set of values as a new column of a text file with already existing columns of values.
-    Each column will be then easily used for comparison in plots.
+    """Append a data series as a new column in a simple text table.
 
-    Args:
-        data_file (str): Name of the file where to save the set of values
+    The file format is line-based and comma-separated. On first write, the file
+    is created and initialized with the values from ``x_data`` (usually an
+    x-axis label followed by x values). On subsequent writes, each line gets one
+    extra comma-separated entry from ``new_data``.
 
-        x_data (list): It contains the x values corresponding to the new set of values.
-            The first entry is a string label
+    Parameters
+    ----------
+    data_file : str
+        Path to the text file to create/update.
+    x_data : list
+        Reference column written when the file does not yet exist.
+        Conventionally the first item is a label and the remaining items are x
+        values.
+    new_data : list
+        Column to append to the file. It must contain the same number of entries
+        as the current file line count. Conventionally the first item is a label.
 
-        new_data (list): It contains the new set of y values corresponding to the x_data.
-            The first entry is a string label (typicalliy referred to the simulation)
+    Returns
+    -------
+    None
 
-    Raises:
-        TypeError: If the input arguments are of incorrect types or formats.
+    Raises
+    ------
+    TypeError
+        If the input arguments have invalid types.
+
+    Notes
+    -----
+    This helper assumes ``x_data`` and ``new_data`` are already aligned line by
+    line. It does not validate lengths or parse values.
     """
     if not isinstance(data_file, str):
         raise TypeError(f"data_file should be a STRING, not a {type(data_file)}")
@@ -82,19 +130,33 @@ def save_data_in_textfile(data_file, x_data, new_data):
 
 
 def load_data_from_textfile(data_file_name, row_for_labels=False):
-    """
-    This function acquires data from a text file made out of different columns and yields it as a dictonary
+    """Load columnar numeric data from a comma-separated text file.
 
-    Args:
-        data_file_name (str): name of the file
+    Parameters
+    ----------
+    data_file_name : str
+        Path to the input file.
+    row_for_labels : bool, optional
+        If ``True``, interpret the first line as column labels and store them as
+        ``"label_0"``, ``"label_1"``, ... entries in the returned dictionary.
+        Default is ``False``.
 
-        row_for_labels (bool, optional): If True, the firs line contains the labels. Default to False.
+    Returns
+    -------
+    dict
+        Dictionary containing one NumPy array per column under string keys
+        ``"0"``, ``"1"``, ... . If ``row_for_labels`` is ``True``, label entries
+        are also included.
 
-    Raises:
-        TypeError: If the input arguments are of incorrect types or formats.
+    Raises
+    ------
+    TypeError
+        If ``data_file_name`` or ``row_for_labels`` has an invalid type.
 
-    Returns:
-        dict: Dictonary where all the informations are stored
+    Notes
+    -----
+    Data values are converted to ``float``. This helper expects a regular
+    comma-separated table with the same number of columns on each line.
     """
     if not isinstance(data_file_name, str):
         raise TypeError(
@@ -103,7 +165,7 @@ def load_data_from_textfile(data_file_name, row_for_labels=False):
     if not isinstance(row_for_labels, bool):
         raise TypeError(f"row_for_labels must be a BOOL, not a {type(row_for_labels)}")
     # Open the file and acquire all the lines
-    f = open(data_file_name, "r+")
+    f = open(data_file_name, "r")
     line = f.readlines()
     f.close()
     # CREATE A DICTIONARY TO HOST THE LISTS OBTAINED FROM EACH COLUMN OF data_file
@@ -133,13 +195,28 @@ def load_data_from_textfile(data_file_name, row_for_labels=False):
 
 
 def save_sparse_matrix_to_dat(sparse_matrix, filename):
-    """
-    Save the non-zero entries of a scipy.sparse.csr_matrix to a .dat file.
+    """Export a sparse matrix to a human-readable ``.dat`` text file.
 
-    Parameters:
-    A (scipy.sparse.csr_matrix): The sparse matrix to save.
+    The output contains:
 
-    filename (str): The name of the file where the matrix will be saved.
+    - a header line with the matrix dimension,
+    - one line per non-zero entry with row/column indices and complex value.
+
+    Parameters
+    ----------
+    sparse_matrix : scipy.sparse.spmatrix
+        Sparse matrix to export.
+    filename : str
+        Output file path.
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If ``sparse_matrix`` or ``filename`` has an invalid type.
     """
     validate_parameters(op_list=[sparse_matrix], filename=filename)
 

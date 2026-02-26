@@ -1,3 +1,24 @@
+"""Mappings between a linear site index and lattice coordinates.
+
+This module contains helpers that map a 1D index ``d`` to lattice coordinates
+and vice versa using simple scan orders (zig-zag / snake) and a Hilbert curve
+for 2D square lattices.
+
+Public API
+----------
+The exported functions in ``__all__`` are:
+
+- :func:`zig_zag` and :func:`inverse_zig_zag` for generic multi-dimensional
+  coordinates (documented use: square / hypercubic lattices with 0-based
+  indexing),
+- :func:`coords`, a small formatting helper for human-readable 2D labels.
+
+Notes
+-----
+- All mapping functions in this module use 0-based indexing for coordinates and
+  linear indices unless explicitly stated otherwise.
+"""
+
 import numpy as np
 from math import prod
 
@@ -9,19 +30,34 @@ __all__ = [
 
 
 def zig_zag(lvals, d):
-    """
-    Given the 1d point at position d of the zigzag curve in a discrete lattice with arbitrary dimensions,
-    it provides the corresponding multidimensional coordinates of the point.
+    """Map a linear index to lattice coordinates using a zig-zag scan order.
 
-    NOTE: d has to be smaller than the total number of lattice sites
+    Parameters
+    ----------
+    lvals : list[int]
+        Lattice sizes along each axis, e.g. ``[Lx, Ly]`` or ``[Lx, Ly, Lz]``.
+        The documented and recommended use of this generic implementation is for
+        square / hypercubic lattices (equal linear size along all axes).
+    d : int
+        0-based linear index. It must satisfy ``0 <= d < prod(lvals)``.
 
-    Args:
-        lvals (list or tuple of int): The dimensions of the lattice in each direction (Lx, Ly, Lz, ...)
+    Returns
+    -------
+    tuple[int, ...]
+        Coordinate tuple ``(x, y, z, ...)`` corresponding to ``d``.
 
-        d (int): Point of a 1D curve covering the multi-dimensional lattice.
+    Raises
+    ------
+    TypeError
+        If ``lvals`` or ``d`` has an invalid type.
+    ValueError
+        If ``d`` is outside the valid range.
 
-    Returns:
-        tuple of int: Multi-dimensional coordinates of the 1D point of the ZigZag curve in the lattice (x, y, z, ...).
+    Notes
+    -----
+    This is a simple row-major style mapping (not a snake curve): the fastest
+    direction is the first coordinate in the inverse mapping convention used by
+    :func:`inverse_zig_zag`.
     """
     if not isinstance(lvals, list):
         raise TypeError(f"lvals should be a list, not a {type(lvals)}")
@@ -45,20 +81,31 @@ def zig_zag(lvals, d):
 
 
 def inverse_zig_zag(lvals, coords):
-    """
-    Inverse zigzag curve mapping (from d coords to the 1D points).
+    """Map lattice coordinates back to the 0-based zig-zag linear index.
 
-    NOTE: Given the sizes of a multidimensional lattice, the d-dimensional coords
-    are supposed to start from 0 and have to be smaller than each lattice dimension
-    Correspondingly, the points of the zigzag curve start from 0.
+    Parameters
+    ----------
+    lvals : list[int]
+        Lattice sizes along each axis. The documented use is square /
+        hypercubic lattices for consistency with :func:`zig_zag`.
+    coords : sequence[int]
+        Coordinate tuple/list ``(x, y, z, ...)`` using 0-based indexing.
 
-    Args:
-        lvals (list or tuple of int): The dimensions of the lattice in each direction (Lx, Ly, Lz, ...)
+    Returns
+    -------
+    int
+        0-based linear index corresponding to ``coords``.
 
-        coords (list or tuple of int): Multi-dimensional coordinates of the 1D point of the ZigZag curve in the lattice (x, y, z, ...).
+    Raises
+    ------
+    TypeError
+        If the input types are invalid.
+    ValueError
+        If any coordinate lies outside the corresponding lattice range.
 
-    Returns:
-        int: 1D point of the zigzag curve
+    Notes
+    -----
+    ``inverse_zig_zag(lvals, zig_zag(lvals, d)) == d`` for supported inputs.
     """
     if not isinstance(lvals, list):
         raise TypeError(f"lvals should be a list, not a {type(lvals)}")
@@ -76,19 +123,6 @@ def inverse_zig_zag(lvals, coords):
             )
         d += coords[ii] * (lvals[ii - 1] ** ii)
     return d
-
-
-"""
-# Example usage:
-from itertools import product
-dimensions = [5, 7]  # Example lattice dimensions
-for d in range(prod(dimensions)):
-    print(d, zig_zag(dimensions, d))
-
-for y in range(dimensions[1]):
-    for x in range(dimensions[0]):
-        print([x, y], inverse_zig_zag(dimensions, [x, y]))
-"""
 
 
 def zig_zag1(nx, ny, d):
@@ -362,4 +396,20 @@ def inverse_hilbert(n, x, y):
 
 
 def coords(x, y):
+    """Format 2D coordinates as a 1-based string label.
+
+    Parameters
+    ----------
+    x, y : int
+        0-based coordinates.
+
+    Returns
+    -------
+    str
+        Coordinate label formatted as ``"(x+1,y+1)"``.
+
+    Notes
+    -----
+    This is a display helper only; it does not perform validation.
+    """
     return "(" + str(x + 1) + "," + str(y + 1) + ")"

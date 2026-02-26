@@ -4,13 +4,10 @@
 Managing IN/OUT data
 ========================================
 
-This module provides utility functions for saving and loading data obtained from simulations.
+Utilities for simple file I/O used in examples and scripts: saving/loading
+dictionaries, appending columns to plain-text tables, reading columnar data, and
+exporting sparse matrices.
 
 .. automodule:: edlgt.tools.manage_data
-   :noindex:
    :members:
-   :show-inheritance:
-
-
-.. seealso::
-   :ref:`manage_data Module <manage_data>`
+   :member-order: bysource

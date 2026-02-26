@@ -1,8 +1,16 @@
+"""Plotting and time-series post-processing helpers for analysis scripts.
+
+This module combines small visualization utilities (figure sizing, tick
+formatters) with helpers for running time averages and windowed smoothing used
+in dynamics post-processing.
+
+Only the functions listed in ``__all__`` are considered the public API here.
+"""
+
 import numpy as np
 import matplotlib.pyplot as plt
 import math
 from matplotlib.lines import Line2D
-import matplotlib.pyplot as plt
 import matplotlib.colors as mc
 import colorsys
 import logging
@@ -25,21 +33,28 @@ default_params = {
 
 
 def set_size(width_pt, fraction=1, subplots=(1, 1), height_factor=1.0):
-    """
-    Set figure dimensions to avoid scaling in LaTeX.
+    """Compute figure dimensions in inches from a document width.
 
     Parameters
     ----------
-    width: float
-            Document width in points
-    fraction: float, optional
-            Fraction of the width which you wish the figure to occupy
-    subplots: array-like, optional
-            The number of rows and columns of subplots.
+    width_pt : float
+        Reference width in points.
+    fraction : float, optional
+        Fraction of the width to occupy. Default is ``1``.
+    subplots : tuple[int, int], optional
+        Number of subplot rows and columns. Default is ``(1, 1)``.
+    height_factor : float, optional
+        Additional multiplier applied to the computed height.
+
     Returns
     -------
-    fig_dim: tuple
-            Dimensions of figure in inches
+    tuple[float, float]
+        Figure dimensions ``(width_in, height_in)`` in inches.
+
+    Notes
+    -----
+    The height is based on a golden-ratio scaling, adjusted by the subplot
+    layout and ``height_factor``.
     """
     # Width of figure (in pts)
     fig_width_pt = width_pt * fraction
@@ -63,7 +78,20 @@ To acquire the psi file
 
 @plt.FuncFormatter
 def fake_log(x, pos):
-    "The two args are the value and tick position"
+    """Format axis ticks as powers of ten for Matplotlib.
+
+    Parameters
+    ----------
+    x : float
+        Tick value.
+    pos : int
+        Tick position (unused; required by Matplotlib formatter API).
+
+    Returns
+    -------
+    str
+        Tick label formatted as a power of ten.
+    """
     return r"$10^{%d}$" % (x)
 
 
@@ -86,21 +114,22 @@ def lighten_color(color, amount=0.5):
 
 
 def gaussian_time_integral(time, M, sigma=None):
-    """
-    Computes a locally averaged version of the observable M using a Gaussian window.
+    """Smooth a time series with a Gaussian-weighted local average.
 
-    For each time point t, the function computes a weighted average of M over all times,
-    where the weights are given by a Gaussian function centered at t. This helps to
-    suppress the influence of the initial condition and improves convergence.
+    Parameters
+    ----------
+    time : numpy.ndarray
+        One-dimensional time grid (can be non-uniform).
+    M : numpy.ndarray
+        Observable values sampled on ``time``.
+    sigma : float, optional
+        Width of the Gaussian window. If ``None``, a default value equal to
+        one-tenth of the total time range is used.
 
-    Parameters:
-        time (numpy.ndarray): 1D array of time points (can be non-uniform).
-        M (numpy.ndarray): 1D array of observable values corresponding to each time point.
-        sigma (float, optional): Width of the Gaussian window (in the same units as time).
-            If None, sigma defaults to one-tenth of the total time range.
-
-    Returns:
-        numpy.ndarray: Array of the locally averaged observable.
+    Returns
+    -------
+    numpy.ndarray
+        Smoothed observable values with the same shape as ``M``.
     """
     # Choose a default sigma if none is provided.
     if sigma is None:
@@ -121,18 +150,26 @@ def gaussian_time_integral(time, M, sigma=None):
 
 
 def moving_time_integral(time, M, max_points=100):
-    """
-    Computes a running time average of an observable M over a moving window of at most `max_points`
-    time steps. In the beginning, when there are fewer than `max_points` steps, the average is taken
-    over all available time points. This way, after some time the average "forgets" the early transient.
+    """Compute a moving-window time average using trapezoidal integration.
 
-    Parameters:
-        time (numpy.ndarray): 1D array of time points (can be non-uniformly spaced).
-        M (numpy.ndarray): 1D array of observable values corresponding to each time point.
-        max_points (int): Maximum number of points in the moving window for averaging.
+    Parameters
+    ----------
+    time : numpy.ndarray
+        One-dimensional time grid (can be non-uniform).
+    M : numpy.ndarray
+        Observable values sampled on ``time``.
+    max_points : int, optional
+        Maximum number of samples used in the averaging window.
 
-    Returns:
-        numpy.ndarray: Array of the running averaged observable.
+    Returns
+    -------
+    numpy.ndarray
+        Running averaged observable with the same shape as ``M``.
+
+    Notes
+    -----
+    At early times, when fewer than ``max_points`` samples are available, the
+    window includes all samples from the start.
     """
     M_avg = np.zeros_like(M)
 
@@ -155,15 +192,20 @@ def moving_time_integral(time, M, max_points=100):
 
 
 def time_integral(time, M):
-    """
-    Computes the running time integral/average of an observable M over a given time line.
+    """Compute a cumulative time average of an observable.
 
-    Parameters:
-    time (numpy.ndarray): Array of time points.
-    M (numpy.ndarray): Array of observable values corresponding to each time point.
+    Parameters
+    ----------
+    time : numpy.ndarray
+        One-dimensional time grid.
+    M : numpy.ndarray
+        Observable values sampled on ``time``.
 
-    Returns:
-    numpy.ndarray: Array of the running average of M at each time point.
+    Returns
+    -------
+    numpy.ndarray
+        Array where entry ``i`` is the time-averaged value accumulated up to
+        ``time[i]``.
     """
     Mavg = np.zeros_like(M)
     Mavg[0] = M[0]
@@ -177,14 +219,50 @@ def time_integral(time, M):
 
 
 def get_tline(par: dict):
+    """Build a uniform time grid from a parameter dictionary.
+
+    Parameters
+    ----------
+    par : dict
+        Dictionary containing at least ``"start"``, ``"stop"``, and
+        ``"delta_n"``.
+
+    Returns
+    -------
+    numpy.ndarray
+        Uniform time grid starting at ``par["start"]`` with step
+        ``par["delta_n"]`` and stopping before ``par["stop"]``.
+    """
     start = par["start"]
     stop = par["stop"]
     delta_n = par["delta_n"]
     n_steps = int((stop - start) / delta_n)
-    return np.arange(n_steps) * delta_n
+    return start + np.arange(n_steps) * delta_n
 
 
 def custom_average(arr, staggered=None, norm=None):
+    """Average rows of a 2D array with optional site selection or weighting.
+
+    Parameters
+    ----------
+    arr : numpy.ndarray
+        Two-dimensional array where each row is averaged over columns.
+    staggered : {"even", "odd"}, optional
+        If provided, average only even or odd column indices.
+    norm : numpy.ndarray, optional
+        Weight vector used for a dot-product average. If provided, this branch is
+        used instead of the ``staggered`` selection.
+
+    Returns
+    -------
+    numpy.ndarray
+        One-dimensional array containing one averaged value per row.
+
+    Raises
+    ------
+    ValueError
+        If ``norm`` is provided and its length does not match ``arr.shape[1]``.
+    """
     # Determine indices to consider based on the staggered parameter
     indices = np.arange(arr.shape[1])
     if staggered == "even":

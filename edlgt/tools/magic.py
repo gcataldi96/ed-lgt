@@ -1,3 +1,23 @@
+"""Low-level encoded-configuration utilities used in stabilizer calculations.
+
+This module provides Numba-accelerated helpers for working with basis
+configurations encoded as integer keys using a mixed-radix convention.
+
+Main use cases
+--------------
+- Encode and decode many-body configurations using per-site local dimensions.
+- Generate and deduplicate X-string shift keys active on a truncated support.
+- Evaluate the stabilizer Rényi-2 sum on a truncated support of a state.
+
+Conventions
+-----------
+- The rightmost site is the fastest-varying digit.
+- Keys are built from ``loc_dims`` and the corresponding ``strides`` returned by
+  :func:`compute_strides`.
+- Most functions here are low-level kernels and expect consistent, already
+  validated arrays.
+"""
+
 import numpy as np
 from numba import njit, prange
 import logging
@@ -36,12 +56,12 @@ def compute_strides(loc_dims: np.ndarray) -> np.ndarray:
 
     Parameters
     ----------
-    loc_dims:
+    loc_dims : numpy.ndarray
         Array of shape (n_sites,) containing local dimensions per site.
 
     Returns
     -------
-    strides:
+    strides : numpy.ndarray
         int64 array of shape (n_sites,) encoding weights for each site.
 
     Notes
@@ -66,14 +86,14 @@ def encode_config(config: np.ndarray, strides: np.ndarray) -> np.int64:
 
     Parameters
     ----------
-    config:
+    config : numpy.ndarray
         Array of shape (n_sites,) with local basis indices at each site.
-    strides:
-        Array of shape (n_sites,) produced by `compute_strides`.
+    strides : numpy.ndarray
+        Array of shape (n_sites,) produced by :func:`compute_strides`.
 
     Returns
     -------
-    key:
+    key : numpy.int64
         int64 encoding of the configuration.
 
     Notes
@@ -93,14 +113,14 @@ def encode_all_configs(configs: np.ndarray, strides: np.ndarray) -> np.ndarray:
 
     Parameters
     ----------
-    configs:
+    configs : numpy.ndarray
         Array of shape (n_configs, n_sites) with local basis indices.
-    strides:
-        Array of shape (n_sites,) produced by `compute_strides`.
+    strides : numpy.ndarray
+        Array of shape (n_sites,) produced by :func:`compute_strides`.
 
     Returns
     -------
-    keys:
+    keys : numpy.ndarray
         int64 array of shape (n_configs,) containing the encoded keys.
 
     Notes
@@ -127,14 +147,14 @@ def decode_key_to_config(key: np.int64, loc_dims: np.ndarray) -> np.ndarray:
 
     Parameters
     ----------
-    key:
+    key : numpy.int64
         Non-negative int64 key produced by `encode_config` / `encode_all_configs`.
-    loc_dims:
+    loc_dims : numpy.ndarray
         Array of shape (n_sites,) containing local dimensions per site.
 
     Returns
     -------
-    config:
+    config : numpy.ndarray
         uint16 array of shape (n_sites,) reconstructing the site digits.
 
     Notes
@@ -158,14 +178,14 @@ def binary_search_sorted(keys_sorted: np.ndarray, target: np.int64) -> int:
 
     Parameters
     ----------
-    keys_sorted:
+    keys_sorted : numpy.ndarray
         1D int64 array sorted in non-decreasing order.
-    target:
+    target : numpy.int64
         int64 value to search.
 
     Returns
     -------
-    index:
+    index : int
         Index of `target` in `keys_sorted` if found, otherwise -1.
 
     Notes
@@ -189,23 +209,24 @@ def binary_search_sorted(keys_sorted: np.ndarray, target: np.int64) -> int:
 
 @njit(parallel=True, cache=True)
 def decode_Xstrings(Xp_keys: np.ndarray, loc_dims: np.ndarray) -> np.ndarray:
-    """Decode encoded X-string keys into per-site power vectors.
+    """Decode encoded X-string keys into per-site shift (power) vectors.
 
     Parameters
     ----------
-    Xp_keys:
+    Xp_keys : numpy.ndarray
         1D int64 array of encoded X-string keys (each key encodes a power vector).
-    loc_dims:
+    loc_dims : numpy.ndarray
         Array of shape (n_sites,) with local dimensions per site.
 
     Returns
     -------
-    x_strings:
-        uint16 array of shape (n_strings, n_sites), where each row is a power vector.
+    x_strings : numpy.ndarray
+        ``uint16`` array of shape ``(n_strings, n_sites)``. Each row is one
+        decoded per-site shift vector.
 
     Notes
     -----
-    - Uses `decode_key_to_config`, so it follows the same stride convention.
+    - Uses :func:`decode_key_to_config`, so it follows the same stride convention.
     """
     n_strings = Xp_keys.shape[0]
     n_sites = loc_dims.shape[0]
@@ -221,12 +242,12 @@ def unique_sorted_int64(arr_sorted: np.ndarray) -> np.ndarray:
 
     Parameters
     ----------
-    arr_sorted:
+    arr_sorted : numpy.ndarray
         1D int64 array sorted in non-decreasing order.
 
     Returns
     -------
-    unique_values:
+    unique_values : numpy.ndarray
         1D int64 array containing the unique values in `arr_sorted`, in sorted order.
 
     Notes
@@ -264,38 +285,34 @@ def all_pairwise_pkeys_support(
     loc_dims: np.ndarray,  # (N,) int
     strides: np.ndarray,  # (N,) int64
 ) -> np.ndarray:
-    """Generate encoded X-string keys from all ordered pairs of support configurations.
+    """Generate X-string keys induced by all ordered pairs in a support.
 
-    For each ordered pair (row_config, col_config) among the support configurations,
-    we define an X-string power vector `pvec` site-by-site as:
-
-        pvec[site] = (col_config[site] - row_config[site]) mod loc_dims[site]
-
-    This `pvec` is then encoded into an int64 key using the provided `strides`:
-
-        pkey = sum_{site} pvec[site] * strides[site]
+    For each ordered pair ``(row_config, col_config)`` in ``support_configs``,
+    the function computes the modular site-wise difference and encodes it as a
+    mixed-radix integer key. The output is typically sorted and deduplicated to
+    obtain the set of X-strings active on the support.
 
     Parameters
     ----------
-    support_configs:
+    support_configs : numpy.ndarray
         Array of shape (n_configs_support, n_sites) with local basis indices.
-    loc_dims:
+    loc_dims : numpy.ndarray
         Array of shape (n_sites,) with local dimensions per site.
-    strides:
-        Array of shape (n_sites,) produced by `compute_strides(loc_dims)`.
+    strides : numpy.ndarray
+        Array of shape (n_sites,) produced by :func:`compute_strides`.
         Uses the convention: rightmost site (n_sites-1) is the fastest digit.
 
     Returns
     -------
-    pkeys_all:
+    pkeys_all : numpy.ndarray
         1D int64 array of length (n_configs_support * n_configs_support).
         Entry pkeys_all[row * n_configs_support + col] encodes the X-string that maps
         support_configs[row] to support_configs[col] by modular shifts.
 
     Notes
     -----
-    - The output contains duplicates; typical usage is:
-      sort -> unique_sorted_int64 to obtain the activated set of X-strings.
+    - The output contains duplicates. A common workflow is:
+      ``np.sort(...)`` followed by :func:`unique_sorted_int64`.
     - The identity string (all zero powers) appears when row == col.
     - Complexity: O(n_configs_support^2 * n_sites) time and O(n_configs_support^2) memory.
     """
@@ -378,44 +395,50 @@ def stabilizer_renyi_sum(
     loc_dims: np.ndarray,
     strides: np.ndarray,
 ) -> np.float64:
-    """Compute the Rényi-2 stabilizer sum from a truncated support of psi.
+    """Compute the stabilizer Rényi-2 sum on a truncated support.
+
+    This is the high-level public entry point in this module. It evaluates the
+    total sum over the encoded X-strings listed in ``pkeys_uniq`` using the
+    support data of a (possibly truncated) state.
 
     Parameters
     ----------
-    pkeys_uniq:
+    pkeys_uniq : numpy.ndarray
         1D int64 array of length (n_strings,). Each entry encodes one X-string
-        as a per-site power vector p[site] in mixed-radix form consistent with
-        `loc_dims` and `strides`. Typically produced by:
-        - all_pairwise_pkeys_support(...),
-        - sorting, then unique_sorted_int64(...).
-    support_configs:
+        as a per-site shift vector in mixed-radix form consistent with
+        ``loc_dims`` and ``strides``. Typical workflow:
+        :func:`all_pairwise_pkeys_support` -> ``np.sort`` ->
+        :func:`unique_sorted_int64`.
+    support_configs : numpy.ndarray
         2D uint16 array of shape (n_configs_support, n_sites). Each row is a basis
         configuration in the truncated support.
-    support_probs:
-        1D float64 array of shape (n_configs_support,). Coefficients for each support
-        configuration: support_coefss[row] = psi_row.
-    support_keys:
+    support_coeffs : numpy.ndarray
+        1D complex array of shape (n_configs_support,) with the state
+        coefficients aligned with ``support_configs``.
+    support_keys : numpy.ndarray
         1D int64 array of shape (n_configs_support,) containing encoded configuration
         keys for `support_configs`, sorted in non-decreasing order. These keys
-        must use the same stride convention as `pkeys_uniq`:
+        must use the same stride convention as ``pkeys_uniq``:
         rightmost site is the fastest digit.
-    loc_dims:
+    loc_dims : numpy.ndarray
         1D array of shape (n_sites,) giving the local dimension at each site.
-        Must be consistent with the digit ranges used in support_configs and p.
+        Must be consistent with the digit ranges used in ``support_configs``.
         Recommended dtype: int64 (Numba-friendly).
-    strides:
-        1D int64 array of shape (n_sites,) produced by compute_strides(loc_dims),
+    strides : numpy.ndarray
+        1D int64 array of shape (n_sites,) produced by
+        :func:`compute_strides`,
         using the convention: rightmost site is the fastest digit.
 
     Returns
     -------
-    M2:
-        float64 scalar equal to sum_p S_p^{2}, restricted to the provided support.
+    M2 : numpy.float64
+        Stabilizer Rényi-2 sum computed from the provided support and X-string
+        set.
 
     Notes
     -----
-    - Parallelism: the loop over X-strings is parallelized with prange. Each
-      string is independent.
+    - The loop over X-strings is parallelized with ``prange``.
+    - Accuracy depends on the quality of the provided support truncation.
     """
     n_strings = pkeys_uniq.shape[0]
     Tp_array = np.zeros(n_strings, dtype=np.float64)

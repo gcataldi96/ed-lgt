@@ -13,5 +13,9 @@ Tools
 
     checks
     derivatives
+    magic
     manage_data
-    mappings_1D_2D
+    lattice_mappings
+    measures
+    numba_functions
+    plotting

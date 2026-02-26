@@ -1,3 +1,12 @@
+"""Numba-accelerated array helpers used across basis and symmetry workflows.
+
+This module contains small compiled utilities for indexing, row comparisons, and
+array filtering. The exported functions are low-level helpers intended to be
+called by higher-level routines in the library.
+
+Most functions assume inputs are already validated and shaped consistently.
+"""
+
 import numpy as np
 from numba import njit, prange
 import logging
@@ -16,17 +25,22 @@ __all__ = [
 
 @njit(cache=True)
 def rowcol_to_index(row, col, loc_dims):
-    """
-    Compute the global index from row and column indices, considering
-    the number of nonzero columns for each row (loc_dims).
+    """Convert a `(row, col)` pair into a flattened index for ragged row lengths.
 
-    Args:
-        row (int): Index of the current row in the valid rows list.
-        col (int): Index of the current column within the valid columns for the current row.
-        loc_dims (np.ndarray of ints): The number of nonzero columns for each valid row.
+    Parameters
+    ----------
+    row : int
+        Row index in the compact representation.
+    col : int
+        Column index within the selected row.
+    loc_dims : numpy.ndarray
+        One-dimensional array where ``loc_dims[i]`` is the number of valid
+        columns stored for row ``i``.
 
-    Returns:
-        int: The flattened global index corresponding to the (row, col) pair.
+    Returns
+    -------
+    int
+        Flattened global index corresponding to ``(row, col)``.
     """
     index = 0
     # Compute the cumulative sum of nonzero columns up to the current row
@@ -38,11 +52,36 @@ def rowcol_to_index(row, col, loc_dims):
 
 @njit
 def get_nonzero_indices(arr):
+    """Return indices of non-zero entries in a 1D array.
+
+    Parameters
+    ----------
+    arr : numpy.ndarray
+        Input array.
+
+    Returns
+    -------
+    numpy.ndarray
+        One-dimensional integer array of indices where ``arr`` is non-zero.
+    """
     return np.nonzero(arr)[0]
 
 
 @njit
 def precompute_nonzero_indices(momentum_basis):
+    """Precompute non-zero row indices for each column of a basis matrix.
+
+    Parameters
+    ----------
+    momentum_basis : numpy.ndarray
+        Two-dimensional array whose columns are scanned for non-zero entries.
+
+    Returns
+    -------
+    list
+        Numba-compatible list where element ``i`` contains the non-zero row
+        indices of ``momentum_basis[:, i]``.
+    """
     basis_dim = momentum_basis.shape[1]
     nonzero_indices = [
         get_nonzero_indices(momentum_basis[:, i]) for i in range(basis_dim)
@@ -52,6 +91,18 @@ def precompute_nonzero_indices(momentum_basis):
 
 @njit(cache=True)
 def arrays_equal(arr1, arr2):
+    """Compare two 1D arrays element-wise with a small numerical tolerance.
+
+    Parameters
+    ----------
+    arr1, arr2 : numpy.ndarray
+        One-dimensional arrays to compare.
+
+    Returns
+    -------
+    bool
+        ``True`` if shapes match and all entries are equal within ``atol=1e-14``.
+    """
     if arr1.shape != arr2.shape:
         return False
     for ii in range(arr1.shape[0]):
@@ -170,15 +221,24 @@ def find_equal_rows(m_states, target):
 
 @njit(parallel=True, cache=True)
 def exclude_columns(data_matrix, exclude_indices):
-    """
-    Exclude columns from a integer matrix based on a list of indices, parallelized with prange.
+    """Return a copy of a matrix with selected columns removed.
 
-    Args:
-        data_matrix (np.ndarray): Input 2D array (matrix) from which to exclude columns.
-        exclude_indices (list of ints): List of column indices to exclude from the matrix.
+    Parameters
+    ----------
+    data_matrix : numpy.ndarray
+        Input 2D integer array.
+    exclude_indices : sequence[int]
+        Column indices to remove.
 
-    Returns:
-        reduced_matrix (np.ndarray): Resulting matrix with specified columns excluded.
+    Returns
+    -------
+    numpy.ndarray
+        Matrix with the requested columns excluded. The output dtype is
+        ``uint16``.
+
+    Notes
+    -----
+    The implementation is parallelized over rows using ``prange``.
     """
     num_rows = data_matrix.shape[0]
     num_cols_remaining = data_matrix.shape[1] - len(exclude_indices)
@@ -197,6 +257,21 @@ def exclude_columns(data_matrix, exclude_indices):
 
 @njit
 def filter_compatible_rows(matrix: np.ndarray, row):
+    """Return indices of rows that match a reference row.
+
+    Parameters
+    ----------
+    matrix : numpy.ndarray
+        Two-dimensional array whose rows are compared.
+    row : numpy.ndarray
+        One-dimensional reference row.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``uint16`` indices of rows in ``matrix`` that match ``row`` according to
+        :func:`arrays_equal`.
+    """
     # Find indices corresponding to matrix of ints rows equal to row
     check = np.zeros(matrix.shape[0], dtype=np.bool_)
     matching_indices = np.arange(matrix.shape[0], dtype=np.uint16)

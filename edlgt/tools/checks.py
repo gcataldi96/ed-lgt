@@ -1,5 +1,13 @@
-"""
-This module provides utility functions for manipulating quantum many-body operators and matrices.
+"""Validation, diagnostics, and matrix consistency checks.
+
+This module collects small utility functions used across the library for:
+
+- validating common input parameters,
+- pausing or logging debug messages during script execution,
+- checking commutation relations, matrix equality, and Hermiticity,
+- timing function calls with a lightweight decorator.
+
+Most matrix checks operate on SciPy sparse matrices.
 """
 
 import numpy as np
@@ -26,7 +34,18 @@ __all__ = [
 
 
 def get_time(func):
-    """Times any function"""
+    """Decorate a function to log its execution time at debug level.
+
+    Parameters
+    ----------
+    func : callable
+        Function to wrap.
+
+    Returns
+    -------
+    callable
+        Wrapped function with the same signature and return value.
+    """
 
     @wraps(func)
     def wrapper(*args, **kwargs):
@@ -77,8 +96,29 @@ def validate_parameters(
     get_singlet=None,
     array=None,
 ):
-    """
-    This is a function for type validation of parameters widely used in the library
+    """Validate commonly used library arguments by type and basic value rules.
+
+    Only parameters passed with a value different from ``None`` are checked.
+    The function is intentionally broad and centralizes validation logic shared by
+    multiple modules.
+
+    Parameters
+    ----------
+    ... : object, optional
+        Any named argument in the function signature. Each argument provided
+        with a value different from ``None`` is validated against the expected
+        type (and, where implemented, basic value constraints).
+
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If an argument has an invalid type.
+    ValueError
+        If an argument has an invalid value (for example ``stag_label``).
     """
     # -----------------------------------------------------------------------------
     if lvals is not None and (
@@ -139,7 +179,7 @@ def validate_parameters(
         or not all(isinstance(x, str) for x in op_names_list)
     ):
         raise TypeError(
-            f"op_names_list must be a LIST of INTs, not {type(op_names_list)}"
+            f"op_names_list must be a LIST of STRs, not {type(op_names_list)}"
         )
     # -----------------------------------------------------------------------------
     if add_dagger is not None and not isinstance(add_dagger, bool):
@@ -223,16 +263,23 @@ def validate_parameters(
 
 
 def pause(phrase, debug):
-    """
-    Pause the execution of the program and display a message.
+    """Pause execution and wait for user input when debugging is enabled.
 
-    Args:
-        phrase (str): The message to display.
+    Parameters
+    ----------
+    phrase : str
+        Prompt displayed to the user.
+    debug : bool
+        If ``True``, call :func:`input`; otherwise do nothing.
 
-        debug (bool): If ``True``, the pause and message are executed; if ``False``, they are skipped.
+    Returns
+    -------
+    None
 
-    Raises:
-        TypeError: If the input arguments are of incorrect types or formats.
+    Raises
+    ------
+    TypeError
+        If ``phrase`` or ``debug`` has an invalid type.
     """
     # Validate type of parameters
     validate_parameters(phrase=phrase, debug=debug)
@@ -240,22 +287,29 @@ def pause(phrase, debug):
         # IT PROVIDES A PAUSE in a given point of the PYTHON CODE
         logger.debug("----------------------------------------------------")
         # Press the <ENTER> key to continue
-        programPause = input(phrase)
+        _ = input(phrase)
         logger.debug("----------------------------------------------------")
         logger.debug("")
 
 
 def alert(phrase, debug):
-    """
-    Display an alert message during program execution.
+    """Log a debug message when debugging is enabled.
 
-    Args:
-        phrase (str): The alert message to display.
+    Parameters
+    ----------
+    phrase : str
+        Message to log.
+    debug : bool
+        If ``True``, emit the message at debug level; otherwise do nothing.
 
-        debug (bool): If ``True``, the alert and message are executed; if ``False``, they are skipped.
+    Returns
+    -------
+    None
 
-    Raises:
-        TypeError: If the input arguments are of incorrect types or formats.
+    Raises
+    ------
+    TypeError
+        If ``phrase`` or ``debug`` has an invalid type.
     """
     # Validate type of parameters
     validate_parameters(phrase=phrase, debug=debug)
@@ -266,19 +320,22 @@ def alert(phrase, debug):
 
 
 def commutator(A, B):
-    """
-    Compute the commutator of two sparse matrices.
+    """Compute the commutator ``[A, B] = AB - BA``.
 
-    Args:
-        A (scipy.sparse.csr_matrix): First matrix
+    Parameters
+    ----------
+    A, B : scipy.sparse.spmatrix
+        Sparse matrices with compatible shapes.
 
-        B (scipy.sparse.csr_matrix): Second matrix
+    Returns
+    -------
+    scipy.sparse.spmatrix
+        Sparse matrix representing ``AB - BA``.
 
-    Raises:
-        TypeError: If the input arguments are of incorrect types or formats.
-
-    Returns:
-        scipy.sparse.csr_matrix: The commutator of matrices A and B.
+    Raises
+    ------
+    TypeError
+        If ``A`` or ``B`` is not a SciPy sparse matrix.
     """
     validate_parameters(spmatrix=A)
     validate_parameters(spmatrix=B)
@@ -288,19 +345,22 @@ def commutator(A, B):
 
 
 def anti_commutator(A, B):
-    """
-    Compute the anti-commutator of two sparse matrices.
+    """Compute the anti-commutator ``{A, B} = AB + BA``.
 
-    Args:
-        A (scipy.sparse.csr_matrix): First matrix
+    Parameters
+    ----------
+    A, B : scipy.sparse.spmatrix
+        Sparse matrices with compatible shapes.
 
-        B (scipy.sparse.csr_matrix): Second matrix
+    Returns
+    -------
+    scipy.sparse.spmatrix
+        Sparse matrix representing ``AB + BA``.
 
-    Raises:
-        TypeError: If the input arguments are of incorrect types or formats.
-
-    Returns:
-        scipy.sparse.csr_matrix: The anti-commutator of matrices A and B.
+    Raises
+    ------
+    TypeError
+        If ``A`` or ``B`` is not a SciPy sparse matrix.
     """
     validate_parameters(spmatrix=A)
     validate_parameters(spmatrix=B)
@@ -310,18 +370,26 @@ def anti_commutator(A, B):
 
 
 def check_commutator(A, B):
-    """
-    Check the commutation relations between two operators A and B.
+    """Check whether two sparse operators commute within a fixed tolerance.
 
-    Args:
-        A (scipy.sparse.csr_matrix): First matrix
+    The function computes a normalized commutator norm and raises if the ratio
+    exceeds ``1e-15``.
 
-        B (scipy.sparse.csr_matrix): Second matrix
+    Parameters
+    ----------
+    A, B : scipy.sparse.spmatrix
+        Sparse matrices with compatible shapes.
 
-    Raises:
-        TypeError: If the input arguments are of incorrect types or formats.
+    Returns
+    -------
+    None
 
-        ValueError: If the commutation ratio is greater than a threshold.
+    Raises
+    ------
+    TypeError
+        If ``A`` or ``B`` is not a SciPy sparse matrix.
+    ValueError
+        If the normalized commutator norm is larger than the tolerance.
     """
     # CHECKS THE COMMUTATION RELATIONS BETWEEN THE OPERATORS A AND B
     validate_parameters(spmatrix=A)
@@ -339,16 +407,23 @@ def check_commutator(A, B):
 
 
 def check_matrix(A: csr_matrix, B: csr_matrix):
-    """
-    Check the difference between two sparse matrices A and B computing the Frobenius Norm
+    """Compare two sparse matrices using a normalized Frobenius-norm criterion.
 
-    Args:
-        A (scipy.sparse.csr_matrix): First matrix
-        B (scipy.sparse.csr_matrix): Second matrix
+    Parameters
+    ----------
+    A, B : scipy.sparse.csr_matrix
+        Sparse matrices to compare.
 
-    Raises:
-        TypeError: If the input arguments are of incorrect types or formats.
-        ValueError: If the matrices have different shapes or the difference ratio is above a threshold.
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If ``A`` or ``B`` is not a SciPy sparse matrix.
+    ValueError
+        If shapes differ or the normalized difference is larger than ``1e-14``.
     """
     # CHECKS THE DIFFERENCE BETWEEN TWO SPARSE MATRICES
     validate_parameters(spmatrix=A)
@@ -365,14 +440,24 @@ def check_matrix(A: csr_matrix, B: csr_matrix):
 
 
 def check_hermitian(A):
-    """
-    Check if a sparse matrix A is Hermitian.
+    """Validate that a sparse matrix is Hermitian.
 
-    Args:
-        A (scipy.sparse.csr_matrix): The sparse matrix to check for Hermiticity.
+    Parameters
+    ----------
+    A : scipy.sparse.spmatrix
+        Sparse matrix to test.
 
-    Raises:
-        TypeError: If the input matrix is not in the correct format.
+    Returns
+    -------
+    None
+
+    Raises
+    ------
+    TypeError
+        If ``A`` is not a SciPy sparse matrix.
+    ValueError
+        If ``A`` differs from its Hermitian conjugate beyond the tolerance used
+        by :func:`check_matrix`.
     """
     validate_parameters(spmatrix=A)
     A_dag = A.getH()
