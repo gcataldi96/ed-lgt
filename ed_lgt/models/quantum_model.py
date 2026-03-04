@@ -387,6 +387,16 @@ class QuantumModel:
     def time_evolution_Hamiltonian(self, initial_state, time_line):
         self.H.time_evolution(initial_state, time_line, self.loc_dims)
 
+    def diagonalize_Liouvillian(self, n_eigs, format):
+        # DIAGONALIZE THE Liouvillian
+        self.L.diagonalize(n_eigs, format, self.loc_dims)
+        self.n_liou_eigs = self.L.n_eigs
+        self.res["Liou_eigVals"] = self.L.eigVals
+
+    def time_evolution_Liouvillian(self, initial_state, time_line, sparse_ev_method):
+        """Time evolve a state with Liouvillian superoperator. initial_state must be a vectorized density matrix state"""
+        self.L.time_evolution(initial_state, time_line, self.loc_dims, sparse_ev_method)
+
     # ---- Momentum-basis wrappers (no copies) ----
     def _basis_Pk_as_csc(self):
         """Return B as a SciPy CSC matrix using the stored arrays (no copy)."""
@@ -618,6 +628,31 @@ class QuantumModel:
             logger.info(f"FIDELITY: {fidelity}")
         return fidelity
 
+    def measure_fidelity_Liou(
+        self,
+        state: np.ndarray,
+        index: int,
+        dynamics: bool = False,
+        print_value: bool = False,
+    ):
+        if not isinstance(state, np.ndarray):
+            raise TypeError(f"state must be np.array not {type(state)}")
+        if len(state) != self.L.Liou.shape[0]:
+            raise ValueError(
+                f"len(state) must be {self.L.Liou.shape[0]} not {len(state)}"
+            )
+        if not dynamics:
+            raise NotImplementedError(
+                "Fidelity calculations only possible for time evolution for now"
+            )
+        # Define the reference state
+        ref_psi = self.L.rho_time[index]
+        ref_psi.convert_representation("vec")
+        fidelity = np.abs(state.conj().dot(ref_psi.rho))
+        if print_value:
+            logger.info(f"FIDELITY: {fidelity}")
+        return fidelity
+
     def compute_expH(self, beta):
         return csc_matrix(expm(-beta * self.H.Ham))
 
@@ -627,18 +662,34 @@ class QuantumModel:
     def canonical_avg(self, local_obs, beta):
         logger.info("----------------------------------------------------")
         logger.info("CANONICAL ENSEMBLE")
-        op_matrix = LocalTerm(
+
+        # Get the matrix representation of the observable
+        r_list, c_list, v_list = LocalTerm(
             operator=self.ops[local_obs], op_name=local_obs, **self.def_params
-        ).get_Hamiltonian(1)
-        # Define the exponential of the Hamiltonian
-        expm_matrix = self.compute_expH(beta)
-        Z = np.real(expm_matrix.trace())
-        canonical_avg = np.real(csc_matrix(op_matrix).dot(expm_matrix).trace()) / (
-            Z * self.n_sites
+        ).get_Hamiltonian(strength=1)
+        op_matrix = csc_matrix(
+            (v_list, (r_list, c_list)), shape=(self.H.shape[0], self.H.shape[0])
         )
+
+        # Calculate rho_canonical if it doesn't already exist
+        if not hasattr(self, "rho_canonical"):
+            self.canonical_ensemble(beta)
+
+        # Calculate the expectation value of the operator in the canonical ensemble
+        canonical_avg = np.real(
+            csc_matrix(op_matrix).dot(self.rho_canonical).trace()
+        ) / (self.n_sites)
+
         logger.info(f"Canonical avg: {canonical_avg}")
         logger.info("----------------------------------------------------")
         return canonical_avg
+
+    def canonical_ensemble(self, beta):
+        # Define the exponential of the Hamiltonian
+        expm_matrix = self.compute_expH(beta)  # Can be improved for small hamiltonians
+        Z = np.real(expm_matrix.trace())
+        self.rho_canonical = expm_matrix / Z
+        return
 
     def microcanonical_avg(self, local_obs, state):
         logger.info("----------------------------------------------------")
@@ -771,6 +822,29 @@ class QuantumModel:
         for op_names_list in self.nbody_obs:
             obs = "_".join(op_names_list)
             self.obs_list[obs].get_expval(state)
+            self.res[obs] = self.obs_list[obs].obs
+
+    def measure_observables_Liou(self, index, dynamics=False, ref_state=[]):
+        if dynamics:
+            state = self.L.rho_time[index]
+        else:
+            state = ref_state
+        for obs in self.local_obs:
+            self.obs_list[obs].get_expval_Liou(state)
+            self.res[obs] = self.obs_list[obs].obs
+        for op_names_list in self.twobody_obs:
+            obs = "_".join(op_names_list)
+            self.obs_list[obs].get_expval_Liou(state)
+            self.res[obs] = self.obs_list[obs].corr
+            if self.twobody_axes is not None:
+                self.obs_list[obs].print_nearest_neighbors()
+        for op_names_list in self.plaquette_obs:
+            obs = "_".join(op_names_list)
+            self.obs_list[obs].get_expval_Liou(state)
+            self.res[obs] = self.obs_list[obs].avg
+        for op_names_list in self.nbody_obs:
+            obs = "_".join(op_names_list)
+            self.obs_list[obs].get_expval_Liou(state)
             self.res[obs] = self.obs_list[obs].obs
 
     def link_avg(self, obs_name):

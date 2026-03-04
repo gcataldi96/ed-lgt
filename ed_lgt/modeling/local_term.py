@@ -4,6 +4,11 @@ from .lattice_mappings import zig_zag, inverse_zig_zag
 from .lattice_geometry import get_neighbor_sites
 from .qmb_operations import local_op
 from .qmb_state import QMB_state, exp_val_data
+from .qmb_densityMatrix import (
+    QMB_densityMatrix,
+    sparse_matrix_exp_val,
+    sparse_vec_exp_val,
+)
 from .qmb_term import QMBTerm
 from ed_lgt.tools import validate_parameters, get_time
 from ed_lgt.symmetries import nbody_term
@@ -175,6 +180,117 @@ class LocalTerm(QMBTerm):
                         self.momentum_basis,
                     )
                     self.var[ii] = exp_val_data(psi.psi, r_list1, c_list1, v_list1)
+                    self.var[ii] -= self.obs[ii] ** 2
+        # =============================================================================
+        # CHECK STAGGERED CONDITION AND PRINT VALUES
+        self.avg = 0.0
+        self.std = 0.0
+        counter = 0
+        for ii in range(self.n_sites):
+            # Given the 1D point on the d-dimensional lattice, get the corresponding coords
+            coords = zig_zag(self.lvals, ii)
+            if self.get_staggered_conditions(coords, stag_label):
+                if print_values:
+                    logger.info(f"{coords} {format(self.obs[ii], '.16f')}")
+                counter += 1
+                self.avg += self.obs[ii]
+                if get_variance:
+                    self.std += self.var[ii]
+        self.avg = self.avg / counter
+        if get_variance:
+            self.std = np.sqrt(np.abs(self.std) / counter)
+        if print_values:
+            if get_variance:
+                msg = f"{format(self.avg, '.16f')} +/- {format(self.std, '.16f')}"
+            else:
+                msg = f"{format(self.avg, '.16f')}"
+            logger.info(msg)
+
+    def get_expval_Liou(
+        self, rho, stag_label=None, print_values=True, get_variance=False
+    ):
+        """
+        The function calculates the expectation value <O> and the variance <O^2> - <O>^2
+        of the Local Liouvillian and is averaged over all the lattice sites.
+
+        Args:
+            rho (instance of QMB_densityMatrix class): QMB densityMatrix where the expectation value has to be computed
+
+            stag_label (str, optional): if odd/even, then the expectation value
+                is performed only on that kind of sites. Defaults to None.
+
+        Raises:
+            TypeError: If the input arguments are of incorrect types or formats.
+
+        Notes:
+            - The exp value <O> is computed for each site using matrix-vector multiplication.
+            - The variance <O^2> - <O>^2 is also computed for each site.
+            For local operators, without momentum basis, squaring the non-zero entries
+            in `v_list` (the matrix elements of O) is sufficient to compute O^2.
+        """
+        # Check on parameters
+        if not isinstance(rho, QMB_densityMatrix):
+            raise TypeError(
+                f"rho must be instance of class:QMB_densityMatrix not {type(rho)}"
+            )
+        validate_parameters(stag_label=stag_label)
+        # Initialize arrays for storing expectation values and variances for all sites
+        self.obs = np.zeros(self.n_sites, dtype=float)  # Stores exp values <O>
+        if get_variance:
+            self.std = 0.0
+            self.var = np.zeros(self.n_sites, dtype=float)  # Stores var <O^2> - <O>^2
+        # PRINT OBSERVABLE NAME
+        if print_values:
+            msg = "" if stag_label is None else f"{stag_label}"
+            logger.info(f"----------------------------------------------------")
+            logger.info(f"{self.op_name} {msg}")
+        # =============================================================================
+        if self.sector_configs is None:
+            for ii in range(self.n_sites):
+                self.obs[ii] = rho.expectation_value(
+                    local_op(operator=self.op, op_site=ii, **self.def_params)
+                )
+                if get_variance:
+                    self.var[ii] = rho.expectation_value(
+                        local_op(operator=self.op**2, op_site=ii, **self.def_params)
+                    )
+                    self.var[ii] -= self.obs[ii] ** 2
+        # =============================================================================
+        else:
+            sparse_exp_val = (
+                sparse_vec_exp_val if (rho.rho_form == "vec") else sparse_matrix_exp_val
+            )
+            # COMPUTE THE LOCAL OBSERVABLE
+            for ii in range(self.n_sites):
+                r_list, c_list, v_list = nbody_term(
+                    self.sym_ops,
+                    np.array([ii]),
+                    self.sector_configs,
+                    self.momentum_basis,
+                )
+                self.obs[ii] = sparse_exp_val(rho.rho, r_list, c_list, v_list)
+                if get_variance and self.momentum_basis is None:
+                    # Without momentum basis, <O^2> - <O>^2 CAN be computed by squaring v_list
+                    self.var[ii] = sparse_exp_val(rho.rho, r_list, c_list, v_list**2)
+                    self.var[ii] -= self.obs[ii] ** 2
+            # COMPUTE THE VARIANCE within MOMENTUM BASIS
+            if get_variance and self.momentum_basis is not None:
+                # Compute the operator for the variance
+                shape = (1, self.n_sites, self.max_loc_dim, self.max_loc_dim)
+                opvar = np.zeros(shape, dtype=float)
+                for ii in range(self.n_sites):
+                    opvar[0, ii] = np.dot(self.sym_ops[0, ii], self.sym_ops[0, ii])
+                # Compute the variance
+                for ii in range(self.n_sites):
+                    # In momentum basis, the variance <O^2> - <O>^2
+                    # can NOT be computed by squaring v_list
+                    r_list1, c_list1, v_list1 = nbody_term(
+                        opvar,
+                        np.array([ii]),
+                        self.sector_configs,
+                        self.momentum_basis,
+                    )
+                    self.var[ii] = sparse_exp_val(rho.rho, r_list1, c_list1, v_list1)
                     self.var[ii] -= self.obs[ii] ** 2
         # =============================================================================
         # CHECK STAGGERED CONDITION AND PRINT VALUES

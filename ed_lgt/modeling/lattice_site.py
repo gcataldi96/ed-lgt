@@ -20,7 +20,7 @@ Legend
 For any basis but the flat one, `basis[configs]` replaces `i` with `x`,
 yielding the corresponding config representation.
 
-For cubic lattices, switching from a site to a link basis amounts 
+For cubic lattices, switching from a site to a link basis amounts
 to replacing `l = (1, d)` with `d` (and reshaping arrays).
 """
 

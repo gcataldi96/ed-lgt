@@ -3,6 +3,8 @@ from numba import typed
 from scipy.sparse import csr_matrix, identity
 from scipy.sparse.linalg import norm as spnorm
 from .quantum_model import QuantumModel
+from ed_lgt.modeling import QMB_liouvillian
+from scipy.sparse import csr_matrix, kron as sp_kron, identity as sp_identity
 from ed_lgt.modeling import (
     LocalTerm,
     TwoBodyTerm,
@@ -126,11 +128,11 @@ class SU2_Model(QuantumModel):
         if self.sector_configs is None:
             raise ValueError("No configurations found for the given symmetry sectors")
 
-    def build_Hamiltonian(self, g, m=None):
+    def build_Hamiltonian(self, g, m=None, t_coef=1 / 2):
         logger.info(f"----------------------------------------------------")
         logger.info("BUILDING s=1/2 HAMILTONIAN")
         # Hamiltonian Coefficients
-        self.SU2_Hamiltonian_couplings(g, m)
+        self.SU2_Hamiltonian_couplings(g, m, t_coef=t_coef)
         h_terms = {}
         # ---------------------------------------------------------------------------
         # ELECTRIC ENERGY
@@ -243,11 +245,11 @@ class SU2_Model(QuantumModel):
             )
         self.H.build(self.ham_format)
 
-    def build_gen_Hamiltonian(self, g, m=None):
+    def build_gen_Hamiltonian(self, g, m=None, t_coef=1 / 2):
         logger.info(f"----------------------------------------------------")
         logger.info("BUILDING generalized HAMILTONIAN")
         # Hamiltonian Coefficients
-        self.SU2_Hamiltonian_couplings(g, m)
+        self.SU2_Hamiltonian_couplings(g, m, t_coef=t_coef)
         h_terms = {}
         # ---------------------------------------------------------------------------
         # ELECTRIC ENERGY
@@ -342,6 +344,101 @@ class SU2_Model(QuantumModel):
                     plaq_list.append(plaq_name)
         self.H.build(self.ham_format)
 
+    # TODO: For now it will only work for 1 dimension
+    # NOTE: Adding each term at a time with add_term() turned out to be slower than adding all the term one time at the end
+    # this implementation exists in the backup but for now I keep this implementation
+    def build_Liouvillian_tot(
+        self,
+        g,
+        m=None,
+        t_coef=1 / 2,
+        beta=0.1,
+        D0_coef=0,
+        corr_type="Delta",
+        sigma=0,
+        lamb_shift_existence=False,
+        liou_format="sparse",
+    ):
+        # Why does the mass term on top use "N-1"?
+        logger.info("BUILDING LIOUVILLIAN")
+
+        # Initialize the Liouvillian
+        hilbertDim = self.H.shape[0]
+        liouDim = self.H.shape[0] ** 2
+        self.L = QMB_liouvillian(self.lvals, size=liouDim)
+        T_coef = 1 / beta
+
+        # Get Hamiltonian
+        self.build_Hamiltonian(
+            g, m, t_coef
+        )  # Now self.H.Ham, = The hamiltonian, but also self.H.(value, row, col)_list have it all
+        self.L.effH = self.H.Ham.copy()
+
+        # Get Jump Operators [For SU(2) the for loop would also go over color dof]
+        N_matter = self.lvals[0]
+        jump_ops = {}
+        for n in range(N_matter):
+            single_site_mask = np.arange(N_matter) == n
+
+            # Create zeroth order jump operator O(n)
+            temp_op = LocalTerm(
+                operator=self.ops[f"N_tot"], op_name=f"N_tot", **self.def_params
+            )
+            r_list, c_list, v_list = temp_op.get_Hamiltonian(
+                strength=(-1) ** n, mask=single_site_mask
+            )
+            jump_ops[f"0th_{n}"] = csr_matrix(
+                (v_list, (r_list, c_list)), shape=(hilbertDim, hilbertDim)
+            )
+
+            # Create second order jump operator L(n)
+            jump_ops[f"2nd_{n}"] = jump_ops[f"0th_{n}"] - (
+                1 / (4 * T_coef)
+            ) * commutator(self.H.Ham, jump_ops[f"0th_{n}"])
+
+        # Get the environment correlator
+        env_corr = self.L.get_environment_correlator(corr_type, D0_coef, sigma)
+
+        # Get Lamb Shift Term
+        if lamb_shift_existence:
+            lamb_shift = csr_matrix((hilbertDim, hilbertDim), dtype=complex)
+            for n in range(N_matter):
+                for m in range(N_matter):
+                    lamb_shift += (env_corr[n, m] / 2) * anticommutator(
+                        jump_ops[f"0th_{n}"],
+                        commutator(self.H.Ham, jump_ops[f"0th_{m}"]),
+                    )
+            self.L.effH += (1j / (8 * T_coef)) * lamb_shift
+
+        # -------------------------------Construct Liouvillian------------------------------------
+        # TODO: It is possible to construct this next section in a function with numba and avoid using sp_kron all together
+        # Construct the hermitian part
+        identity = sp_identity(hilbertDim, format="csr")
+        Liouville_op = -1j * (
+            sp_kron(self.L.effH, identity) - sp_kron(identity, (self.L.effH).T)
+        )
+
+        # Construct the non-hermitian part
+        for n in range(N_matter):
+            Ln_dag = jump_ops[f"2nd_{n}"].conj().T
+            for m in range(N_matter):
+                if env_corr[n, m] != 0:
+                    Lm = jump_ops[f"2nd_{m}"]
+                    Ln_dag_Lm = Ln_dag @ Lm
+
+                    term1 = sp_kron(Lm, Ln_dag.T)  # L_m ⊗ L_n^dag^T
+                    term2 = sp_kron(Ln_dag_Lm, identity)  # L_n^dag L_m ⊗ I
+                    term3 = sp_kron(identity, (Ln_dag_Lm).T)  # I ⊗ (L_n^dag L_m)^T
+
+                    Liouville_op += (env_corr[n, m] / 2) * (2 * term1 - term2 - term3)
+            print(n, end=" ")
+        self.L.add_term(Liouville_op)
+        # --------------------------------------------------------------------------------------
+
+        # Build Liouvillian
+        self.L.build(format=liou_format)
+        logger.info("LIOUVILLIAN BUILT")
+
     def check_symmetries(self):
         # CHECK LINK SYMMETRIES
         for ax in self.directions:
@@ -356,14 +453,14 @@ class SU2_Model(QuantumModel):
     def overlap_QMB_state(self, name):
         # POLARIZED AND BARE VACUUM in 1D
         if len(self.lvals) == 1:
-            if name == "V":
+            if name == "V":  # Vacuum
                 if self.spin < 1:
                     s1, s2, L, R = 0, 4, 0, 2
                 elif self.spin == 1:
                     s1, s2, L, R = 0, 7, 0, 2
                 elif self.spin > 1:
                     s1, s2, L, R = 0, 10, 0, 2
-            elif name == "PV":
+            elif name == "PV":  # Vacuum with E_field non zero everywhere
                 if self.spin < 1:
                     s1, s2, L, R = 1, 5, 1, 1
                 elif self.spin == 1:
@@ -410,7 +507,7 @@ class SU2_Model(QuantumModel):
         config_state = config_state
         return np.array(config_state)
 
-    def SU2_Hamiltonian_couplings(self, g, m=None, theta=0):
+    def SU2_Hamiltonian_couplings(self, g, m=None, t_coef=1 / 2, theta=0):
         """
         This function provides the couplings of the SU2 Yang-Mills Hamiltonian
         starting from the gauge coupling g and the bare mass parameter m
@@ -443,7 +540,7 @@ class SU2_Model(QuantumModel):
         t=1
         """
         if self.dim == 1:
-            E = 8 * g / 3
+            E = g / 2
             B = 0
         else:
             E = g / 2
@@ -457,7 +554,8 @@ class SU2_Model(QuantumModel):
         }
         if not self.pure_theory and m is not None:
             # The correct hopping in original units should be 1/2
-            t = 2 * np.sqrt(2)
+            t = t_coef
+            # 2 * np.sqrt(2)
             self.coeffs |= {
                 "tx_even": -complex(0, t),  # x HOPPING (EVEN SITES)
                 "tx_odd": -complex(0, t),  # x HOPPING (ODD SITES)
@@ -660,3 +758,13 @@ class SU2_Model(QuantumModel):
                     logger.info(f"VDOT{np.vdot(PHpsi,HPpsi)}")
                     logger.info(f"Relative |HP-PH|={absnorm}")
                     raise ValueError(f"config {ii} {cfg} not symmetrized")
+
+
+# Shorthand for commutator
+def commutator(A, B):
+    return A @ B - B @ A
+
+
+# Shorthand for anticommutator
+def anticommutator(A, B):
+    return A @ B + B @ A

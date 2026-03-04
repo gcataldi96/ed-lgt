@@ -1,5 +1,6 @@
 import numpy as np
-from simsio import *
+
+# from simsio import *
 from numba import njit, prange
 from scipy.optimize import minimize
 import logging
