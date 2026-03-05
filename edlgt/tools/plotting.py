@@ -10,7 +10,6 @@ Only the functions listed in ``__all__`` are considered the public API here.
 import numpy as np
 import matplotlib.pyplot as plt
 import math
-from matplotlib.lines import Line2D
 import matplotlib.colors as mc
 import colorsys
 import logging
@@ -25,11 +24,11 @@ __all__ = [
     "custom_average",
     "moving_time_integral",
     "gaussian_time_integral",
+    "moving_time_integral_centered",
+    "lighten_color",
+    "bz_axis",
+    "set_size",
 ]
-
-default_params = {
-    "save_plot": {"bbox_inches": "tight", "transparent": False},
-}
 
 
 def set_size(width_pt, fraction=1, subplots=(1, 1), height_factor=1.0):
@@ -216,6 +215,54 @@ def time_integral(time, M):
                 0.5 * (M[tnc] + M[tnc - 1]) * (time[tnc] - time[tnc - 1]) / time[cnt]
             )
     return Mavg
+
+
+def moving_time_integral_centered(time, M, max_points=101):
+    """
+    Centered running time-average of M(t) using the largest possible
+    symmetric window around each time index.
+
+    - For each i, we choose a radius r_i = min(half, i, N-1-i).
+    - The window is [i - r_i, ..., i + r_i].
+    - Near the edges the window shrinks symmetrically.
+    - In the bulk it has full length max_points.
+
+    Parameters
+    ----------
+    time : 1D np.ndarray
+        Time points (can be non-uniformly spaced).
+    M : 1D np.ndarray
+        Observable values M(t_i).
+    max_points : int
+        Target maximum number of points in the window (will be made odd).
+
+    Returns
+    -------
+    M_avg : 1D np.ndarray
+        Time-averaged observable at each time point.
+    """
+    n = len(time)
+    if n != len(M):
+        raise ValueError("time and M must have the same length")
+    # Enforce odd max_points for a perfectly centered window
+    if max_points % 2 == 0:
+        max_points += 1
+    half = max_points // 2
+    M_avg = np.zeros_like(M, dtype=float)
+    for i in range(n):
+        # Largest symmetric radius that fits both sides and the max_points constraint
+        r = min(half, i, n - 1 - i)
+        start = i - r
+        end = i + r + 1  # slice is [start, end)
+        t_segment = time[start:end]
+        M_segment = M[start:end]
+        dt = t_segment[-1] - t_segment[0]
+        if dt != 0:
+            I = np.trapezoid(M_segment, t_segment)
+            M_avg[i] = I / dt
+        else:
+            M_avg[i] = M_segment[0]
+    return M_avg
 
 
 def get_tline(par: dict):

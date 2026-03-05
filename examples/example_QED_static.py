@@ -115,7 +115,9 @@ def run_QED_simulation(par: dict) -> dict:
                 # we reverse to get descending order.
                 sorted_indices = np.argsort(rho_eigvals)[::-1]
                 rho_eigvals = rho_eigvals[sorted_indices]
-                logger.info(f"eigvals {rho_eigvals}")
+                logger.info("RDM EIGVALS")
+                for eigidx in range(7):
+                    logger.info(f"eigval {eigidx}: {rho_eigvals[eigidx]}")
                 res["eigvals"] = rho_eigvals
                 rho_eigvecs = rho_eigvecs[:, sorted_indices]
                 # Set a list of truncation values to reduce the RDM
@@ -149,8 +151,8 @@ def run_QED_simulation(par: dict) -> dict:
             model.measure_observables(ii)
             res["E2"][ii] = model.link_avg(obs_name="E2")
             if not model.pure_theory:
-                res["N"][ii] += 0.5 * model.stag_avg(model.res["N"], "even")
-                res["N"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "odd")
+                res["N"][ii] += 0.5 * model.stag_avg("N", "even")
+                res["N"][ii] += 0.5 * model.stag_avg("N_zero", "odd")
             for obs_names_list in plaquette_obs:
                 obs = "_".join(obs_names_list)
                 res[obs][ii] = model.res[obs]

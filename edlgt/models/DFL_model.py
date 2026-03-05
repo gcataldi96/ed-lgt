@@ -19,7 +19,7 @@ __all__ = ["DFL_Model"]
 class DFL_Model(QuantumModel):
     """DFL model built from SU(2) dressed-site operators."""
 
-    def __init__(self, spin, pure_theory, background, ham_format, **kwargs):
+    def __init__(self, spin, pure_theory, ham_format, **kwargs):
         """Initialize the DFL model.
 
         Parameters
@@ -39,7 +39,7 @@ class DFL_Model(QuantumModel):
         super().__init__(**kwargs)
         self.spin = spin
         self.pure_theory = pure_theory
-        self.background = background
+        self.background = 0.5
         self.staggered_basis = False
         self.ham_format = ham_format
         # -------------------------------------------------------------------------------

@@ -189,11 +189,11 @@ def run_SU2_spectrum(par: dict) -> dict:
             model.measure_observables(ii)
             res["E2"][ii] = model.link_avg(obs_name="T2")
             if not model.pure_theory:
-                res["N_single"][ii] = model.stag_avg(model.res["N_single"])
-                res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "even")
-                res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "odd")
-                res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "even")
-                res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "odd")
+                res["N_single"][ii] = model.stag_avg("N_single")
+                res["N_pair"][ii] += 0.5 * model.stag_avg("N_pair", "even")
+                res["N_pair"][ii] += 0.5 * model.stag_avg("N_zero", "odd")
+                res["N_zero"][ii] += 0.5 * model.stag_avg("N_zero", "even")
+                res["N_zero"][ii] += 0.5 * model.stag_avg("N_pair", "odd")
                 res["N_tot"][ii] = res["N_single"][ii] + 2.0 * res["N_pair"][ii]
             for obs_names_list in plaquette_obs:
                 obs = "_".join(obs_names_list)
@@ -304,11 +304,11 @@ def run_SU2_bg_groundstate(par: dict) -> dict:
         if measure_obs:
             model.measure_observables(ii, dynamics=False)
             res["E2"][ii] = model.link_avg(obs_name="T2")
-            res["N_single"][ii] = model.stag_avg(model.res["N_single"])
-            res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "even")
-            res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "odd")
-            res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "even")
-            res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "odd")
+            res["N_single"][ii] = model.stag_avg("N_single")
+            res["N_pair"][ii] += 0.5 * model.stag_avg("N_pair", "even")
+            res["N_pair"][ii] += 0.5 * model.stag_avg("N_zero", "odd")
+            res["N_zero"][ii] += 0.5 * model.stag_avg("N_zero", "even")
+            res["N_zero"][ii] += 0.5 * model.stag_avg("N_pair", "odd")
             res["N_tot"][ii] = res["N_single"][ii] + 2 * res["N_pair"][ii]
             logger.info(f"Nsingle {res['N_single'][ii]}")
             logger.info(f"Npair {res['N_pair'][ii]}")
@@ -361,7 +361,7 @@ par = {
         "spin": 0.5,
         "pure_theory": True,
         # "background": 0,
-        "ham_format": "linear",
+        "ham_format": "sparse",
         "sectors": [6],
     },
     "hamiltonian": {

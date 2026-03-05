@@ -1,5 +1,5 @@
 import numpy as np
-from ed_lgt.operators import QED_dressed_site_operators, QED_gauge_invariant_states
+from edlgt.operators import QED_dressed_site_operators, QED_gauge_invariant_states
 from qtealeaves.operators.tnoperators import TNOperators
 from qtealeaves.modeling import (
     QuantumModel,

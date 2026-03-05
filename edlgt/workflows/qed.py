@@ -130,8 +130,8 @@ def QED_measure_on_states(
             model.measure_observables(ii, dynamics=dynamics)
             res["E2"][ii] = model.link_avg(obs_name="E2")
             if not model.pure_theory:
-                res["N"][ii] += 0.5 * model.stag_avg(model.res["N"], "even")
-                res["N"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "odd")
+                res["N"][ii] += 0.5 * model.stag_avg("N", "even")
+                res["N"][ii] += 0.5 * model.stag_avg("N_zero", "odd")
             for obs_names_list in flags["plaquette_obs"]:
                 obs = "_".join(obs_names_list)
                 res[obs][ii] = model.res[obs]

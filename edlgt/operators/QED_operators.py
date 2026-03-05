@@ -6,6 +6,7 @@ from itertools import product
 from scipy.sparse import csr_matrix, diags, identity, kron
 from scipy.sparse.linalg import norm
 from edlgt.modeling import qmb_operator as qmb_op
+from .spin_operators import get_Pauli_operators
 from edlgt.modeling import get_lattice_borders_labels, LGT_border_configs
 from edlgt.tools import anti_commutator as anti_comm, validate_parameters
 from .bose_fermi_operators import fermi_operators as QED_matter_operators
@@ -18,6 +19,7 @@ __all__ = [
     "QED_gauge_invariant_states",
     "QED_rishon_operators",
     "QED_check_gauss_law",
+    "QED_gauge_integrated_operators",
 ]
 
 
@@ -528,3 +530,10 @@ def QED_gauge_invariant_states(
         # Save the gauge states as a np.ndarray
         gauge_states[name] = np.asarray(gauge_states[name])
     return gauge_basis, gauge_states
+
+
+def QED_gauge_integrated_operators():
+    ops = get_Pauli_operators()
+    ops["N"] = 0.5 * (ops["Sz"] + ops["I"])
+    ops["Nzero"] = ops["I"] - ops["N"]
+    return ops

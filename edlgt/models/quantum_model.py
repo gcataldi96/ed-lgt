@@ -158,7 +158,6 @@ class QuantumModel:
             If symmetry-sector configurations are missing, OBC are present, or
             the momentum shape is inconsistent with the lattice dimension.
         """
-        logger.info(k_vals)
         if self.sector_configs is None:
             raise ValueError("symmetry sector_configs not defined yet")
         if self.has_obc[0]:
@@ -771,9 +770,9 @@ class QuantumModel:
         for config in configs:
             index = config_to_index_binarysearch(config, self.sector_configs)
             if index < 0:
-                logger.info(f"{config}")
                 raise ValueError(f"config not compatible with the symmetry sector")
-            logger.info(f"config {config} in state {index}")
+            cfg = " ".join(f"{c:>2d}" for c in config)
+            logger.info(f"cfg [{cfg}] in state {index}")
             state[index] = complex(1 / np.sqrt(len(configs)), 0)
         return state
 
@@ -944,7 +943,8 @@ class QuantumModel:
                 if special_norms[obs] is not None:
                     val = np.dot(local_ops[obs].obs, special_norms[obs]) / self.n_sites
                 elif staggered_avgs[obs] is not None:
-                    val = self.stag_avg(local_ops[obs].obs, staggered_avgs[obs])
+                    self.res[obs] = local_ops[obs].obs
+                    val = self.stag_avg(obs, staggered_avgs[obs])
                 else:
                     val = np.mean(local_ops[obs].obs)
                 ME_avg[f"ME_{obs}"] += val
@@ -1022,7 +1022,8 @@ class QuantumModel:
                         val = np.dot(local_ops[obs].obs, special_norms[obs])
                         val /= self.n_sites
                     elif staggered_avgs[obs] is not None:
-                        val = self.stag_avg(local_ops[obs].obs, staggered_avgs[obs])
+                        self.res[obs] = local_ops[obs].obs
+                        val = self.stag_avg(obs, staggered_avgs[obs])
                     else:
                         # Default: use the average over all sites.
                         val = np.mean(local_ops[obs].obs)
@@ -1055,7 +1056,8 @@ class QuantumModel:
                         val = np.dot(local_ops[obs].obs, special_norms[obs])
                         val /= self.n_sites
                     elif staggered_avgs[obs] is not None:
-                        val = self.stag_avg(local_ops[obs].obs, staggered_avgs[obs])
+                        self.res[obs] = local_ops[obs].obs
+                        val = self.stag_avg(obs, staggered_avgs[obs])
                     else:
                         val = np.mean(local_ops[obs].obs)
                     # NOTE: do not normalize psi_block; this is correct:
@@ -1211,13 +1213,14 @@ class QuantumModel:
         logger.debug(f"{tmp} effective links")
         return avg / tmp
 
-    def stag_avg(self, arr_flat: np.ndarray, staggered_avg=None):
-        """Average a lattice quantity on all, even, or odd staggered sites.
+    def stag_avg(self, obs_name: str, staggered_avg=None):
+        """Average a measured local observable on all, even, or odd sites.
 
         Parameters
         ----------
-        arr_flat : numpy.ndarray
-            Data flattened in the model zig-zag site ordering.
+        obs_name : str
+            Observable key already stored in ``self.res`` as a site-resolved
+            array.
         staggered_avg : str or None, optional
             ``None`` for the full average, or ``"even"`` / ``"odd"`` for a
             staggered sublattice average.
@@ -1226,20 +1229,23 @@ class QuantumModel:
         -------
         float
             Requested average value.
+
+        Raises
+        ------
+        KeyError
+            If ``obs_name`` is not present in ``self.res``.
         """
+        values = self.res[obs_name]
         if staggered_avg is None:
-            return np.mean(arr_flat)
-        # 1) build the true 2D checkerboard mask:
+            return np.mean(values)
+        # Build the staggered mask in lattice coordinates.
         mask2d = staggered_mask(self.lvals, staggered_avg)
-        # 2) allocate a 1D mask of the same length as arr_flat:
-        N = arr_flat.size
-        mask1d = np.zeros(N, dtype=bool)
-        # 3) for each flattened index d, map back to coords, then lookup mask2d:
-        for d in range(N):
-            coords = zig_zag(self.lvals, d)
-            mask1d[d] = mask2d[coords]
-        # 4) select and average:
-        return np.mean(arr_flat[mask1d])
+        # Map the mask back to the flattened zig-zag site ordering used in self.res.
+        mask1d = np.zeros(self.n_sites, dtype=bool)
+        for site_idx in range(self.n_sites):
+            coords = zig_zag(self.lvals, site_idx)
+            mask1d[site_idx] = mask2d[coords]
+        return np.mean(values[mask1d])
 
 
 def apply_projection(
