@@ -537,3 +537,81 @@ def QED_gauge_integrated_operators():
     ops["N"] = 0.5 * (ops["Sz"] + ops["I"])
     ops["Nzero"] = ops["I"] - ops["N"]
     return ops
+
+
+def QED_plq_site_operators(spin, pure_theory, lattice_dim, U="ladder"):
+    """
+    Here we indecate the the order we chose
+    of vertex operators within on plaquette:
+      4|     3|
+    -- o ---- o --
+       |      |
+      1|     2|
+    -- o ---- o --
+       |      |
+    """
+    assert lattice_dim == 2, "Plaquette formulation only defined for 2D lattices"
+    assert pure_theory, "Plaquette formulation only defined for pure gauge theory"
+    # get all the operaprtors from the dressed site formulation
+    ops = QED_dressed_site_operators(spin, pure_theory, lattice_dim, U=U)
+    ops["Id"] = qmb_op(ops, ["Iz", "Iz", "Iz", "Iz"])
+    ops_plqt = {}
+    # electric operators on plaquette
+    ops_plqt["E2_plq"] = qmb_op(ops, ["E2_px", "Id", "Id", "Id"])
+    ops_plqt["E2_plq"] += qmb_op(ops, ["E2_py", "Id", "Id", "Id"])
+    ops_plqt["E2_plq"] += qmb_op(ops, ["Id", "E2_py", "Id", "Id"])
+    ops_plqt["E2_plq"] += qmb_op(ops, ["Id", "Id", "Id", "E2_px"])
+    # U*U*Udag*Udag + dag on plaquette
+    ops_plqt["B2_plq"] = qmb_op(ops, ["C_px,py", "C_py,mx", "C_mx,my", "C_my,px"])
+    ops_plqt["B2_plq"] += ops_plqt["B2_plq"].conj().transpose()
+    # Casimir operators between plaquettes
+    # plus direction
+    ops_plqt["E2_plq_px"] = qmb_op(ops, ["Id", "E2_px", "Id", "Id"])
+    ops_plqt["E2_plq_px"] += qmb_op(ops, ["Id", "Id", "E2_px", "Id"])
+    ops_plqt["E2_plq_py"] = qmb_op(ops, ["Id", "Id", "E2_py", "Id"])
+    ops_plqt["E2_plq_py"] += qmb_op(ops, ["Id", "Id", "Id", "E2_py"])
+    # minus direction
+    ops_plqt["E2_plq_mx"] = qmb_op(ops, ["E2_mx", "Id", "Id", "Id"])
+    ops_plqt["E2_plq_mx"] += qmb_op(ops, ["Id", "Id", "Id", "E2_mx"])
+    ops_plqt["E2_plq_my"] = qmb_op(ops, ["E2_py", "Id", "Id", "Id"])
+    ops_plqt["E2_plq_my"] += qmb_op(ops, ["Id", "E2_py", "Id", "Id"])
+    # two body plaquette operators
+    # plus direction
+    ops_plqt["B2_plq_px"] = qmb_op(ops, ["C_px,py", "Id", "Id", "C_px,my"])
+    ops_plqt["B2_plq_px_dag"] = ops_plqt["B2_plq_px"].conj().transpose()
+    ops_plqt["B2_plq_py"] = qmb_op(ops, ["Id", "Id", "C_mx,py", "C_px,py"])
+    ops_plqt["B2_plq_py_dag"] = ops_plqt["B2_plq_py"].conj().transpose()
+    # minus direction
+    ops_plqt["B2_plq_mx"] = qmb_op(ops, ["Id", "C_mx,py", "C_mx,my", "Id"])
+    ops_plqt["B2_plq_mx_dag"] = ops_plqt["B2_plq_mx"].conj().transpose()
+    ops_plqt["B2_plq_my"] = qmb_op(ops, ["Id", "Id", "C_mx,my", "C_px,my"])
+    ops_plqt["B2_plq_my_dag"] = ops_plqt["B2_plq_my"].conj().transpose()
+    # four body plaquette operators
+    ops_plqt["B2_plq_px_py"] = qmb_op(ops, ["Id", "Id", "C_px,py", "Id"])
+    ops_plqt["B2_plq_px_py_dag"] = ops_plqt["B2_plq_px_py"].conj().transpose()
+    ops_plqt["B2_plq_mx_py"] = qmb_op(ops, ["Id", "Id", "Id", "C_mx,py"])
+    ops_plqt["B2_plq_mx_py_dag"] = ops_plqt["B2_plq_mx_py"].conj().transpose()
+    ops_plqt["B2_plq_mx_my"] = qmb_op(ops, ["C_mx,my", "Id", "Id", "Id"])
+    ops_plqt["B2_plq_mx_my_dag"] = ops_plqt["B2_plq_mx_my"].conj().transpose()
+    ops_plqt["B2_plq_px_my"] = qmb_op(ops, ["Id", "C_px,my", "Id", "Id"])
+    ops_plqt["B2_plq_px_my_dag"] = ops_plqt["B2_plq_px_my"].conj().transpose()
+    # Convention:
+    # For the x-direction we enumerate from lower to up
+    # For the y-direction we enumerate from left to right
+    # plus x-direction
+    ops_plqt["E_plq_px1"] = qmb_op(ops, ["Id", "E_px", "Id", "Id"])
+    ops_plqt["E_plq_px2"] = qmb_op(ops, ["Id", "Id", "E_px", "Id"])
+    ops_plqt["E_plq_px"] = ops_plqt["E_plq_px1"] + ops_plqt["E_plq_px2"]
+    # minus x-direction
+    ops_plqt["E_plq_mx1"] = qmb_op(ops, ["E_mx", "Id", "Id", "Id"])
+    ops_plqt["E_plq_mx2"] = qmb_op(ops, ["Id", "Id", "Id", "E_mx"])
+    ops_plqt["E_plq_mx"] = ops_plqt["E_plq_mx1"] + ops_plqt["E_plq_mx2"]
+    # plus y-direction
+    ops_plqt["E_plq_py1"] = qmb_op(ops, ["Id", "Id", "Id", "E_py"])
+    ops_plqt["E_plq_py2"] = qmb_op(ops, ["Id", "Id", "E_py", "Id"])
+    ops_plqt["E_plq_py"] = ops_plqt["E_plq_py1"] + ops_plqt["E_plq_py2"]
+    # minus y-direction
+    ops_plqt["E_plq_my1"] = qmb_op(ops, ["E_my", "Id", "Id", "Id"])
+    ops_plqt["E_plq_my2"] = qmb_op(ops, ["Id", "E_my", "Id", "Id"])
+    ops_plqt["E_plq_my"] = ops_plqt["E_plq_my1"] + ops_plqt["E_plq_my2"]
+    return ops_plqt

@@ -5,7 +5,11 @@ from numba import typed
 from edlgt.modeling import LocalTerm, TwoBodyTerm, PlaquetteTerm
 from edlgt.modeling import check_link_symmetry, staggered_mask, get_origin_surfaces
 from .quantum_model import QuantumModel
-from edlgt.operators import QED_dressed_site_operators, QED_gauge_invariant_states
+from edlgt.operators import (
+    QED_dressed_site_operators,
+    QED_gauge_invariant_states,
+    QED_gauge_integrated_operators,
+)
 import logging
 
 logger = logging.getLogger(__name__)
@@ -15,7 +19,15 @@ __all__ = ["QED_Model"]
 class QED_Model(QuantumModel):
     """QED lattice gauge model with optional matter fields."""
 
-    def __init__(self, spin, pure_theory, bg_list=None, get_only_bulk=False, **kwargs):
+    def __init__(
+        self,
+        spin,
+        pure_theory,
+        bg_list=None,
+        plaq_basis=False,
+        get_only_bulk=False,
+        **kwargs,
+    ):
         """Initialize the QED model and construct its symmetry sector.
 
         Parameters
@@ -35,31 +47,42 @@ class QED_Model(QuantumModel):
         """
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
+        if spin == "integrated" and not np.all([pure_theory == False, self.dim == 1]):
+            msg = "QED with integrated gauge fields is allowed only in 1D with matter"
+            raise ValueError(msg)
         self.spin = spin
-        self.pure_theory = pure_theory
-        self.background = int(max(np.abs(bg_list))) if bg_list is not None else 0
-        self.bg_list = bg_list if self.background != 0 else None
-        self.staggered_basis = False if self.pure_theory else True
-        pure_label = "pure" if self.pure_theory else "with matter"
-        logger.info(f"----------------------------------------------------")
-        msg = f"({self.dim}+1)D QED MODEL {pure_label} j={spin}, bg={self.background}"
-        logger.info(msg)
-        # -------------------------------------------------------------------------------
-        # Acquire gauge invariant basis and states
-        self.gauge_basis, self.gauge_states = QED_gauge_invariant_states(
-            self.spin,
-            self.pure_theory,
-            lattice_dim=self.dim,
-            background=self.background,
-            get_only_bulk=get_only_bulk,
-        )
-        # -------------------------------------------------------------------------------
-        # Acquire operators
-        ops = QED_dressed_site_operators(
-            self.spin, self.pure_theory, self.dim, background=self.background
-        )
-        # Initialize the operators, local dimension and lattice labels
-        self.project_operators(ops, self.bg_list)
+        if np.isscalar(self.spin):
+            self.pure_theory = pure_theory
+            self.plaq_basis = plaq_basis
+            self.background = int(max(np.abs(bg_list))) if bg_list is not None else 0
+            self.bg_list = bg_list if self.background != 0 else None
+            self.staggered_basis = False if self.pure_theory else True
+            pure_label = "pure" if self.pure_theory else "with matter"
+            logger.info(f"----------------------------------------------------")
+            msg = f"({self.dim}+1)D QED MODEL {pure_label} j={spin}"
+            msg += f"bg={self.background}"
+            logger.info(msg)
+            # -------------------------------------------------------------------------------
+            # Acquire gauge invariant basis and states
+            self.gauge_basis, self.gauge_states = QED_gauge_invariant_states(
+                self.spin,
+                self.pure_theory,
+                lattice_dim=self.dim,
+                background=self.background,
+                get_only_bulk=get_only_bulk,
+            )
+            # -------------------------------------------------------------------------------
+            # Acquire operators
+            ops = QED_dressed_site_operators(
+                self.spin, self.pure_theory, self.dim, background=self.background
+            )
+            # Initialize the operators, local dimension and lattice labels
+            self.project_operators(ops, self.bg_list)
+        elif self.spin == "integrated":
+            ops = QED_gauge_integrated_operators()
+            self.project_operators(ops)
+        else:
+            raise ValueError(f"spin must be integer or 'integrated': got {spin}")
         # -------------------------------------------------------------------------------
         # GLOBAL SYMMETRIES
         if self.pure_theory:
@@ -69,12 +92,27 @@ class QED_Model(QuantumModel):
             global_ops = [self.ops["N"]]
             global_sectors = [int(self.n_sites / 2)]
         # -------------------------------------------------------------------------------
-        # LINK SYMMETRIES
-        link_ops = [
-            [self.ops[f"E_p{d}"], -self.ops[f"E_m{d}"]] for d in self.directions
-        ]
-        link_sectors = [0 for _ in self.directions]
-        # -------------------------------------------------------------------------------
+        # LINK SYMMETRIES (only present in the truncated version of gauge fields)
+        if self.spin == "integrated":
+            link_ops = None
+            link_sectors = None
+        else:
+            if not self.plaq_basis:
+                dirs = self.directions
+                link_ops = [[self.ops[f"E_p{d}"], -self.ops[f"E_m{d}"]] for d in dirs]
+                link_sectors = [0 for _ in self.directions]
+            else:
+                link_ops = [
+                    [self.ops[f"E_plqt_p{d}1"], self.ops[f"E_plqt_m{d}1"]]
+                    for d in self.directions
+                ]
+                link_ops += [
+                    [self.ops[f"E_plqt_p{d}2"], self.ops[f"E_plqt_m{d}2"]]
+                    for d in self.directions
+                ]
+                link_sectors = [0 for _ in self.directions]
+                link_sectors += [0 for _ in self.directions]
+        # ---------------------------------------------------------------------------
         # ELECTRIC-FLUX “NBODY” SYMMETRIES
         # only in the pure (no-matter) theory, more than 1D, *and* PBC
         # Constrain, for each cartesian direction, the corresponding
@@ -125,6 +163,15 @@ class QED_Model(QuantumModel):
         self.default_params()
 
     def build_Hamiltonian(self, g, m=None, theta=0.0):
+        if not self.plaq_basis:
+            if self.spin == "integrated":
+                return self.build_integrated_Hamiltonian(g, m, theta)
+            else:
+                return self.build_truncated_Hamiltonian(g, m, theta)
+        else:
+            return self.build_plaquette_Hamiltonian(g)
+
+    def build_truncated_Hamiltonian(self, g, m=None, theta=0.0):
         """Assemble the QED Hamiltonian.
 
         Parameters
@@ -137,7 +184,7 @@ class QED_Model(QuantumModel):
             Topological-angle coupling parameter.
         """
         logger.info(f"----------------------------------------------------")
-        logger.info("BUILDING HAMILTONIAN")
+        logger.info("BUILDING truncated HAMILTONIAN")
         # Hamiltonian Coefficients
         self.QED_Hamiltonian_couplings(g, m, theta)
         h_terms = {}
@@ -264,6 +311,76 @@ class QED_Model(QuantumModel):
                             mask=staggered_mask(self.lvals, stag_label),
                         )
                     )
+        self.H.build(format=self.ham_format)
+
+    def build_integrated_Hamiltonian(self, g, m, theta=0.0):
+        # Hamiltonian Coefficients
+        self.QED_Hamiltonian_couplings(g, m, theta)
+        logger.info("BUILDING integrated HAMILTONIAN")
+        h_terms = {}
+        # ---------------------------------------------------------------------------
+        # STAGGERED MASS TERM
+        h_terms["N"] = LocalTerm(operator=self.ops["N"], op_name="N", **self.def_params)
+        for _, stag_label in enumerate(["even", "odd"]):
+            self.H.add_term(
+                h_terms["N"].get_Hamiltonian(
+                    self.coeffs[f"m_{stag_label}"],
+                    staggered_mask(self.lvals, stag_label),
+                )
+            )
+        # ---------------------------------------------------------------------------
+        # HOPPING TERM
+        op_names_list = ["Sp", "Sm"]
+        op_list = [self.ops[op] for op in op_names_list]
+        # Define the Hamiltonian term
+        h_terms["hop"] = TwoBodyTerm("x", op_list, op_names_list, **self.def_params)
+        self.H.add_term(
+            h_terms["hop"].get_Hamiltonian(strength=self.coeffs["t"], add_dagger=True)
+        )
+        # ---------------------------------------------------------------------------
+        # ELECTIC ENERGY: long-range Hamiltonian
+        self.H.build(format=self.ham_format)
+
+    def build_plaquette_Hamiltonian(self, g):
+        logger.info("BUILDING plaquette HAMILTONIAN")
+        # Hamiltonian Coefficients
+        self.coeffs = {"E": g, "B": -1 / (2 * g)}
+        h_terms = {}
+        assert self.dim == 2, "Plaquette Hamiltonian only defined for dim >=2"
+        # -------------------------------------------------------------------------------
+        # ELECTRIC ENERGY
+        for op_name in ["E2_plq", "E2_plq_px", "E2_plq_py"]:
+            h_terms[op_name] = LocalTerm(self.ops[op_name], op_name, **self.def_params)
+            self.H.add_term(h_terms[op_name].get_Hamiltonian(strength=self.coeffs["E"]))
+        # -------------------------------------------------------------------------------
+        # MAGNETIC ENERGY
+        # PLAQUETTE TERM: MAGNETIC INTERACTION
+        h_terms["B2_plq"] = LocalTerm(self.ops["B2_plq"], "B2_plq", **self.def_params)
+        self.H.add_term(h_terms[op_name].get_Hamiltonian(strength=self.coeffs["B"]))
+        for d in self.directions:
+            # Define the list of the 2 non trivial operators
+            op_names_list = [f"B2_plq_p{d}", f"B2_plq_m{d}"]
+            op_list = [self.ops[op] for op in op_names_list]
+            # Define the Hamiltonian term
+            h_terms[f"plq_{d}"] = TwoBodyTerm(
+                d, op_list, op_names_list, **self.def_params
+            )
+            self.H.add_term(
+                h_terms[f"plq_{d}"].get_Hamiltonian(
+                    strength=self.coeffs["B"], add_dagger=True
+                )
+            )
+        # Plaquette operator between sites:
+        op_names_list = ["B2_plq_px_py", "B2_plq_mx_py", "B2_plq_px_my", "B2_plq_mx_my"]
+        op_list = [self.ops[op] for op in op_names_list]
+        h_terms["B2_plaq_xy"] = PlaquetteTerm(
+            ["x", "y"], op_list, op_names_list, **self.def_params
+        )
+        self.H.add_term(
+            h_terms["B2_plaq_xy"].get_Hamiltonian(
+                strength=self.coeffs["B"], add_dagger=True
+            )
+        )
         self.H.build(format=self.ham_format)
 
     def check_symmetries(self):
