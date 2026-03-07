@@ -32,7 +32,7 @@ class QED_Model(QuantumModel):
 
         Parameters
         ----------
-        spin : float
+        spin : float or str = integrated
             Gauge-link spin representation.
         pure_theory : bool
             If ``True``, build the pure-gauge theory (no matter fields).
@@ -60,8 +60,10 @@ class QED_Model(QuantumModel):
             pure_label = "pure" if self.pure_theory else "with matter"
             logger.info(f"----------------------------------------------------")
             msg = f"({self.dim}+1)D QED MODEL {pure_label} j={spin}"
-            msg += f"bg={self.background}"
             logger.info(msg)
+            if self.bg_list is not None:
+                msg = f"bg_list={self.bg_list}"
+                logger.info(msg)
             # -------------------------------------------------------------------------------
             # Acquire gauge invariant basis and states
             self.gauge_basis, self.gauge_states = QED_gauge_invariant_states(
@@ -468,20 +470,51 @@ class QED_Model(QuantumModel):
         """
         # MINIMAL STRING CONFIGURATIONS IN 3D QED WITH BACKGROUND charges
         if len(self.lvals) == 3 and self.bg_list == [-1, 0, 0, 0, 0, 0, 0, 1]:
-            if name == "S1":
-                config_state = np.array([4, 9, 9, 3, 6, 0, 3, 10])
-            elif name == "S2":
-                config_state = np.array([3, 9, 6, 0, 9, 3, 3, 11])
-            elif name == "S3":
-                config_state = np.array([1, 7, 9, 3, 9, 2, 3, 10])
-            elif name == "S4":
-                config_state = np.array([4, 9, 9, 3, 7, 3, 0, 8])
-            elif name == "S5":
-                config_state = np.array([1, 6, 9, 2, 9, 3, 3, 11])
-            elif name == "S6":
-                config_state = np.array([3, 9, 7, 3, 9, 3, 2, 8])
-            else:
-                raise ValueError(f"Unknown String name: {name}")
+            if self.spin == 1:
+                if name == "S1":
+                    config_state = np.array([4, 9, 9, 3, 6, 0, 3, 10])
+                elif name == "S2":
+                    config_state = np.array([3, 9, 6, 0, 9, 3, 3, 11])
+                elif name == "S3":
+                    config_state = np.array([1, 7, 9, 3, 9, 2, 3, 10])
+                elif name == "S4":
+                    config_state = np.array([4, 9, 9, 3, 7, 3, 0, 8])
+                elif name == "S5":
+                    config_state = np.array([1, 6, 9, 2, 9, 3, 3, 11])
+                elif name == "S6":
+                    config_state = np.array([3, 9, 7, 3, 9, 3, 2, 8])
+                else:
+                    raise ValueError(f"Unknown String name: {name}")
+            elif self.spin == 2:
+                if name == "S1":
+                    config_state = np.array([11, 27, 27, 9, 22, 4, 9, 29])
+                elif name == "S2":
+                    config_state = np.array([10, 27, 22, 4, 27, 9, 9, 30])
+                elif name == "S3":
+                    config_state = np.array([10, 27, 23, 9, 27, 9, 8, 25])
+                elif name == "S4":
+                    config_state = np.array([6, 22, 27, 8, 27, 9, 9, 30])
+                elif name == "S5":
+                    config_state = np.array([6, 23, 27, 9, 27, 8, 9, 29])
+                elif name == "S6":
+                    config_state = np.array([11, 27, 27, 9, 23, 9, 4, 25])
+                else:
+                    raise ValueError(f"Unknown String name: {name}")
+            elif self.spin == 3:
+                if name == "S1":
+                    config_state = np.array([20, 54, 47, 11, 54, 18, 18, 58])
+                elif name == "S2":
+                    config_state = np.array([21, 54, 54, 18, 47, 11, 18, 57])
+                elif name == "S3":
+                    config_state = np.array([21, 54, 54, 18, 48, 18, 11, 51])
+                elif name == "S4":
+                    config_state = np.array([20, 54, 48, 18, 54, 18, 17, 51])
+                elif name == "S5":
+                    config_state = np.array([14, 48, 54, 18, 54, 17, 18, 57])
+                elif name == "S6":
+                    config_state = np.array([14, 47, 54, 17, 54, 18, 18, 58])
+                else:
+                    raise ValueError(f"Unknown String name: {name}")
             return config_state
         else:
             raise NotImplementedError("Only 3D QED states are supported")

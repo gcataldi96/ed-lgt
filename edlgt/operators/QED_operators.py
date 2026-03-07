@@ -23,7 +23,7 @@ __all__ = [
 ]
 
 
-def QED_rishon_operators(spin, pure_theory, U, fermionic=True):
+def QED_rishon_operators(spin, pure_theory, U, fermionic=True, background=0):
     """
     Build single-rishon operators for a truncated U(1) quantum link model.
 
@@ -102,6 +102,12 @@ def QED_rishon_operators(spin, pure_theory, U, fermionic=True):
     # ELECTRIC FIELD OPERATORS
     ops["E"] = diags(np.arange(-spin, spin + 1, 1, dtype=float), 0, shape, dtype=float)
     ops["E2"] = ops["E"] ** 2
+    # BACKGROUND CHARGE
+    if background > 0:
+        bg_size = int(2 * background + 1)
+        bg_shape = (bg_size, bg_size)
+        bg_vals = np.arange(-background, background + 1, 1, dtype=float)
+        ops["bg"] = diags(bg_vals, 0, bg_shape, dtype=float)
     # In case with dynamical matter, check FERMIONIC RISHONS
     if fermionic:
         for key in ["Zp", "Zm", "Zp_dag", "Zm_dag"]:
@@ -157,7 +163,7 @@ def QED_dressed_site_operators(
     # Lattice Dimensions
     dimensions = "xyz"[:lattice_dim]
     # Get the Rishon operators according to the chosen n truncation
-    in_ops = QED_rishon_operators(spin, pure_theory, U, fermionic)
+    in_ops = QED_rishon_operators(spin, pure_theory, U, fermionic, background)
     # Size of the rishon operators
     z_size = int(2 * spin + 1)
     # Size of the whole dressed site
@@ -306,7 +312,7 @@ def QED_dressed_site_operators(
             id_list = ["Iz" for _ in range(2 * lattice_dim)]
         else:
             id_list = ["ID_psi"] + ["Iz" for _ in range(2 * lattice_dim)]
-        ops["bg"] = qmb_op(in_ops, ["E"] + id_list)
+        ops["bg"] = qmb_op(in_ops, ["bg"] + id_list)
     # -----------------------------------------------------------------------------
     # # GAUSS LAW OPERATORS on hard-core lattice sites
     if check_gauss_law:
