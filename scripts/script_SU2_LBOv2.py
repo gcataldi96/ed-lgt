@@ -7,8 +7,8 @@ B = int(sys.argv[-1])
 os.environ["NUMBA_NUM_THREADS"] = str(B)
 
 import numpy as np
-from ed_lgt.models import SU2_Model
-from ed_lgt.operators import spin_space
+from edlgt.models import SU2_Model
+from edlgt.operators import spin_space
 from simsio import run_sim
 from time import perf_counter
 import logging
@@ -70,21 +70,13 @@ with run_sim() as sim:
             # MEASURE OBSERVABLES
             if sim.par["observables"]["measure_obs"]:
                 model.measure_observables(ii)
-                sim.res["E_square"][ss, ii] = model.stag_avg(model.res["N_single"])
+                sim.res["E_square"][ss, ii] = model.stag_avg("N_single")
                 if not model.pure_theory:
-                    sim.res["N_single"][ss, ii] = model.stag_avg(model.res["N_single"])
-                    sim.res["N_pair"][ss, ii] += 0.5 * model.stag_avg(
-                        model.res["N_pair"], "even"
-                    )
-                    sim.res["N_pair"][ss, ii] += 0.5 * model.stag_avg(
-                        model.res["N_zero"], "odd"
-                    )
-                    sim.res["N_zero"][ss, ii] += 0.5 * model.stag_avg(
-                        model.res["N_zero"], "even"
-                    )
-                    sim.res["N_zero"][ss, ii] += 0.5 * model.stag_avg(
-                        model.res["N_pair"], "odd"
-                    )
+                    sim.res["N_single"][ss, ii] = model.stag_avg("N_single")
+                    sim.res["N_pair"][ss, ii] += 0.5 * model.stag_avg("N_pair", "even")
+                    sim.res["N_pair"][ss, ii] += 0.5 * model.stag_avg("N_zero", "odd")
+                    sim.res["N_zero"][ss, ii] += 0.5 * model.stag_avg("N_zero", "even")
+                    sim.res["N_zero"][ss, ii] += 0.5 * model.stag_avg("N_pair", "odd")
                     sim.res["N_tot"][ss, ii] = (
                         sim.res["N_single"][ss, ii] + 2 * sim.res["N_pair"][ss, ii]
                     )

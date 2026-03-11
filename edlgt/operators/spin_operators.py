@@ -63,9 +63,9 @@ def get_Pauli_operators():
     """Return Pauli-operator matrices in the package normalization."""
     shape = (2, 2)
     ops = {}
-    ops["I"] = identity(2)
-    ops["Sz"] = diags([1, -1], 0, shape)
-    ops["Sp"] = diags([1], 1, shape)
+    ops["I"] = identity(2, dtype=np.float64)
+    ops["Sz"] = diags(np.array([1.0, -1.0], dtype=np.float64), 0, shape)
+    ops["Sp"] = diags(np.array([1.0], dtype=np.float64), 1, shape)
     ops["Sm"] = ops["Sp"].transpose()
     ops["Sx"] = ops["Sp"] + ops["Sm"]
     ops["Sy"] = complex(0, -1) * (ops["Sp"] - ops["Sm"])

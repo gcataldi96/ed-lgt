@@ -49,13 +49,18 @@ def run_QED_simulation(par: dict) -> dict:
             res[f"psi{ii}"] = model.H.Npsi[ii].psi
     # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
-    local_obs = ["E2"]
-    local_obs += [f"E2_{s}{d}" for d in model.directions for s in "mp"]
     if not model.pure_theory:
-        local_obs += ["N", "N_zero"]
-    measure_obs = ["E2"]
-    if not model.pure_theory:
-        measure_obs += ["N"]
+        local_obs = ["N", "N_zero"]
+        measure_obs = ["N"]
+    else:
+        local_obs = []
+        measure_obs = []
+    # In integrated 1D QED, E2 is reconstructed from N (and N-N) instead of
+    # directly measured from link operators.
+    if model.spin != "integrated":
+        local_obs += ["E2"]
+        local_obs += [f"E2_{s}{d}" for d in model.directions for s in "mp"]
+    measure_obs += ["E2"]
     for obs in measure_obs:
         res[obs] = np.zeros(n_eigs, dtype=float)
     # LIST OF TWOBODY CORRELATORS
@@ -142,14 +147,19 @@ def run_QED_simulation(par: dict) -> dict:
                 cfgs, vals = model.H.Npsi[ii].get_state_configurations(
                     1e-3, model.sector_configs, return_configs=True
                 )
-                logger.info(f"State configurations for eigenstate {ii}:")
-                for cfg, val in zip(cfgs, vals):
-                    model.print_state_config(cfg, amplitude=val)
+                if model.spin != "integrated":
+                    logger.info(f"State configurations for eigenstate {ii}:")
+                    for cfg, val in zip(cfgs, vals):
+                        model.print_state_config(cfg, amplitude=val)
         # ---------------------------------------------------------------------------
         # MEASURE OBSERVABLES
         if measure_obs:
             model.measure_observables(ii)
-            res["E2"][ii] = model.link_avg(obs_name="E2")
+            if model.spin == "integrated":
+                model.reconstruct_integrated_E2_from_N(state_index=ii)
+                res["E2"][ii] = model.res["E2_avg"]
+            else:
+                res["E2"][ii] = model.link_avg(obs_name="E2")
             if not model.pure_theory:
                 res["N"][ii] += 0.5 * model.stag_avg("N", "even")
                 res["N"][ii] += 0.5 * model.stag_avg("N_zero", "odd")

@@ -2,7 +2,7 @@
 
 This module builds translation orbits and sparse momentum-basis projectors for
 symmetry-sector configuration tables, and provides momentum-projected sparse
-operator kernels for one-, two-, and four-site factorized operators.
+operator kernels for generic factorized n-body operators.
 """
 
 import numpy as np
@@ -15,6 +15,7 @@ __all__ = [
     "check_normalization",
     "check_orthogonality",
     "get_momentum_basis",
+    "nbody_data_momentum",
     "nbody_data_momentum_4sites",
     "nbody_data_momentum_2sites",
     "nbody_data_momentum_1site",
@@ -1146,6 +1147,168 @@ def precompute_nonzero_csr(matrix: np.ndarray):
                 indices[pos] = ii
                 pos += 1
     return indptr, indices
+
+
+@njit(cache=True, parallel=True)
+def nbody_data_momentum(
+    op_list: np.ndarray,  # (n_ops, n_sites, d_loc, d_loc)
+    op_sites_list: np.ndarray,  # (n_ops,), int32
+    sector_configs: np.ndarray,  # (n_states, n_sites), int32
+    # --- sparse momentum basis B arrays ---
+    L_col_ptr: np.ndarray,  # (proj_dim+1,) int32
+    L_row_idx: np.ndarray,  # (nnz_B,) int32
+    L_data: np.ndarray,  # (nnz_B,) float64/complex128
+    R_row_ptr: np.ndarray,  # (n_states+1,) int32
+    R_col_idx: np.ndarray,  # (nnz_B,) int32
+    R_data: np.ndarray,  # (nnz_B,) float64/complex128
+):
+    """Build sparse triplets for a generic n-body operator in momentum basis.
+
+    Parameters
+    ----------
+    op_list : ndarray
+        Site-resolved factorized operator data of shape
+        ``(n_ops, n_sites, d_loc, d_loc)``.
+    op_sites_list : ndarray
+        Sites where each operator factor acts (shape ``(n_ops,)``).
+    sector_configs : ndarray
+        Symmetry-sector configurations, one row per basis state.
+    L_col_ptr, L_row_idx, L_data : ndarray
+        CSC representation of momentum projector ``B``.
+    R_row_ptr, R_col_idx, R_data : ndarray
+        CSR representation of momentum projector ``B``.
+
+    Returns
+    -------
+    tuple
+        ``(row_list, col_list, value_list)`` triplets for the projected
+        operator ``B^H H B``.
+    """
+    n_states, n_sites = sector_configs.shape
+    local_dim = op_list.shape[2]
+    n_ops = len(op_sites_list)
+    proj_dim = L_col_ptr.shape[0] - 1
+    if n_ops < 1:
+        raise ValueError(f"nbody operator must act on at least one site, got {n_ops}")
+    # ----------------------------
+    # PASS 1: count nnz per projected row
+    # ----------------------------
+    nnz_per_row = np.zeros(proj_dim, np.int32)
+    for proj_row_idx in prange(proj_dim):
+        row_nnz = 0
+        left_start = L_col_ptr[proj_row_idx]
+        left_stop = L_col_ptr[proj_row_idx + 1]
+        for left_ptr in range(left_start, left_stop):
+            bra_idx = L_row_idx[left_ptr]
+            bra_cfg = sector_configs[bra_idx]
+            ket_local_states = np.empty((n_ops, local_dim), np.int32)
+            transition_counts = np.empty(n_ops, np.int32)
+            combo_count = 1
+            for op_idx in range(n_ops):
+                site_idx = op_sites_list[op_idx]
+                site_op = op_list[op_idx, site_idx]
+                bra_loc = bra_cfg[site_idx]
+                n_transitions = 0
+                for ket_loc in range(local_dim):
+                    if np.abs(site_op[bra_loc, ket_loc]) > OP_EPS:
+                        ket_local_states[op_idx, n_transitions] = ket_loc
+                        n_transitions += 1
+                transition_counts[op_idx] = n_transitions
+                combo_count *= n_transitions
+            if combo_count == 0:
+                continue
+            ket_cfg = np.empty(n_sites, np.int32)
+            transition_counters = np.zeros(n_ops, np.int32)
+            finished = False
+            while not finished:
+                for site_idx in range(n_sites):
+                    ket_cfg[site_idx] = bra_cfg[site_idx]
+                for op_idx in range(n_ops):
+                    trans_idx = transition_counters[op_idx]
+                    ket_cfg[op_sites_list[op_idx]] = ket_local_states[op_idx, trans_idx]
+                ket_idx = config_to_index_binarysearch(ket_cfg, sector_configs)
+                if ket_idx >= 0:
+                    row_nnz += R_row_ptr[ket_idx + 1] - R_row_ptr[ket_idx]
+                for op_idx in range(n_ops - 1, -1, -1):
+                    transition_counters[op_idx] += 1
+                    if transition_counters[op_idx] < transition_counts[op_idx]:
+                        break
+                    transition_counters[op_idx] = 0
+                    if op_idx == 0:
+                        finished = True
+        nnz_per_row[proj_row_idx] = row_nnz
+    # Prefix-sum row offsets
+    offset = 0
+    for proj_row_idx in range(proj_dim):
+        tmp_nnz = nnz_per_row[proj_row_idx]
+        nnz_per_row[proj_row_idx] = offset
+        offset += tmp_nnz
+    total_nnz = offset
+    # ----------------------------
+    # PASS 2: fill triplets
+    # ----------------------------
+    row_list = np.empty(total_nnz, np.int32)
+    col_list = np.empty(total_nnz, np.int32)
+    value_list = np.empty(total_nnz, np.complex128)
+    for proj_row_idx in prange(proj_dim):
+        write_ptr = nnz_per_row[proj_row_idx]
+        left_start = L_col_ptr[proj_row_idx]
+        left_stop = L_col_ptr[proj_row_idx + 1]
+        for left_ptr in range(left_start, left_stop):
+            bra_idx = L_row_idx[left_ptr]
+            amp_left = np.conj(L_data[left_ptr])
+            bra_cfg = sector_configs[bra_idx]
+
+            ket_local_states = np.empty((n_ops, local_dim), np.int32)
+            transition_values = np.empty((n_ops, local_dim), np.complex128)
+            transition_counts = np.empty(n_ops, np.int32)
+            combo_count = 1
+            for op_idx in range(n_ops):
+                site_idx = op_sites_list[op_idx]
+                site_op = op_list[op_idx, site_idx]
+                bra_loc = bra_cfg[site_idx]
+                n_transitions = 0
+                for ket_loc in range(local_dim):
+                    elem = site_op[bra_loc, ket_loc]
+                    if np.abs(elem) > OP_EPS:
+                        ket_local_states[op_idx, n_transitions] = ket_loc
+                        transition_values[op_idx, n_transitions] = elem
+                        n_transitions += 1
+                transition_counts[op_idx] = n_transitions
+                combo_count *= n_transitions
+            if combo_count == 0:
+                continue
+
+            ket_cfg = np.empty(n_sites, np.int32)
+            transition_counters = np.zeros(n_ops, np.int32)
+            finished = False
+            while not finished:
+                for site_idx in range(n_sites):
+                    ket_cfg[site_idx] = bra_cfg[site_idx]
+                amp_mid = 1.0 + 0.0j
+                for op_idx in range(n_ops):
+                    trans_idx = transition_counters[op_idx]
+                    amp_mid *= transition_values[op_idx, trans_idx]
+                    ket_cfg[op_sites_list[op_idx]] = ket_local_states[op_idx, trans_idx]
+                ket_idx = config_to_index_binarysearch(ket_cfg, sector_configs)
+                if ket_idx >= 0:
+                    right_start = R_row_ptr[ket_idx]
+                    right_stop = R_row_ptr[ket_idx + 1]
+                    for right_ptr in range(right_start, right_stop):
+                        proj_col_idx = R_col_idx[right_ptr]
+                        amp_right = R_data[right_ptr]
+                        row_list[write_ptr] = proj_row_idx
+                        col_list[write_ptr] = proj_col_idx
+                        value_list[write_ptr] = amp_left * amp_mid * amp_right
+                        write_ptr += 1
+                for op_idx in range(n_ops - 1, -1, -1):
+                    transition_counters[op_idx] += 1
+                    if transition_counters[op_idx] < transition_counts[op_idx]:
+                        break
+                    transition_counters[op_idx] = 0
+                    if op_idx == 0:
+                        finished = True
+    return row_list, col_list, value_list
 
 
 @njit(cache=True, parallel=True)

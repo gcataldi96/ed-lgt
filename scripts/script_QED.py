@@ -7,11 +7,11 @@ B = int(sys.argv[-1])
 os.environ["NUMBA_NUM_THREADS"] = str(B)
 
 import numpy as np
-from ed_lgt.models import QED_Model
+from edlgt.models import QED_Model
 from simsio import run_sim
 from time import perf_counter
-from ed_lgt.modeling import diagonalize_density_matrix
-from ed_lgt.workflows import _get
+from edlgt.modeling import diagonalize_density_matrix
+from edlgt.workflows import _get
 import logging
 
 logger = logging.getLogger(__name__)

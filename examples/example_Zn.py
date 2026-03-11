@@ -3,7 +3,7 @@ import numpy as np
 from scipy.linalg import schur
 from math import prod
 from copy import deepcopy
-from ed_lgt.operators import (
+from edlgt.operators import (
     Zn_rishon_operators,
     Zn_gauge_invariant_ops,
     Zn_corner_magnetic_basis,
@@ -12,8 +12,8 @@ from ed_lgt.operators import (
     QED_Hamiltonian_couplings,
     get_lambda_subspace,
 )
-from ed_lgt.modeling import Ground_State, LocalTerm, TwoBodyTerm, PlaquetteTerm
-from ed_lgt.modeling import (
+from edlgt.modeling import Ground_State, LocalTerm, TwoBodyTerm, PlaquetteTerm
+from edlgt.modeling import (
     entanglement_entropy,
     get_reduced_density_matrix,
     diagonalize_density_matrix,
@@ -25,7 +25,7 @@ from ed_lgt.modeling import (
 from numpy.linalg import eigh
 from scipy.sparse import csr_matrix, identity
 from scipy.sparse.linalg import norm
-from ed_lgt.tools import (
+from edlgt.tools import (
     check_hermitian,
     anti_commutator as anti_comm,
     check_commutator as check_comm,

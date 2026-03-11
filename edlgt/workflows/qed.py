@@ -38,7 +38,9 @@ def QED_build_model_and_hamiltonian(par: dict) -> QED_Model:
 def QED_prepare_observables(model: QED_Model, par, n_points):
     # Local observables
     theta = par.get("theta", 0.0) if model.pure_theory else 0
-    local_obs = [f"E2_p{d}" for d in model.directions]
+    local_obs = []
+    if model.spin != "integrated":
+        local_obs = [f"E2_p{d}" for d in model.directions]
     if not model.pure_theory:
         local_obs += ["N", "N_zero"]
     # Two-body observables
@@ -128,7 +130,13 @@ def QED_measure_on_states(
         # observables
         if flags["measure_obs"]:
             model.measure_observables(ii, dynamics=dynamics)
-            res["E2"][ii] = model.link_avg(obs_name="E2")
+            if model.spin == "integrated":
+                model.reconstruct_integrated_E2_from_N(
+                    state_index=ii, dynamics=dynamics
+                )
+                res["E2"][ii] = model.res["E2_avg"]
+            else:
+                res["E2"][ii] = model.link_avg(obs_name="E2")
             if not model.pure_theory:
                 res["N"][ii] += 0.5 * model.stag_avg("N", "even")
                 res["N"][ii] += 0.5 * model.stag_avg("N_zero", "odd")

@@ -3,19 +3,19 @@ import numpy as np
 from math import prod
 from numba import typed
 import logging
-from ed_lgt.symmetries import (
+from edlgt.symmetries import (
     get_symmetry_sector_generators,
     global_abelian_sector,
     link_abelian_sector,
 )
-from ed_lgt.modeling import QMB_hamiltonian, LocalTerm, TwoBodyTerm, PlaquetteTerm
-from ed_lgt.modeling import (
+from edlgt.modeling import QMB_hamiltonian, LocalTerm, TwoBodyTerm, PlaquetteTerm
+from edlgt.modeling import (
     lattice_base_configs,
     zig_zag,
     get_neighbor_sites,
     check_link_symmetry,
 )
-from ed_lgt.operators import (
+from edlgt.operators import (
     Z2_FermiHubbard_dressed_site_operators,
     Z2_FermiHubbard_gauge_invariant_states,
 )

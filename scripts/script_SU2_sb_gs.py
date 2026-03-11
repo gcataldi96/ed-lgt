@@ -7,9 +7,9 @@ B = int(sys.argv[-1])
 os.environ["NUMBA_NUM_THREADS"] = str(B)
 
 import numpy as np
-from ed_lgt.models import DFL_Model
-from ed_lgt.modeling import get_lattice_link_site_pairs
-from ed_lgt.symmetries import get_symmetry_sector_generators, symmetry_sector_configs
+from edlgt.models import DFL_Model
+from edlgt.modeling import get_lattice_link_site_pairs
+from edlgt.symmetries import get_symmetry_sector_generators, symmetry_sector_configs
 from simsio import run_sim
 from time import perf_counter
 import logging
@@ -134,11 +134,11 @@ with run_sim() as sim:
         # MEASURE OBSERVABLES
         model.measure_observables(ii, dynamics=False)
         sim.res["E2"][ii] = model.link_avg(obs_name="T2")
-        sim.res["N_single"][ii] = model.stag_avg(model.res["N_single"])
-        sim.res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "even")
-        sim.res["N_pair"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "odd")
-        sim.res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_zero"], "even")
-        sim.res["N_zero"][ii] += 0.5 * model.stag_avg(model.res["N_pair"], "odd")
+        sim.res["N_single"][ii] = model.stag_avg("N_single")
+        sim.res["N_pair"][ii] += 0.5 * model.stag_avg("N_pair", "even")
+        sim.res["N_pair"][ii] += 0.5 * model.stag_avg("N_zero", "odd")
+        sim.res["N_zero"][ii] += 0.5 * model.stag_avg("N_zero", "even")
+        sim.res["N_zero"][ii] += 0.5 * model.stag_avg("N_pair", "odd")
         sim.res["N_tot"][ii] = sim.res["N_single"][ii] + 2 * sim.res["N_pair"][ii]
         logger.info(f"Nsingle {sim.res['N_single'][ii]}")
         logger.info(f"Npair {sim.res['N_pair'][ii]}")

@@ -26,6 +26,9 @@ class QMBTerm:
         op_list: list[np.ndarray] = None,
         op_names_list: list[str] = None,
         sector_configs: np.ndarray = None,
+        loc_dims: np.ndarray = None,
+        staggered_basis: bool = False,
+        gauge_basis: dict | None = None,
         momentum_basis=None,
     ):
         """Initialize geometry and operator metadata for a lattice term.
@@ -51,11 +54,21 @@ class QMBTerm:
             Optional momentum-basis metadata used by some derived classes.
         """
         # Validate type of parameters
-        validate_parameters(lvals=lvals, has_obc=has_obc)
+        validate_parameters(
+            lvals=lvals,
+            has_obc=has_obc,
+            loc_dims=loc_dims,
+            staggered_basis=staggered_basis,
+            gauge_basis=gauge_basis,
+        )
         # Lattice Geometry
         self.lvals = lvals
         self.dimensions = "xyz"[: len(lvals)]
         self.has_obc = has_obc
+        # Single site basis info: dimension, staggering, gauge basis
+        self.loc_dims = loc_dims
+        self.staggered_basis = staggered_basis
+        self.gauge_basis = gauge_basis
         # Operators Info
         self.op = operator
         self.op_name = op_name
@@ -64,7 +77,13 @@ class QMBTerm:
         # Symmetry sector
         self.sector_configs = sector_configs
         # Get default parameters
-        self.def_params = {"lvals": self.lvals, "has_obc": self.has_obc}
+        self.def_params = {
+            "lvals": self.lvals,
+            "has_obc": self.has_obc,
+            "loc_dims": self.loc_dims,
+            "staggered_basis": self.staggered_basis,
+            "gauge_basis": self.gauge_basis,
+        }
         # Get Symmetry operator
         self.get_symmetry_operator()
         # Momentum basis

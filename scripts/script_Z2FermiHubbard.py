@@ -1,9 +1,9 @@
 import numpy as np
-from ed_lgt.models import Z2_FermiHubbard_Model
+from edlgt.models import Z2_FermiHubbard_Model
 from simsio import run_sim
 from time import perf_counter
 import logging
-from ed_lgt.operators import (
+from edlgt.operators import (
     Z2_FermiHubbard_dressed_site_operators,
     Z2_FermiHubbard_gauge_invariant_states,
 )

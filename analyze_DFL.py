@@ -11,12 +11,86 @@ from edlgt.tools import (
     custom_average,
     moving_time_integral,
     set_size,
+    moving_time_integral_centered,
 )
 
 textwidth_pt = 510.0
 textwidth_in = textwidth_pt / 72.27
 columnwidth_pt = 246.0
 columnwidth_in = columnwidth_pt / 72.27
+# %%
+config_filename = f"DFL/PE"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+res = {}
+gvals = vals["g"]
+print(gvals)
+time_steps = get_sim(ugrid[0]).res["time_steps"]
+res["PE"] = np.zeros((len(vals["g"]), len(time_steps)))
+for ii, g in enumerate(vals["g"]):
+    res["PE"][ii] = get_sim(ugrid[ii]).res["PE"]
+sm = cm.ScalarMappable(cmap="magma")
+palette = sm.to_rgba(gvals)
+fig, axs = plt.subplots(1, 1, constrained_layout=True, sharex=True)
+for gidx, _ in enumerate(gvals):
+    axs.plot(
+        time_steps[1:],
+        moving_time_integral_centered(time_steps[1:], res["PE"][gidx, 1:], 80),
+        "-",
+        color=palette[gidx],
+        markersize=2,
+        markeredgecolor=palette[gidx],
+        markerfacecolor="white",
+        markeredgewidth=1,
+    )
+axs.set(
+    ylabel=r"Participation entropy $PE_{2}(t)$",
+    xlabel=r"time $t$",
+    xscale="log",
+)
+axs.grid(True, which="both", linestyle="-", linewidth=0.4)
+cb = fig.colorbar(
+    sm, ax=axs, aspect=30, location="right", orientation="vertical", pad=0.02
+)
+cb.set_label(label=r"$g^{2}$", rotation=0, labelpad=-17, x=-0.2, y=-0.03)
+plt.savefig("DFL_PE_N12.pdf")
+
+res8 = {}
+config_filename = f"DFL/PE_N8"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["g"])
+gvals = vals["g"]
+res8["time"] = get_sim(ugrid[0]).res["time_steps"]
+res8["PE"] = np.zeros((len(vals["g"]), len(res8["time"])))
+for ii, g in enumerate(vals["g"]):
+    res8["PE"][ii] = get_sim(ugrid[ii]).res["PE"]
+gindices = [1, 7, 14]
+fig, axs = plt.subplots(3, 1, constrained_layout=True, sharex=True)
+for gidx, gval in enumerate(gvals):
+    g12idx = gindices[gidx]
+    axs[gidx].plot(
+        res8["time"][1:],
+        moving_time_integral_centered(res8["time"][1:], res["PE"][g12idx, 1:], 80) / 12,
+        "-",
+        color=palette[g12idx],
+        markersize=2,
+        markeredgecolor=palette[g12idx],
+        markerfacecolor="white",
+        markeredgewidth=1,
+    )
+    axs[gidx].plot(
+        res8["time"][1:],
+        moving_time_integral_centered(res8["time"][1:], res8["PE"][gidx, 1:], 80) / 8,
+        "o--",
+        color=palette[g12idx],
+        markersize=2,
+        markeredgecolor=palette[g12idx],
+        markerfacecolor="black",
+        markeredgewidth=1,
+    )
+    axs[gidx].set(ylabel=r"$PE_{2}(t)$", xscale="log")
+    axs[gidx].grid(True, which="both", linestyle="-", linewidth=0.4)
+
 # %%
 res = {"P": {}, "noP": {}}
 obs_list = [

@@ -194,7 +194,7 @@ for ii, g in enumerate(vals["g"]):
     res["chi"][ii, :] = -topological_susceptibility_from_energy_density(
         res["theta"], res["energy"][ii, :]
     )
-# save_dictionary(res, f"qed_thetaterm_ED1.pkl")
+save_dictionary(res, f"SU2_thetaterm.pkl")
 # %%
 gindexmin = 0
 sm_gvals = cm.ScalarMappable(cmap="magma")
@@ -240,7 +240,20 @@ cb = fig.colorbar(
 cb.set_label(label=r"$g^{2}$", rotation=0, labelpad=-20, x=-0.04, y=+0.03)
 plt.savefig(f"SU2thetaterm.pdf")
 
-
+# %%
+config_filename = f"su2_thetaterm/levels"
+match = SimsQuery(group_glob=config_filename)
+ugrid, vals = uids_grid(match.uids, ["theta"])
+n_eigs = 4
+dim_tuple = (len(vals["theta"]), n_eigs)
+res = {"energy": np.zeros(dim_tuple), "theta": vals["theta"], "E2": np.zeros(dim_tuple)}
+for kk, theta in enumerate(vals["theta"]):
+    for neig in range(4):
+        res["energy"][kk, neig] = get_sim(ugrid[kk]).res["energy"][neig]
+        res["E2"][kk, neig] = get_sim(ugrid[kk]).res["E2"][neig]
+save_dictionary(res, f"SU2_thetaterm_levels.pkl")
+for ii in range(len(vals["theta"])):
+    print(vals["theta"][ii], res["energy"][ii, :])
 # %%
 plaq1 = "C_px,py_C_py,mx_C_my,px_C_mx,my"
 plaq2 = "C_px,pz_C_pz,mx_C_mz,px_C_mx,mz"

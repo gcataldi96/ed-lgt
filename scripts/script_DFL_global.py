@@ -1,10 +1,16 @@
+import os
+import sys
+
+# Ensure NUMBA_NUM_THREADS is set properly before importing anything else
+B = int(sys.argv[-1])
+# Read the B parameter from command-line arguments
+os.environ["NUMBA_NUM_THREADS"] = str(B)
+
 import logging
-from time import perf_counter
-
 import numpy as np
-
-from edlgt.workflows import normalize_DFL_simsio_params, run_DFL_dynamics
 from simsio import run_sim
+from edlgt.workflows import normalize_DFL_simsio_params, run_DFL_dynamics
+from time import perf_counter
 
 logger = logging.getLogger(__name__)
 

@@ -1,9 +1,7 @@
 # %%
 from simsio import *
 import matplotlib.pyplot as plt
-import matplotlib.cm as cm
-from matplotlib.colors import LogNorm
-from edlgt.tools import set_size, plot_energy_bands
+from edlgt.tools import set_size
 
 textwidth_pt = 510.0
 textwidth_in = textwidth_pt / 72.27
@@ -259,12 +257,3 @@ for ii, g in enumerate(params["g"]):
                     markerfacecolor="white",
                     markeredgewidth=0.5,
                 )
-
-# %%
-plot_energy_bands(["band1_N0", "band1_N1"])
-# %%
-plot_energy_bands(["band2_N0", "band2_N1"])
-# %%
-plot_energy_bands(["band3_N0", "band3_N1"])
-# %%
-plot_energy_bands(["band4_N0", "band4_N1"])

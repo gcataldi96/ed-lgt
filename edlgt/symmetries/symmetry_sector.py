@@ -591,7 +591,7 @@ def get_link_sector_configs(
     # Acquire Sector dimension
     sector_dim = math.prod(int(d) for d in loc_dims)
     bits = sum(math.log2(d) for d in loc_dims)
-    logger.info(f"TOT DIM: {sector_dim}, 2^{round(bits,3)}")
+    logger.info(f"TOT DIM: {sector_dim}, 2^{bits:3f}")
     if nbody_op_diags is not None:
         if not isinstance(nbody_sectors, np.ndarray):
             nbody_sectors = np.array(nbody_sectors, dtype=float)
@@ -612,7 +612,7 @@ def get_link_sector_configs(
         )
     # Acquire dimension of the new sector
     sector_dim = len(sector_configs)
-    logger.info(f"SEC DIM: {sector_dim}, 2^{round(np.log2(sector_dim),3)}")
+    logger.info(f"SEC DIM: {sector_dim}, 2^{np.log2(sector_dim):3f}")
     return sector_configs
 
 

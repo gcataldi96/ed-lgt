@@ -10,6 +10,7 @@ from numba import njit, prange
 from edlgt.dtype_config import coerce_numeric_array
 from .generate_configs import config_to_index_binarysearch
 from .translational_sym import (
+    nbody_data_momentum,
     nbody_data_momentum_4sites,
     nbody_data_momentum_2sites,
     nbody_data_momentum_1site,
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 __all__ = [
     "nbody_term",
+    "nbody_data",
     "nbody_data_2sites",
     "localbody_data_par",
 ]
@@ -39,11 +41,11 @@ def nbody_term(
     Parameters
     ----------
     op_list : ndarray
-        Shape (M, n_sites, d_loc, d_loc) with M in {1,2,4}.
+        Shape (n_ops, n_sites, d_loc, d_loc).
     op_sites_list : ndarray
-        Shape (M,), int32 — the lattice sites the operator acts on.
+        Shape (n_ops,), int32 — the lattice sites the operator acts on.
     sector_configs : ndarray
-        Shape (N, n_sites), int32 — basis configurations in the (symmetry) sector.
+        Shape (n_states, n_sites), int32 — basis configurations in the (symmetry) sector.
     momentum_basis : object, optional
         Momentum-projection data.
         If a dictionary is provided, it must contain the sparse left/right
@@ -51,7 +53,7 @@ def nbody_term(
         ``"L_data"``, ``"R_row_ptr"``, ``"R_col_idx"``, and ``"R_data"``
         (``"n_rows"``/``"n_cols"`` may also be present).
         If an ndarray is provided (legacy path), it is interpreted as a dense
-        projection basis of shape ``(N, Bdim)``.
+        projection basis of shape ``(n_states, basis_dim)``.
         If ``None``, the operator is built in the real-space symmetry sector.
 
     Returns
@@ -61,22 +63,17 @@ def nbody_term(
         operator.
     """
     # normalize site-count & sanity-check
-    M = int(len(op_sites_list))
-    if M not in [1, 2, 4]:
-        msg = f"nbody operators can be only of 1,2,4 sites, got {M}"
-        raise NotImplementedError(msg)
-    # === No momentum projection → original real-space path ===
+    n_ops = int(len(op_sites_list))
+    if n_ops < 1:
+        raise ValueError(f"nbody operator must act on at least one site, got {n_ops}")
+    # === No momentum projection: original real-space path ===
     if momentum_basis is None:
-        if M == 1:
+        if n_ops == 1:
             row_list, col_list, value_list = localbody_data_par(
                 op_list[0], op_sites_list[0], sector_configs
             )
-        elif M == 2:
-            row_list, col_list, value_list = nbody_data_2sites(
-                op_list, op_sites_list, sector_configs
-            )
-        else:  # M == 4
-            row_list, col_list, value_list = nbody_data_4sites(
+        else:
+            row_list, col_list, value_list = nbody_data(
                 op_list, op_sites_list, sector_configs
             )
     else:
@@ -89,10 +86,10 @@ def nbody_term(
             "R_col_idx",
             "R_data",
         )
-        for k in required:
-            if k not in momentum_basis:
+        for key_name in required:
+            if key_name not in momentum_basis:
                 raise KeyError(
-                    f"momentum_basis dict missing required key '{k}'. "
+                    f"momentum_basis dict missing required key '{key_name}'. "
                     f"Present keys: {tuple(momentum_basis.keys())}"
                 )
         L_col_ptr = momentum_basis["L_col_ptr"]
@@ -101,7 +98,7 @@ def nbody_term(
         R_row_ptr = momentum_basis["R_row_ptr"]
         R_col_idx = momentum_basis["R_col_idx"]
         R_data = momentum_basis["R_data"]
-        if M == 1:
+        if n_ops == 1:
             row_list, col_list, value_list = nbody_data_momentum_1site(
                 op_list,
                 op_sites_list,
@@ -113,7 +110,7 @@ def nbody_term(
                 R_col_idx,
                 R_data,
             )
-        elif M == 2:
+        elif n_ops == 2:
             row_list, col_list, value_list = nbody_data_momentum_2sites(
                 op_list,
                 op_sites_list,
@@ -125,7 +122,7 @@ def nbody_term(
                 R_col_idx,
                 R_data,
             )
-        else:
+        elif n_ops == 4:
             row_list, col_list, value_list = nbody_data_momentum_4sites(
                 op_list,
                 op_sites_list,
@@ -137,7 +134,123 @@ def nbody_term(
                 R_col_idx,
                 R_data,
             )
+        else:
+            row_list, col_list, value_list = nbody_data_momentum(
+                op_list,
+                op_sites_list,
+                sector_configs,
+                L_col_ptr,
+                L_row_idx,
+                L_data,
+                R_row_ptr,
+                R_col_idx,
+                R_data,
+            )
     value_list = coerce_numeric_array(value_list, name="symmetry nbody values")
+    return row_list, col_list, value_list
+
+
+@njit(parallel=True, cache=True)
+def nbody_data(
+    op_list: np.ndarray, op_sites_list: np.ndarray, sector_configs: np.ndarray
+):
+    """Build sparse triplets for a generic n-body operator in a symmetry basis.
+
+    Parameters
+    ----------
+    op_list : ndarray
+        Site-resolved operator matrices.
+    op_sites_list : ndarray
+        Site indices on which the operator acts.
+    sector_configs : ndarray
+        Symmetry-sector configurations, one row per basis state.
+
+    Returns
+    -------
+    tuple
+        ``(row_list, col_list, value_list)`` sparse triplet arrays.
+    """
+    n_states = sector_configs.shape[0]
+    n_sites = sector_configs.shape[1]
+    local_dim = np.int32(op_list[0].shape[-1])
+    n_ops = len(op_sites_list)
+    # Number of nonzero columns generated per row
+    nnz_counts = np.zeros(n_states, dtype=np.int32)
+    # Estimate the number of nonzero elements per row
+    for state_idx in prange(n_states):
+        row_nnz = 1
+        for op_idx in range(n_ops):
+            site_idx = op_sites_list[op_idx]
+            site_op = op_list[op_idx, site_idx]
+            bra_loc = sector_configs[state_idx, site_idx]
+            n_transitions = 0
+            for ket_loc in range(local_dim):
+                if np.abs(site_op[bra_loc, ket_loc]) > 1e-10:
+                    n_transitions += 1
+            row_nnz *= n_transitions
+        nnz_counts[state_idx] = row_nnz
+    # Row offsets in the flattened triplet arrays
+    nnz_offsets = np.empty(n_states, dtype=np.int32)
+    # Allocate the output arrays
+    total_nnz = 0
+    for state_idx in range(n_states):
+        nnz_offsets[state_idx] = total_nnz
+        total_nnz += nnz_counts[state_idx]
+    # Preallocate the output arrays
+    row_list = np.empty(total_nnz, dtype=np.int32)
+    col_list = np.empty(total_nnz, dtype=np.int32)
+    value_list = np.empty(total_nnz, dtype=np.complex128)
+    # PASS 2: enumerate the cartesian product of local nonzero transitions
+    for bra_idx in prange(n_states):
+        # 1) grab the bra's full config and where to write
+        bra_config = sector_configs[bra_idx]
+        if nnz_counts[bra_idx] == 0:
+            continue
+        write_idx = nnz_offsets[bra_idx]
+        # 2) build per-site transitions
+        ket_local_states = np.empty((n_ops, local_dim), np.int32)
+        transition_values = np.empty((n_ops, local_dim), np.complex128)
+        transition_counts = np.empty(n_ops, np.int32)
+        for op_idx in range(n_ops):
+            site_idx = op_sites_list[op_idx]
+            site_op = op_list[op_idx, site_idx]
+            bra_loc = bra_config[site_idx]
+            n_transitions = 0
+            for ket_loc in range(local_dim):
+                elem = site_op[bra_loc, ket_loc]
+                if np.abs(elem) > 1e-10:
+                    ket_local_states[op_idx, n_transitions] = ket_loc
+                    transition_values[op_idx, n_transitions] = elem
+                    n_transitions += 1
+            transition_counts[op_idx] = n_transitions
+        # 3) enumerate all combinations with a mixed-radix counter
+        transition_counters = np.zeros(n_ops, np.int32)
+        ket_config = np.empty(n_sites, np.int32)
+        finished = False
+        while not finished:
+            # start from the bra each time
+            for site_idx in range(n_sites):
+                ket_config[site_idx] = bra_config[site_idx]
+            amplitude = 1.0 + 0.0j
+            for op_idx in range(n_ops):
+                trans_idx = transition_counters[op_idx]
+                amplitude *= transition_values[op_idx, trans_idx]
+                ket_config[op_sites_list[op_idx]] = ket_local_states[
+                    op_idx, trans_idx
+                ]
+            ket_idx = config_to_index_binarysearch(ket_config, sector_configs)
+            row_list[write_idx] = bra_idx
+            col_list[write_idx] = ket_idx
+            value_list[write_idx] = amplitude
+            write_idx += 1
+            # increment mixed-radix counter from last digit
+            for op_idx in range(n_ops - 1, -1, -1):
+                transition_counters[op_idx] += 1
+                if transition_counters[op_idx] < transition_counts[op_idx]:
+                    break
+                transition_counters[op_idx] = 0
+                if op_idx == 0:
+                    finished = True
     return row_list, col_list, value_list
 
 
@@ -161,89 +274,89 @@ def nbody_data_4sites(
     tuple
         ``(row_list, col_list, value_list)`` sparse triplet arrays.
     """
-    N = sector_configs.shape[0]
+    n_states = sector_configs.shape[0]
     n_sites = sector_configs.shape[1]
-    d_loc = np.int32(op_list[0].shape[-1])
-    M = len(op_sites_list)
+    local_dim = np.int32(op_list[0].shape[-1])
+    n_ops = len(op_sites_list)
     # Array to hold the number of nonzero columns per row
-    nnz_cols_per_row = np.zeros(N, dtype=np.int32)
+    nnz_cols_per_row = np.zeros(n_states, dtype=np.int32)
     # Estimate the number of nonzero elements per row
-    for ii in prange(N):
-        prod = 1
-        for kk in range(M):
-            site = op_sites_list[kk]
-            operator = op_list[kk, site]
-            row = sector_configs[ii, site]
-            count = 0
-            for col in range(d_loc):
-                if np.abs(operator[row, col]) > 1e-10:
-                    count += 1
-            prod *= count
-        nnz_cols_per_row[ii] = prod
+    for state_idx in prange(n_states):
+        row_nnz = 1
+        for op_idx in range(n_ops):
+            site_idx = op_sites_list[op_idx]
+            site_op = op_list[op_idx, site_idx]
+            bra_loc = sector_configs[state_idx, site_idx]
+            n_transitions = 0
+            for ket_loc in range(local_dim):
+                if np.abs(site_op[bra_loc, ket_loc]) > 1e-10:
+                    n_transitions += 1
+            row_nnz *= n_transitions
+        nnz_cols_per_row[state_idx] = row_nnz
     # Allocate the output arrays
     total_nnz = 0
-    for ii in range(N):
-        tmp = nnz_cols_per_row[ii]
-        nnz_cols_per_row[ii] = total_nnz
-        total_nnz += tmp
+    for state_idx in range(n_states):
+        tmp_nnz = nnz_cols_per_row[state_idx]
+        nnz_cols_per_row[state_idx] = total_nnz
+        total_nnz += tmp_nnz
     # Preallocate the output arrays
     row_list = np.empty(total_nnz, dtype=np.int32)
     col_list = np.empty(total_nnz, dtype=np.int32)
     value_list = np.empty(total_nnz, dtype=np.complex128)
-    # --- PASS 2: explicit 4‐nested‐loops version for M=4  ---------------
-    for irow in prange(N):
+    # --- PASS 2: explicit 4-nested-loops version for n_ops=4  ---------------
+    for bra_idx in prange(n_states):
         # 1) grab the bra’s full config and where to write
-        row_cfg = sector_configs[irow]
-        ptr = nnz_cols_per_row[irow]
-        # 2) build the per‐site (idxs,vs,lens) from the one‐site operators
-        idxs = np.empty((M, d_loc), np.int32)
-        vs = np.empty((M, d_loc), np.complex128)
-        lens = np.empty(M, np.int32)
-        for kk in range(M):
-            site = op_sites_list[kk]
-            Op = op_list[kk, site]
-            a = row_cfg[site]
-            cnt = 0
-            for b in range(d_loc):
-                v = Op[a, b]  # or Op[b, a], depending on your storage
-                if np.abs(v) > 1e-10:
-                    idxs[kk, cnt] = b
-                    vs[kk, cnt] = v
-                    cnt += 1
-            lens[kk] = cnt
+        bra_config = sector_configs[bra_idx]
+        ptr = nnz_cols_per_row[bra_idx]
+        # 2) build the per-site transitions from the one-site operators
+        ket_local_states = np.empty((n_ops, local_dim), np.int32)
+        transition_values = np.empty((n_ops, local_dim), np.complex128)
+        transition_counts = np.empty(n_ops, np.int32)
+        for op_idx in range(n_ops):
+            site_idx = op_sites_list[op_idx]
+            site_op = op_list[op_idx, site_idx]
+            bra_loc = bra_config[site_idx]
+            n_transitions = 0
+            for ket_loc in range(local_dim):
+                elem = site_op[bra_loc, ket_loc]
+                if np.abs(elem) > 1e-10:
+                    ket_local_states[op_idx, n_transitions] = ket_loc
+                    transition_values[op_idx, n_transitions] = elem
+                    n_transitions += 1
+            transition_counts[op_idx] = n_transitions
         # 3) a scratch array for the ket
         ket_config = np.empty(n_sites, np.int32)
         # start from the bra each time
-        for jj in range(n_sites):
-            ket_config[jj] = row_cfg[jj]
+        for site_idx in range(n_sites):
+            ket_config[site_idx] = bra_config[site_idx]
         # 4) four fully‐nested loops
         site0 = op_sites_list[0]
         site1 = op_sites_list[1]
         site2 = op_sites_list[2]
         site3 = op_sites_list[3]
-        for i0 in range(lens[0]):
-            b0 = idxs[0, i0]
-            v0 = vs[0, i0]
-            ket_config[site0] = b0
-            for i1 in range(lens[1]):
-                b1 = idxs[1, i1]
-                v1 = vs[1, i1]
-                ket_config[site1] = b1
-                for i2 in range(lens[2]):
-                    b2 = idxs[2, i2]
-                    v2 = vs[2, i2]
-                    ket_config[site2] = b2
-                    for i3 in range(lens[3]):
-                        b3 = idxs[3, i3]
-                        v3 = vs[3, i3]
-                        ket_config[site3] = b3
+        for ii0 in range(transition_counts[0]):
+            ket0 = ket_local_states[0, ii0]
+            val0 = transition_values[0, ii0]
+            ket_config[site0] = ket0
+            for ii1 in range(transition_counts[1]):
+                ket1 = ket_local_states[1, ii1]
+                val1 = transition_values[1, ii1]
+                ket_config[site1] = ket1
+                for ii2 in range(transition_counts[2]):
+                    ket2 = ket_local_states[2, ii2]
+                    val2 = transition_values[2, ii2]
+                    ket_config[site2] = ket2
+                    for ii3 in range(transition_counts[3]):
+                        ket3 = ket_local_states[3, ii3]
+                        val3 = transition_values[3, ii3]
+                        ket_config[site3] = ket3
                         # compute the full amplitude
-                        amp = v0 * v1 * v2 * v3
+                        amp = val0 * val1 * val2 * val3
                         # lookup that ket in your sorted sector_configs
-                        icol = config_to_index_binarysearch(ket_config, sector_configs)
+                        ket_idx = config_to_index_binarysearch(ket_config, sector_configs)
                         # write out the entry
-                        row_list[ptr] = irow
-                        col_list[ptr] = icol
+                        row_list[ptr] = bra_idx
+                        col_list[ptr] = ket_idx
                         value_list[ptr] = amp
                         ptr += 1
     return row_list, col_list, value_list
@@ -269,83 +382,79 @@ def nbody_data_2sites(
     tuple
         ``(row_list, col_list, value_list)`` sparse triplet arrays.
     """
-    N = sector_configs.shape[0]
+    n_states = sector_configs.shape[0]
     n_sites = sector_configs.shape[1]
-    d_loc = np.int32(op_list[0].shape[-1])
-    M = len(op_sites_list)
+    local_dim = np.int32(op_list[0].shape[-1])
+    n_ops = len(op_sites_list)
     # Array to hold the number of nonzero columns per row
-    nnz_cols_per_row = np.zeros(N, dtype=np.int32)
+    nnz_cols_per_row = np.zeros(n_states, dtype=np.int32)
     # Estimate the number of nonzero elements per row
-    for ii in prange(N):
-        prod = 1
-        for kk in range(M):
-            site = op_sites_list[kk]
-            operator = op_list[kk, site]
-            row = sector_configs[ii, site]
-            count = 0
-            for col in range(d_loc):
-                if np.abs(operator[row, col]) > 1e-10:
-                    count += 1
-            prod *= count
-        nnz_cols_per_row[ii] = prod
+    for state_idx in prange(n_states):
+        row_nnz = 1
+        for op_idx in range(n_ops):
+            site_idx = op_sites_list[op_idx]
+            site_op = op_list[op_idx, site_idx]
+            bra_loc = sector_configs[state_idx, site_idx]
+            n_transitions = 0
+            for ket_loc in range(local_dim):
+                if np.abs(site_op[bra_loc, ket_loc]) > 1e-10:
+                    n_transitions += 1
+            row_nnz *= n_transitions
+        nnz_cols_per_row[state_idx] = row_nnz
     # Allocate the output arrays
     total_nnz = 0
-    for ii in range(N):
-        tmp = nnz_cols_per_row[ii]
-        nnz_cols_per_row[ii] = total_nnz
-        total_nnz += tmp
+    for state_idx in range(n_states):
+        tmp_nnz = nnz_cols_per_row[state_idx]
+        nnz_cols_per_row[state_idx] = total_nnz
+        total_nnz += tmp_nnz
     # Preallocate the output arrays
     row_list = np.empty(total_nnz, dtype=np.int32)
     col_list = np.empty(total_nnz, dtype=np.int32)
     value_list = np.empty(total_nnz, dtype=np.complex128)
-    # --- PASS 2: explicit 4‐nested‐loops version for M=4  ---------------
-    for irow in prange(N):
+    # --- PASS 2: explicit 2-nested-loops version for n_ops=2  ---------------
+    for bra_idx in prange(n_states):
         # 1) grab the bra’s full config and where to write
-        row_cfg = sector_configs[irow]
-        ptr = nnz_cols_per_row[irow]
-        # 2) build the per‐site (idxs,vs,lens) from the one‐site operators
-        idxs = np.empty((M, d_loc), np.int32)
-        vs = np.empty((M, d_loc), np.complex128)
-        lens = np.empty(M, np.int32)
-        for kk in range(M):
-            site = op_sites_list[kk]
-            Op = op_list[kk, site]
-            a = row_cfg[site]
-            cnt = 0
-            for b in range(d_loc):
-                v = Op[a, b]  # or Op[b, a], depending on your storage
-                if np.abs(v) > 1e-10:
-                    idxs[kk, cnt] = b
-                    vs[kk, cnt] = v
-                    cnt += 1
-            lens[kk] = cnt
-
+        bra_config = sector_configs[bra_idx]
+        ptr = nnz_cols_per_row[bra_idx]
+        # 2) build the per-site transitions from the one-site operators
+        ket_local_states = np.empty((n_ops, local_dim), np.int32)
+        transition_values = np.empty((n_ops, local_dim), np.complex128)
+        transition_counts = np.empty(n_ops, np.int32)
+        for op_idx in range(n_ops):
+            site_idx = op_sites_list[op_idx]
+            site_op = op_list[op_idx, site_idx]
+            bra_loc = bra_config[site_idx]
+            n_transitions = 0
+            for ket_loc in range(local_dim):
+                elem = site_op[bra_loc, ket_loc]
+                if np.abs(elem) > 1e-10:
+                    ket_local_states[op_idx, n_transitions] = ket_loc
+                    transition_values[op_idx, n_transitions] = elem
+                    n_transitions += 1
+            transition_counts[op_idx] = n_transitions
         # 3) a scratch array for the ket
         ket_config = np.empty(n_sites, np.int32)
         # 4) four fully‐nested loops
         site0 = op_sites_list[0]
         site1 = op_sites_list[1]
-
-        for i0 in range(lens[0]):
+        for ii0 in range(transition_counts[0]):
             # start from the bra each time
-            for jj in range(n_sites):
-                ket_config[jj] = row_cfg[jj]
-
-            b0 = idxs[0, i0]
-            v0 = vs[0, i0]
-            ket_config[site0] = b0
-
-            for i1 in range(lens[1]):
-                b1 = idxs[1, i1]
-                v1 = vs[1, i1]
-                ket_config[site1] = b1
+            for site_idx in range(n_sites):
+                ket_config[site_idx] = bra_config[site_idx]
+            ket0 = ket_local_states[0, ii0]
+            val0 = transition_values[0, ii0]
+            ket_config[site0] = ket0
+            for ii1 in range(transition_counts[1]):
+                ket1 = ket_local_states[1, ii1]
+                val1 = transition_values[1, ii1]
+                ket_config[site1] = ket1
                 # compute the full amplitude
-                amp = v0 * v1
+                amp = val0 * val1
                 # lookup that ket in your sorted sector_configs
-                icol = config_to_index_binarysearch(ket_config, sector_configs)
+                ket_idx = config_to_index_binarysearch(ket_config, sector_configs)
                 # write out the entry
-                row_list[ptr] = irow
-                col_list[ptr] = icol
+                row_list[ptr] = bra_idx
+                col_list[ptr] = ket_idx
                 value_list[ptr] = amp
                 ptr += 1
     return row_list, col_list, value_list

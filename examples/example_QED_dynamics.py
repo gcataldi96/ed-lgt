@@ -75,13 +75,18 @@ def run_QED_dynamics(par: dict) -> dict:
         res[f"overlap_{state}"] = np.zeros(n_steps, dtype=float)
     # -------------------------------------------------------------------------------
     # LIST OF LOCAL OBSERVABLES
-    local_obs = ["E2"]
-    local_obs += [f"E2_{s}{d}" for d in model.directions for s in "mp"]
     if not model.pure_theory:
-        local_obs += ["N", "N_zero"]
-    measure_obs = ["E2"]
-    if not model.pure_theory:
-        measure_obs += ["N"]
+        local_obs = ["N", "N_zero"]
+        measure_obs = ["N"]
+    else:
+        local_obs = []
+        measure_obs = []
+    # In integrated 1D QED, E2 is reconstructed from N (and N-N) instead of
+    # directly measured from link operators.
+    if model.spin != "integrated":
+        local_obs += ["E2"]
+        local_obs += [f"E2_{s}x" for d in model.directions for s in "mp"]
+    measure_obs += ["E2"]
     for obs in measure_obs:
         res[obs] = np.zeros(n_steps, dtype=float)
     # LIST OF TWOBODY CORRELATORS
@@ -176,7 +181,11 @@ def run_QED_dynamics(par: dict) -> dict:
         # MEASURE OBSERVABLES
         if measure_obs:
             model.measure_observables(ii, dynamics=True)
-            res["E2"][ii] = model.link_avg(obs_name="E2")
+            if model.spin == "integrated":
+                model.reconstruct_integrated_E2_from_N(state_index=ii, dynamics=True)
+                res["E2"][ii] = model.res["E2_avg"]
+            else:
+                res["E2"][ii] = model.link_avg(obs_name="E2")
             if not model.pure_theory:
                 res["N"][ii] += 0.5 * model.stag_avg("N", "even")
                 res["N"][ii] += 0.5 * model.stag_avg("N_zero", "odd")

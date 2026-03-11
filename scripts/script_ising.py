@@ -1,6 +1,6 @@
 import numpy as np
-from ed_lgt.models import IsingModel
-from ed_lgt.modeling import QMB_state
+from edlgt.models import IsingModel
+from edlgt.modeling import QMB_state
 
 from simsio import run_sim
 import logging

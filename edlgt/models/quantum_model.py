@@ -7,6 +7,7 @@ spin models.
 """
 
 import numpy as np
+import math
 from scipy.sparse import csc_matrix, isspmatrix, csr_matrix, identity
 from scipy.sparse.linalg import expm, norm
 from math import prod
@@ -121,6 +122,9 @@ class QuantumModel:
         self.def_params = {
             "lvals": self.lvals,
             "has_obc": self.has_obc,
+            "loc_dims": self.loc_dims,
+            "staggered_basis": self.staggered_basis,
+            "gauge_basis": self.gauge_basis,
             "sector_configs": self.sector_configs,
             "momentum_basis": self.momentum_basis,
         }
@@ -517,6 +521,11 @@ class QuantumModel:
                 nbody_sites_list=nbody_sites_list,
                 nbody_sym_type=nbody_sym_type,
             )
+        else:
+            logger.info(f"NO SYMMETRY DETECTED: no sector_configs")
+            tot_dim = math.prod(int(d) for d in self.loc_dims)
+            bits = sum(math.log2(d) for d in self.loc_dims)
+            logger.info(f"TOT DIM: {tot_dim}, 2^{round(bits,3)}")
 
     def diagonalize_Hamiltonian(self, n_eigs, format, print_results=False):
         """Diagonalize the model Hamiltonian and cache energies/eigenstates."""

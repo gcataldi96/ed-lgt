@@ -1,9 +1,9 @@
 # %%
 import numpy as np
 from math import prod
-from ed_lgt.operators import bose_operators
-from ed_lgt.modeling import abelian_sector_indices
-from ed_lgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
+from edlgt.operators import bose_operators
+from edlgt.modeling import abelian_sector_indices
+from edlgt.modeling import LocalTerm, TwoBodyTerm, QMB_hamiltonian
 
 # N eigenvalues
 n_eigs = 1

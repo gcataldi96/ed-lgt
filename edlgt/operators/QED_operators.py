@@ -541,7 +541,7 @@ def QED_gauge_invariant_states(
 def QED_gauge_integrated_operators():
     ops = get_Pauli_operators()
     ops["N"] = 0.5 * (ops["Sz"] + ops["I"])
-    ops["Nzero"] = ops["I"] - ops["N"]
+    ops["N_zero"] = ops["I"] - ops["N"]
     return ops
 
 

@@ -1,4 +1,4 @@
-from ed_lgt.models import BoseHubbard_Model
+from edlgt.models import BoseHubbard_Model
 from simsio import run_sim
 from time import perf_counter
 import logging

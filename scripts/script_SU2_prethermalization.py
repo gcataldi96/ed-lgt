@@ -1,5 +1,5 @@
 import numpy as np
-from ed_lgt.models import SU2_Model
+from edlgt.models import SU2_Model
 from simsio import run_sim
 from time import perf_counter
 import logging
@@ -124,21 +124,13 @@ with run_sim() as sim:
             if sim.par["observables"]["measure_obs"]:
                 model.measure_observables(ii, dynamics=True)
                 sim.res["E2"][ii] = model.link_avg(obs_name="T2")
-                sim.res["bg"][ii] = model.stag_avg(model.res["bg"])
+                sim.res["bg"][ii] = model.stag_avg("bg")
                 if not model.pure_theory:
-                    sim.res["N_single"][ii] = model.stag_avg(model.res["N_single"])
-                    sim.res["N_pair"][ii] += 0.5 * model.stag_avg(
-                        model.res["N_pair"], "even"
-                    )
-                    sim.res["N_pair"][ii] += 0.5 * model.stag_avg(
-                        model.res["N_zero"], "odd"
-                    )
-                    sim.res["N_zero"][ii] += 0.5 * model.stag_avg(
-                        model.res["N_zero"], "even"
-                    )
-                    sim.res["N_zero"][ii] += 0.5 * model.stag_avg(
-                        model.res["N_pair"], "odd"
-                    )
+                    sim.res["N_single"][ii] = model.stag_avg("N_single")
+                    sim.res["N_pair"][ii] += 0.5 * model.stag_avg("N_pair", "even")
+                    sim.res["N_pair"][ii] += 0.5 * model.stag_avg("N_zero", "odd")
+                    sim.res["N_zero"][ii] += 0.5 * model.stag_avg("N_zero", "even")
+                    sim.res["N_zero"][ii] += 0.5 * model.stag_avg("N_pair", "odd")
                     sim.res["N_tot"][ii] = (
                         sim.res["N_single"][ii] + 2 * sim.res["N_pair"][ii]
                     )

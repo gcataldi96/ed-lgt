@@ -7,9 +7,9 @@ B = int(sys.argv[-1])
 os.environ["NUMBA_NUM_THREADS"] = str(B)
 
 import numpy as np
-from ed_lgt.models import SU2_Model
+from edlgt.models import SU2_Model
 from simsio import run_sim
-from ed_lgt.modeling import (
+from edlgt.modeling import (
     get_projector_for_efficient_density_matrix as project_RDM,
     diagonalize_density_matrix,
 )
@@ -92,21 +92,13 @@ with run_sim() as sim:
         # MEASURE OBSERVABLES
         if sim.par["observables"]["measure_obs"]:
             model.measure_observables(ii)
-            sim.res["E_square"][ii] = model.stag_avg(model.res["N_single"])
+            sim.res["E_square"][ii] = model.stag_avg("N_single")
             if not model.pure_theory:
-                sim.res["N_single"][ii] = model.stag_avg(model.res["N_single"])
-                sim.res["N_pair"][ii] += 0.5 * model.stag_avg(
-                    model.res["N_pair"], "even"
-                )
-                sim.res["N_pair"][ii] += 0.5 * model.stag_avg(
-                    model.res["N_zero"], "odd"
-                )
-                sim.res["N_zero"][ii] += 0.5 * model.stag_avg(
-                    model.res["N_zero"], "even"
-                )
-                sim.res["N_zero"][ii] += 0.5 * model.stag_avg(
-                    model.res["N_pair"], "odd"
-                )
+                sim.res["N_single"][ii] = model.stag_avg("N_single")
+                sim.res["N_pair"][ii] += 0.5 * model.stag_avg("N_pair", "even")
+                sim.res["N_pair"][ii] += 0.5 * model.stag_avg("N_zero", "odd")
+                sim.res["N_zero"][ii] += 0.5 * model.stag_avg("N_zero", "even")
+                sim.res["N_zero"][ii] += 0.5 * model.stag_avg("N_pair", "odd")
                 sim.res["N_tot"][ii] = (
                     sim.res["N_single"][ii] + 2 * sim.res["N_pair"][ii]
                 )
@@ -187,24 +179,20 @@ with run_sim() as sim:
                     # ----------------------------------------------------------------------------+
                     # MEASURE OBSERVABLES
                     eff_model.measure_observables(ii)
-                    sim.res["eff_E_square"][tt, ii] = eff_model.stag_avg(
-                        eff_model.res["E_square"]
-                    )
+                    sim.res["eff_E_square"][tt, ii] = eff_model.stag_avg("E_square")
                     if not model.pure_theory:
-                        sim.res["eff_N_single"][tt, ii] = eff_model.stag_avg(
-                            eff_model.res["N_single"]
+                        sim.res["eff_N_single"][tt, ii] = eff_model.stag_avg("N_single")
+                        sim.res["eff_N_pair"][tt, ii] += 0.5 * eff_model.stag_avg(
+                            "N_pair", "even"
                         )
                         sim.res["eff_N_pair"][tt, ii] += 0.5 * eff_model.stag_avg(
-                            eff_model.res["N_pair"], "even"
-                        )
-                        sim.res["eff_N_pair"][tt, ii] += 0.5 * eff_model.stag_avg(
-                            eff_model.res["N_zero"], "odd"
+                            "N_zero", "odd"
                         )
                         sim.res["eff_N_zero"][tt, ii] += 0.5 * eff_model.stag_avg(
-                            eff_model.res["N_zero"], "even"
+                            "N_zero", "even"
                         )
                         sim.res["eff_N_zero"][tt, ii] += 0.5 * eff_model.stag_avg(
-                            eff_model.res["N_pair"], "odd"
+                            "N_pair", "odd"
                         )
                         sim.res["eff_N_tot"][tt, ii] = (
                             sim.res["eff_N_single"][tt, ii]

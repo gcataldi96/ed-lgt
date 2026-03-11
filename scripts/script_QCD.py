@@ -1,8 +1,8 @@
 import numpy as np
 import os
 from numba import set_num_threads
-from ed_lgt.modeling import get_entropy_partition
-from ed_lgt.models import QCD_Model
+from edlgt.modeling import get_entropy_partition
+from edlgt.models import QCD_Model
 from simsio import run_sim
 from time import perf_counter
 import logging

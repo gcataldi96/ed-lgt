@@ -6,7 +6,7 @@ for site-dependent basis projections (e.g. gauge bases).
 """
 
 import numpy as np
-from scipy.sparse import csr_matrix, identity, kron
+from scipy.sparse import csr_matrix, identity, isspmatrix, kron
 from edlgt.tools import validate_parameters
 from edlgt.dtype_config import coerce_matrix_dtype
 from .lattice_mappings import zig_zag
@@ -80,6 +80,7 @@ def local_op(
     has_obc,
     staggered_basis=False,
     gauge_basis=None,
+    loc_dims=None,
 ):
     """Construct a single-site operator embedded in the full lattice Hilbert space.
 
@@ -97,6 +98,9 @@ def local_op(
         Whether a staggered basis is used.
     gauge_basis : dict, optional
         Site-label-dependent basis projectors.
+    loc_dims : numpy.ndarray, optional
+        Per-site local dimensions used when operators are already projected and
+        provided as 3D site-resolved arrays.
 
     Returns
     -------
@@ -111,10 +115,17 @@ def local_op(
         has_obc=has_obc,
         staggered_basis=staggered_basis,
         gauge_basis=gauge_basis,
+        loc_dims=loc_dims,
     )
     # Construct the dictionary of operators and their names needed to construct the QMB local term
     ops, op_names_list = construct_operator_list(
-        [operator], [op_site], lvals, has_obc, staggered_basis, gauge_basis
+        [operator],
+        [op_site],
+        lvals,
+        has_obc,
+        staggered_basis,
+        gauge_basis,
+        loc_dims=loc_dims,
     )
     return qmb_operator(ops, op_names_list)
 
@@ -126,6 +137,7 @@ def two_body_op(
     has_obc,
     staggered_basis=False,
     gauge_basis=None,
+    loc_dims=None,
 ):
     """Construct a two-site operator embedded in the full lattice Hilbert space.
 
@@ -143,6 +155,9 @@ def two_body_op(
         Whether a staggered basis is used.
     gauge_basis : dict, optional
         Site-label-dependent basis projectors.
+    loc_dims : numpy.ndarray, optional
+        Per-site local dimensions used when operators are already projected and
+        provided as 3D site-resolved arrays.
 
     Returns
     -------
@@ -157,10 +172,17 @@ def two_body_op(
         has_obc=has_obc,
         staggered_basis=staggered_basis,
         gauge_basis=gauge_basis,
+        loc_dims=loc_dims,
     )
     # Construct the dictionary of operators and their names needed to construct the QMB twobody term
     ops, op_names_list = construct_operator_list(
-        op_list, op_sites_list, lvals, has_obc, staggered_basis, gauge_basis
+        op_list,
+        op_sites_list,
+        lvals,
+        has_obc,
+        staggered_basis,
+        gauge_basis,
+        loc_dims=loc_dims,
     )
     return qmb_operator(ops, op_names_list)
 
@@ -172,6 +194,7 @@ def four_body_op(
     has_obc,
     staggered_basis=False,
     gauge_basis=None,
+    loc_dims=None,
     get_real=False,
 ):
     """Construct a four-site (plaquette-like) operator in the full Hilbert space.
@@ -190,6 +213,9 @@ def four_body_op(
         Whether a staggered basis is used.
     gauge_basis : dict, optional
         Site-label-dependent basis projectors.
+    loc_dims : numpy.ndarray, optional
+        Per-site local dimensions used when operators are already projected and
+        provided as 3D site-resolved arrays.
     get_real : bool, optional
         If ``True``, return only the Hermitian (real) part.
 
@@ -207,16 +233,29 @@ def four_body_op(
         get_real=get_real,
         staggered_basis=staggered_basis,
         gauge_basis=gauge_basis,
+        loc_dims=loc_dims,
     )
     # Construct the dictionary of operators and their names needed to construct the QMB twobody term
     ops, op_names_list = construct_operator_list(
-        op_list, op_sites_list, lvals, has_obc, staggered_basis, gauge_basis
+        op_list,
+        op_sites_list,
+        lvals,
+        has_obc,
+        staggered_basis,
+        gauge_basis,
+        loc_dims=loc_dims,
     )
     return qmb_operator(ops, op_names_list, get_real=get_real)
 
 
 def construct_operator_list(
-    op_list, op_sites_list, lvals, has_obc, staggered_basis, gauge_basis
+    op_list,
+    op_sites_list,
+    lvals,
+    has_obc,
+    staggered_basis,
+    gauge_basis,
+    loc_dims=None,
 ):
     """Create per-site operator labels/matrices for a lattice operator product.
 
@@ -234,6 +273,9 @@ def construct_operator_list(
         Whether a staggered basis is used.
     gauge_basis : dict or None
         Site-label-dependent basis projectors, or ``None`` for a uniform basis.
+    loc_dims : numpy.ndarray, optional
+        Per-site local dimensions. Required when ``op_list`` contains projected
+        site-resolved operators with shape ``(n_sites, max_loc_dim, max_loc_dim)``.
 
     Returns
     -------
@@ -250,31 +292,78 @@ def construct_operator_list(
         has_obc=has_obc,
         staggered_basis=staggered_basis,
         gauge_basis=gauge_basis,
+        loc_dims=loc_dims,
     )
-    all_sites_equal = True if gauge_basis is None else False
-    # Define the identity operator
-    ID = identity(op_list[0].shape[0])
+    n_sites = int(np.prod(lvals))
+    if loc_dims is not None:
+        loc_dims = np.asarray(loc_dims, dtype=np.int64)
+        if loc_dims.size != n_sites:
+            msg = f"loc_dims size must be {n_sites}, got {loc_dims.size}"
+            raise ValueError(msg)
+    has_site_resolved_ops = any(
+        isinstance(op, np.ndarray) and op.ndim == 3 for op in op_list
+    )
+    all_sites_equal = (
+        True if (gauge_basis is None and not has_site_resolved_ops) else False
+    )
+    # Define the identity operator for the legacy 2D-operator path
+    if isspmatrix(op_list[0]):
+        ID = identity(op_list[0].shape[0], format="csr")
+    elif isinstance(op_list[0], np.ndarray) and op_list[0].ndim == 2:
+        ID = identity(op_list[0].shape[0], format="csr")
+    else:
+        ID = None
     # Empty dictionary of operators and list of their names
     ops_dict = {}
     op_names_list = []
     # Assign a name to the operator at position ii
     tmp = 0
-    for ii in range(np.prod(lvals)):
+    for ii in range(n_sites):
         if ii in op_sites_list:
             tmp += 1
             op_name = f"op{tmp}"
-            op = op_list[op_sites_list.index(ii)]
+            base_op = op_list[op_sites_list.index(ii)]
         else:
             op_name = "ID"
-            op = ID
+            base_op = None
+        if base_op is None:
+            if has_site_resolved_ops:
+                if loc_dims is None:
+                    msg = "loc_dims is required with site-resolved operators"
+                    raise ValueError(msg)
+                op = identity(int(loc_dims[ii]), format="csr")
+                op_name = f"{op_name}_d{int(loc_dims[ii])}"
+            else:
+                op = ID
+        elif isinstance(base_op, np.ndarray) and base_op.ndim == 3:
+            if base_op.shape[0] != n_sites:
+                msg = (
+                    "site-resolved operator first dimension must match number of sites: "
+                    f"expected {n_sites}, got {base_op.shape[0]}"
+                )
+                raise ValueError(msg)
+            site_op = base_op[ii]
+            if loc_dims is not None:
+                loc_dim = int(loc_dims[ii])
+                site_op = site_op[:loc_dim, :loc_dim]
+            op = csr_matrix(site_op)
+            op_name = f"{op_name}_s{ii}"
+        elif isinstance(base_op, np.ndarray) and base_op.ndim == 2:
+            op = csr_matrix(base_op)
+        elif isspmatrix(base_op):
+            op = base_op
+        else:
+            raise TypeError("operators must be sparse matrices or 2D/3D numpy arrays")
         # Get the coordinates of ii in the d-dim lattice
         coords = zig_zag(lvals, ii)
         # Get the site label according to its position in the lattice (border, corner, core)
         basis_label = get_site_label(
             coords, lvals, has_obc, staggered_basis, all_sites_equal
         )
-        # Apply projection of the operator on the proper basis for that lattice position (and update its name)
-        op, op_name = apply_basis_projection(op, op_name, basis_label, gauge_basis)
+        # Apply projection only in the legacy 2D-operator path.
+        if not has_site_resolved_ops:
+            # Apply projection of the operator on the proper basis for that lattice position (and update its name)
+            op, op_name = apply_basis_projection(op, op_name, basis_label, gauge_basis)
         # Save operator and its name
         ops_dict[op_name] = op
         op_names_list.append(op_name)

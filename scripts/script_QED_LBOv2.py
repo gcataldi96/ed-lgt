@@ -7,7 +7,7 @@ B = int(sys.argv[-1])
 os.environ["NUMBA_NUM_THREADS"] = str(B)
 
 import numpy as np
-from ed_lgt.models import QED_Model
+from edlgt.models import QED_Model
 from simsio import run_sim
 from time import perf_counter
 import logging
@@ -68,7 +68,7 @@ with run_sim() as sim:
             # MEASURE OBSERVABLES
             if sim.par["observables"]["measure_obs"]:
                 model.measure_observables(ii)
-                sim.res["E_square"][ss, ii] = model.stag_avg(model.res["E_square"])
+                sim.res["E_square"][ss, ii] = model.stag_avg("E_square")
         logger.info("--------------------------------------------------------------")
     # -------------------------------------------------------------------------------
     end_time = perf_counter()

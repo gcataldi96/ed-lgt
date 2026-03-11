@@ -7,10 +7,10 @@ B = int(sys.argv[-1])
 os.environ["NUMBA_NUM_THREADS"] = str(B)
 
 import numpy as np
-from ed_lgt.models import QED_Model
+from edlgt.models import QED_Model
 from simsio import run_sim
 from time import perf_counter
-from ed_lgt.modeling import (
+from edlgt.modeling import (
     get_projector_for_efficient_density_matrix as project_RDM,
     diagonalize_density_matrix,
 )

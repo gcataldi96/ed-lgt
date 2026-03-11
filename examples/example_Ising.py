@@ -1,18 +1,15 @@
 # %%
 import numpy as np
 from math import prod
-from ed_lgt.modeling import abelian_sector_indices
-from ed_lgt.operators import get_Pauli_operators
-from ed_lgt.modeling import (
+from edlgt.modeling import abelian_sector_indices
+from edlgt.operators import get_Pauli_operators
+from edlgt.modeling import (
     LocalTerm,
     TwoBodyTerm,
     QMB_hamiltonian,
     NBodyTerm,
-    truncation,
-    get_loc_states_from_qmb_state,
 )
 from time import time
-from scipy.sparse import csr_matrix
 import logging
 
 logger = logging.getLogger(__name__)
@@ -171,36 +168,3 @@ end = time()
 tot_time = end - start
 logger.info("")
 logger.info("TOT TIME {tot_time}")
-
-# %%
-"""C = np.outer(H.Npsi[1].psi, np.conjugate(H.Npsi[0].psi))
-indices = np.array(np.where(np.abs(C) > 1e-3)).T
-data = csr_matrix(truncation(C, threshold=1e-3)).data
-
-if sector:
-    true_indices_r = sector_indices[indices[:, 0]]
-    true_indices_c = sector_indices[indices[:, 1]]
-    true_indices = np.array([true_indices_r, true_indices_c]).T
-    basis_r = sector_basis[indices[:, 0], :]
-    basis_c = sector_basis[indices[:, 1], :]
-else:
-    basis_r = basis[indices[:, 0], :]
-    basis_c = basis[indices[:, 1], :]
-    true_indices = indices
-
-# Order data and indices according to data in descending order
-order = np.argsort(-np.abs(data))
-true_indices = true_indices[order, :]
-o_basis_r = basis_r[order, :]
-o_basis_c = basis_c[order, :]
-true_data = data[order]
-for ii in range(data.shape[0]):
-    logger.info(
-        true_indices[ii],
-        round(true_data[ii], 6),
-        o_basis_r[ii],
-        o_basis_c[ii],
-        list(np.where(~np.equal(o_basis_r[ii], o_basis_c[ii]))[0]),
-    )
-"""
-# %%
