@@ -10,6 +10,11 @@ it is in the `0.x` development phase.
 ### Added
 - No user-facing changes yet.
 
+## [0.2.1] - 2026-03-11
+
+### Fixed
+- Corrected `CITATION.cff` YAML formatting so release metadata is parsed reliably by Zenodo.
+
 ## [0.2.0] - 2026-03-11
 
 ### Added
