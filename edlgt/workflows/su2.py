@@ -24,6 +24,15 @@ def _get(d, path, default=None):
     return cur
 
 
+def _get_dtype_mode(par: dict):
+    mode = _get(par, ["hamiltonian", "dtype_mode"], "auto")
+    if mode == "auto":
+        legacy_flag = _get(par, ["hamiltonian", "is_complex"], None)
+        if legacy_flag is not None:
+            mode = bool(legacy_flag)
+    return mode
+
+
 def compare_SU2_models(lvals, pure_theory, has_obc, g=0.1, m=0.1, atol=1e-10, neigs=4):
     if not pure_theory:
         sectors = [np.prod(lvals)]
@@ -92,7 +101,9 @@ def su2_build_model_and_hamiltonian(par: dict) -> SU2_Model:
     # Hamiltonian
     g = par["g"]
     m = par.get("m", None) if not model.pure_theory else None
-    model.build_Hamiltonian(g, m)
+    theta = par.get("theta", 0.0) if model.pure_theory else 0.0
+    dtype_mode = _get_dtype_mode(par)
+    model.build_Hamiltonian(g, m, theta=theta, dtype_mode=dtype_mode)
     return model
 
 

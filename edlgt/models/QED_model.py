@@ -49,6 +49,9 @@ class QED_Model(QuantumModel):
         """
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
+        # Build local operator dictionaries in complex mode, then optionally
+        # switch to real mode at Hamiltonian-assembly time when allowed.
+        self.configure_dtype_mode(dtype_mode="complex", auto_mode="complex")
         # Check Background charge list
         if bg_list is None:
             self.bg_list = None
@@ -197,16 +200,39 @@ class QED_Model(QuantumModel):
         # DEFAULT PARAMS
         self.default_params()
 
-    def build_Hamiltonian(self, g, m=None, theta=0.0):
+    def _get_auto_dtype_mode(self, m=None, theta=0.0):
+        """Heuristic dtype mode for QED Hamiltonian assembly."""
+        if not self.pure_theory:
+            return "complex"
+        if np.abs(theta) <= 1e-12:
+            return "real"
+        return "complex"
+
+    def build_Hamiltonian(self, g, m=None, theta=0.0, dtype_mode="auto"):
+        """Dispatch to the appropriate QED Hamiltonian builder.
+
+        Parameters
+        ----------
+        dtype_mode : str or bool, optional
+            ``"auto"``, ``"real"``, ``"complex"``, or legacy bool flag.
+        """
+        resolved_mode = self.configure_dtype_mode(
+            dtype_mode=dtype_mode,
+            auto_mode=self._get_auto_dtype_mode(m=m, theta=theta),
+        )
         if not self.plaq_basis:
             if self.spin == "integrated":
-                return self.build_integrated_Hamiltonian(g, m, theta)
+                return self.build_integrated_Hamiltonian(
+                    g, m, theta, dtype_mode=resolved_mode
+                )
             else:
-                return self.build_truncated_Hamiltonian(g, m, theta)
+                return self.build_truncated_Hamiltonian(
+                    g, m, theta, dtype_mode=resolved_mode
+                )
         else:
-            return self.build_plaquette_Hamiltonian(g)
+            return self.build_plaquette_Hamiltonian(g, dtype_mode=resolved_mode)
 
-    def build_truncated_Hamiltonian(self, g, m=None, theta=0.0):
+    def build_truncated_Hamiltonian(self, g, m=None, theta=0.0, dtype_mode="auto"):
         """Assemble the QED Hamiltonian.
 
         Parameters
@@ -217,7 +243,13 @@ class QED_Model(QuantumModel):
             Bare fermion mass (used only when matter is present).
         theta : float, optional
             Topological-angle coupling parameter.
+        dtype_mode : str or bool, optional
+            ``"auto"``, ``"real"``, ``"complex"``, or legacy bool flag.
         """
+        self.configure_dtype_mode(
+            dtype_mode=dtype_mode,
+            auto_mode=self._get_auto_dtype_mode(m=m, theta=theta),
+        )
         logger.info(f"----------------------------------------------------")
         logger.info("BUILDING truncated HAMILTONIAN")
         # Hamiltonian Coefficients
@@ -361,7 +393,15 @@ class QED_Model(QuantumModel):
                 self.H.add_term(h_terms["penalty"].get_Hamiltonian(strength=-100))
         self.H.build(format=self.ham_format)
 
-    def build_integrated_Hamiltonian(self, g, m, theta=0.0):
+    def build_integrated_Hamiltonian(self, g, m, theta=0.0, dtype_mode="auto"):
+        """Assemble the integrated-gauge 1D QED Hamiltonian.
+
+        Parameters
+        ----------
+        dtype_mode : str or bool, optional
+            ``"auto"``, ``"real"``, ``"complex"``, or legacy bool flag.
+        """
+        self.configure_dtype_mode(dtype_mode=dtype_mode, auto_mode="complex")
         # Hamiltonian Coefficients
         self.QED_Hamiltonian_couplings(g, m, theta)
         logger.info("BUILDING integrated HAMILTONIAN")
@@ -617,7 +657,18 @@ class QED_Model(QuantumModel):
             logger.info(f"{format(self.res['E2_avg'], '.16f')}")
         return link_casimir
 
-    def build_plaquette_Hamiltonian(self, g):
+    def build_plaquette_Hamiltonian(self, g, dtype_mode="auto"):
+        """Assemble the plaquette-basis QED Hamiltonian.
+
+        Parameters
+        ----------
+        dtype_mode : str or bool, optional
+            ``"auto"``, ``"real"``, ``"complex"``, or legacy bool flag.
+        """
+        self.configure_dtype_mode(
+            dtype_mode=dtype_mode,
+            auto_mode=self._get_auto_dtype_mode(m=None, theta=0.0),
+        )
         logger.info("BUILDING plaquette HAMILTONIAN")
         # Hamiltonian Coefficients
         self.coeffs = {"E": g, "B": -1 / (2 * g)}

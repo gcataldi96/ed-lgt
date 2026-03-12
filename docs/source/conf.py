@@ -14,7 +14,7 @@ copyright = "2023, Giovanni Cataldi"
 author = "Giovanni Cataldi"
 
 # The full version, including alpha/beta/rc tags
-release = "31/07/2023"
+release = "0.2.2"
 
 
 # -- General configuration ---------------------------------------------------

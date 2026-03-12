@@ -19,6 +19,15 @@ def _get(d, path, default=None):
     return cur
 
 
+def _get_dtype_mode(par: dict):
+    mode = _get(par, ["hamiltonian", "dtype_mode"], "auto")
+    if mode == "auto":
+        legacy_flag = _get(par, ["hamiltonian", "is_complex"], None)
+        if legacy_flag is not None:
+            mode = bool(legacy_flag)
+    return mode
+
+
 def run_SU2_spectrum(par: dict) -> dict:
     """
     Run the SU2 ED workflow using a plain parameter dictionary.
@@ -51,7 +60,8 @@ def run_SU2_spectrum(par: dict) -> dict:
     g = par["g"]
     m = par.get("m", None) if not model.pure_theory else None
     theta = par.get("theta", 0.0) if model.pure_theory else 0
-    model.build_Hamiltonian(g, m, theta)
+    dtype_mode = _get_dtype_mode(par)
+    model.build_Hamiltonian(g, m, theta, dtype_mode=dtype_mode)
     # -------------------------------------------------------------------------------
     # Diagonalize
     n_eigs = _get(par, ["hamiltonian", "n_eigs"], "full")
@@ -258,10 +268,11 @@ def run_SU2_bg_groundstate(par: dict) -> dict:
     )
     # DEFINE SETTINGS, OBSERVABLES, and BUILD HAMILTONIAN
     model.default_params()
+    dtype_mode = _get_dtype_mode(par)
     if par["model"]["spin"] < 1:
-        model.build_Hamiltonian(par["g"], par["m"])
+        model.build_Hamiltonian(par["g"], par["m"], dtype_mode=dtype_mode)
     else:
-        model.build_gen_Hamiltonian(par["g"], par["m"])
+        model.build_gen_Hamiltonian(par["g"], par["m"], dtype_mode=dtype_mode)
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     n_eigs = par["hamiltonian"]["n_eigs"]
@@ -386,7 +397,39 @@ par = {
     "theta": 10,
 }
 res = run_SU2_spectrum(par)
-
+# %%
+par = {
+    "model": {
+        "lvals": [6, 3],
+        "has_obc": [True, True],
+        "spin": 1,
+        "pure_theory": True,
+        "bg_list": [1, 0, 0, 0,0, 1, 1, 0, 0,0,  0, 1, 1, 0, 0, 0, 0, 1],
+        "ham_format": "sparse",
+        "sectors": [6],
+    },
+    "hamiltonian": {
+        "n_eigs": 1,
+        "save_psi": False,
+    },
+    "momentum": {
+        "get_momentum_basis": False,
+        "unit_cell_size": [1, 1, 1],
+        "TC_symmetry": False,
+        "momentum_k_vals": [0, 0, 0],
+    },
+    "observables": {
+        "measure_obs": True,
+        "get_entropy": False,
+        "entropy_partition": [0, 1],
+        "get_state_configs": True,
+        "get_overlap": False,
+    },
+    "g": 10,
+    "m": 1,
+    "theta": 10,
+}
+res = run_SU2_spectrum(par)
 # %%
 par = {
     "model": {

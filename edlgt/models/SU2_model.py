@@ -4,7 +4,7 @@ import numpy as np
 from numba import typed
 from scipy.sparse import csr_matrix, identity
 from scipy.sparse.linalg import norm as spnorm
-from .quantum_model import QuantumModel
+from .quantum_model import QuantumModel, format_loc_dims
 from edlgt.modeling import (
     LocalTerm,
     TwoBodyTerm,
@@ -56,6 +56,8 @@ class SU2_Model(QuantumModel):
         """
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
+        # SU(2) dressed-site operators are intrinsically complex.
+        self.configure_dtype_mode(dtype_mode="complex", auto_mode="complex")
         self.spin = spin
         self.pure_theory = pure_theory
         self.background = max(bg_list) if bg_list is not None else 0
@@ -65,8 +67,6 @@ class SU2_Model(QuantumModel):
         logger.info(f"----------------------------------------------------")
         msg = f"({self.dim}+1)D SU(2) LGT {pure_label} j={spin}"
         logger.info(msg)
-        if self.bg_list is not None:
-            logger.info(f"background charges: {self.bg_list}")
         logger.info(f"----------------------------------------------------")
         # -------------------------------------------------------------------------------
         # Acquire gauge invariant basis and states
@@ -100,6 +100,10 @@ class SU2_Model(QuantumModel):
             )
         # Initialize the operators, local dimension and lattice labels
         self.project_operators(ops, bg_sector_list=self.bg_list)
+        if self.bg_list is not None:
+            logger.info(f"----------------------------------------------------")
+            logger.info(f"BACKGROUND CHARGES per SITE")
+            format_loc_dims(self.bg_list, self.lvals)
         # -------------------------------------------------------------------------------
         # GLOBAL SYMMETRIES
         if self.pure_theory:
@@ -166,14 +170,36 @@ class SU2_Model(QuantumModel):
         if self.sector_configs is None:
             raise ValueError("No configurations found for the given symmetry sectors")
 
-    def build_Hamiltonian(self, g, m=None, theta=0.0, lambda_noise=0.0):
-        """Dispatch to the hardcoded or generalized SU(2) Hamiltonian builder."""
-        if self.spin < 1 and not self.use_generic_model:
-            self.build_base_Hamiltonian(g, m, theta, lambda_noise)
-        else:
-            self.build_gen_Hamiltonian(g, m)
+    def build_Hamiltonian(
+        self, g, m=None, theta=0.0, lambda_noise=0.0, dtype_mode="auto"
+    ):
+        """Dispatch to the hardcoded or generalized SU(2) Hamiltonian builder.
 
-    def build_base_Hamiltonian(self, g, m=None, theta=0.0, lambda_noise=0.0):
+        Parameters
+        ----------
+        dtype_mode : str or bool, optional
+            ``"auto"``, ``"real"``, ``"complex"``, or legacy bool flag.
+        """
+        resolved_mode = self.configure_dtype_mode(
+            dtype_mode=dtype_mode,
+            auto_mode=self._get_auto_dtype_mode(m=m, theta=theta),
+        )
+        if self.spin < 1 and not self.use_generic_model:
+            self.build_base_Hamiltonian(
+                g, m, theta, lambda_noise, dtype_mode=resolved_mode
+            )
+        else:
+            self.build_gen_Hamiltonian(g, m, dtype_mode=resolved_mode)
+
+    def _get_auto_dtype_mode(self, m=None, theta=0.0):
+        """Heuristic dtype mode for SU(2) Hamiltonian assembly."""
+        if self.pure_theory and np.abs(theta) <= 1e-12:
+            return "real"
+        return "complex"
+
+    def build_base_Hamiltonian(
+        self, g, m=None, theta=0.0, lambda_noise=0.0, dtype_mode="auto"
+    ):
         """Assemble the hardcoded low-spin SU(2) Hamiltonian.
 
         Parameters
@@ -186,11 +212,17 @@ class SU2_Model(QuantumModel):
             Topological-angle parameter.
         lambda_noise : float, optional
             Optional Gauss-law-violating noise strength.
+        dtype_mode : str or bool, optional
+            ``"auto"``, ``"real"``, ``"complex"``, or legacy bool flag.
         """
         logger.info(f"----------------------------------------------------")
         logger.info("BUILDING (H)ardocore (G)luon J=1/2 HAMILTONIAN")
         logger.info(f"g={g}, m={m}, theta={theta}, lambda_noise={lambda_noise}")
         logger.info(f"----------------------------------------------------")
+        self.configure_dtype_mode(
+            dtype_mode=dtype_mode,
+            auto_mode=self._get_auto_dtype_mode(m=m, theta=theta),
+        )
         # Hamiltonian Coefficients
         self.SU2_Hamiltonian_couplings(g, m, theta)
         h_terms = {}
@@ -322,7 +354,7 @@ class SU2_Model(QuantumModel):
             )
         self.H.build(self.ham_format)
 
-    def build_gen_Hamiltonian(self, g, m=None):
+    def build_gen_Hamiltonian(self, g, m=None, dtype_mode="auto"):
         """Assemble the generalized SU(2) Hamiltonian.
 
         Parameters
@@ -331,9 +363,15 @@ class SU2_Model(QuantumModel):
             Gauge coupling.
         m : float, optional
             Bare mass parameter.
+        dtype_mode : str or bool, optional
+            ``"auto"``, ``"real"``, ``"complex"``, or legacy bool flag.
         """
         logger.info(f"----------------------------------------------------")
         logger.info(f"BUILDING generalized HAMILTONIAN with g={g}, m={m}")
+        self.configure_dtype_mode(
+            dtype_mode=dtype_mode,
+            auto_mode=self._get_auto_dtype_mode(m=m, theta=0.0),
+        )
         # Hamiltonian Coefficients
         self.SU2_Hamiltonian_couplings(g, m)
         h_terms = {}

@@ -37,6 +37,8 @@ class DFL_Model(QuantumModel):
         """
         # Initialize base class with the common parameters
         super().__init__(**kwargs)
+        # DFL uses SU(2) dressed-site operators that are intrinsically complex.
+        self.configure_dtype_mode(dtype_mode="complex", auto_mode="complex")
         self.spin = spin
         self.pure_theory = pure_theory
         self.background = 0.5
@@ -71,7 +73,7 @@ class DFL_Model(QuantumModel):
         self.project_operators(ops)
         # Rather than for SU2, here we do not select the symmetry sector
 
-    def build_Hamiltonian(self, g, m=None):
+    def build_Hamiltonian(self, g, m=None, dtype_mode="auto"):
         """Assemble the standard DFL Hamiltonian.
 
         Parameters
@@ -80,7 +82,10 @@ class DFL_Model(QuantumModel):
             Gauge coupling.
         m : float, optional
             Bare mass parameter.
+        dtype_mode : str or bool, optional
+            ``"auto"``, ``"real"``, ``"complex"``, or legacy bool flag.
         """
+        self.configure_dtype_mode(dtype_mode=dtype_mode, auto_mode="complex")
         logger.info("BUILDING HAMILTONIAN")
         # Hamiltonian Coefficients
         self.DFL_Hamiltonian_couplings(g, m)
@@ -163,7 +168,7 @@ class DFL_Model(QuantumModel):
                     )
         self.H.build(format=self.ham_format)
 
-    def build_gen_Hamiltonian(self, g, m=None):
+    def build_gen_Hamiltonian(self, g, m=None, dtype_mode="auto"):
         """Assemble the generalized DFL Hamiltonian.
 
         Parameters
@@ -172,7 +177,10 @@ class DFL_Model(QuantumModel):
             Gauge coupling.
         m : float, optional
             Bare mass parameter.
+        dtype_mode : str or bool, optional
+            ``"auto"``, ``"real"``, ``"complex"``, or legacy bool flag.
         """
+        self.configure_dtype_mode(dtype_mode=dtype_mode, auto_mode="complex")
         logger.info("BUILDING generalized HAMILTONIAN")
         # Hamiltonian Coefficients
         self.DFL_Hamiltonian_couplings(g, m)

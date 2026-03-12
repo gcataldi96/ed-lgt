@@ -28,6 +28,15 @@ def _get(d, path, default=None):
     return cur
 
 
+def _get_dtype_mode(par: dict):
+    mode = _get(par, ["hamiltonian", "dtype_mode"], "auto")
+    if mode == "auto":
+        legacy_flag = _get(par, ["hamiltonian", "is_complex"], None)
+        if legacy_flag is not None:
+            mode = bool(legacy_flag)
+    return mode
+
+
 def _get_gvals(params: dict) -> np.ndarray:
     if "g_values" in params:
         return np.asarray(params["g_values"], dtype=float)
@@ -149,11 +158,12 @@ def run_DFL_dynamics(params: dict) -> dict:
     if flags["get_entropy"]:
         model._partition_cache = {}
         model._get_partition(res["partition_indices"])
+    dtype_mode = _get_dtype_mode(params)
     for gidx, g in enumerate(gvals):
         model.default_params()
         if flags["measure_obs"]:
             model.get_observables(res["local_obs"])
-        model.build_Hamiltonian(g, params["m"])
+        model.build_Hamiltonian(g, params["m"], dtype_mode=dtype_mode)
         model.time_evolution_Hamiltonian(in_state, time_line)
         for tidx in range(n_steps):
             msg = f"TIME {time_line[tidx]:.3f}"
@@ -181,6 +191,7 @@ def run_DFL_dynamics_sector_by_sector(params: dict) -> dict:
     _, _, unique_bg_sectors, grouped_configs, weights = _get_bgsector_groups(
         model, logical_stag_basis
     )
+    dtype_mode = _get_dtype_mode(params)
     for bg_num, (bg_sector, bg_config_group, weight) in enumerate(
         zip(unique_bg_sectors, grouped_configs, weights)
     ):
@@ -208,7 +219,7 @@ def run_DFL_dynamics_sector_by_sector(params: dict) -> dict:
             model.default_params()
             if flags["measure_obs"]:
                 model.get_observables(sector_res["local_obs"])
-            model.build_Hamiltonian(g, params["m"])
+            model.build_Hamiltonian(g, params["m"], dtype_mode=dtype_mode)
             model.time_evolution_Hamiltonian(in_state, time_line)
             for tidx in range(n_steps):
                 msg = f"SECTOR {bg_num} TIME {time_line[tidx]:.3f}"

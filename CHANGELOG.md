@@ -10,6 +10,14 @@ it is in the `0.x` development phase.
 ### Added
 - No user-facing changes yet.
 
+## [0.2.2] - 2026-03-12
+
+### Added
+- Dtype-mode control (`auto` / `real` / `complex`) propagated across SU2/QED examples and workflows, with legacy `is_complex` compatibility.
+
+### Changed
+- SU2 and QED automatic dtype selection now uses real-valued assembly in pure-theory runs when `theta = 0`, and complex otherwise.
+
 ## [0.2.1] - 2026-03-11
 
 ### Fixed

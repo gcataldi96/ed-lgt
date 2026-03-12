@@ -17,6 +17,15 @@ def _get(d, path, default=None):
     return cur
 
 
+def _get_dtype_mode(par: dict):
+    mode = _get(par, ["hamiltonian", "dtype_mode"], "auto")
+    if mode == "auto":
+        legacy_flag = _get(par, ["hamiltonian", "is_complex"], None)
+        if legacy_flag is not None:
+            mode = bool(legacy_flag)
+    return mode
+
+
 def run_QED_simulation(par: dict) -> dict:
     res = {}
     start_time = perf_counter()
@@ -36,7 +45,8 @@ def run_QED_simulation(par: dict) -> dict:
     # Build Hamiltonian
     m = par["m"] if not model.pure_theory else None
     theta = par.get("theta", 0.0)
-    model.build_Hamiltonian(par["g"], m, theta)
+    dtype_mode = _get_dtype_mode(par)
+    model.build_Hamiltonian(par["g"], m, theta, dtype_mode=dtype_mode)
     # -------------------------------------------------------------------------------
     # DIAGONALIZE THE HAMILTONIAN and SAVE ENERGY EIGVALS
     n_eigs = _get(par, ["hamiltonian", "n_eigs"], "full")

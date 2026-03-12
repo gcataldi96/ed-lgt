@@ -18,6 +18,15 @@ def _get(d, path, default=None):
     return cur
 
 
+def _get_dtype_mode(par: dict):
+    mode = _get(par, ["hamiltonian", "dtype_mode"], "auto")
+    if mode == "auto":
+        legacy_flag = _get(par, ["hamiltonian", "is_complex"], None)
+        if legacy_flag is not None:
+            mode = bool(legacy_flag)
+    return mode
+
+
 def QED_build_model_and_hamiltonian(par: dict) -> QED_Model:
     model = QED_Model(**par["model"])
     # momentum sector
@@ -31,7 +40,8 @@ def QED_build_model_and_hamiltonian(par: dict) -> QED_Model:
     g = par["g"]
     m = par.get("m", None) if not model.pure_theory else None
     theta = par.get("theta", 0)
-    model.build_Hamiltonian(g, m, theta)
+    dtype_mode = _get_dtype_mode(par)
+    model.build_Hamiltonian(g, m, theta, dtype_mode=dtype_mode)
     return model
 
 

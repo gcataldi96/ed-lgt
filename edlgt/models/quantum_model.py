@@ -34,11 +34,17 @@ from edlgt.symmetries import (
     config_to_index,
     subenv_map_to_unique_indices,
 )
+from edlgt.dtype_config import (
+    get_default_dtype_mode,
+    set_default_dtype_mode,
+    get_numeric_dtype,
+    coerce_numeric_array,
+)
 from edlgt.tools import exclude_columns
 import logging
 
 logger = logging.getLogger(__name__)
-__all__ = ["QuantumModel"]
+__all__ = ["QuantumModel", "format_loc_dims"]
 
 
 class QuantumModel:
@@ -1255,6 +1261,75 @@ class QuantumModel:
             coords = zig_zag(self.lvals, site_idx)
             mask1d[site_idx] = mask2d[coords]
         return np.mean(values[mask1d])
+
+    @staticmethod
+    def _normalize_dtype_mode(dtype_mode, allow_auto=True):
+        """Normalize dtype-mode inputs to ``'real'``/``'complex'``/``'auto'``.
+
+        Parameters
+        ----------
+        dtype_mode : str or bool or None
+            Requested dtype mode.
+        allow_auto : bool, optional
+            Whether ``"auto"`` and ``None`` are accepted.
+
+        Returns
+        -------
+        str
+            Normalized mode label.
+        """
+        if isinstance(dtype_mode, (bool, np.bool_)):
+            return "complex" if bool(dtype_mode) else "real"
+        if dtype_mode is None:
+            if allow_auto:
+                return "auto"
+            raise ValueError("dtype_mode cannot be None in this context")
+        if not isinstance(dtype_mode, str):
+            msg = f"dtype_mode must be bool/str/None, got {type(dtype_mode)}"
+            raise TypeError(msg)
+        mode = dtype_mode.strip().lower()
+        valid = {"real", "complex", "auto"} if allow_auto else {"real", "complex"}
+        if mode not in valid:
+            msg = f"dtype_mode must be one of {sorted(valid)}, got {dtype_mode!r}"
+            raise ValueError(msg)
+        return mode
+
+    def configure_dtype_mode(self, dtype_mode="auto", auto_mode="complex"):
+        """Apply the global numeric dtype mode for Hamiltonian/operator assembly.
+
+        Parameters
+        ----------
+        dtype_mode : str or bool, optional
+            Explicit mode (``"real"``/``"complex"`` or bool) or ``"auto"``.
+        auto_mode : str or bool, optional
+            Fallback mode used when ``dtype_mode == "auto"``.
+
+        Returns
+        -------
+        str
+            Applied normalized mode (``"real"`` or ``"complex"``).
+        """
+        mode = self._normalize_dtype_mode(dtype_mode, allow_auto=True)
+        if mode == "auto":
+            mode = self._normalize_dtype_mode(auto_mode, allow_auto=False)
+        if get_default_dtype_mode() != mode:
+            set_default_dtype_mode(mode)
+            logger.info(f"NUMERIC DTYPE MODE set to {mode}")
+        # If a Hamiltonian container already exists, keep its value dtype aligned
+        # with the active global mode to avoid silent casts when terms are added.
+        ham = getattr(self, "H", None)
+        if ham is not None and hasattr(ham, "value_list"):
+            target_dtype = get_numeric_dtype()
+            if ham.value_list.dtype != target_dtype:
+                if ham.value_list.size == 0:
+                    ham.value_list = np.array([], dtype=target_dtype)
+                else:
+                    values = coerce_numeric_array(
+                        ham.value_list,
+                        name="existing Hamiltonian values",
+                    )
+                    ham.value_list = np.asarray(values, dtype=target_dtype)
+        return mode
 
 
 def apply_projection(
