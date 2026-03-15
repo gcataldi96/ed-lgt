@@ -4,11 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "edlgt"
-version = "0.2.2"
+version = "0.2.3"
 description = "Exact diagonalization tools for lattice gauge theories and quantum many-body Hamiltonians"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { file = "LICENSE" }
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 authors = [
   { name = "Giovanni Cataldi", email = "giovacataldi96@gmail.com" },
 ]
@@ -16,7 +17,6 @@ keywords = ["exact diagonalization", "lattice gauge theory", "quantum many-body"
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Science/Research",
-  "License :: OSI Approved :: Apache Software License",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
   "Topic :: Scientific/Engineering :: Physics",

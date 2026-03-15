@@ -32,7 +32,6 @@ from edlgt.symmetries import (
     symmetry_sector_configs,
     config_to_index_binarysearch,
     config_to_index,
-    subenv_map_to_unique_indices,
 )
 from edlgt.dtype_config import (
     get_default_dtype_mode,
@@ -40,11 +39,82 @@ from edlgt.dtype_config import (
     get_numeric_dtype,
     coerce_numeric_array,
 )
-from edlgt.tools import exclude_columns
+from edlgt.tools import exclude_columns, compute_strides, encode_all_configs
 import logging
 
 logger = logging.getLogger(__name__)
 __all__ = ["QuantumModel", "format_loc_dims"]
+
+
+def _can_encode_partition_configs(loc_dims: np.ndarray) -> bool:
+    """Check whether mixed-radix encoding fits safely in ``int64``.
+
+    Parameters
+    ----------
+    loc_dims : ndarray
+        Local dimensions of the sites kept in one partition.
+
+    Returns
+    -------
+    bool
+        ``True`` if the full mixed-radix key range fits in signed ``int64``.
+    """
+    max_key_plus_one = 1
+    int64_max = np.iinfo(np.int64).max
+    for dim in np.asarray(loc_dims, dtype=np.int64):
+        if dim <= 0:
+            raise ValueError("local dimensions must be positive")
+        if max_key_plus_one > int64_max // int(dim):
+            return False
+        max_key_plus_one *= int(dim)
+    return True
+
+
+def _unique_configs_with_inverse(
+    configs: np.ndarray, loc_dims: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Get unique rows and inverse map, preferring packed-key uniqueness.
+
+    Parameters
+    ----------
+    configs : ndarray
+        Configuration table with one configuration per row.
+    loc_dims : ndarray
+        Local dimensions corresponding to the columns of ``configs``.
+
+    Returns
+    -------
+    tuple
+        ``(unique_configs, inverse_map)`` exactly as needed by the
+        subsystem/environment partition cache.
+
+    Notes
+    -----
+    When the mixed-radix key range fits in ``int64``, the function encodes all
+    rows into scalar keys and runs ``np.unique`` on the 1D key array. This is
+    usually much faster than ``np.unique(..., axis=0)`` on the 2D table. If the
+    key range would overflow ``int64``, the function falls back to the safe
+    row-wise ``np.unique(..., axis=0, return_inverse=True)`` path.
+    """
+    if configs.shape[1] == 0:
+        # Empty subsystem/environment: every sector basis state maps to the
+        # unique empty configuration.
+        unique_configs = np.empty((1, 0), dtype=configs.dtype)
+        inverse_map = np.zeros(configs.shape[0], dtype=np.int64)
+        return unique_configs, inverse_map
+
+    if _can_encode_partition_configs(loc_dims):
+        strides = compute_strides(np.asarray(loc_dims, dtype=np.int64))
+        encoded_configs = encode_all_configs(configs, strides)
+        _, unique_indices, inverse_map = np.unique(
+            encoded_configs, return_index=True, return_inverse=True
+        )
+        # ``np.unique`` sorts the scalar keys, and mixed-radix key order matches
+        # the lexicographic order of the underlying configuration rows.
+        unique_configs = np.ascontiguousarray(configs[unique_indices])
+        return unique_configs, inverse_map
+
+    return np.unique(configs, axis=0, return_inverse=True)
 
 
 class QuantumModel:
@@ -674,21 +744,21 @@ class QuantumModel:
                 subsys_configs = exclude_columns(self.sector_configs, env_indices)
                 logger.info("get environment configs")
                 env_configs = exclude_columns(self.sector_configs, keep_indices)
-                # Find unique subsystem and environment configurations
-                unique_subsys_configs = np.unique(subsys_configs, axis=0)
-                # Initialize the RDM with shape = number of unique subsys configs
-                unique_env_configs = np.unique(env_configs, axis=0)
+                # Build the reduced subsystem/environment bases together with
+                # the inverse maps from each sector basis state to those bases.
+                # Prefer packed-key uniqueness when the partition fits in int64,
+                # and fall back to row-wise ``np.unique(..., axis=0)`` otherwise.
+                unique_subsys_configs, subsys_map = _unique_configs_with_inverse(
+                    subsys_configs, self.loc_dims[keep_indices]
+                )
+                unique_env_configs, env_map = _unique_configs_with_inverse(
+                    env_configs, self.loc_dims[env_indices]
+                )
                 # Dimensions of the partitions
                 subsys_dim = unique_subsys_configs.shape[0]
                 env_dim = unique_env_configs.shape[0]
-                # Get the maps from subsys_configs to unique_subsys_configs (same for env)
-                subsys_map, env_map = subenv_map_to_unique_indices(
-                    subsystem_configs=subsys_configs,
-                    environment_configs=env_configs,
-                    unique_subsys_configs=unique_subsys_configs,
-                    unique_env_configs=unique_env_configs,
-                )
-                # Check that maps are correct. Namely unique_cfgs contain all the given rows
+                # Check that every sector basis state was mapped to a valid
+                # subsystem/environment basis element.
                 if not np.all(subsys_map >= 0):
                     raise ValueError("Invalid subsys_map: some entries are -1")
                 if not np.all(env_map >= 0):
@@ -1261,6 +1331,12 @@ class QuantumModel:
             coords = zig_zag(self.lvals, site_idx)
             mask1d[site_idx] = mask2d[coords]
         return np.mean(values[mask1d])
+
+    def _single_site_mask(self, site_index: int) -> np.ndarray:
+        """Boolean mask selecting one 1D lattice site."""
+        site_mask = np.zeros(tuple(self.lvals), dtype=np.bool_)
+        site_mask[(site_index,)] = True
+        return site_mask
 
     @staticmethod
     def _normalize_dtype_mode(dtype_mode, allow_auto=True):

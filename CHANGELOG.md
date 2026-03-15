@@ -10,6 +10,22 @@ it is in the `0.x` development phase.
 ### Added
 - No user-facing changes yet.
 
+## [0.2.3] - 2026-03-15
+
+### Added
+- Validation coverage for config/index roundtrip consistency, iterative symmetry-sector consistency, and subsystem/environment mapping.
+
+### Changed
+- Symmetry-sector construction now uses incremental global updates, stronger U(1) reachability pruning, and activated link/n-body checks to avoid rescanning full prefixes.
+- Hamiltonian COO accumulation now appends term-sized blocks and materializes triplets once at build time instead of repeatedly concatenating all prior data.
+- Real-space and momentum-space n-body builders now reuse precomputed local transition tables across counting and emission passes.
+- Standard momentum basis construction now uses lighter translation/orbit bookkeeping, reducing repeated shift encoding, orbit deduplication, and phase recomputation.
+- Entanglement partition caching now uses packed-key uniqueness with inverse maps when safe, with overflow fallback to the generic row-wise path.
+
+### Fixed
+- Restored consistent mixed-radix config/index conversion so `config_to_index` and `index_to_config` roundtrip correctly.
+- Corrected momentum generic ket-configuration assembly so untouched sites are preserved during projected n-body enumeration.
+
 ## [0.2.2] - 2026-03-12
 
 ### Added

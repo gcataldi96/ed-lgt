@@ -241,14 +241,15 @@ cb.set_label(label=r"$g^{2}$", rotation=0, labelpad=-20, x=-0.04, y=+0.03)
 plt.savefig(f"SU2thetaterm.pdf")
 
 # %%
-config_filename = f"su2_thetaterm/levels"
+config_filename = f"su2_thetaterm/levels2"
 match = SimsQuery(group_glob=config_filename)
 ugrid, vals = uids_grid(match.uids, ["theta"])
-n_eigs = 4
+n_eigs = 7
 dim_tuple = (len(vals["theta"]), n_eigs)
 res = {"energy": np.zeros(dim_tuple), "theta": vals["theta"], "E2": np.zeros(dim_tuple)}
 for kk, theta in enumerate(vals["theta"]):
-    for neig in range(4):
+    logger.info(f"{kk}, {theta}")
+    for neig in range(n_eigs):
         res["energy"][kk, neig] = get_sim(ugrid[kk]).res["energy"][neig]
         res["E2"][kk, neig] = get_sim(ugrid[kk]).res["E2"][neig]
 save_dictionary(res, f"SU2_thetaterm_levels.pkl")

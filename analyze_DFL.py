@@ -35,7 +35,8 @@ fig, axs = plt.subplots(1, 1, constrained_layout=True, sharex=True)
 for gidx, _ in enumerate(gvals):
     axs.plot(
         time_steps[1:],
-        moving_time_integral_centered(time_steps[1:], res["PE"][gidx, 1:], 80),
+        # moving_time_integral_centered(time_steps[1:], res["PE"][gidx, 1:], 80),
+        res["PE"][gidx, 1:],
         "-",
         color=palette[gidx],
         markersize=2,
@@ -54,7 +55,7 @@ cb = fig.colorbar(
 )
 cb.set_label(label=r"$g^{2}$", rotation=0, labelpad=-17, x=-0.2, y=-0.03)
 plt.savefig("DFL_PE_N12.pdf")
-
+save_dictionary(res, "DFL_PE_N12.pkl")
 res8 = {}
 config_filename = f"DFL/PE_N8"
 match = SimsQuery(group_glob=config_filename)
@@ -90,7 +91,7 @@ for gidx, gval in enumerate(gvals):
     )
     axs[gidx].set(ylabel=r"$PE_{2}(t)$", xscale="log")
     axs[gidx].grid(True, which="both", linestyle="-", linewidth=0.4)
-
+save_dictionary(res8,"DFL_PE_N8.pkl")
 # %%
 res = {"P": {}, "noP": {}}
 obs_list = [

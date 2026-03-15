@@ -259,5 +259,10 @@ def build_g_grid(g_min=0.8, g_max=10.0, n=10):
 
 g_vals = build_g_grid()
 params = {"g": g_vals, "theta": theta_vals}
-gen_configs("template", params, f"su2_thetaterm/scan3")
+
+thetas = np.arange(0.5, 0.622, 0.002).tolist()
+thetas += np.arange(0.62, 0.81, 0.01).tolist()
+thetas += np.arange(0.8, 1.005, 0.005).tolist()
+params = {"theta": thetas}
+gen_configs("template", params, f"su2_thetaterm/levels2")
 # %%

@@ -23,6 +23,57 @@ __all__ = [
 
 
 @njit(cache=True)
+def _prepare_momentum_local_transition_data(
+    op_list: np.ndarray, op_sites_list: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Precompute nonzero local transitions for the momentum-space kernels.
+
+    Parameters
+    ----------
+    op_list : ndarray
+        Site-resolved operator matrices.
+    op_sites_list : ndarray
+        Site indices on which the operator acts.
+
+    Returns
+    -------
+    tuple
+        ``(transition_counts, ket_local_states, transition_values)`` where
+        ``transition_counts[op_idx, bra_loc]`` stores how many outgoing local
+        transitions are available for operator factor ``op_idx`` from local bra
+        state ``bra_loc``.
+
+    Notes
+    -----
+    ``local_dim`` is the common padded local dimension stored by the rectangular
+    operator tensor ``op_list``. Sites with smaller physical local Hilbert spaces
+    are represented by matrices whose unused rows/columns are zero padded.
+    """
+    n_ops = len(op_sites_list)
+    local_dim = np.int32(op_list.shape[2])
+    # For each operator factor and each local bra state, store the list of
+    # allowed local ket states together with the corresponding matrix elements.
+    transition_counts = np.zeros((n_ops, local_dim), dtype=np.int32)
+    ket_local_states = np.empty((n_ops, local_dim, local_dim), dtype=np.int32)
+    transition_values = np.empty((n_ops, local_dim, local_dim), dtype=np.complex128)
+    for op_idx in range(n_ops):
+        site_idx = op_sites_list[op_idx]
+        site_op = op_list[op_idx, site_idx]
+        for bra_loc in range(local_dim):
+            n_transitions = 0
+            for ket_loc in range(local_dim):
+                elem = site_op[bra_loc, ket_loc]
+                if np.abs(elem) > OP_EPS:
+                    # Compactify the nonzero row entries so later kernels can
+                    # iterate only over the allowed local transitions.
+                    ket_local_states[op_idx, bra_loc, n_transitions] = ket_loc
+                    transition_values[op_idx, bra_loc, n_transitions] = elem
+                    n_transitions += 1
+            transition_counts[op_idx, bra_loc] = n_transitions
+    return transition_counts, ket_local_states, transition_values
+
+
+@njit(cache=True)
 def _prefix_sum_counts(nnz_per_col: np.ndarray) -> np.ndarray:
     """
     Turn column nnz counts into CSC col_ptr with a prefix sum.
@@ -143,6 +194,225 @@ def decode_mixed_index(idx: int, bases: np.ndarray, out: np.ndarray) -> None:
 
 
 @njit(cache=True)
+def _compute_rowmajor_strides(bases: np.ndarray) -> np.ndarray:
+    """Return row-major strides matching :func:`encode_shift`."""
+    lattice_dim = bases.size
+    strides = np.empty(lattice_dim, np.int32)
+    stride = 1
+    for ax in range(lattice_dim - 1, -1, -1):
+        # In row-major mixed-radix order, axis ``ax`` advances by the product
+        # of all bases to its right.
+        strides[ax] = stride
+        stride *= bases[ax]
+    return strides
+
+
+@njit(inline="always")
+def _next_power_of_two_at_least(min_size: int) -> int:
+    """Return the smallest power of two greater than or equal to ``min_size``."""
+    size = 1
+    while size < min_size:
+        size <<= 1
+    return size
+
+
+@njit(inline="always")
+def _advance_period_box_counter(
+    t_local: np.ndarray, pvec: np.ndarray, shift_strides: np.ndarray, full_shift: int
+) -> tuple[int, bool]:
+    """Advance the local mixed-radix counter and update the full shift index.
+
+    ``t_local`` enumerates the period box with per-axis bases ``pvec``.
+    ``full_shift`` stores the corresponding flat shift index in the full
+    translation table, using the row-major strides of ``shifts_per_dir``.
+    """
+    lattice_dim = pvec.size
+    for ax in range(lattice_dim - 1, -1, -1):
+        # Try to advance the least-significant still-active axis first.
+        t_local[ax] += 1
+        full_shift += shift_strides[ax]
+        if t_local[ax] < pvec[ax]:
+            return full_shift, False
+        # This digit overflowed: reset it and remove the completed block.
+        full_shift -= pvec[ax] * shift_strides[ax]
+        t_local[ax] = 0
+    return full_shift, True
+
+
+@njit(inline="always")
+def _insert_or_accumulate_real(
+    cfg_row: int,
+    incr: float,
+    used_indices: np.ndarray,
+    used_values: np.ndarray,
+    hash_keys: np.ndarray,
+    hash_positions: np.ndarray,
+    hash_mask: int,
+    used_len: int,
+) -> int:
+    """Insert or accumulate one real-valued orbit contribution."""
+    slot = cfg_row & hash_mask
+    while True:
+        key = hash_keys[slot]
+        if key == -1:
+            # First time this translated row appears in the orbit column.
+            hash_keys[slot] = cfg_row
+            hash_positions[slot] = used_len
+            used_indices[used_len] = cfg_row
+            used_values[used_len] = incr
+            return used_len + 1
+        if key == cfg_row:
+            # Repeated image of the same basis row: accumulate its weight.
+            used_values[hash_positions[slot]] += incr
+            return used_len
+        slot = (slot + 1) & hash_mask
+
+
+@njit(inline="always")
+def _insert_or_accumulate_complex(
+    cfg_row: int,
+    incr: complex,
+    used_indices: np.ndarray,
+    used_values: np.ndarray,
+    hash_keys: np.ndarray,
+    hash_positions: np.ndarray,
+    hash_mask: int,
+    used_len: int,
+) -> int:
+    """Insert or accumulate one complex-valued orbit contribution."""
+    slot = cfg_row & hash_mask
+    while True:
+        key = hash_keys[slot]
+        if key == -1:
+            # First time this translated row appears in the orbit column.
+            hash_keys[slot] = cfg_row
+            hash_positions[slot] = used_len
+            used_indices[used_len] = cfg_row
+            used_values[used_len] = incr
+            return used_len + 1
+        if key == cfg_row:
+            # Repeated image of the same basis row: accumulate its Bloch phase.
+            used_values[hash_positions[slot]] += incr
+            return used_len
+        slot = (slot + 1) & hash_mask
+
+
+@njit(cache=True)
+def _accumulate_zero_k_orbit(
+    translations_row: np.ndarray, pvec: np.ndarray, shift_strides: np.ndarray
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """Accumulate one zero-momentum orbit column with hashed deduplication."""
+    lattice_dim = pvec.size
+    orbit_size = 1
+    for ax in range(lattice_dim):
+        orbit_size *= pvec[ax]
+    # Over-allocate one slot per point in the period box. After deduplication,
+    # only the first ``used_len`` entries are meaningful.
+    used_indices = np.empty(orbit_size, np.int32)
+    used_values = np.zeros(orbit_size, np.float64)
+    # The hash table maps translated basis rows -> position inside the compact
+    # ``used_*`` arrays. A power-of-two size keeps linear probing simple.
+    hash_size = _next_power_of_two_at_least(2 * orbit_size)
+    hash_keys = np.full(hash_size, -1, np.int32)
+    hash_positions = np.empty(hash_size, np.int32)
+    hash_mask = hash_size - 1
+    # ``t_local`` walks the local period box, while ``full_shift`` tracks the
+    # corresponding flat index inside the full translation table row.
+    t_local = np.zeros(lattice_dim, np.int32)
+    full_shift = 0
+    used_len = 0
+    finished = False
+    while not finished:
+        cfg_row = translations_row[full_shift]
+        used_len = _insert_or_accumulate_real(
+            cfg_row,
+            1.0,
+            used_indices,
+            used_values,
+            hash_keys,
+            hash_positions,
+            hash_mask,
+            used_len,
+        )
+        full_shift, finished = _advance_period_box_counter(
+            t_local, pvec, shift_strides, full_shift
+        )
+    return used_indices, used_values, used_len
+
+
+@njit(cache=True)
+def _prepare_phase_table(
+    k_vals: np.ndarray, shifts_per_dir: np.ndarray
+) -> np.ndarray:
+    """Precompute per-axis Bloch phases ``exp(-2πi k_d t / R_d)``."""
+    lattice_dim = shifts_per_dir.size
+    max_shift = 0
+    for ax in range(lattice_dim):
+        if shifts_per_dir[ax] > max_shift:
+            max_shift = shifts_per_dir[ax]
+    phase_table = np.empty((lattice_dim, max_shift), np.complex128)
+    for ax in range(lattice_dim):
+        # Shift zero always carries unit phase.
+        phase_table[ax, 0] = 1.0 + 0.0j
+        if shifts_per_dir[ax] <= 1:
+            continue
+        kd = k_vals[ax] % shifts_per_dir[ax]
+        step = np.exp(-1j * 2.0 * np.pi * kd / float(shifts_per_dir[ax]))
+        for shift_idx in range(1, shifts_per_dir[ax]):
+            # Reuse the previous power instead of calling exp repeatedly.
+            phase_table[ax, shift_idx] = phase_table[ax, shift_idx - 1] * step
+    return phase_table
+
+
+@njit(cache=True)
+def _accumulate_finite_k_orbit(
+    translations_row: np.ndarray,
+    pvec: np.ndarray,
+    shift_strides: np.ndarray,
+    phase_table: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray, int]:
+    """Accumulate one finite-momentum orbit column with hashed deduplication."""
+    lattice_dim = pvec.size
+    orbit_size = 1
+    for ax in range(lattice_dim):
+        orbit_size *= pvec[ax]
+    # Over-allocate one slot per point in the period box. After deduplication,
+    # only the first ``used_len`` entries are meaningful.
+    used_indices = np.empty(orbit_size, np.int32)
+    used_values = np.zeros(orbit_size, np.complex128)
+    hash_size = _next_power_of_two_at_least(2 * orbit_size)
+    hash_keys = np.full(hash_size, -1, np.int32)
+    hash_positions = np.empty(hash_size, np.int32)
+    hash_mask = hash_size - 1
+    # ``t_local`` walks the local period box, while ``full_shift`` tracks the
+    # corresponding flat index inside the full translation table row.
+    t_local = np.zeros(lattice_dim, np.int32)
+    full_shift = 0
+    used_len = 0
+    finished = False
+    while not finished:
+        phase = 1.0 + 0.0j
+        for ax in range(lattice_dim):
+            # The total Bloch phase factorizes axis by axis.
+            phase *= phase_table[ax, t_local[ax]]
+        cfg_row = translations_row[full_shift]
+        used_len = _insert_or_accumulate_complex(
+            cfg_row,
+            phase,
+            used_indices,
+            used_values,
+            hash_keys,
+            hash_positions,
+            hash_mask,
+            used_len,
+        )
+        full_shift, finished = _advance_period_box_counter(
+            t_local, pvec, shift_strides, full_shift
+        )
+    return used_indices, used_values, used_len
+
+
+@njit(cache=True)
 def check_normalization(basis: np.ndarray) -> bool:
     """Check whether all columns of a basis matrix are normalized.
 
@@ -234,6 +504,66 @@ def build_TC_translations(
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+@njit(cache=True)
+def _prepare_translation_source_sites(
+    lvals: np.ndarray, unit_cell_size: np.ndarray
+) -> tuple[np.ndarray, np.ndarray]:
+    """Precompute how each allowed block-translation permutes lattice sites.
+
+    Parameters
+    ----------
+    lvals : ndarray
+        Lattice lengths along each spatial direction.
+    unit_cell_size : ndarray
+        Translation step along each axis, expressed in lattice sites.
+
+    Returns
+    -------
+    tuple
+        ``(source_sites, shifts_per_dir)`` where
+        ``source_sites[flat_shift, dest_site_idx]`` gives the source lattice
+        site that lands on ``dest_site_idx`` after the decoded block-translation
+        ``flat_shift`` is applied.
+
+    Notes
+    -----
+    This helper moves all coordinate algebra out of the hot ``cfg_idx`` loop of
+    :func:`build_all_translations`. Once the source table is known, translating a
+    configuration reduces to a simple gather:
+
+    ``rolled_cfg[dest_site_idx] = cfg[source_sites[flat_shift, dest_site_idx]]``.
+    """
+    lattice_dim = lvals.size
+    shifts_per_dir = lvals // unit_cell_size
+    total_shifts = 1
+    n_sites = 1
+    for ax in range(lattice_dim):
+        total_shifts *= shifts_per_dir[ax]
+        n_sites *= lvals[ax]
+
+    source_sites = np.empty((total_shifts, n_sites), np.int32)
+    axis_shifts = np.empty(lattice_dim, np.int32)
+    coords = np.empty(lattice_dim, np.int32)
+    shifted_coords = np.empty(lattice_dim, np.int32)
+
+    # Build the permutation table once for every allowed combined shift.
+    for flat_shift in range(total_shifts):
+        decode_shift(flat_shift, shifts_per_dir, axis_shifts)
+        for source_site_idx in range(n_sites):
+            # Convert the source site to lattice coordinates.
+            linear_to_coords_rowmajor(source_site_idx, lvals, coords)
+            # Apply the block translation in coordinate space.
+            for ax in range(lattice_dim):
+                shifted_coords[ax] = (
+                    coords[ax] + axis_shifts[ax] * unit_cell_size[ax]
+                ) % lvals[ax]
+            # Record which source site populates the translated destination site.
+            dest_site_idx = coords_to_linear_rowmajor(shifted_coords, lvals)
+            source_sites[flat_shift, dest_site_idx] = source_site_idx
+    return source_sites, shifts_per_dir
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 @njit(cache=True, parallel=True)
 def build_all_translations(
     sector_configs: np.ndarray,
@@ -262,37 +592,24 @@ def build_all_translations(
         shifts_per_dir: int32 array (D,) with R_d = L_d / s_d.
     """
     n_configs, n_sites = sector_configs.shape
-    lattice_dim = lvals.size
-    shifts_per_dir = lvals // unit_cell_size
-    total_shifts = np.prod(shifts_per_dir)
+    # Precompute the geometry-dependent site permutations once, before touching
+    # the potentially huge number of sector configurations.
+    source_sites, shifts_per_dir = _prepare_translation_source_sites(
+        lvals, unit_cell_size
+    )
+    total_shifts = source_sites.shape[0]
     # Allocate the memory for the array with all the translations
     translations_array = np.empty((n_configs, total_shifts), np.int32)
     # Run over all the configs
     for cfg_idx in prange(n_configs):
         cfg = sector_configs[cfg_idx]
-        # per-thread scratch (PRIVATE per cfg_idx)
-        coords = np.empty(lattice_dim, np.int32)
-        new_coords = np.empty(lattice_dim, np.int32)
-        # Consider all the possible combined shift (t0,...,t_{D-1}) along each direction
-        # For each flat shift, decode the per-axis shifts and build the rolled config
+        # Reuse one scratch array for every shift of this configuration.
+        rolled_cfg = np.empty(n_sites, sector_configs.dtype)
+        # Consider all the possible combined block-shifts.
         for flat_shift in range(total_shifts):
-            axis_shifts = np.empty(lattice_dim, np.int32)
-            decode_shift(flat_shift, shifts_per_dir, axis_shifts)
-            # Allocate the memory for the corresponding rolled configuration
-            rolled_cfg = np.empty(n_sites, sector_configs.dtype)
-            # Apply translation: move each site by (t_d * s_d) on axis d
-            for site_idx in range(n_sites):
-                # Find the corresponding volume coordinates
-                linear_to_coords_rowmajor(site_idx, lvals, coords)
-                # Obtain shifted coordinates
-                for ax in range(lattice_dim):
-                    new_coords[ax] = (
-                        coords[ax] + axis_shifts[ax] * unit_cell_size[ax]
-                    ) % lvals[ax]
-                # Get back to the corresponding flat index
-                new_site_idx = coords_to_linear_rowmajor(new_coords, lvals)
-                # Implement the shift on the new flat index
-                rolled_cfg[new_site_idx] = cfg[site_idx]
+            # Gather the translated configuration via the precomputed site map.
+            for dest_site_idx in range(n_sites):
+                rolled_cfg[dest_site_idx] = cfg[source_sites[flat_shift, dest_site_idx]]
             # Find the index of the rolled config in sector_configs
             translations_array[cfg_idx, flat_shift] = config_to_index_binarysearch(
                 rolled_cfg, sector_configs
@@ -327,8 +644,9 @@ def select_references(
     period_vectors = np.empty((n_configs, lattice_dim), np.int32)
     # Bookkeeping: which config indices already belong to an orbit we've processed?
     assigned = np.zeros(n_configs, np.uint8)
-    # Scratch for “axis-only” shift (p * e_d)
-    axis_only = np.zeros(lattice_dim, np.int32)
+    # Convert axis-only shifts into flat indices without rebuilding temporary
+    # vectors inside the innermost loop.
+    shift_strides = _compute_rowmajor_strides(shifts_per_dir)
     n_refs = 0
     # loop in index order
     for cfg_idx in range(n_configs):
@@ -343,9 +661,9 @@ def select_references(
             found = False
             # Scan p = 1..R_d until the shift along axis 'ax' returns to the reference
             for p in range(1, shifts_per_dir[ax] + 1):
-                axis_only[:] = 0
-                axis_only[ax] = p  # p * e_d
-                flat = encode_shift(axis_only, shifts_per_dir)
+                # ``p = R_d`` wraps back to zero shift, which is why the modulo
+                # reproduces the full-cycle fallback without a separate branch.
+                flat = (p % shifts_per_dir[ax]) * shift_strides[ax]
                 if orbit_row[flat] == cfg_idx:  # returned to itself
                     pvec[ax] = p
                     found = True
@@ -426,6 +744,9 @@ def momentum_basis_zero_k(
         sector_configs, lvals, unit_cell_size
     )
     lattice_dim = shifts_per_dir.size
+    # These strides let the orbit helper update the full translation index
+    # incrementally while it walks the period box.
+    shift_strides = _compute_rowmajor_strides(shifts_per_dir)
     # ---------- 1) Orbit representatives and their period-vectors ----------
     k_zero = np.zeros(lattice_dim, np.int32)
     references, period_vectors = select_references(
@@ -437,31 +758,10 @@ def momentum_basis_zero_k(
     for col_idx in prange(n_cols):
         ref_cfg_index = references[col_idx]
         pvec = period_vectors[col_idx, :]  # (D,)
-        # Upper bound for distinct images when scanning the period box
-        orbit_size = np.prod(pvec)
-        # Per-column dedup accumulator (indices + counts)
-        used_indices = np.empty(orbit_size, np.int32)
-        used_values = np.zeros(orbit_size, np.float64)  # counts (phase=1)
-        used_len = 0
-        # local mixed-radix index in the period box
-        t_local = np.zeros(lattice_dim, np.int32)
-        # Enumerate all t in 0..p_d-1 and map via the precomputed table
-        for flat_local in range(orbit_size):
-            decode_mixed_index(flat_local, pvec, t_local)
-            flat_full = encode_shift(t_local, shifts_per_dir)  # base R_d
-            cfg_row = translations_array[ref_cfg_index, flat_full]
-            # -----------------------------------------------------
-            # deduplicate: linear scan OK (orbit boxes are small)
-            pos = -1
-            for u in range(used_len):
-                if used_indices[u] == cfg_row:
-                    pos = u
-                    break
-            if pos == -1:
-                pos = used_len
-                used_indices[pos] = cfg_row
-                used_len += 1
-            used_values[pos] += 1
+        # Build the deduplicated orbit content once, then read only its length.
+        used_indices, used_values, used_len = _accumulate_zero_k_orbit(
+            translations_array[ref_cfg_index], pvec, shift_strides
+        )
         nnz_per_col[col_idx] = used_len
     # CSC structure
     L_col_ptr = _prefix_sum_counts(nnz_per_col)
@@ -472,27 +772,10 @@ def momentum_basis_zero_k(
     for col_idx in prange(n_cols):
         ref_cfg_index = references[col_idx]
         pvec = period_vectors[col_idx, :]
-        # same bound
-        orbit_size = np.prod(pvec)
-        used_indices = np.empty(orbit_size, np.int32)
-        used_values = np.zeros(orbit_size, np.float64)
-        used_len = 0
-        t_local = np.zeros(lattice_dim, np.int32)
-        for flat_local in range(orbit_size):
-            decode_mixed_index(flat_local, pvec, t_local)
-            flat_full = encode_shift(t_local, shifts_per_dir)
-            cfg_row = translations_array[ref_cfg_index, flat_full]
-            # -----------------------------------------------------
-            pos = -1
-            for u in range(used_len):
-                if used_indices[u] == cfg_row:
-                    pos = u
-                    break
-            if pos == -1:
-                pos = used_len
-                used_indices[pos] = cfg_row
-                used_len += 1
-            used_values[pos] += 1
+        # Rebuild the same orbit content, now to normalize and materialize it.
+        used_indices, used_values, used_len = _accumulate_zero_k_orbit(
+            translations_array[ref_cfg_index], pvec, shift_strides
+        )
         # Normalize the column by its 2-norm (counts are real here)
         norm_sq = 0.0
         for u in range(used_len):
@@ -580,6 +863,11 @@ def momentum_basis_finite_k(
         sector_configs, lvals, unit_cell_size
     )
     lattice_dim = shifts_per_dir.size
+    # These strides let the orbit helper update the full translation index
+    # incrementally while it walks the period box.
+    shift_strides = _compute_rowmajor_strides(shifts_per_dir)
+    # Precompute all one-axis phase factors once and reuse them across columns.
+    phase_table = _prepare_phase_table(k_vals, shifts_per_dir)
     # ---------- 1) Orbit representatives & periods (filtered by k_vals) ----------
     references, period_vectors = select_references(
         translations_array, shifts_per_dir, k_vals
@@ -590,38 +878,11 @@ def momentum_basis_finite_k(
     for col_idx in prange(n_cols):
         ref_cfg_index = references[col_idx]
         pvec = period_vectors[col_idx, :]  # (D,)
-        # Orbit-box upper bound
-        orbit_size = 1
-        for ax in range(lattice_dim):
-            orbit_size *= pvec[ax]
-        # Per-column accumulators (dedup by image row)
-        used_indices = np.empty(orbit_size, np.int32)
-        used_values = np.zeros(orbit_size, np.complex128)
-        used_len = 0
-        t_local = np.zeros(lattice_dim, np.int32)
-        # Enumerate period box, accumulate complex phase per distinct image
-        for flat_local in range(orbit_size):
-            decode_mixed_index(flat_local, pvec, t_local)
-            # phase = exp(-2πi Σ_d (k_d * t_d / R_d))
-            phase_arg = 0.0
-            for ax in range(lattice_dim):
-                kd = k_vals[ax] % shifts_per_dir[ax]
-                phase_arg += (kd * t_local[ax]) / float(shifts_per_dir[ax])
-            phase = np.exp(-1j * 2.0 * np.pi * phase_arg)
-            flat_full = encode_shift(t_local, shifts_per_dir)  # base R_d
-            cfg_row = translations_array[ref_cfg_index, flat_full]
-            # -----------------------------------------------------
-            # deduplicate by row
-            pos = -1
-            for u in range(used_len):
-                if used_indices[u] == cfg_row:
-                    pos = u
-                    break
-            if pos == -1:
-                pos = used_len
-                used_indices[pos] = cfg_row
-                used_len += 1
-            used_values[pos] += phase
+        # Build the deduplicated orbit content once, then only count the
+        # entries that survive Bloch-phase cancellations.
+        used_indices, used_values, used_len = _accumulate_finite_k_orbit(
+            translations_array[ref_cfg_index], pvec, shift_strides, phase_table
+        )
         # Count only truly non-zero amplitudes after cancellation
         cnt = 0
         for u in range(used_len):
@@ -637,33 +898,11 @@ def momentum_basis_finite_k(
     for col_idx in prange(n_cols):
         ref_cfg_index = references[col_idx]
         pvec = period_vectors[col_idx, :]
-        orbit_size = np.prod(pvec)
-        used_indices = np.empty(orbit_size, np.int32)
-        used_values = np.zeros(orbit_size, np.complex128)
-        used_len = 0
-        t_local = np.zeros(lattice_dim, np.int32)
-        # Deduplicate + accumulate complex phases
-        for flat_local in range(orbit_size):
-            decode_mixed_index(flat_local, pvec, t_local)
-            phase_arg = 0.0
-            for ax in range(lattice_dim):
-                kd = k_vals[ax] % shifts_per_dir[ax]
-                phase_arg += (kd * t_local[ax]) / float(shifts_per_dir[ax])
-            phase = np.exp(-1j * 2.0 * np.pi * phase_arg)
-            flat_full = encode_shift(t_local, shifts_per_dir)
-            cfg_row = translations_array[ref_cfg_index, flat_full]
-            # -----------------------------------------------------
-            # deduplicate by row
-            pos = -1
-            for u in range(used_len):
-                if used_indices[u] == cfg_row:
-                    pos = u
-                    break
-            if pos == -1:
-                pos = used_len
-                used_indices[pos] = cfg_row
-                used_len += 1
-            used_values[pos] += phase
+        # Rebuild the same orbit content, now to prune zeros, normalize, and
+        # write the canonical CSC column.
+        used_indices, used_values, used_len = _accumulate_finite_k_orbit(
+            translations_array[ref_cfg_index], pvec, shift_strides, phase_table
+        )
         # In-place prune entries that cancelled to ~0, and compute column norm
         kept_len = 0
         norm_sq = 0.0
@@ -798,7 +1037,8 @@ def momentum_basis_zero_k_TC(sector_configs: np.ndarray):
                 pos = used_len
                 used_indices[pos] = cfg_row
                 used_len += 1
-            # change here, before was +1
+            # Odd powers of the TC generator contribute the parity sign of the
+            # reference configuration instead of a plain +1 factor.
             used_values[pos] += incr
         nnz_per_col[col_idx] = used_len
     # CSC structure
@@ -1099,6 +1339,8 @@ def get_momentum_basis(
     lvals = np.ascontiguousarray(lvals, dtype=np.int32)
     unit_cell_size = np.ascontiguousarray(unit_cell_size, dtype=np.int32)
     k_vals = np.ascontiguousarray(k_vals, dtype=np.int32)
+    # Dispatch to the correct projector constructor: finite-k vs zero-k, and
+    # standard translations vs the special TC symmetry path.
     if np.any(k_vals != 0):
         if TC_symmetry:
             return momentum_basis_finite_k_TC(sector_configs, k_vals)
@@ -1185,53 +1427,60 @@ def nbody_data_momentum(
         operator ``B^H H B``.
     """
     n_states, n_sites = sector_configs.shape
-    local_dim = op_list.shape[2]
     n_ops = len(op_sites_list)
     proj_dim = L_col_ptr.shape[0] - 1
     if n_ops < 1:
         raise ValueError(f"nbody operator must act on at least one site, got {n_ops}")
+    # Precompute all one-site transitions once and reuse them in both passes.
+    transition_counts_all, ket_local_states_all, transition_values_all = (
+        _prepare_momentum_local_transition_data(op_list, op_sites_list)
+    )
     # ----------------------------
     # PASS 1: count nnz per projected row
     # ----------------------------
     nnz_per_row = np.zeros(proj_dim, np.int32)
     for proj_row_idx in prange(proj_dim):
         row_nnz = 0
+        # The left CSC projector tells which real-space bra rows contribute to
+        # this momentum row.
         left_start = L_col_ptr[proj_row_idx]
         left_stop = L_col_ptr[proj_row_idx + 1]
         for left_ptr in range(left_start, left_stop):
             bra_idx = L_row_idx[left_ptr]
             bra_cfg = sector_configs[bra_idx]
-            ket_local_states = np.empty((n_ops, local_dim), np.int32)
-            transition_counts = np.empty(n_ops, np.int32)
+            bra_local_states = np.empty(n_ops, np.int32)
+            active_transition_counts = np.empty(n_ops, np.int32)
             combo_count = 1
             for op_idx in range(n_ops):
                 site_idx = op_sites_list[op_idx]
-                site_op = op_list[op_idx, site_idx]
                 bra_loc = bra_cfg[site_idx]
-                n_transitions = 0
-                for ket_loc in range(local_dim):
-                    if np.abs(site_op[bra_loc, ket_loc]) > OP_EPS:
-                        ket_local_states[op_idx, n_transitions] = ket_loc
-                        n_transitions += 1
-                transition_counts[op_idx] = n_transitions
-                combo_count *= n_transitions
+                bra_local_states[op_idx] = bra_loc
+                active_transition_counts[op_idx] = transition_counts_all[op_idx, bra_loc]
+                combo_count *= active_transition_counts[op_idx]
             if combo_count == 0:
                 continue
             ket_cfg = np.empty(n_sites, np.int32)
+            # Start every candidate ket from the bra configuration so that
+            # untouched sites remain unchanged throughout the mixed-radix walk.
+            for site_idx in range(n_sites):
+                ket_cfg[site_idx] = bra_cfg[site_idx]
             transition_counters = np.zeros(n_ops, np.int32)
             finished = False
             while not finished:
-                for site_idx in range(n_sites):
-                    ket_cfg[site_idx] = bra_cfg[site_idx]
+                # Overwrite only the acted sites; all untouched sites stay equal
+                # to the bra because ``ket_cfg`` started as a copy of it.
                 for op_idx in range(n_ops):
                     trans_idx = transition_counters[op_idx]
-                    ket_cfg[op_sites_list[op_idx]] = ket_local_states[op_idx, trans_idx]
+                    bra_loc = bra_local_states[op_idx]
+                    ket_cfg[op_sites_list[op_idx]] = ket_local_states_all[
+                        op_idx, bra_loc, trans_idx
+                    ]
                 ket_idx = config_to_index_binarysearch(ket_cfg, sector_configs)
                 if ket_idx >= 0:
                     row_nnz += R_row_ptr[ket_idx + 1] - R_row_ptr[ket_idx]
                 for op_idx in range(n_ops - 1, -1, -1):
                     transition_counters[op_idx] += 1
-                    if transition_counters[op_idx] < transition_counts[op_idx]:
+                    if transition_counters[op_idx] < active_transition_counts[op_idx]:
                         break
                     transition_counters[op_idx] = 0
                     if op_idx == 0:
@@ -1256,42 +1505,43 @@ def nbody_data_momentum(
         left_stop = L_col_ptr[proj_row_idx + 1]
         for left_ptr in range(left_start, left_stop):
             bra_idx = L_row_idx[left_ptr]
+            # Left projector contributes the bra-side amplitude <prow|bra>.
             amp_left = np.conj(L_data[left_ptr])
             bra_cfg = sector_configs[bra_idx]
-
-            ket_local_states = np.empty((n_ops, local_dim), np.int32)
-            transition_values = np.empty((n_ops, local_dim), np.complex128)
-            transition_counts = np.empty(n_ops, np.int32)
+            bra_local_states = np.empty(n_ops, np.int32)
+            active_transition_counts = np.empty(n_ops, np.int32)
             combo_count = 1
             for op_idx in range(n_ops):
                 site_idx = op_sites_list[op_idx]
-                site_op = op_list[op_idx, site_idx]
                 bra_loc = bra_cfg[site_idx]
-                n_transitions = 0
-                for ket_loc in range(local_dim):
-                    elem = site_op[bra_loc, ket_loc]
-                    if np.abs(elem) > OP_EPS:
-                        ket_local_states[op_idx, n_transitions] = ket_loc
-                        transition_values[op_idx, n_transitions] = elem
-                        n_transitions += 1
-                transition_counts[op_idx] = n_transitions
-                combo_count *= n_transitions
+                bra_local_states[op_idx] = bra_loc
+                active_transition_counts[op_idx] = transition_counts_all[op_idx, bra_loc]
+                combo_count *= active_transition_counts[op_idx]
             if combo_count == 0:
                 continue
 
             ket_cfg = np.empty(n_sites, np.int32)
+            # Start every candidate ket from the bra configuration so that
+            # untouched sites remain unchanged throughout the mixed-radix walk.
+            for site_idx in range(n_sites):
+                ket_cfg[site_idx] = bra_cfg[site_idx]
             transition_counters = np.zeros(n_ops, np.int32)
             finished = False
             while not finished:
-                for site_idx in range(n_sites):
-                    ket_cfg[site_idx] = bra_cfg[site_idx]
+                # Rebuild the full operator amplitude from the selected local
+                # transitions and update only the acted sites in the ket.
                 amp_mid = 1.0 + 0.0j
                 for op_idx in range(n_ops):
+                    bra_loc = bra_local_states[op_idx]
                     trans_idx = transition_counters[op_idx]
-                    amp_mid *= transition_values[op_idx, trans_idx]
-                    ket_cfg[op_sites_list[op_idx]] = ket_local_states[op_idx, trans_idx]
+                    amp_mid *= transition_values_all[op_idx, bra_loc, trans_idx]
+                    ket_cfg[op_sites_list[op_idx]] = ket_local_states_all[
+                        op_idx, bra_loc, trans_idx
+                    ]
                 ket_idx = config_to_index_binarysearch(ket_cfg, sector_configs)
                 if ket_idx >= 0:
+                    # The right CSR projector tells which momentum columns the
+                    # real-space ket contributes to, together with their amplitudes.
                     right_start = R_row_ptr[ket_idx]
                     right_stop = R_row_ptr[ket_idx + 1]
                     for right_ptr in range(right_start, right_stop):
@@ -1303,7 +1553,7 @@ def nbody_data_momentum(
                         write_ptr += 1
                 for op_idx in range(n_ops - 1, -1, -1):
                     transition_counters[op_idx] += 1
-                    if transition_counters[op_idx] < transition_counts[op_idx]:
+                    if transition_counters[op_idx] < active_transition_counts[op_idx]:
                         break
                     transition_counters[op_idx] = 0
                     if op_idx == 0:
@@ -1347,10 +1597,11 @@ def nbody_data_momentum_1site(
     """
     n_sites = sector_configs.shape[1]
     Ldim = L_col_ptr.size - 1  # number of momentum columns (dim of projected space)
-    d_loc = op_list.shape[2]
     # Selected site/operator
     site = op_sites_list[0]
-    Op = op_list[0, site]
+    transition_counts_all, ket_local_states_all, transition_values_all = (
+        _prepare_momentum_local_transition_data(op_list, op_sites_list)
+    )
     # ----------------------------
     # PASS 1: count nnz per momentum-row (prow)
     # ----------------------------
@@ -1364,22 +1615,15 @@ def nbody_data_momentum_1site(
             j1 = L_row_idx[p1]  # row index in real space
             # bra config
             bra_cfg = sector_configs[j1]
-            # build list of target local states b where Op[a,b] != 0
             a = bra_cfg[site]
-            idxs = np.empty(d_loc, np.int32)
-            cnt1 = 0
-            for b in range(d_loc):
-                if np.abs(Op[a, b]) > 1e-10:
-                    idxs[cnt1] = b
-                    cnt1 += 1
-            lens = cnt1
+            lens = transition_counts_all[0, a]
             # scratch ket (copy bra → then edit one site)
             ket_cfg = np.empty(n_sites, np.int32)
             for jj in range(n_sites):
                 ket_cfg[jj] = bra_cfg[jj]
             # for each allowed local change a→b0, find the ket index j2
             for i0 in range(lens):
-                b0 = idxs[i0]
+                b0 = ket_local_states_all[0, a, i0]
                 ket_cfg[site] = b0
                 j2 = config_to_index_binarysearch(ket_cfg, sector_configs)
                 if j2 < 0:
@@ -1409,27 +1653,16 @@ def nbody_data_momentum_1site(
             j1 = L_row_idx[p1]  # real-space row
             B1 = L_data[p1]  # value B[j1, prow] (float64 or complex128)
             bra_cfg = sector_configs[j1]
-            # rebuild idxs, vs for Op[a, :]
             a = bra_cfg[site]
-            idxs = np.empty(d_loc, np.int32)
-            vs = np.empty(d_loc, np.complex128)
-            cnt2 = 0
-            for b in range(d_loc):
-                v = Op[a, b]
-                if np.abs(v) > 1e-10:
-                    idxs[cnt2] = b
-                    # ensure complex128 for downstream products
-                    vs[cnt2] = v if np.iscomplexobj(Op) else (v + 0.0j)
-                    cnt2 += 1
-            lens = cnt2
+            lens = transition_counts_all[0, a]
             # scratch ket
             ket_cfg = np.empty(n_sites, np.int32)
             for jj in range(n_sites):
                 ket_cfg[jj] = bra_cfg[jj]
             # explicit 1-nested loop + projection
             for i0 in range(lens):
-                b0 = idxs[i0]
-                v0 = vs[i0]
+                b0 = ket_local_states_all[0, a, i0]
+                v0 = transition_values_all[0, a, i0]
                 ket_cfg[site] = b0
                 j2 = config_to_index_binarysearch(ket_cfg, sector_configs)
                 if j2 < 0:
@@ -1485,8 +1718,10 @@ def nbody_data_momentum_2sites(
     """
     N, n_sites = sector_configs.shape
     Ldim = L_col_ptr.shape[0] - 1
-    d_loc = op_list.shape[2]
     M = len(op_sites_list)
+    transition_counts_all, ket_local_states_all, transition_values_all = (
+        _prepare_momentum_local_transition_data(op_list, op_sites_list)
+    )
     # -------------------------------
     # PASS 1: count nonzeros per projected row
     # -------------------------------
@@ -1499,30 +1734,21 @@ def nbody_data_momentum_2sites(
         for idx1 in range(start1, stop1):
             j1 = L_row_idx[idx1]
             bra_cfg = sector_configs[j1]
-            # per-site allowed target indices and their counts
-            idxs = np.empty((M, d_loc), np.int32)
-            lens = np.empty(M, np.int32)
-            for kk in range(M):
-                site = op_sites_list[kk]
-                Op = op_list[kk, site]
-                a = bra_cfg[site]
-                cnt1 = 0
-                for b in range(d_loc):
-                    if np.abs(Op[a, b]) > OP_EPS:
-                        idxs[kk, cnt1] = b
-                        cnt1 += 1
-                lens[kk] = cnt1
+            bra_loc0 = bra_cfg[op_sites_list[0]]
+            bra_loc1 = bra_cfg[op_sites_list[1]]
+            len0 = transition_counts_all[0, bra_loc0]
+            len1 = transition_counts_all[1, bra_loc1]
             # scratch ket config (start from bra each time)
             ket_cfg = np.empty(n_sites, np.int32)
             for jj in range(n_sites):
                 ket_cfg[jj] = bra_cfg[jj]
             site0, site1 = op_sites_list[0], op_sites_list[1]
             # explicit 2-nested loops → real-space j2
-            for i0 in range(lens[0]):
-                b0 = idxs[0, i0]
+            for i0 in range(len0):
+                b0 = ket_local_states_all[0, bra_loc0, i0]
                 ket_cfg[site0] = b0
-                for i1 in range(lens[1]):
-                    b1 = idxs[1, i1]
+                for i1 in range(len1):
+                    b1 = ket_local_states_all[1, bra_loc1, i1]
                     ket_cfg[site1] = b1
                     # find j2 in the sector
                     j2 = config_to_index_binarysearch(ket_cfg, sector_configs)
@@ -1552,33 +1778,21 @@ def nbody_data_momentum_2sites(
             j1 = L_row_idx[idx1]
             bra_cfg = sector_configs[j1]
             amp_L = np.conj(L_data[idx1])  # conj(B[j1, prow])
-            # rebuild idxs, vs, lens
-            idxs = np.empty((M, d_loc), np.int32)
-            vs = np.empty((M, d_loc), np.complex128)
-            lens = np.empty(M, np.int32)
-            for kk in range(M):
-                site = op_sites_list[kk]
-                Op = op_list[kk, site]
-                a = bra_cfg[site]
-                cnt2 = 0
-                for b in range(d_loc):
-                    v = Op[a, b]
-                    if np.abs(v) > OP_EPS:
-                        idxs[kk, cnt2] = b
-                        vs[kk, cnt2] = v
-                        cnt2 += 1
-                lens[kk] = cnt2
+            bra_loc0 = bra_cfg[op_sites_list[0]]
+            bra_loc1 = bra_cfg[op_sites_list[1]]
+            len0 = transition_counts_all[0, bra_loc0]
+            len1 = transition_counts_all[1, bra_loc1]
             ket_cfg = np.empty(n_sites, np.int32)
             for jj in range(n_sites):
                 ket_cfg[jj] = bra_cfg[jj]
             site0, site1 = op_sites_list[0], op_sites_list[1]
-            for i0 in range(lens[0]):
-                b0 = idxs[0, i0]
-                v0 = vs[0, i0]
+            for i0 in range(len0):
+                b0 = ket_local_states_all[0, bra_loc0, i0]
+                v0 = transition_values_all[0, bra_loc0, i0]
                 ket_cfg[site0] = b0
-                for i1 in range(lens[1]):
-                    b1 = idxs[1, i1]
-                    v1 = vs[1, i1]
+                for i1 in range(len1):
+                    b1 = ket_local_states_all[1, bra_loc1, i1]
+                    v1 = transition_values_all[1, bra_loc1, i1]
                     ket_cfg[site1] = b1
                     j2 = config_to_index_binarysearch(ket_cfg, sector_configs)
                     if j2 < 0:
@@ -1634,8 +1848,10 @@ def nbody_data_momentum_4sites(
     """
     N, n_sites = sector_configs.shape
     Ldim = L_col_ptr.shape[0] - 1
-    d_loc = op_list.shape[2]
     M = len(op_sites_list)
+    transition_counts_all, ket_local_states_all, transition_values_all = (
+        _prepare_momentum_local_transition_data(op_list, op_sites_list)
+    )
     # -------------------------------
     # PASS 1: count nonzeros per projected row
     # -------------------------------
@@ -1648,19 +1864,14 @@ def nbody_data_momentum_4sites(
         for idx1 in range(start1, stop1):
             j1 = L_row_idx[idx1]
             bra_cfg = sector_configs[j1]
-            # per-site allowed target indices and counts
-            idxs = np.empty((M, d_loc), np.int32)
-            lens = np.empty(M, np.int32)
-            for kk in range(M):
-                site = op_sites_list[kk]
-                Op = op_list[kk, site]
-                a = bra_cfg[site]
-                cnt1 = 0
-                for b in range(d_loc):
-                    if np.abs(Op[a, b]) > OP_EPS:
-                        idxs[kk, cnt1] = b
-                        cnt1 += 1
-                lens[kk] = cnt1
+            bra_loc0 = bra_cfg[op_sites_list[0]]
+            bra_loc1 = bra_cfg[op_sites_list[1]]
+            bra_loc2 = bra_cfg[op_sites_list[2]]
+            bra_loc3 = bra_cfg[op_sites_list[3]]
+            len0 = transition_counts_all[0, bra_loc0]
+            len1 = transition_counts_all[1, bra_loc1]
+            len2 = transition_counts_all[2, bra_loc2]
+            len3 = transition_counts_all[3, bra_loc3]
             ket_cfg = np.empty(n_sites, np.int32)
             for jj in range(n_sites):
                 ket_cfg[jj] = bra_cfg[jj]
@@ -1669,17 +1880,17 @@ def nbody_data_momentum_4sites(
             site2 = op_sites_list[2]
             site3 = op_sites_list[3]
             # explicit 4-nested loops → real-space j2
-            for i0 in range(lens[0]):
-                b0 = idxs[0, i0]
+            for i0 in range(len0):
+                b0 = ket_local_states_all[0, bra_loc0, i0]
                 ket_cfg[site0] = b0
-                for i1 in range(lens[1]):
-                    b1 = idxs[1, i1]
+                for i1 in range(len1):
+                    b1 = ket_local_states_all[1, bra_loc1, i1]
                     ket_cfg[site1] = b1
-                    for i2 in range(lens[2]):
-                        b2 = idxs[2, i2]
+                    for i2 in range(len2):
+                        b2 = ket_local_states_all[2, bra_loc2, i2]
                         ket_cfg[site2] = b2
-                        for i3 in range(lens[3]):
-                            b3 = idxs[3, i3]
+                        for i3 in range(len3):
+                            b3 = ket_local_states_all[3, bra_loc3, i3]
                             ket_cfg[site3] = b3
                             j2 = config_to_index_binarysearch(ket_cfg, sector_configs)
                             if j2 < 0:
@@ -1708,22 +1919,14 @@ def nbody_data_momentum_4sites(
             j1 = L_row_idx[idx1]
             bra_cfg = sector_configs[j1]
             amp_L = np.conj(L_data[idx1])  # conj(B[j1, prow])
-            # rebuild idxs, vs, lens
-            idxs = np.empty((M, d_loc), np.int32)
-            vs = np.empty((M, d_loc), np.complex128)
-            lens = np.empty(M, np.int32)
-            for kk in range(M):
-                site = op_sites_list[kk]
-                Op = op_list[kk, site]
-                a = bra_cfg[site]
-                cnt2 = 0
-                for b in range(d_loc):
-                    v = Op[a, b]
-                    if np.abs(v) > OP_EPS:
-                        idxs[kk, cnt2] = b
-                        vs[kk, cnt2] = v
-                        cnt2 += 1
-                lens[kk] = cnt2
+            bra_loc0 = bra_cfg[op_sites_list[0]]
+            bra_loc1 = bra_cfg[op_sites_list[1]]
+            bra_loc2 = bra_cfg[op_sites_list[2]]
+            bra_loc3 = bra_cfg[op_sites_list[3]]
+            len0 = transition_counts_all[0, bra_loc0]
+            len1 = transition_counts_all[1, bra_loc1]
+            len2 = transition_counts_all[2, bra_loc2]
+            len3 = transition_counts_all[3, bra_loc3]
             ket_cfg = np.empty(n_sites, np.int32)
             for jj in range(n_sites):
                 ket_cfg[jj] = bra_cfg[jj]
@@ -1732,21 +1935,21 @@ def nbody_data_momentum_4sites(
             site2 = op_sites_list[2]
             site3 = op_sites_list[3]
             # explicit 4-loops + projection
-            for i0 in range(lens[0]):
-                b0 = idxs[0, i0]
-                v0 = vs[0, i0]
+            for i0 in range(len0):
+                b0 = ket_local_states_all[0, bra_loc0, i0]
+                v0 = transition_values_all[0, bra_loc0, i0]
                 ket_cfg[site0] = b0
-                for i1 in range(lens[1]):
-                    b1 = idxs[1, i1]
-                    v1 = vs[1, i1]
+                for i1 in range(len1):
+                    b1 = ket_local_states_all[1, bra_loc1, i1]
+                    v1 = transition_values_all[1, bra_loc1, i1]
                     ket_cfg[site1] = b1
-                    for i2 in range(lens[2]):
-                        b2 = idxs[2, i2]
-                        v2 = vs[2, i2]
+                    for i2 in range(len2):
+                        b2 = ket_local_states_all[2, bra_loc2, i2]
+                        v2 = transition_values_all[2, bra_loc2, i2]
                         ket_cfg[site2] = b2
-                        for i3 in range(lens[3]):
-                            b3 = idxs[3, i3]
-                            v3 = vs[3, i3]
+                        for i3 in range(len3):
+                            b3 = ket_local_states_all[3, bra_loc3, i3]
+                            v3 = transition_values_all[3, bra_loc3, i3]
                             ket_cfg[site3] = b3
                             j2 = config_to_index_binarysearch(ket_cfg, sector_configs)
                             if j2 < 0:

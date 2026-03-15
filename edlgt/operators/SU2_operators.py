@@ -9,7 +9,13 @@ from scipy.sparse.linalg import norm
 from edlgt.modeling import qmb_operator as qmb_op
 from edlgt.modeling import get_lattice_borders_labels, LGT_border_configs
 from .SU2_singlets import get_SU2_singlets, SU2_singlet_canonical_vector
-from .spin_operators import spin_space, SU2_generators, get_spin_operators, m_values
+from .spin_operators import (
+    spin_space,
+    SU2_generators,
+    get_spin_operators,
+    m_values,
+    get_Pauli_operators,
+)
 from .SU2_rishons import SU2_Rishon, SU2_Rishon_gen
 from .bose_fermi_operators import fermi_operators as SU2_matter_operators
 from edlgt.tools import validate_parameters
@@ -22,6 +28,7 @@ __all__ = [
     "SU2_gen_dressed_site_operators",
     "SU2_check_gauss_law",
     "SU2_gauge_invariant_states",
+    "SU2_gauge_integrated_operators",
 ]
 
 
@@ -582,6 +589,36 @@ def SU2_gen_dressed_site_operators(spin, pure_theory, lattice_dim, background=0)
         else:
             id_list = ["ID_psi"] + ["Iz" for _ in range(2 * lattice_dim)]
         ops["bg"] = qmb_op(in_ops, ["T2_bg"] + id_list)
+    return ops
+
+
+def SU2_gauge_integrated_operators():
+    # We assume an internal ordering like [red , green]
+    in_ops = get_Pauli_operators()
+    in_ops["Ir"] = identity(2, dtype=float)
+    in_ops["Ig"] = identity(2, dtype=float)
+    ops = {}
+    # Electric operators
+    ops["Sp_r_Sm_g"] = qmb_op(in_ops, ["Sp", "Sm"])
+    ops["Sm_r_Sp_g"] = qmb_op(in_ops, ["Sm", "Sp"])
+    # Sz on each color
+    ops["Sz_r"] = qmb_op(in_ops, ["Sz", "Ig"])
+    ops["Sz_g"] = qmb_op(in_ops, ["Ir", "Sz"])
+    # Sp on each color
+    ops["Sp_r"] = qmb_op(in_ops, ["Sp", "Ig"])
+    ops["Sp_g"] = qmb_op(in_ops, ["Ir", "Sp"])
+    # Sm on each color
+    ops["Sm_r"] = qmb_op(in_ops, ["Sm", "Ig"])
+    ops["Sm_g"] = qmb_op(in_ops, ["Ir", "Sm"])
+    # Matter operator
+    ops["Nr"] = ops["Sp_r"] @ ops["Sm_r"]
+    ops["Ng"] = ops["Sp_g"] @ ops["Sm_g"]
+    ops["N_tot"] = ops["Nr"] + ops["Ng"]
+    # Hopping operators
+    ops["Sp_r_Sz_g"] = ops["Sp_r"] @ ops["Sz_g"]
+    ops["Sz_r_Sm_g"] = ops["Sz_r"] @ ops["Sm_g"]
+    # Difference of Sz
+    ops["Delta_Z"] = ops["Sz_r"] - ops["Sz_g"]
     return ops
 
 

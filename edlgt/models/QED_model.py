@@ -502,12 +502,6 @@ class QED_Model(QuantumModel):
             raise ValueError(msg)
         return static_charges
 
-    def _single_site_mask(self, site_index: int) -> np.ndarray:
-        """Boolean mask selecting one 1D lattice site."""
-        site_mask = np.zeros(tuple(self.lvals), dtype=np.bool_)
-        site_mask[(site_index,)] = True
-        return site_mask
-
     def reconstruct_integrated_E2_from_N(
         self,
         density_obs_name: str = "N",

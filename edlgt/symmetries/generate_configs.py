@@ -45,7 +45,9 @@ def index_to_config(qmb_index, loc_dims):
     """
     num_sites = len(loc_dims)
     config = np.zeros(num_sites, dtype=np.uint8)
-    for site_index in range(num_sites):
+    # Keep the same row-major convention as np.ravel_multi_index and
+    # config_to_index: the last site is the fastest-varying index.
+    for site_index in range(num_sites - 1, -1, -1):
         dim = loc_dims[site_index]
         config[site_index] = qmb_index % dim
         qmb_index //= dim
@@ -171,6 +173,15 @@ def config_to_index_binarysearch(config, unique_configs):
     return -1  # Configuration not found
 
 
+@njit(cache=True)
+def _is_sorted_config_table(config_table: np.ndarray) -> bool:
+    """Check whether a configuration table is lexicographically sorted."""
+    for idx in range(1, config_table.shape[0]):
+        if compare_configs(config_table[idx - 1], config_table[idx]) > 0:
+            return False
+    return True
+
+
 @njit(cache=True, parallel=True)
 def subenv_map_to_unique_indices(
     subsystem_configs: np.ndarray,  # (sector_dim, |S|)
@@ -187,9 +198,13 @@ def subenv_map_to_unique_indices(
     environment_configs : ndarray
         Environment configurations, one row per sector basis state.
     unique_subsys_configs : ndarray
-        Unique subsystem configurations used as lookup table.
+        Unique subsystem configurations used as lookup table. If rows are
+        lexicographically sorted, the function automatically switches to binary
+        search; otherwise it falls back to linear search.
     unique_env_configs : ndarray
-        Unique environment configurations used as lookup table.
+        Unique environment configurations used as lookup table. If rows are
+        lexicographically sorted, the function automatically switches to binary
+        search; otherwise it falls back to linear search.
 
     Returns
     -------
@@ -200,13 +215,28 @@ def subenv_map_to_unique_indices(
     sector_dim = subsystem_configs.shape[0]
     subsys_map = np.empty(sector_dim, dtype=np.int64)
     env_map = np.empty(sector_dim, dtype=np.int64)
+    # ``np.unique(..., axis=0)`` returns lexicographically sorted rows, so the
+    # binary-search path is the expected fast path in the library. The fallback
+    # keeps the helper robust for externally provided unsorted lookup tables.
+    subsys_is_sorted = _is_sorted_config_table(unique_subsys_configs)
+    env_is_sorted = _is_sorted_config_table(unique_env_configs)
     for idx in prange(sector_dim):
-        env_map[idx] = config_to_index_linsearch(
-            environment_configs[idx], unique_env_configs
-        )
-        subsys_map[idx] = config_to_index_linsearch(
-            subsystem_configs[idx], unique_subsys_configs
-        )
+        if env_is_sorted:
+            env_map[idx] = config_to_index_binarysearch(
+                environment_configs[idx], unique_env_configs
+            )
+        else:
+            env_map[idx] = config_to_index_linsearch(
+                environment_configs[idx], unique_env_configs
+            )
+        if subsys_is_sorted:
+            subsys_map[idx] = config_to_index_binarysearch(
+                subsystem_configs[idx], unique_subsys_configs
+            )
+        else:
+            subsys_map[idx] = config_to_index_linsearch(
+                subsystem_configs[idx], unique_subsys_configs
+            )
     return subsys_map, env_map
 
 

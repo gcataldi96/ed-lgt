@@ -37,10 +37,120 @@ class QMB_hamiltonian:
         validate_parameters(lvals=lvals)
         self.lvals = lvals
         self.shape = (size, size)
-        # Initialize row_list, col_list, value_list as empty arrays
-        self.row_list = np.array([], dtype=int)
-        self.col_list = np.array([], dtype=int)
-        self.value_list = np.array([], dtype=get_numeric_dtype())
+        # Triplet storage is kept in compact dtypes because these arrays can be
+        # very large for symmetry-reduced sectors.
+        self._index_dtype = np.int32
+        self._value_dtype = get_numeric_dtype()
+        self.row_list = np.empty(0, dtype=self._index_dtype)
+        self.col_list = np.empty(0, dtype=self._index_dtype)
+        self.value_list = np.empty(0, dtype=self._value_dtype)
+        # New terms are accumulated block-wise and flattened only when needed.
+        # This avoids repeated concatenate/copy work in add_term.
+        self._row_blocks = []
+        self._col_blocks = []
+        self._value_blocks = []
+        self._pending_nnz = 0
+
+    def _normalize_term_triplets(self, term):
+        """Convert a Hamiltonian contribution to normalized COO triplet arrays.
+
+        Parameters
+        ----------
+        term : tuple or numpy.ndarray or scipy.sparse.spmatrix
+            Hamiltonian contribution provided as a sparse triplet
+            ``(row_list, col_list, value_list)``, a dense matrix, or a SciPy
+            sparse matrix.
+
+        Returns
+        -------
+        tuple
+            ``(row_list, col_list, value_list)`` as one-dimensional arrays with
+            dtypes compatible with the internal accumulator.
+
+        Raises
+        ------
+        TypeError
+            If ``term`` has an unsupported format.
+        ValueError
+            If the three triplet arrays do not have the same length.
+        """
+        if isinstance(term, tuple) and len(term) == 3:
+            # Case 1: term is already given in COO triplet format.
+            row_list, col_list, value_list = term
+        elif isinstance(term, np.ndarray):
+            # Case 2: term is a dense matrix.
+            row_list, col_list = np.nonzero(term)
+            value_list = term[row_list, col_list]
+        elif isspmatrix(term):
+            # Case 3: term is a SciPy sparse matrix.
+            coo = coo_matrix(term)
+            row_list = coo.row
+            col_list = coo.col
+            value_list = coo.data
+        else:
+            msg = "Unsupported term type: expect (dense/sparse) or (row_list, col_list, value_list) "
+            raise TypeError(msg)
+        row_list = np.asarray(row_list, dtype=self._index_dtype)
+        col_list = np.asarray(col_list, dtype=self._index_dtype)
+        value_list = coerce_numeric_array(value_list, name="Hamiltonian term values")
+        value_list = value_list.astype(self._value_dtype, copy=False)
+        return row_list, col_list, value_list
+
+    def _append_triplet_block(
+        self, row_list: np.ndarray, col_list: np.ndarray, value_list: np.ndarray
+    ):
+        """Register one triplet block without flattening previous blocks.
+
+        Parameters
+        ----------
+        row_list, col_list, value_list : numpy.ndarray
+            One-dimensional triplet arrays for a single Hamiltonian contribution.
+        """
+        if row_list.shape[0] == 0:
+            return
+        self._row_blocks.append(row_list)
+        self._col_blocks.append(col_list)
+        self._value_blocks.append(value_list)
+        self._pending_nnz += row_list.shape[0]
+
+    def _materialize_triplets(self):
+        """Flatten pending triplet blocks into contiguous arrays once.
+
+        This method is called before building sparse/dense/linear Hamiltonian
+        representations or when direct access to the triplets is required.
+        """
+        if self._pending_nnz == 0:
+            return
+        # Existing materialized triplets are kept and extended with the pending blocks.
+        total_nnz = self.row_list.shape[0] + self._pending_nnz
+        row_list = np.empty(total_nnz, dtype=self._index_dtype)
+        col_list = np.empty(total_nnz, dtype=self._index_dtype)
+        value_list = np.empty(total_nnz, dtype=self._value_dtype)
+        write_pos = 0
+        # Save the current set of nnzentries
+        if self.row_list.shape[0] > 0:
+            n_existing = self.row_list.shape[0]
+            row_list[:n_existing] = self.row_list
+            col_list[:n_existing] = self.col_list
+            value_list[:n_existing] = self.value_list
+            write_pos = n_existing
+        # Add the new set of nnzentries
+        for block_idx in range(len(self._row_blocks)):
+            block_size = self._row_blocks[block_idx].shape[0]
+            next_pos = write_pos + block_size
+            row_list[write_pos:next_pos] = self._row_blocks[block_idx]
+            col_list[write_pos:next_pos] = self._col_blocks[block_idx]
+            value_list[write_pos:next_pos] = self._value_blocks[block_idx]
+            write_pos = next_pos
+        # get the global list of nnz entries
+        self.row_list = row_list
+        self.col_list = col_list
+        self.value_list = value_list
+        # release memory
+        self._row_blocks.clear()
+        self._col_blocks.clear()
+        self._value_blocks.clear()
+        self._pending_nnz = 0
 
     def add_term(self, term):
         """Add a Hamiltonian contribution to the internal sparse triplet lists.
@@ -57,30 +167,8 @@ class QMB_hamiltonian:
         TypeError
             If ``term`` has an unsupported format.
         """
-        if isinstance(term, tuple) and len(term) == 3:
-            # Case 1: term is (row_list, col_list, value_list)
-            row_list, col_list, value_list = term
-        elif isinstance(term, np.ndarray):
-            # Case 2: term is a dense matrix
-            row_list, col_list = np.nonzero(term)
-            value_list = term[row_list, col_list]
-        elif isspmatrix(term):
-            # Case 3: term is a sparse matrix
-            coo = coo_matrix(term)
-            row_list = coo.row
-            col_list = coo.col
-            value_list = coo.data
-        else:
-            raise TypeError(
-                "Unsupported term type. Provide a matrix (dense or sparse) "
-                "or (row_list, col_list, value_list)."
-            )
-        value_list = coerce_numeric_array(value_list, name="Hamiltonian term values")
-        self.row_list = np.concatenate((self.row_list, row_list))
-        self.col_list = np.concatenate((self.col_list, col_list))
-        self.value_list = np.concatenate(
-            (self.value_list, value_list.astype(self.value_list.dtype, copy=False))
-        )
+        row_list, col_list, value_list = self._normalize_term_triplets(term)
+        self._append_triplet_block(row_list, col_list, value_list)
 
     def build(self, format):
         """Build the Hamiltonian representation from accumulated triplets.
@@ -91,6 +179,8 @@ class QMB_hamiltonian:
             Target representation: ``"dense"``, ``"sparse"``, or ``"linear"``.
         """
         logger.info(f"Construct {format} Hamiltonian")
+        # Flatten all pending triplet blocks exactly once before building.
+        self._materialize_triplets()
 
         # ==========================================================================
         def matvec(psi):
@@ -295,6 +385,8 @@ class QMB_hamiltonian:
                 endpoint=True,
             )
         elif self.Ham_type == "linear":
+            # Ensure traceA sees the complete set of accumulated triplets.
+            self._materialize_triplets()
 
             def matvec_lin(psi):
                 return -1j * self.Ham.matvec(psi)
@@ -521,6 +613,7 @@ class QMB_hamiltonian:
 
     def get_sparsity(self):
         """Log the current sparsity estimated from accumulated triplets."""
+        self._materialize_triplets()
         sparsity = len(self.row_list) / (self.shape[0] ** 2)
         logger.info(f"SPARSITY: {round(sparsity,16)}")
 
